@@ -1,0 +1,145 @@
+/**
+ * Тип записи в бинарных файлах хранится числом — индексом в этом списке
+ * (порядок игрового enum itemType; сверено с OpenConstructionSet и с комментариями
+ * `Type:` в locale/<язык>/gamedata.po). Имена совпадают с секциями `fcs.def`.
+ *
+ * Это единственное, что ядро знает о данных «из головы»: в файлах игры таблицы
+ * «номер → имя» нет.
+ */
+export const ITEM_TYPE_NAMES = [
+  'BUILDING', // 0
+  'CHARACTER',
+  'WEAPON',
+  'ARMOUR',
+  'ITEM',
+  'ANIMAL_ANIMATION',
+  'ATTACHMENT',
+  'RACE',
+  'LOCATION',
+  'WAR_SAVESTATE',
+  'FACTION', // 10
+  'NULL_ITEM',
+  'ZONE_MAP',
+  'TOWN',
+  'WORLDMAP_CHARACTER',
+  'CHARACTER_APPEARANCE_OLD',
+  'LOCATIONAL_DAMAGE',
+  'COMBAT_TECHNIQUE',
+  'DIALOGUE',
+  'DIALOGUE_LINE',
+  'TECHTREE', // 20
+  'RESEARCH',
+  'AI_TASK',
+  'AI_STATE',
+  'ANIMATION',
+  'STATS',
+  'PERSONALITY',
+  'CONSTANTS',
+  'BIOMES',
+  'BUILDING_PART',
+  'INSTANCE_COLLECTION', // 30
+  'DIALOG_ACTION',
+  'TEMPORARY_INFO',
+  'MOD_FILENAME',
+  'PLATOON',
+  'GAMESTATE_BUILDING',
+  'GAMESTATE_CHARACTER',
+  'GAMESTATE_FACTION',
+  'GAMESTATE_TOWN_INSTANCE_LIST',
+  'STATE',
+  'SAVED_STATE', // 40
+  'INVENTORY_STATE',
+  'INVENTORY_ITEM_STATE',
+  'REPEATABLE_BUILDING_PART_SLOT',
+  'MATERIAL_SPEC',
+  'MATERIAL_SPECS_COLLECTION',
+  'CONTAINER',
+  'MATERIAL_SPECS_CLOTHING',
+  'GAMESTATE_BUILDING_INTERIOR',
+  'VENDOR_LIST',
+  'MATERIAL_SPECS_WEAPON', // 50
+  'WEAPON_MANUFACTURER',
+  'SQUAD_TEMPLATE',
+  'ROAD',
+  'LOCATION_NODE',
+  'COLOR_DATA',
+  'CAMERA',
+  'MEDICAL_STATE',
+  'MEDICAL_PART_STATE',
+  'FOLIAGE_LAYER',
+  'FOLIAGE_MESH', // 60
+  'GRASS',
+  'BUILDING_FUNCTIONALITY',
+  'DAY_SCHEDULE',
+  'NEW_GAME_STARTOFF',
+  'GAMESTATE_CRAFTING',
+  'CHARACTER_APPEARANCE',
+  'GAMESTATE_AI',
+  'WILDLIFE_BIRDS',
+  'MAP_FEATURES',
+  'DIPLOMATIC_ASSAULTS', // 70
+  'SINGLE_DIPLOMATIC_ASSAULT',
+  'AI_PACKAGE',
+  'DIALOGUE_PACKAGE',
+  'GUN_DATA',
+  'HUMAN_CHARACTER',
+  'ANIMAL_CHARACTER',
+  'UNIQUE_SQUAD_TEMPLATE',
+  'FACTION_TEMPLATE',
+  'AI_SCHEDULE',
+  'WEATHER', // 80
+  'SEASON',
+  'EFFECT',
+  'ITEM_PLACEMENT_GROUP',
+  'WORD_SWAPS',
+  'NEST',
+  'NEST_ITEM',
+  'CHARACTER_PHYSICS_ATTACHMENT',
+  'LIGHT',
+  'HEAD',
+  'BLUEPRINT', // 90
+  'SHOP_TRADER_CLASS',
+  'FOLIAGE_BUILDING',
+  'FACTION_CAMPAIGN',
+  'GAMESTATE_TOWN',
+  'BIOME_GROUP',
+  'EFFECT_FOG_VOLUME',
+  'FARM_DATA',
+  'FARM_PART',
+  'ENVIRONMENT_RESOURCES',
+  'RACE_GROUP', // 100
+  'ARTIFACTS',
+  'MAP_ITEM',
+  'BUILDINGS_SWAP',
+  'ITEMS_CULTURE',
+  'ANIMATION_EVENT',
+  'TUTORIAL',
+  'CROSSBOW',
+  'TERRAIN_DECALS',
+  'AMBIENT_SOUND',
+  'WORLD_EVENT_STATE', // 110
+  'LIMB_REPLACEMENT',
+  'ANIMATION_FILE',
+  'BOAT',
+  'GAMESTATE_BOAT',
+  'BUILD_GRID',
+  'BUILDING_SHELL',
+] as const;
+
+export type ItemTypeName = (typeof ITEM_TYPE_NAMES)[number];
+
+const byName = new Map<string, number>(ITEM_TYPE_NAMES.map((n, i) => [n, i]));
+
+/** Имя типа по номеру; для неизвестных номеров — `TYPE_<n>`. */
+export function itemTypeName(type: number): string {
+  return ITEM_TYPE_NAMES[type] ?? `TYPE_${type}`;
+}
+
+/** Номер типа по имени (`DIALOGUE` → 18) или undefined. */
+export function itemTypeId(name: string): number | undefined {
+  return byName.get(name);
+}
+
+export function isItemTypeName(name: string): name is ItemTypeName {
+  return byName.has(name);
+}

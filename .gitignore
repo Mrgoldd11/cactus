@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+# отчёты, которые генерируются из файлов игры
+reports/
+# локальный конфиг с путями к игре
+kenshi-paths.json
