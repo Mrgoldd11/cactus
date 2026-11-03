@@ -1,12 +1,20 @@
 # Редактор модов Kenshi
 
-Замена FCS (Forgotten Construction Set). Сейчас готово ядро формата — `packages/core`:
-чтение и запись `.base`/`.mod` без потерь, разбор `fcs.def`, `fcs_enums.def`,
-`fcs_layout.def` и `gamedata.po`. План — в [ROADMAP.md](ROADMAP.md).
+Замена FCS (Forgotten Construction Set). Сейчас готово:
+
+- `packages/core` — формат `.base`/`.mod` без потерь, схема из `fcs*.def`, перевод из
+  `gamedata.po`; модель редактирования: слои ваниль → зависимости → мод, индекс ссылок,
+  команды с undo/redo, сохранение только отличий, поиск, валидация;
+- `packages/cli` — `kedit`: поиск, просмотр, проверка и сборка модов из командной строки
+  (замена `tools/kdata.py`);
+- `packages/mcp` — MCP-сервер с теми же операциями и правкой мода для ИИ-ассистентов.
+
+План — в [ROADMAP.md](ROADMAP.md).
 
 ## Установка
 
-Нужен Node.js 20 или новее (проверено на 24). pnpm подключается через corepack:
+Нужен Node.js 22.18 или новее (проверено на 24): `kedit` и MCP-сервер запускают `.ts` без
+сборки. pnpm подключается через corepack:
 
 ```bash
 corepack enable pnpm
@@ -65,7 +73,91 @@ pnpm report
 Отчёт о расхождениях `fcs.def` с данными: какие типы и поля есть в файлах, но не описаны
 в схеме, и наоборот. Пишется в `reports/schema-report.md` и `.json` (в `.gitignore`).
 
-## Пример
+## kedit (CLI)
+
+```bash
+node packages/cli/bin/kedit.js --help
+```
+
+```text
+find [текст] [ТИП]      записи по имени (англ. или рус.) или id; ТИП — имя или номер
+    --type ТИП  --field ключ=знач (~ подстрока, != < > <= >=, ключ? — поле есть)
+    --status new,changed,deleted,base  --anywhere текст  --exact  --mod-only
+show <id>...            поля и ссылки (с именами целей)  --layers  --max-refs N
+tree <id>               дерево диалога (dialogs/lines)  --full  --depth N  --max-nodes N
+mod <файл.mod> [текст]  записи файла мода со статусом  --brief
+refs <id>               ссылки из записи и на неё  --from  --to
+diff                    что мод (--mod) меняет относительно нижних слоёв
+diff <a.mod> <b.mod>    разница двух файлов
+validate                битые ссылки, поля вне схемы, не тот вид; код выхода 1 при ошибках
+schema [ТИП]            типы записей / поля типа с описаниями из fcs.def  --enum ИМЯ
+build <скрипт.ts|план.json> --out <файл.mod> [--name Имя.mod] [--mod исходный] [-- аргументы]
+```
+
+Общие флаги: `--game`, `--mod <путь|имя.mod>` (мод поверх ванили и его зависимостей),
+`--deps a.mod,b.mod`, `--json`, `--offset`, `--limit`. Соответствие `tools/kdata.py`:
+`find`, `show`, `tree`, `mod` — те же команды (тип можно номером, как там), только данные
+берутся наложением слоёв, как в игре, а не слиянием файлов.
+
+```bash
+node packages/cli/bin/kedit.js find людоед CHARACTER --mod "Skeleton Cannibal Friend"
+```
+
+```bash
+node packages/cli/bin/kedit.js show 2604-gamedata.base --layers
+```
+
+`build` пишет только отличия от нижних слоёв и не пишет в папку игры или мастерской без
+`--force`. Скрипт экспортирует по умолчанию `(env: BuildEnv) => ModContext`; JSON-план —
+`{ mod?, name?, dependencies?, info?, ops: [...] }`, операции: `create`, `duplicate`, `delete`,
+`restore`, `revert`, `rename`, `set`, `reset`, `addRef`, `removeRef`, `setRefs`, `info`.
+
+### Пример: Skeleton Cannibal Friend
+
+`packages/cli/examples/skeleton-cannibal-friend/` — перенос `tools/build_skeleton_cannibal.py`
+на команды ядра. Сборка в `editor/out/` (в `.gitignore`):
+
+```bash
+node packages/cli/bin/kedit.js build packages/cli/examples/skeleton-cannibal-friend/build.ts --out "out/Skeleton Cannibal Friend.mod"
+```
+
+По умолчанию ваниль берётся так, как её видел `kdata.py` (файлы слиты в одну запись), и
+результат совпадает с установленным модом байт в байт. С `-- --layered` — настоящим
+наложением слоёв; единственное отличие разобрано в `packages/cli/test/scf.test.ts`. Тест
+сравнивает обе сборки с установленным модом (без игры пропускается).
+
+## MCP-сервер
+
+stdio-сервер `kenshi-mod-editor` на `@modelcontextprotocol/sdk`:
+
+- инструменты: `open_mod`, `find`, `show`, `tree`, `refs`, `diff`, `validate`, `schema` —
+  как в CLI; `edit` (пачка операций, как в JSON-плане, одним набором изменений, `$псевдонимы`
+  для новых записей), `undo`, `redo`, `history`, `save`;
+- ресурсы: `kenshi://schema/types`, `kenshi://schema/type/{ТИП}` (поля с описаниями из
+  `fcs.def`), `kenshi://schema/enum/{ИМЯ}`;
+- ответы короткие: ссылки с именами целей, длинные списки — страницами (`offset`, `limit`).
+
+`save` без `path` пишет в файл открытого мода; в папку игры или мастерской — только с
+`force: true`.
+
+`.mcp.json` (Claude Code и другие клиенты):
+
+```json
+{
+  "mcpServers": {
+    "kenshi": {
+      "command": "node",
+      "args": ["D:/Kenshiproject/editor/packages/mcp/bin/kenshi-mcp.js", "--mod", "Skeleton Cannibal Friend"],
+      "env": { "KENSHI_DIR": "D:/SteamLibrary/steamapps/common/Kenshi" }
+    }
+  }
+}
+```
+
+Флаги сервера: `--game <папка Kenshi>`, `--mod <путь|имя.mod>` (открыть сразу; иначе —
+`open_mod`), `--deps a.mod,b.mod`.
+
+## Пример: ядро в коде
 
 ```ts
 import { readFileSync } from 'node:fs';
@@ -90,4 +182,9 @@ console.log(schema.types.get('WEAPON')?.fields.get('blunt damage multiplier')?.d
 - `src/schema/` — парсеры `fcs*.def`, сборка схемы (`parseGameSchema`), сверка с данными
   (`analyzeCoverage`) и дополнение схемы полями из данных (`withInferredFields`).
 - `src/locale/po.ts` — gettext PO и индекс переводов по строковым id записей.
-- `src/node/` — то, что требует Node: пути к игре, загрузка файлов.
+- `src/model/` — редактирование без Node: `context.ts` (`ModContext`: слои, статусы,
+  индекс ссылок, команды, undo/redo, сохранение отличий), `record-ops.ts` (наложение и
+  разность записей), `ops.ts` (операции JSON для CLI/MCP), `search.ts`, `validate.ts`,
+  `diff.ts`, `present.ts`, `dialogue.ts`, `schema-view.ts`.
+- `src/node/` — то, что требует Node: пути к игре, загрузка файлов, `loadModContext`,
+  `saveModContext`.

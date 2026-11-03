@@ -6,3 +6,4 @@ coverage/
 reports/
 # локальный конфиг с путями к игре
 kenshi-paths.json
+out/
