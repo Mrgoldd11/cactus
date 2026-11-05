@@ -1,6 +1,7 @@
 /** Мост для окна: только перечисленные вызовы `KeditApi`, без доступа к Node. */
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC, type KeditApi } from '../shared/api.ts';
+import type { LiveRequestBody } from '@kenshi-editor/core';
+import { IPC, type KeditApi, type LiveReply, type LiveStatus } from '../shared/api.ts';
 
 const api: KeditApi = {
   detectGames: () => ipcRenderer.invoke(IPC.detectGames),
@@ -17,6 +18,28 @@ const api: KeditApi = {
   setSettings: (patch) => ipcRenderer.invoke(IPC.setSettings, patch),
   setDirty: (dirty, title) => {
     ipcRenderer.send(IPC.setDirty, dirty, title);
+  },
+  onLiveRequest: (handler) => {
+    ipcRenderer.removeAllListeners(IPC.liveRequest);
+    ipcRenderer.on(IPC.liveRequest, (_e, msg: { rid: number; req: LiveRequestBody }) => {
+      let reply: LiveReply;
+      try {
+        reply = handler(msg.req);
+      } catch (err) {
+        reply = { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+      ipcRenderer.send(IPC.liveResponse, { rid: msg.rid, reply });
+    });
+  },
+  getLiveStatus: () => ipcRenderer.invoke(IPC.getLiveStatus),
+  onLiveStatus: (cb) => {
+    const listener = (_e: unknown, s: LiveStatus): void => {
+      cb(s);
+    };
+    ipcRenderer.on(IPC.liveStatus, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.liveStatus, listener);
+    };
   },
 };
 

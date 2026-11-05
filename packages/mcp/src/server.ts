@@ -126,6 +126,12 @@ const READ = { readOnlyHint: true, openWorldHint: false } as const;
 const EDIT = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 
 export function createServer(session: Session): McpServer {
+  // Подключены к редактору — перед командой взять свежее состояние окна.
+  const run = (fn: () => string[] | Promise<string[]>): Promise<ToolResult> =>
+    guarded(async () => {
+      await session.sync();
+      return fn();
+    });
   const server = new McpServer(
     { name: SERVER_NAME, version: '0.1.0' },
     {
@@ -134,6 +140,7 @@ export function createServer(session: Session): McpServer {
         'Сначала open_mod (или работайте по ванили без него). Записи — по строковому id или имени (show, tree, refs, diff); find ищет по англ. и рус. имени.',
         'Правки (edit) — пачкой операций, одна отмена на пачку; save пишет только изменения. В папку игры save пишет только с force: true.',
         'Схема типов и полей с описаниями из fcs.def — инструмент schema и ресурсы kenshi://schema/…',
+        'Если открыт Kenshi Mod Editor — connect_editor: дальше всё читается из окна редактора, а edit отправляет правки в окно набором изменений; пользователь их принимает или откатывает (editor_changes — их состояние). save и undo в этом режиме делает пользователь.',
       ].join('\n'),
     },
   );
@@ -151,7 +158,7 @@ export function createServer(session: Session): McpServer {
       annotations: { ...READ, title: 'Открыть мод' },
     },
     (a) =>
-      guarded(() => {
+      run(() => {
         const r = session.open(compact({ mod: a.mod, name: a.name, dependencies: a.dependencies }));
         const lines = [`${r.ctx.modName}${r.path ? ` — ${r.path}` : ' — новый, путь укажите в save'}`, statusSummary(r.ctx)];
         if (r.dependencyPaths.length) lines.push(`зависимости: ${r.dependencyPaths.join(', ')}`);
@@ -180,7 +187,7 @@ export function createServer(session: Session): McpServer {
       annotations: { ...READ, title: 'Найти записи' },
     },
     (a) =>
-      guarded(() => {
+      run(() => {
         const hits = searchRecords(
           session.ctx(),
           compact({
@@ -210,7 +217,7 @@ export function createServer(session: Session): McpServer {
       annotations: { ...READ, title: 'Показать запись' },
     },
     (a) =>
-      guarded(() => {
+      run(() => {
         const ctx = session.ctx();
         const max = a.max_refs ?? 20;
         return formatRecord(ctx, record(ctx, resolveId(ctx, a.id)), { showLayers: a.layers ?? false, ...(max > 0 ? { maxRefsPerCategory: max } : {}) });
@@ -231,7 +238,7 @@ export function createServer(session: Session): McpServer {
       annotations: { ...READ, title: 'Дерево диалога' },
     },
     (a) =>
-      guarded(() => {
+      run(() => {
         const ctx = session.ctx();
         const id = resolveId(ctx, a.id, DIALOGUE_TYPES);
         const tree = buildDialogueTree(ctx, id, { maxDepth: a.depth ?? 6, maxNodes: a.max_nodes ?? 60 });
@@ -253,7 +260,7 @@ export function createServer(session: Session): McpServer {
       annotations: { ...READ, title: 'Ссылки записи' },
     },
     (a) =>
-      guarded(() => {
+      run(() => {
         const ctx = session.ctx();
         const id = resolveId(ctx, a.id);
         const dir = a.direction ?? 'both';
@@ -282,7 +289,7 @@ export function createServer(session: Session): McpServer {
       annotations: { ...READ, title: 'Где в игре' },
     },
     (a) =>
-      guarded(() => {
+      run(() => {
         const ctx = session.ctx();
         const id = resolveId(ctx, a.id);
         const res = whereInGame(ctx, id, { world: session.world() });
@@ -305,7 +312,7 @@ export function createServer(session: Session): McpServer {
       annotations: { ...READ, title: 'Что меняет мод' },
     },
     (a) =>
-      guarded(() => {
+      run(() => {
         const ctx = session.ctx();
         const ids = a.id !== undefined ? [resolveId(ctx, a.id)] : ctx.modRecords().map((r) => r.stringId);
         const diffs = ids.flatMap((sid) => modRecordDiff(ctx, sid) ?? []);
@@ -325,7 +332,7 @@ export function createServer(session: Session): McpServer {
       annotations: { ...READ, title: 'Проверить мод' },
     },
     (a) =>
-      guarded(() => {
+      run(() => {
         const ctx = session.ctx();
         const issues = validateMod(ctx);
         const errors = issues.filter((i) => i.severity === 'error').length;
@@ -353,7 +360,15 @@ export function createServer(session: Session): McpServer {
       annotations: { ...EDIT, title: 'Править мод' },
     },
     (a) =>
-      guarded(() => {
+      run(async () => {
+        if (session.editor) {
+          const r = await session.propose(a.label ?? `${a.ops.length} правок`, a.ops.map((op) => compact(op)));
+          const lines = [`в редакторе: набор изменений #${r.changeset.id} «${r.changeset.title}» — ждёт решения пользователя (принять / откатить)`];
+          const aliases = Object.entries(r.aliases);
+          if (aliases.length) lines.push(`псевдонимы: ${aliases.map(([k, v]) => `${k} = ${v}`).join(', ')}`);
+          lines.push(...r.changeset.summary);
+          return lines;
+        }
         const ctx = session.ctx();
         const before = ctx.history().undo.length;
         const r = applyOps(ctx, a.ops.map((op) => compact(op)), a.label);
@@ -368,7 +383,8 @@ export function createServer(session: Session): McpServer {
   );
 
   const step = (dir: 'undo' | 'redo'): Promise<ToolResult> =>
-    guarded(() => {
+    run(() => {
+      if (session.editor) throw new SessionError('Подключены к редактору: отмену делает пользователь в окне (или откатывает набор изменений)');
       const ctx = session.ctx();
       const cs = dir === 'undo' ? ctx.undo() : ctx.redo();
       if (!cs) return [dir === 'undo' ? 'отменять нечего' : 'повторять нечего'];
@@ -386,7 +402,7 @@ export function createServer(session: Session): McpServer {
       annotations: { ...READ, title: 'История правок' },
     },
     (a) =>
-      guarded(() => {
+      run(() => {
         const ctx = session.ctx();
         const { undo, redo } = ctx.history();
         if (a.detail !== undefined) {
@@ -414,13 +430,55 @@ export function createServer(session: Session): McpServer {
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false, title: 'Сохранить мод' },
     },
     (a) =>
-      guarded(() => {
+      run(() => {
         const r = session.save(a.path, a.force ?? false);
         const ctx = session.ctx();
         const errors = validateMod(ctx).filter((i) => i.severity === 'error');
         const lines = [`${r.path}: ${statusSummary(ctx)}`];
         if (errors.length) lines.push(`ошибок проверки: ${errors.length} (validate)`);
         return lines;
+      }),
+  );
+
+  server.registerTool(
+    'connect_editor',
+    {
+      title: 'Подключиться к редактору',
+      description:
+        'Подключиться к открытому окну Kenshi Mod Editor (локально): дальше find/show/… читают мод из окна, edit отправляет правки в окно набором изменений, который пользователь принимает или откатывает. disconnect: true — отключиться.',
+      inputSchema: { disconnect: z.boolean().optional() },
+      annotations: { ...READ, title: 'Подключиться к редактору' },
+    },
+    (a) =>
+      guarded(async () => {
+        if (a.disconnect) {
+          const was = session.editor !== undefined;
+          session.disconnectEditor();
+          return [was ? 'отключено от редактора; дальше — по ванили (open_mod — открыть мод)' : 'редактор и так не подключён'];
+        }
+        const st = await session.connectEditor();
+        const ctx = session.ctx();
+        const lines = [`подключено к редактору: ${st.modName}${st.modPath ? ` — ${st.modPath}` : ' (новый, не сохранён)'}`, statusSummary(ctx)];
+        if (st.dependencies.length) lines.push(`зависимости: ${st.dependencies.map((d) => d.name).join(', ')}`);
+        if (st.game !== undefined && st.game.toLowerCase() !== session.paths.kenshi.toLowerCase()) lines.push(`внимание: в редакторе игра ${st.game}, у сервера — ${session.paths.kenshi}`);
+        if (st.dirty) lines.push('в окне есть несохранённые изменения');
+        return lines;
+      }),
+  );
+
+  server.registerTool(
+    'editor_changes',
+    {
+      title: 'Наборы изменений в редакторе',
+      description: 'Наборы изменений, отправленные в редактор (edit при connect_editor), и решение пользователя по каждому: ждёт, принят, откачен, отменён.',
+      annotations: { ...READ, title: 'Наборы изменений в редакторе' },
+    },
+    () =>
+      run(async () => {
+        const list = await session.editorChangesets();
+        if (!list.length) return ['наборов изменений нет'];
+        const label: Record<string, string> = { pending: 'ждёт решения', accepted: 'принят', 'rolled-back': 'откачен', undone: 'отменён в окне' };
+        return list.map((c) => `#${c.id} «${c.title}» — ${label[c.status] ?? c.status}; записи: ${c.touched.join(', ')}`);
       }),
   );
 
@@ -433,7 +491,7 @@ export function createServer(session: Session): McpServer {
       annotations: { ...READ, title: 'Схема' },
     },
     (a) =>
-      guarded(() => {
+      run(() => {
         const schema = session.schema();
         if (a.enum !== undefined) {
           const lines = formatEnum(schema, a.enum);

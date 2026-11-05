@@ -4,7 +4,9 @@
  */
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import type { GameSchema, Layer, ModContext, PoFile, WorldIndex } from '@kenshi-editor/core';
+import { LiveClient } from './live-client.ts';
+import { readFileSync } from 'node:fs';
+import { base64ToBytes, ModContext, readDataFile, type GameSchema, type Layer, type LiveSnapshot, type LiveState, type PoFile, type ProposeResult, type AiChangeset, type EditOp, type WorldIndex } from '@kenshi-editor/core';
 import {
   gamedataPoPath,
   hasGame,
@@ -14,6 +16,8 @@ import {
   loadModContext,
   loadVanillaLayers,
   loadWorld,
+  liveDiscoveryPath,
+  readLiveDiscovery,
   resolveModPath,
   saveModContext,
   type GamePaths,
@@ -46,6 +50,8 @@ export class Session {
   private poCache?: PoFile | null;
   private current?: OpenResult;
   private worldCache?: { key: string; world: WorldIndex };
+  private live?: { client: LiveClient; state: LiveState; synced?: { session: number; version: number } };
+  private readonly depCache = new Map<string, Layer>();
 
   constructor(paths: GamePaths, cwd: string) {
     this.paths = paths;
@@ -77,6 +83,7 @@ export class Session {
   }
 
   open(req: OpenRequest): OpenResult {
+    if (this.live) throw new SessionError('Подключены к редактору: мод открывают в окне редактора (или connect_editor с disconnect: true)');
     return (this.current = this.load(req));
   }
 
@@ -110,6 +117,7 @@ export class Session {
 
   /** Записать мод. Без пути — туда, откуда открыт. В папку игры — только с `force`. */
   save(path: string | undefined, force: boolean): { path: string; records: number } {
+    if (this.live) throw new SessionError('Подключены к редактору: сохраняет пользователь в окне (Ctrl+S)');
     const cur = this.current;
     if (!cur) throw new SessionError('Мод не открыт: сначала open_mod');
     const target = path !== undefined ? resolve(this.cwd, path) : cur.path;
@@ -120,5 +128,91 @@ export class Session {
     const file = saveModContext(cur.ctx, target);
     cur.path ??= target;
     return { path: target, records: file.records.length };
+  }
+
+  // ------------------------------------------------------------ живая связь с редактором
+
+  /** Подключён ли открытый редактор (и что в нём открыто на момент последней синхронизации). */
+  get editor(): LiveState | undefined {
+    return this.live && !this.live.client.closed ? this.live.state : undefined;
+  }
+
+  /** Подключиться к открытому редактору по файлу обнаружения и взять его мод. */
+  async connectEditor(discoveryPath = liveDiscoveryPath()): Promise<LiveState> {
+    const d = readLiveDiscovery(discoveryPath);
+    if (!d) throw new SessionError(`Редактор не запущен (нет ${discoveryPath}) — откройте Kenshi Mod Editor`);
+    this.disconnectEditor();
+    const client = await LiveClient.connect(d);
+    try {
+      const state = await client.request<LiveState>({ method: 'state' });
+      this.live = { client, state };
+      await this.sync();
+      return this.live.state;
+    } catch (e) {
+      client.close();
+      this.live = undefined;
+      throw e;
+    }
+  }
+
+  disconnectEditor(): void {
+    if (!this.live) return;
+    this.live.client.close();
+    this.live = undefined;
+    this.current = undefined;
+  }
+
+  /**
+   * Перед каждой командой: если подключены к редактору и в окне что-то изменилось — взять
+   * свежий снимок мода. Связь оборвалась — ошибка, дальше работа без редактора (по ванили).
+   */
+  async sync(): Promise<void> {
+    const live = this.live;
+    if (!live) return;
+    try {
+      const state = await live.client.request<LiveState>({ method: 'state' });
+      live.state = state;
+      if (live.synced?.session === state.session && live.synced.version === state.version && this.current) return;
+      const snap = await live.client.request<LiveSnapshot>({ method: 'snapshot' });
+      this.current = this.fromSnapshot(snap);
+      live.state = snap;
+      live.synced = { session: snap.session, version: snap.version };
+    } catch (e) {
+      this.live = undefined;
+      this.current = undefined;
+      throw new SessionError(`${e instanceof Error ? e.message : String(e)}. Дальше — без редактора; connect_editor — подключиться снова`);
+    }
+  }
+
+  private fromSnapshot(snap: LiveSnapshot): OpenResult {
+    const deps = snap.dependencies.map((d) => {
+      let layer = this.depCache.get(d.path);
+      if (!layer) this.depCache.set(d.path, (layer = { name: d.name, file: readDataFile(readFileSync(d.path)) }));
+      return layer;
+    });
+    const po = this.po();
+    const ctx = new ModContext({
+      layers: [...this.vanilla(), ...deps],
+      modName: snap.modName,
+      mod: readDataFile(base64ToBytes(snap.mod)),
+      schema: this.schema(),
+      ...(po ? { po } : {}),
+    });
+    return { ctx, ...(snap.modPath !== undefined ? { path: snap.modPath } : {}), missingDependencies: [], dependencyPaths: snap.dependencies.map((d) => d.path) };
+  }
+
+  /** Отправить правки в окно редактора набором изменений ИИ. */
+  async propose(title: string, ops: EditOp[]): Promise<ProposeResult> {
+    const live = this.live;
+    if (!live) throw new SessionError('Редактор не подключён');
+    const r = await live.client.request<ProposeResult>({ method: 'propose', title, ops });
+    await this.sync();
+    return r;
+  }
+
+  async editorChangesets(): Promise<AiChangeset[]> {
+    const live = this.live;
+    if (!live) throw new SessionError('Редактор не подключён');
+    return live.client.request<AiChangeset[]>({ method: 'changesets' });
   }
 }

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { GameInstallInfo, Lang, ProjectRequest, Settings } from '../../shared/api.ts';
 import { LangContext, STRINGS } from './i18n.ts';
 import { Project } from './project.ts';
+import { setLiveProject } from './live.ts';
 import { StartScreen } from './components/StartScreen.tsx';
 import { Editor } from './components/Editor.tsx';
 
@@ -26,6 +27,10 @@ export function App(): ReactNode {
       setGame(found.find((g) => g.kenshi === s.gameDir) ?? found[0]);
     })();
   }, []);
+
+  useEffect(() => {
+    setLiveProject(project);
+  }, [project]);
 
   const lang = useMemo(() => ({ lang: settings.lang, t: STRINGS[settings.lang] }), [settings.lang]);
 

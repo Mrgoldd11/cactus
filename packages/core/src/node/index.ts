@@ -16,3 +16,4 @@ export function readDataFileSync(path: string, options?: ReadOptions): DataFile 
 export function writeDataFileSync(path: string, file: DataFile, options?: WriteOptions): void {
   writeFileSync(path, writeDataFile(file, options));
 }
+export * from './live-server.ts';

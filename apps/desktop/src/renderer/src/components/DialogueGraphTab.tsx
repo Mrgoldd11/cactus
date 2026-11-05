@@ -4,7 +4,7 @@
  * рёбрами; петли (ссылка на уже показанную реплику) — пунктиром. Сверху — проблемы:
  * нет записи, диалог без реплик, реплика, которую игра не выберет.
  */
-import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Background,
   Controls,
@@ -18,12 +18,13 @@ import {
   type Edge,
   type Node,
   type NodeProps,
+  type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { buildDialogueGraph, type DialogueGraph, type DialogueGraphNode, type TranslationIndex } from '@kenshi-editor/core';
 import { useLang, useT } from '../i18n.ts';
 import type { Project } from '../project.ts';
-import { layoutDialogue, NODE_WIDTH } from '../dialogue-layout.ts';
+import { layoutDialogue, NODE_WIDTH, type Placed } from '../dialogue-layout.ts';
 
 interface Props {
   project: Project;
@@ -40,7 +41,7 @@ type LineNode = Node<LineData, 'line'>;
 
 export function DialogueGraphTab(props: Props): ReactNode {
   return (
-    // Новый провайдер на каждую запись — стартовый вид (fitView) заново.
+    // Новый провайдер на каждую запись — стартовый вид заново.
     <ReactFlowProvider key={props.sid}>
       <GraphView {...props} />
     </ReactFlowProvider>
@@ -52,6 +53,7 @@ function GraphView({ project, sid, version, onGo }: Props): ReactNode {
   const lang = useLang();
   const [translation, setTranslation] = useState<TranslationIndex | undefined | null>(null);
   const flow = useReactFlow();
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -70,7 +72,7 @@ function GraphView({ project, sid, version, onGo }: Props): ReactNode {
 
   const graph = useMemo((): DialogueGraph => buildDialogueGraph(project.ctx, sid, translation ? { translation } : {}), [project, sid, version, translation]);
 
-  const { nodes, edges } = useMemo(() => {
+  const { nodes, edges, pos } = useMemo(() => {
     const pos = layoutDialogue(graph, MAX_TEXTS);
     const ru = lang === 'ru';
     const nodes: LineNode[] = graph.nodes.map((n) => ({
@@ -92,14 +94,17 @@ function GraphView({ project, sid, version, onGo }: Props): ReactNode {
       markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
       ...(e.back ? { animated: true } : {}),
     }));
-    return { nodes, edges };
+    return { nodes, edges, pos };
   }, [graph, lang, onGo]);
 
-  // Стартовый вид: корень и первый ряд реплик в читаемом масштабе.
-  const fitOptions = useMemo(() => {
-    const first = graph.nodes.filter((n) => n.depth <= 1).slice(0, 8);
-    return { nodes: first.map((n) => ({ id: n.id })), minZoom: INITIAL_ZOOM, maxZoom: INITIAL_ZOOM };
-  }, [graph]);
+  // Стартовый вид в читаемом масштабе: граф целиком, если влезает, иначе корень у левого края
+  // по центру высоты (раньше вид центрировался по первым репликам, и в узком окне в середине
+  // могло не оказаться ни одного узла).
+  const startView = useRef<(inst: ReactFlowInstance<LineNode>) => void>(() => undefined);
+  startView.current = (inst) => {
+    const el = canvasRef.current;
+    void inst.setViewport(initialViewport(pos, graph.root, el?.clientWidth ?? 800, el?.clientHeight ?? 600));
+  };
 
   const focus = useCallback(
     (id: string) => {
@@ -143,7 +148,7 @@ function GraphView({ project, sid, version, onGo }: Props): ReactNode {
           {graph.issues.length > 30 && <li className="muted">… {graph.issues.length - 30}</li>}
         </ul>
       )}
-      <div className="dg-canvas">
+      <div className="dg-canvas" ref={canvasRef}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -152,8 +157,11 @@ function GraphView({ project, sid, version, onGo }: Props): ReactNode {
           minZoom={0.1}
           maxZoom={2}
           colorMode="dark"
-          fitView
-          fitViewOptions={fitOptions}
+          onInit={(inst) => {
+            startView.current(inst);
+          }}
+          // Колесо листает (как страницу), Ctrl+колесо — масштаб.
+          panOnScroll
           proOptions={{ hideAttribution: true }}
         >
           <Background gap={24} />
@@ -229,6 +237,36 @@ const LineCard = memo(function LineCard({ data }: NodeProps<LineNode>): ReactNod
 });
 
 const NODE_TYPES = { line: LineCard };
+
+const MARGIN = 24;
+
+/** Вид при открытии графа (масштаб `INITIAL_ZOOM`) для холста `width`×`height`. */
+export function initialViewport(pos: ReadonlyMap<string, Placed>, root: string, width: number, height: number): { x: number; y: number; zoom: number } {
+  const z = INITIAL_ZOOM;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of pos.values()) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x + NODE_WIDTH);
+    maxY = Math.max(maxY, p.y + p.height);
+  }
+  if (!Number.isFinite(minX)) return { x: MARGIN, y: MARGIN, zoom: z };
+  const w = (maxX - minX) * z;
+  const h = (maxY - minY) * z;
+  const x = w + 2 * MARGIN <= width ? (width - w) / 2 - minX * z : MARGIN - (pos.get(root)?.x ?? minX) * z;
+  let y: number;
+  if (h + 2 * MARGIN <= height) y = (height - h) / 2 - minY * z;
+  else {
+    const r = pos.get(root);
+    const center = r ? r.y + r.height / 2 : minY;
+    // Корень по центру, но без пустоты над верхним узлом.
+    y = Math.min(height / 2 - center * z, MARGIN - minY * z);
+  }
+  return { x, y, zoom: z };
+}
 
 /** Типы записей, у которых есть вкладка графа. */
 export const DIALOGUE_GRAPH_TYPES: ReadonlySet<string> = new Set(['DIALOGUE_PACKAGE', 'DIALOGUE', 'DIALOGUE_LINE']);

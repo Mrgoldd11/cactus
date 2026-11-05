@@ -3,6 +3,7 @@
  * всё чтение и запись — через эти вызовы, main выполняет их и спрашивает подтверждение,
  * если запись идёт в папку игры или мастерской.
  */
+import type { LiveRequestBody } from '@kenshi-editor/core';
 
 export type GameSource = 'config' | 'steam' | 'gog' | 'manual';
 
@@ -89,6 +90,17 @@ export interface WorldRequest {
   modPaths: string[];
 }
 
+/** Живая связь с ИИ (MCP): сервер в main, запросы выполняет окно. */
+export interface LiveStatus {
+  /** Порт на 127.0.0.1; нет — сервер не запущен (см. error). */
+  port?: number;
+  /** Подключённые клиенты (MCP-серверы ИИ). */
+  clients: { id: number; name: string; since: number }[];
+  error?: string;
+}
+
+export type LiveReply = { ok: true; result: unknown } | { ok: false; error: string };
+
 export interface KeditApi {
   detectGames(): Promise<GameInstallInfo[]>;
   /** Диалог выбора папки игры; null — отменено или в папке нет игры. */
@@ -111,6 +123,11 @@ export interface KeditApi {
   setSettings(patch: Partial<Settings>): Promise<Settings>;
   /** Есть ли несохранённые изменения (main спросит при закрытии окна). */
   setDirty(dirty: boolean, title: string): void;
+  /** Обработчик запросов ИИ к открытому проекту (один на окно; новый заменяет прежний). */
+  onLiveRequest(handler: (req: LiveRequestBody) => LiveReply): void;
+  getLiveStatus(): Promise<LiveStatus>;
+  /** Подписка на состояние живой связи; вернёт отписку. */
+  onLiveStatus(cb: (s: LiveStatus) => void): () => void;
 }
 
 export const IPC = {
@@ -127,4 +144,8 @@ export const IPC = {
   getSettings: 'kedit:get-settings',
   setSettings: 'kedit:set-settings',
   setDirty: 'kedit:set-dirty',
+  liveRequest: 'kedit:live-request',
+  liveResponse: 'kedit:live-response',
+  liveStatus: 'kedit:live-status',
+  getLiveStatus: 'kedit:get-live-status',
 } as const;

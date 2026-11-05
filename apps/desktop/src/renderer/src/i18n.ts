@@ -173,6 +173,20 @@ const en = {
   validation: 'Validation',
   errors: 'errors',
   warnings: 'warnings',
+  // живая связь с ИИ
+  aiButton: 'AI',
+  aiChanges: 'AI changes',
+  aiServerOff: 'Live link is off',
+  aiServerFailed: 'Live link failed to start',
+  aiWaiting: 'No AI connected. Add the kenshi-mcp server to your AI client and ask it to call connect_editor.',
+  aiConnected: 'Connected',
+  aiNone: 'The AI has not sent any changes yet. Its edits appear here and in the window right away.',
+  aiAccept: 'Accept',
+  aiRollback: 'Roll back',
+  aiStatus_pending: 'awaiting decision',
+  aiStatus_accepted: 'accepted',
+  'aiStatus_rolled-back': 'rolled back',
+  aiStatus_undone: 'undone',
 };
 
 export type Strings = typeof en;
@@ -339,6 +353,19 @@ const ru: Strings = {
   validation: 'Проверка',
   errors: 'ошибок',
   warnings: 'предупреждений',
+  aiButton: 'ИИ',
+  aiChanges: 'Изменения ИИ',
+  aiServerOff: 'Живая связь выключена',
+  aiServerFailed: 'Живая связь не запустилась',
+  aiWaiting: 'ИИ не подключён. Добавьте сервер kenshi-mcp в свой ИИ-клиент и попросите его вызвать connect_editor.',
+  aiConnected: 'Подключено',
+  aiNone: 'ИИ пока ничего не прислал. Его правки появятся здесь и сразу в окне.',
+  aiAccept: 'Принять',
+  aiRollback: 'Откатить',
+  aiStatus_pending: 'ждёт решения',
+  aiStatus_accepted: 'принято',
+  'aiStatus_rolled-back': 'откачено',
+  aiStatus_undone: 'отменено',
 };
 
 export const STRINGS: Record<Lang, Strings> = { en, ru };

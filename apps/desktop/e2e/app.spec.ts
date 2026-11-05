@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { decodeText, itemTypeName, readDataFile, type GameRecord } from '@kenshi-editor/core';
+import { Session } from '@kenshi-editor/mcp';
 
 const appDir = resolve(import.meta.dirname, '..');
 const editorRoot = resolve(appDir, '../..');
@@ -19,14 +20,30 @@ const KATANA = '476-gamedata.base';
 const WEAPON_VENDOR = '2235-gamedata.base';
 const CUT = 'cut damage multiplier';
 
-async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
+async function launch(): Promise<{ app: ElectronApplication; page: Page; liveFile: string }> {
   const userData = mkdtempSync(join(tmpdir(), 'kedit-e2e-'));
   const env: Record<string, string> = { KEDIT_USER_DATA: userData };
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && k !== 'ELECTRON_RENDERER_URL') env[k] = v;
+  // Свой файл обнаружения живой связи: не трогать файл открытого у пользователя редактора.
+  const liveFile = join(userData, 'live.json');
+  env['KEDIT_LIVE_FILE'] = liveFile;
   const app = await electron.launch({ args: ['.'], cwd: appDir, env });
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
-  return { app, page };
+  return { app, page, liveFile };
+}
+
+/**
+ * Закрыть приложение теста. Окна уничтожаются без события close: иначе у несохранённого мода
+ * всплывает «Закрыть без сохранения?» прямо на экране и тест ждёт, пока Playwright убьёт процесс.
+ */
+async function closeApp(app: ElectronApplication): Promise<void> {
+  await app
+    .evaluate(({ BrowserWindow }) => {
+      for (const w of BrowserWindow.getAllWindows()) w.destroy();
+    })
+    .catch(() => undefined);
+  await app.close();
 }
 
 interface Stubs {
@@ -152,7 +169,7 @@ test('ваниль: поиск, правка поля, отмена, сохра�
     expect(existsSync(flat) || existsSync(nested)).toBe(false);
     rmSync(dir, { recursive: true, force: true });
   } finally {
-    await app.close();
+    await closeApp(app);
   }
 });
 
@@ -232,7 +249,7 @@ test('сценарий: копия катаны, имя и урон, в ассо
     await page.screenshot({ path: join(shots, '09-english-fields.png') });
     await page.getByTestId('lang-ru').click();
   } finally {
-    await app.close();
+    await closeApp(app);
   }
 });
 
@@ -269,7 +286,7 @@ test('где в игре: катана → торговец оружием → �
     await expect(page.getByTestId('where-fact').first()).toBeVisible();
     await page.screenshot({ path: join(shots, '11-where-icon.png') });
   } finally {
-    await app.close();
+    await closeApp(app);
   }
 });
 
@@ -296,8 +313,13 @@ test('граф диалога: реплики по-русски, выбор иг
     await page.screenshot({ path: join(shots, '12-dialogue-graph.png') });
 
     // «Hunger arrest empire»: вторая реплика (условие на расу, очков меньше) не будет выбрана.
+    // Узкое окно: стартовый вид от корня, а не пустая середина широкого дерева.
+    await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1100, 640); });
     await selectRecord(page, '53976-Dialogue.mod', '53976-Dialogue.mod');
     await page.getByTestId('tab-graph').click();
+    await expect(graph.getByTestId('dg-stats')).toContainText('узлов 25');
+    await expect(graph.locator('[data-testid="dg-node"][data-id="53976-Dialogue.mod"]')).toBeInViewport();
+    await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1400, 900); });
     const issue = graph.locator('[data-kind="shadowed"][data-node="53978-Dialogue.mod"]');
     await expect(issue).toContainText('не будет выбрана');
     await expect(issue).toContainText(/реплика «[^»]*[а-яё]/i);
@@ -311,6 +333,86 @@ test('граф диалога: реплики по-русски, выбор иг
     await selectRecord(page, 'katana', KATANA);
     await expect(page.getByTestId('tab-graph')).toHaveCount(0);
   } finally {
-    await app.close();
+    await closeApp(app);
   }
+});
+
+test('живая связь с ИИ: MCP подключается к окну, правки — набором изменений, принять и откатить', async () => {
+  const { app, page, liveFile } = await launch();
+  let session: Session | undefined;
+  try {
+    await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('open-vanilla').click();
+    await waitEditor(page);
+    const live = page.getByTestId('live-status');
+    await expect(live).toBeVisible();
+    await expect(live).not.toHaveClass(/connected/);
+    await expect.poll(() => existsSync(liveFile), { timeout: 10_000 }).toBe(true);
+
+    // MCP-сервер (его сессия) — по той же игре, что открыта в окне.
+    const [game] = await page.evaluate(() => window.kedit.detectGames());
+    session = new Session({ kenshi: game!.kenshi, workshop: game!.workshop }, editorRoot);
+    const state = await session.connectEditor(liveFile);
+    expect(state.modName).toBeTruthy();
+    await expect(live).toHaveClass(/connected/);
+    expect(decodeText(session.ctx().get(KATANA)!.name)).toBe('Katana');
+
+    // Правка ИИ: сразу в окне, панель открывается сама.
+    const first = await session.propose('катана тяжелее и острее', [
+      { op: 'set', id: KATANA, field: 'weight kg', value: 9 },
+      { op: 'set', id: KATANA, field: CUT, value: 1.4 },
+    ]);
+    expect(first.changeset.status).toBe('pending');
+    expect(first.changeset.summary.join(' ')).toContain('weight');
+    const panel = page.getByTestId('ai-panel');
+    await expect(panel).toBeVisible();
+    await expect(panel.getByTestId('ai-conn')).toContainText('kenshi-mcp');
+    await expect(panel.getByTestId('ai-changeset')).toHaveCount(1);
+    await expect(live.locator('.live-badge')).toHaveText('1');
+    const card = panel.locator(`[data-testid="ai-changeset"]`).first();
+    await expect(card).toContainText('катана тяжелее и острее');
+    await expect(card).toContainText('weight');
+    // Ссылка на запись — открывает её в редакторе с новым значением.
+    await card.locator(`[data-sid="${KATANA}"]`).click();
+    await expect(page.getByTestId('record-sid')).toHaveText(KATANA);
+    await page.getByTestId('field-filter').fill('weight kg');
+    await expect(page.getByTestId('field-weight kg')).toHaveValue('9');
+    await page.screenshot({ path: join(shots, '14-ai-changeset.png') });
+
+    // Вторая правка — переименование; пользователь её откатывает, первую принимает.
+    const second = await session.propose('новое имя', [{ op: 'rename', id: KATANA, name: 'AI Katana' }]);
+    await expect(page.getByTestId('record-name')).toHaveValue('AI Katana');
+    await expect(panel.getByTestId('ai-changeset')).toHaveCount(2);
+    await expect(live.locator('.live-badge')).toHaveText('2');
+    const secondCard = panel.locator(`[data-testid="ai-changeset"]`).first();
+    await expect(secondCard).toContainText(`#${second.changeset.id}`);
+    await secondCard.getByTestId('ai-rollback').click();
+    await expect(secondCard).toHaveAttribute('data-status', 'rolled-back');
+    await expect(page.getByTestId('record-name')).toHaveValue('Katana');
+    await panel.locator('[data-testid="ai-changeset"][data-status="pending"]').getByTestId('ai-accept').click();
+    await expect(panel.locator('[data-testid="ai-changeset"][data-status="accepted"]')).toHaveCount(1);
+    await expect(live.locator('.live-badge')).toHaveCount(0);
+    await expect(page.getByTestId('field-weight kg')).toHaveValue('9');
+
+    // ИИ видит решения пользователя и состояние окна.
+    const list = await session.editorChangesets();
+    expect(list.map((c) => c.status)).toEqual(['accepted', 'rolled-back']);
+    await session.sync();
+    expect(decodeText(session.ctx().get(KATANA)!.name)).toBe('Katana');
+    expect(session.ctx().get(KATANA)!.floats.get('weight kg')).toBe(9);
+    await page.screenshot({ path: join(shots, '15-ai-accept-rollback.png') });
+
+    // Пользователь сам поменял ту же запись — откат принятого набора запрещён с пояснением.
+    const weight = page.getByTestId('field-weight kg');
+    await weight.fill('11');
+    await weight.press('Enter');
+    await panel.locator('[data-testid="ai-changeset"][data-status="accepted"]').getByTestId('ai-rollback').click();
+    await expect(page.getByTestId('status-msg')).toContainText('Нельзя откатить');
+    await expect(weight).toHaveValue('11');
+  } finally {
+    session?.disconnectEditor();
+    await closeApp(app);
+  }
+  // Окно закрыто — файл обнаружения убран.
+  expect(existsSync(liveFile)).toBe(false);
 });

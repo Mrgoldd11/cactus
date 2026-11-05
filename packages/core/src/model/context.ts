@@ -414,6 +414,42 @@ export class ModContext {
     return cs;
   }
 
+  /** Правка из истории отмены по id (только те, что сейчас действуют). */
+  findChangeset(id: number): Changeset | undefined {
+    return this.undoStack.find((c) => c.id === id);
+  }
+
+  /**
+   * Откатить одну правку из истории, не трогая более поздние: новой правкой («откат: …»),
+   * которую тоже можно отменить. Если затронутые записи (или заголовок) меняли позже —
+   * EditError, ничего не меняется. Правку, уже отменённую через undo, откатывать нечего.
+   */
+  rollbackChangeset(id: number): Changeset {
+    if (this.depth > 0) throw new EditError('Нельзя откатывать внутри транзакции');
+    const cs = this.findChangeset(id);
+    if (!cs) throw new EditError(this.redoStack.some((c) => c.id === id) ? `Правка ${id} уже отменена` : `Правки ${id} нет в истории`);
+    // Состояние после правки: последняя операция по каждой записи.
+    const last = new Map<string, Slot | undefined>();
+    let info: ModInfo | undefined;
+    for (const op of cs.ops) {
+      if (op.kind === 'record') last.set(op.stringId, op.after);
+      else info = op.after;
+    }
+    const later = [...last].filter(([sid, after]) => this.deltas.get(sid) !== after?.delta).map(([sid]) => sid);
+    if (info !== undefined && this.modInfo !== info) later.push('заголовок мода');
+    if (later.length > 0) throw new EditError(`Нельзя откатить «${cs.label}»: позже изменены ${later.join(', ')}`);
+    const next = this.nextChangesetId;
+    this.transaction(`откат: ${cs.label}`, () => {
+      for (const op of [...cs.ops].reverse()) {
+        if (op.kind === 'record') this.setDelta(op.stringId, op.before?.delta, op.before?.index);
+        else this.setInfo(op.before);
+      }
+    });
+    const done = this.undoStack.at(-1);
+    if (done?.id !== next) throw new EditError(`Откат «${cs.label}» ничего не изменил`);
+    return done;
+  }
+
   /** Правки, которые можно отменить (последняя — в конце), и которые можно повторить. */
   history(): { undo: readonly Changeset[]; redo: readonly Changeset[] } {
     return { undo: [...this.undoStack], redo: [...this.redoStack].reverse() };

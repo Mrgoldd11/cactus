@@ -13,6 +13,8 @@ import { CategoryTree } from './CategoryTree.tsx';
 import { RecordList } from './RecordList.tsx';
 import { RecordEditor } from './RecordEditor.tsx';
 import { DependenciesModal, ModInfoModal, NewRecordModal, ValidationModal } from './Modals.tsx';
+import { AiPanel } from './AiPanel.tsx';
+import { useAiChangesets, useLiveStatus } from '../live.ts';
 
 interface Props {
   project: Project;
@@ -58,6 +60,16 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
   const [modal, setModal] = useState<ModalKind | undefined>();
   const searchRef = useRef<HTMLInputElement>(null);
   const selected = nav.stack[nav.pos];
+  const aiChangesets = useAiChangesets();
+  const liveStatus = useLiveStatus();
+  const [aiOpen, setAiOpen] = useState(false);
+  const aiPending = aiChangesets.filter((c) => c.status === 'pending').length;
+  // Пришла новая правка ИИ — показать панель.
+  const aiSeen = useRef(0);
+  useEffect(() => {
+    if (aiChangesets.length > aiSeen.current) setAiOpen(true);
+    aiSeen.current = aiChangesets.length;
+  }, [aiChangesets.length]);
 
   const select = useCallback((sid: string) => {
     setNav((n) => (n.stack[n.pos] === sid ? n : { stack: [...n.stack.slice(0, n.pos + 1), sid].slice(-200), pos: Math.min(n.pos + 1, 199) }));
@@ -184,6 +196,18 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
           {t.validation}
         </button>
         <span className="grow" />
+        <button
+          data-testid="live-status"
+          className={`live-btn${liveStatus.clients.length > 0 ? ' connected' : ''}${aiOpen ? ' active' : ''}`}
+          title={liveStatus.clients.length > 0 ? `${t.aiConnected}: ${liveStatus.clients.map((c) => c.name).join(', ')}` : t.aiChanges}
+          onClick={() => {
+            setAiOpen((o) => !o);
+          }}
+        >
+          <span className="live-dot" />
+          {t.aiButton}
+          {aiPending > 0 && <span className="live-badge">{aiPending}</span>}
+        </button>
         <span className="mod-title" title={project.path ?? project.bundle.suggestedPath}>
           {project.dirty && <span className="dirty-dot">● </span>}
           {project.title}
@@ -195,7 +219,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
           {t.missingDeps}: {project.bundle.missingDependencies.join(', ')}
         </div>
       )}
-      <div className="panes">
+      <div className={`panes${aiOpen ? ' with-ai' : ''}`}>
         <CategoryTree project={project} version={version} selected={nodeId} onSelect={setNodeId} modCount={modCount} />
         <RecordList
           project={project}
@@ -220,6 +244,18 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
           <RecordEditor key="editor" project={project} version={version} sid={selected} onGo={select} onReport={report} />
         ) : (
           <div className="record-editor empty muted">{t.noSelection}</div>
+        )}
+        {aiOpen && (
+          <AiPanel
+            project={project}
+            changesets={aiChangesets}
+            status={liveStatus}
+            onGo={select}
+            onReport={report}
+            onClose={() => {
+              setAiOpen(false);
+            }}
+          />
         )}
       </div>
       <div className="statusbar" data-testid="statusbar">

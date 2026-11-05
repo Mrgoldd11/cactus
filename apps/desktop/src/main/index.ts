@@ -4,11 +4,27 @@
  *
  * Ядро (ModContext) работает в окне: ему нужен синхронный доступ к записям для списка на
  * десятки тысяч строк, отмены и подписки на изменения. Main только читает и пишет файлы.
+ *
+ * Живая связь с ИИ: main держит WebSocket-сервер на 127.0.0.1 (файл обнаружения `live.json`
+ * во временной папке, `KEDIT_LIVE_FILE`; `KEDIT_LIVE=0` — выключить) и передаёт запросы
+ * MCP окну — их выполняет `LiveHost` над открытым проектом.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
-import { IPC, type GameInstallInfo, type ProjectRequest, type SaveRequest, type SaveResult, type Settings, type WorldRequest } from '../shared/api.ts';
+import type { LiveRequestBody } from '@kenshi-editor/core';
+import { startLiveServer, type LiveServer } from '@kenshi-editor/core/node';
+import {
+  IPC,
+  type GameInstallInfo,
+  type LiveReply,
+  type LiveStatus,
+  type ProjectRequest,
+  type SaveRequest,
+  type SaveResult,
+  type Settings,
+  type WorldRequest,
+} from '../shared/api.ts';
 import {
   detectGames,
   gameFromDir,
@@ -79,7 +95,58 @@ async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<Sav
   }
 }
 
+let liveServer: LiveServer | undefined;
+let liveStatus: LiveStatus = { clients: [] };
+const liveWaits = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+let liveRid = 1;
+
+/** Запрос ИИ — окну проекта; ответ придёт по `liveResponse`. */
+function forwardLive(req: LiveRequestBody): Promise<unknown> {
+  const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
+  if (!win) return Promise.reject(new Error('Окно редактора закрыто'));
+  const rid = liveRid++;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      liveWaits.delete(rid);
+      reject(new Error('Окно редактора не ответило'));
+    }, 25_000);
+    liveWaits.set(rid, { resolve, reject, timer });
+    win.webContents.send(IPC.liveRequest, { rid, req });
+  });
+}
+
+function pushLiveStatus(): void {
+  for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send(IPC.liveStatus, liveStatus);
+}
+
+async function startLive(): Promise<void> {
+  if (process.env['KEDIT_LIVE'] === '0') return;
+  try {
+    liveServer = await startLiveServer({
+      handle: forwardLive,
+      onClients: (clients) => {
+        liveStatus = { ...liveStatus, clients };
+        pushLiveStatus();
+      },
+      app: `Kenshi Mod Editor ${app.getVersion()}`,
+    });
+    liveStatus = { port: liveServer.port, clients: [] };
+  } catch (err) {
+    liveStatus = { clients: [], error: err instanceof Error ? err.message : String(err) };
+  }
+  pushLiveStatus();
+}
+
 function registerIpc(): void {
+  ipcMain.on(IPC.liveResponse, (_e, msg: { rid: number; reply: LiveReply }) => {
+    const w = liveWaits.get(msg.rid);
+    if (!w) return;
+    liveWaits.delete(msg.rid);
+    clearTimeout(w.timer);
+    if (msg.reply.ok) w.resolve(msg.reply.result);
+    else w.reject(new Error(msg.reply.error));
+  });
+  ipcMain.handle(IPC.getLiveStatus, () => liveStatus);
   ipcMain.handle(IPC.detectGames, () => {
     knownGames = detectGames();
     return knownGames;
@@ -156,6 +223,7 @@ function createWindow(): void {
     const ru = settings.lang === 'ru';
     const choice = dialog.showMessageBoxSync(win, {
       type: 'question',
+      title: 'Kenshi Mod Editor',
       buttons: ru ? ['Закрыть без сохранения', 'Отмена'] : ['Close without saving', 'Cancel'],
       defaultId: 1,
       cancelId: 1,
@@ -172,9 +240,16 @@ function createWindow(): void {
 void app.whenReady().then(() => {
   registerIpc();
   createWindow();
+  void startLive();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on('will-quit', () => {
+  // Файл обнаружения убирается сразу (синхронно), соединения закрываются следом.
+  void liveServer?.close();
+  liveServer = undefined;
 });
 
 app.on('window-all-closed', () => {
