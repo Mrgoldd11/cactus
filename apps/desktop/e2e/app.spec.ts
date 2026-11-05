@@ -546,3 +546,78 @@ test('рабочее пространство: перетащил панель, 
     rmSync(userData, { recursive: true, force: true });
   }
 });
+
+test('проигрыватель разговора: какой диалог выбран и почему, ответы, «как будто», пример в «Как игра выбирает»', async () => {
+  const { app, page } = await launch();
+  try {
+    await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('open-vanilla').click();
+    await waitEditor(page);
+    await page.getByTestId('window-menu').click();
+    await page.getByTestId('window-preset-dialogue').click();
+    // Трактирщик болотников.
+    await page.getByTestId('search').fill('50638-rebirth.mod');
+    await page.getByTestId('record-list').locator('[data-sid="50638-rebirth.mod"]').click();
+    const player = page.getByTestId('player');
+    await expect(player).toHaveAttribute('data-sid', '50638-rebirth.mod');
+    const first = player.getByTestId('pl-step').first();
+    const opt = (sid: string) => first.locator(`[data-testid="pl-option"][data-sid="${sid}"]`);
+    // «Как будто все условия выполнены»: побеждает реплика беглого бандита (у неё больше очков за условия).
+    await expect(opt('14394-Dialogue (4).mod')).toHaveAttribute('data-why', 'chosen');
+    await expect(opt('48721-Dialogue.mod')).toHaveAttribute('data-why', 'outscored');
+    // Только записи без условий: обычный «Swamp Barman», начало разговора по-русски, три ответа.
+    await player.getByTestId('pl-mode').selectOption('none');
+    await expect(opt('48721-Dialogue.mod')).toHaveAttribute('data-why', 'chosen');
+    await expect(opt('48721-Dialogue.mod').getByTestId('pl-why')).toContainText('больше всех очков');
+    await expect(opt('14394-Dialogue (4).mod')).toHaveAttribute('data-why', 'fails');
+    await expect(opt('14394-Dialogue (4).mod').getByTestId('pl-why')).toContainText('условия не выполнены');
+    await expect(first.getByTestId('pl-said')).toContainText('Пляшущий Скелет', { timeout: 60_000 });
+    await expect(first.getByTestId('pl-answer')).toHaveCount(3);
+    await page.screenshot({ path: join(shots, '18-player.png') });
+
+    // Ответ игрока → реплика трактирщика и шесть новых ответов; «вернуться» — назад.
+    await first.locator('[data-testid="pl-answer"][data-sid="48725-Dialogue.mod"]').click();
+    await expect(player.getByTestId('pl-step')).toHaveCount(2);
+    const second = player.getByTestId('pl-step').nth(1);
+    await expect(second.getByTestId('pl-said')).toHaveAttribute('data-sid', '48726-Dialogue.mod');
+    await expect(second.getByTestId('pl-answer')).toHaveCount(6);
+    await page.screenshot({ path: join(shots, '18b-player-answer.png') });
+    await first.getByTestId('pl-back').click();
+    await expect(player.getByTestId('pl-step')).toHaveCount(1);
+
+    // «Как будто условия бандита выполнены»: диалог проходит, но у его реплик свои условия — внутри
+    // ничего не подходит, игра его пропускает.
+    const bandit = opt('14394-Dialogue (4).mod');
+    await bandit.getByTestId('pl-asif').locator('input').check();
+    await expect(bandit).toHaveAttribute('data-why', 'empty');
+    await expect(bandit.getByTestId('pl-why')).toContainText('внутри ничего не подходит');
+    await expect(opt('48721-Dialogue.mod')).toHaveAttribute('data-why', 'chosen');
+    // Обратно «как будто выполнены»; снять галочку у бандита — выбор переходит к следующему, сброс возвращает.
+    await player.getByTestId('pl-mode').selectOption('met');
+    await expect(bandit).toHaveAttribute('data-why', 'chosen');
+    await bandit.getByTestId('pl-asif').locator('input').uncheck();
+    await expect(bandit).toHaveAttribute('data-why', 'fails');
+    await expect(opt('5934-Dialogue.mod')).toHaveAttribute('data-why', 'chosen');
+    await player.getByTestId('pl-reset-asif').click();
+    await expect(bandit).toHaveAttribute('data-why', 'chosen');
+    await player.getByTestId('pl-mode').selectOption('none');
+    await expect(opt('48721-Dialogue.mod')).toHaveAttribute('data-why', 'chosen');
+
+    // Клик по реплике — её диалог открывается в графе, сама реплика — в инспекторе реплики.
+    await first.getByTestId('pl-said').getByRole('button').click();
+    await expect(page.getByTestId('dialogue-graph')).toHaveAttribute('data-sid', '48721-Dialogue.mod');
+    await expect(page.getByTestId('line-inspector')).toHaveAttribute('data-sid', '48722-Dialogue.mod');
+    await expect(player).toHaveAttribute('data-sid', '50638-rebirth.mod');
+    await page.screenshot({ path: join(shots, '18c-player-line.png') });
+
+    // «Как игра выбирает диалог»: правило и пример на этом персонаже.
+    await page.locator('.dv-tab', { hasText: 'Как игра выбирает' }).click();
+    const howto = page.getByTestId('howto');
+    await expect(howto.getByTestId('howto-example')).toContainText('Трактирщик — диалогов на «разговор»: 5');
+    await expect(howto.getByTestId('howto-example')).toContainText('Если ни одно условие не выполнено');
+    await expect(howto).toContainText('всем поровну');
+    await page.screenshot({ path: join(shots, '19-howto.png') });
+  } finally {
+    await closeApp(app);
+  }
+});

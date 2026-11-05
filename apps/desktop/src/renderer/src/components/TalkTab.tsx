@@ -93,7 +93,7 @@ export function TalkTab({ project, sid, version, onGo }: Props): ReactNode {
 
 const pct = (p: number): string => `${String(Math.round(p * 100))}%`;
 
-function partsText(parts: readonly ScorePart[], t: Strings): string {
+export function partsText(parts: readonly ScorePart[], t: Strings): string {
   return parts
     .map((p) => {
       const v = `${p.value > 0 ? '+' : ''}${String(p.value)}`;
@@ -373,23 +373,33 @@ function RulesButton(): ReactNode {
       </button>
       {open && (
         <div className="talk-rules" data-testid="talk-rules" role="dialog" aria-label={t.talkHowTitle}>
-          <div className="group-title">{t.talkHowTitle}</div>
-          <ol>
-            {t.talkRules.map((r, i) => (
-              <li key={i}>{r}</li>
-            ))}
-          </ol>
-          <div className="group-title">{t.talkMarksTitle}</div>
-          <ul className="talk-marks">
-            {(['wins', 'random', 'if-conditions', 'tie', 'shadowed'] as const).map((v) => (
-              <li key={v}>
-                <span className={`badge tv-${v}`}>{t[`talkVerdict_${v}`]}</span> {t[`talkMark_${v}`]}
-              </li>
-            ))}
-          </ul>
-          <p className="muted small">{t.talkRulesSource}</p>
+          <TalkRulesBody />
         </div>
       )}
     </span>
+  );
+}
+
+/** Правило выбора простыми словами и что значат пометки (окошко «Как игра выбирает» и панель «Как это работает»). */
+export function TalkRulesBody(): ReactNode {
+  const t = useT();
+  return (
+    <>
+      <div className="group-title">{t.talkHowTitle}</div>
+      <ol>
+        {t.talkRules.map((r, i) => (
+          <li key={i}>{r}</li>
+        ))}
+      </ol>
+      <div className="group-title">{t.talkMarksTitle}</div>
+      <ul className="talk-marks">
+        {(['wins', 'random', 'if-conditions', 'tie', 'shadowed'] as const).map((v) => (
+          <li key={v}>
+            <span className={`badge tv-${v}`}>{t[`talkVerdict_${v}`]}</span> {t[`talkMark_${v}`]}
+          </li>
+        ))}
+      </ul>
+      <p className="muted small">{t.talkRulesSource}</p>
+    </>
   );
 }

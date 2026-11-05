@@ -6,7 +6,9 @@
 import type { ReactNode } from 'react';
 import { DialogueGraphTab } from '../../components/DialogueGraphTab.tsx';
 import { LineInspector } from '../../components/LineInspector.tsx';
-import { TalkTab } from '../../components/TalkTab.tsx';
+import { ConversationPlayer, TalkExample } from '../../components/ConversationPlayer.tsx';
+import { TalkRulesBody, TalkTab } from '../../components/TalkTab.tsx';
+import { useT } from '../../i18n.ts';
 import { registerPanel, type PanelProps } from '../registry.ts';
 import { useFollowed, useWorkbench } from '../context.ts';
 import { Empty } from './common.tsx';
@@ -39,12 +41,34 @@ function LinePanel({ def, params }: PanelProps): ReactNode {
 }
 
 function PlayerPanel({ def, params }: PanelProps): ReactNode {
-  const { project, go } = useWorkbench();
+  const { project, go, selection } = useWorkbench();
+  const t = useT();
   const { sid, version } = useFollowed(def, params);
   if (sid === undefined) return <Empty />;
+  // Реплика из разговора: её диалог — в граф, сама реплика — в инспектор реплики.
+  const selectLine = (line: string, dialog?: string): void => {
+    if (dialog !== undefined) selection.select({ kind: 'record', sid: dialog }, { history: false });
+    selection.select({ kind: 'line', sid: line, ...(dialog !== undefined ? { dialog } : {}) }, { history: false });
+  };
   return (
     <div className="panel-scroll">
-      <TalkTab project={project} sid={sid} version={version} onGo={go} />
+      <ConversationPlayer key={sid} project={project} sid={sid} version={version} onGo={go} onSelectLine={selectLine} />
+      <details className="pl-summary" open>
+        <summary>{t.plSummary}</summary>
+        <TalkTab project={project} sid={sid} version={version} onGo={go} />
+      </details>
+    </div>
+  );
+}
+
+/** «Как игра выбирает диалог»: правило простыми словами и пример на выбранном персонаже. */
+function HowtoPanel({ def, params }: PanelProps): ReactNode {
+  const { project } = useWorkbench();
+  const { sid, version } = useFollowed(def, params);
+  return (
+    <div className="panel-scroll howto" data-testid="howto">
+      <TalkExample project={project} sid={sid} version={version} />
+      <TalkRulesBody />
     </div>
   );
 }
@@ -79,4 +103,13 @@ registerPanel({
   shows: { kinds: ['record'], types: ['CHARACTER'] },
   multi: true,
   order: 60,
+});
+registerPanel({
+  id: 'howto',
+  title: (t) => t.panel_howto,
+  icon: '?',
+  component: HowtoPanel,
+  area: 'bottom',
+  shows: { kinds: ['record'], types: ['CHARACTER'] },
+  order: 70,
 });

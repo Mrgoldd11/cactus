@@ -1577,3 +1577,118 @@ button.small.active {
   flex-direction: column;
   gap: 8px;
 }
+
+/* проигрыватель разговора */
+.player {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.player .talk-bar {
+  flex-wrap: wrap;
+}
+.player .talk-bar label {
+  white-space: nowrap;
+}
+.pl-character {
+  width: 200px;
+}
+.pl-event {
+  max-width: 220px;
+}
+.pl-table {
+  width: 100%;
+}
+.pl-table td:nth-child(4) {
+  min-width: 150px;
+}
+.pl-conds {
+  display: inline-block;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.pl-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pl-step {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg2);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pl-choice-title {
+  color: var(--muted);
+}
+.pl-table td {
+  padding: 2px 6px;
+  vertical-align: top;
+}
+.pl-mark {
+  width: 1em;
+  color: var(--accent);
+}
+.pl-opt.pl-chosen,
+.pl-opt.pl-chosen-random {
+  background: rgba(79, 140, 201, 0.15);
+}
+.pl-opt.pl-fails,
+.pl-opt.pl-outscored,
+.pl-opt.pl-empty,
+.pl-opt.pl-missing {
+  opacity: 0.65;
+}
+.pl-said {
+  padding: 4px 8px;
+  border-left: 3px solid var(--accent);
+  background: var(--bg3);
+}
+.pl-speaker {
+  font-weight: 600;
+}
+.pl-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pl-answer-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.pl-answer {
+  text-align: left;
+}
+.pl-answer-row.pl-chosen .pl-answer {
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.pl-answer-row.pl-hidden .pl-answer {
+  opacity: 0.5;
+  font-style: italic;
+}
+.pl-asif {
+  color: var(--muted);
+}
+.pl-end {
+  color: var(--muted);
+}
+.pl-summary > summary {
+  cursor: pointer;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.howto-example {
+  margin-bottom: 12px;
+}
