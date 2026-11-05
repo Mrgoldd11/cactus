@@ -3,7 +3,7 @@
  * что нужно окну для контекста, запись мода. Подтверждения и диалоги — в `index.ts`.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { decodeText, readModHeader, splitModList, VANILLA_FILES } from '@kenshi-editor/core';
 import {
   detectGameInstalls,
@@ -96,6 +96,34 @@ export function loadProject(req: ProjectRequest): ProjectBundle {
 /** Нужно ли подтверждение: путь в папке игры или мастерской. */
 export function needsConfirmation(game: GameInstallInfo | undefined, path: string): boolean {
   return game !== undefined && isInGameFolders(game, path);
+}
+
+/**
+ * Путь для окна «Сохранить как»: если папки ещё нет (новый мод, `mods/<имя>/`), Windows
+ * открывает «Документы» — тогда предлагаем ближайшую существующую папку выше с тем же именем файла.
+ */
+export function saveDialogDefaultPath(path: string): string {
+  let dir = dirname(path);
+  while (!existsSync(dir)) {
+    const up = dirname(dir);
+    if (up === dir) return basename(path);
+    dir = up;
+  }
+  return join(dir, basename(path));
+}
+
+/**
+ * Лаунчер видит мод только как `mods/<имя>/<имя>.mod`. Файл, сохранённый прямо в `mods/`,
+ * кладём в свою папку: `mods/X.mod` → `mods/X/X.mod`. Остальные пути не меняются.
+ */
+export function modInstallPath(games: readonly GameInstallInfo[], path: string): string {
+  const dir = resolve(dirname(path)).toLowerCase();
+  for (const g of games) {
+    if (resolve(g.kenshi, 'mods').toLowerCase() !== dir) continue;
+    const name = basename(path).replace(/\.mod$/i, '');
+    return join(dirname(path), name, `${name}.mod`);
+  }
+  return path;
 }
 
 export function writeMod(path: string, bytes: Uint8Array): void {

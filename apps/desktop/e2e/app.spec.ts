@@ -29,23 +29,41 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
   return { app, page };
 }
 
-/** Подменить диалог «Сохранить как» в main: вернуть заданный путь. */
+interface Stubs {
+  messageBoxCalls: number;
+  messageBoxDetail?: string;
+  saveDefaultPath?: string;
+}
+
+/** Подменить диалог «Сохранить как» в main: вернуть заданный путь, запомнить предложенный. */
 async function stubSaveDialog(app: ElectronApplication, path: string): Promise<void> {
   await app.evaluate(({ dialog }, p) => {
-    dialog.showSaveDialog = () => Promise.resolve({ canceled: false, filePath: p });
+    const g = globalThis as unknown as Stubs;
+    dialog.showSaveDialog = (...args: unknown[]) => {
+      g.saveDefaultPath = (args.at(-1) as { defaultPath?: string }).defaultPath;
+      return Promise.resolve({ canceled: false, filePath: p });
+    };
   }, path);
 }
 
 /** Подменить окно подтверждения в main: нажать кнопку `response`, запомнить вызов. */
 async function stubMessageBox(app: ElectronApplication, response: number): Promise<void> {
   await app.evaluate(({ dialog }, r) => {
-    const g = globalThis as unknown as { messageBoxCalls: number };
+    const g = globalThis as unknown as Stubs;
     g.messageBoxCalls = 0;
-    dialog.showMessageBox = () => {
+    dialog.showMessageBox = (...args: unknown[]) => {
       g.messageBoxCalls++;
+      g.messageBoxDetail = (args.at(-1) as { detail?: string }).detail;
       return Promise.resolve({ response: r, checkboxChecked: false });
     };
   }, response);
+}
+
+async function stubs(app: ElectronApplication): Promise<Stubs> {
+  return app.evaluate(() => {
+    const g = globalThis as unknown as Stubs;
+    return { messageBoxCalls: g.messageBoxCalls, messageBoxDetail: g.messageBoxDetail, saveDefaultPath: g.saveDefaultPath };
+  });
 }
 
 async function waitEditor(page: Page): Promise<void> {
@@ -120,8 +138,18 @@ test('ваниль: поиск, правка поля, отмена, сохра�
     await stubSaveDialog(app, gamePath);
     await page.getByTestId('save-as').click();
     await expect(page.getByTestId('status-msg')).toContainText('отменено');
-    expect(await app.evaluate(() => (globalThis as unknown as { messageBoxCalls: number }).messageBoxCalls)).toBe(1);
+    expect((await stubs(app)).messageBoxCalls).toBe(1);
     expect(existsSync(gamePath)).toBe(false);
+
+    // Файл прямо в `mods/` лаунчер не видит — редактор кладёт его в `mods/<имя>/<имя>.mod`.
+    const flat = join(kenshi, 'mods', '__kedit_e2e_flat__.mod');
+    const nested = join(kenshi, 'mods', '__kedit_e2e_flat__', '__kedit_e2e_flat__.mod');
+    await stubMessageBox(app, 1);
+    await stubSaveDialog(app, flat);
+    await page.getByTestId('save-as').click();
+    await expect(page.getByTestId('status-msg')).toContainText('отменено');
+    expect((await stubs(app)).messageBoxDetail).toBe(nested);
+    expect(existsSync(flat) || existsSync(nested)).toBe(false);
     rmSync(dir, { recursive: true, force: true });
   } finally {
     await app.close();
@@ -182,6 +210,9 @@ test('сценарий: копия катаны, имя и урон, в ассо
     await stubSaveDialog(app, out);
     await page.getByTestId('save').click();
     await expect(page.getByTestId('status-msg')).toContainText('Сохранено');
+    // Папки нового мода ещё нет — окно сохранения открывается в `Kenshi/mods`, а не в «Документах».
+    const games = await page.evaluate(() => window.kedit.detectGames());
+    expect((await stubs(app)).saveDefaultPath).toBe(join(games[0]!.kenshi, 'mods', `${modName}.mod`));
 
     const recs = recordsOf(out);
     expect(recs).toHaveLength(2);

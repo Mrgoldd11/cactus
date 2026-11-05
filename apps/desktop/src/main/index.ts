@@ -9,7 +9,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { IPC, type GameInstallInfo, type ProjectRequest, type SaveRequest, type SaveResult, type Settings } from '../shared/api.ts';
-import { detectGames, gameFromDir, listMods, loadProject, needsConfirmation, writeMod } from './service.ts';
+import { detectGames, gameFromDir, listMods, loadProject, modInstallPath, needsConfirmation, saveDialogDefaultPath, writeMod } from './service.ts';
 
 // Отдельная папка данных (e2e запускает приложение с чистыми настройками).
 if (process.env['KEDIT_USER_DATA']) app.setPath('userData', process.env['KEDIT_USER_DATA']);
@@ -39,8 +39,9 @@ function isGamePath(path: string): boolean {
   return [...knownGames, ...(currentGame ? [currentGame] : [])].some((g) => needsConfirmation(g, path));
 }
 
-async function saveMod(e: IpcMainInvokeEvent, req: SaveRequest): Promise<SaveResult> {
-  if (!req.path.toLowerCase().endsWith('.mod')) return { ok: false, cancelled: false, error: 'not a .mod path' };
+async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<SaveResult> {
+  if (!request.path.toLowerCase().endsWith('.mod')) return { ok: false, cancelled: false, error: 'not a .mod path' };
+  const req = { ...request, path: modInstallPath([...knownGames, ...(currentGame ? [currentGame] : [])], request.path) };
   const win = windowOf(e);
   if (isGamePath(req.path)) {
     const ru = settings.lang === 'ru';
@@ -95,7 +96,7 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.chooseSavePath, async (e, defaultPath: string) => {
     const win = windowOf(e);
-    const opts = { defaultPath, filters: [{ name: 'Kenshi mod', extensions: ['mod'] }] };
+    const opts = { defaultPath: saveDialogDefaultPath(defaultPath), filters: [{ name: 'Kenshi mod', extensions: ['mod'] }] };
     const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
     return r.canceled ? null : (r.filePath || null);
   });
