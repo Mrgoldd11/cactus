@@ -246,6 +246,15 @@ class Describer {
       const d = this.diffs.find((x) => this.isLine(x));
       return d ? this.lineTextChanged(d) : { ru: 'Изменён текст реплики', en: 'Changed line text' };
     }
+    const relation = /^отношение («.*») (→|⇄) («.*»): (сброс|-?\d+)$/s.exec(label);
+    if (relation) {
+      const [, a, arrow, b, v] = relation;
+      const reset = v === 'сброс';
+      return {
+        ru: `Отношение ${a} ${arrow} ${b}: ${reset ? 'по умолчанию' : v}`,
+        en: `Relation ${a} ${arrow} ${b}: ${reset ? 'default' : v}`,
+      };
+    }
     const created = /^создать «(.*)»$/s.exec(label);
     if (created) {
       const d = this.added()[0];

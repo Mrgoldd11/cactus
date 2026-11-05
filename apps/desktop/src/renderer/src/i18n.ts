@@ -4,6 +4,7 @@
  */
 import { createContext, useContext } from 'react';
 import type { Lang } from '../../shared/api.ts';
+import { specialEn, specialRu } from './i18n-special.ts';
 
 const en = {
   appTitle: 'Kenshi Mod Editor',
@@ -591,6 +592,7 @@ const en = {
   lnOrphan: 'Nothing leads to this line — the game will never say it.',
   lnNoParents: 'No package uses this dialogue.',
   lnInGameTitle: 'As in game (without this mod)',
+  ...specialEn,
 };
 
 export type Strings = typeof en;
@@ -1172,6 +1174,7 @@ const ru: Strings = {
   lnOrphan: 'Сюда ничто не ведёт — игра эту реплику не скажет.',
   lnNoParents: 'Этот диалог не входит ни в один пакет.',
   lnInGameTitle: 'Как в игре (без этого мода)',
+  ...specialRu,
 };
 
 export const STRINGS: Record<Lang, Strings> = { en, ru };

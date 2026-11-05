@@ -16,3 +16,4 @@ export * from './step-title.ts';
 export * from './load-order.ts';
 export * from './conflicts.ts';
 export * from './translate.ts';
+export * from './factions.ts';
