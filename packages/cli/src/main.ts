@@ -43,6 +43,7 @@ import {
 import { loadTranslation, loadWorld, readDataFileSync, readModsCfg } from '@kenshi-editor/core/node';
 import { basename } from 'node:path';
 import { runBuild } from './build.ts';
+import { modsList } from './mods.ts';
 import { UsageError, Workspace } from './workspace.ts';
 
 export interface Io {
@@ -79,6 +80,7 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
   validate                битые ссылки, поля вне схемы, не тот вид; код выхода 1 при ошибках
   schema [ТИП]            типы записей / поля типа с описаниями из fcs.def  --enum ИМЯ
   build <скрипт.ts|план.json> --out <файл.mod> [--name Имя.mod] [--mod исходный] [-- аргументы]
+  mods [list]             установленные моды: порядок mods.cfg, откуда (mods/мастерская)  --full  --json
 
 Общие:
   --game <папка Kenshi>   иначе KENSHI_DIR, kenshi-paths.json или найденная установка Steam/GOG
@@ -386,6 +388,12 @@ const COMMANDS: Record<string, Handler> = {
     if (c.values.json) c.io.out(JSON.stringify({ ...t, fields: [...t.fields.values()] }, null, 1));
     else for (const l of formatTypeSchema(t)) c.io.out(l);
     return 0;
+  },
+
+  mods(c) {
+    const sub = c.args[0] ?? 'list';
+    if (sub === 'list') return modsList(c.ws, c.io, { json: c.values.json ?? false, full: c.values.full ?? false });
+    throw new UsageError(`mods ${sub}? (list)`);
   },
 
   async build(c) {

@@ -4,18 +4,18 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
-import { decodeText, readModHeader, splitModList, VANILLA_FILES } from '@kenshi-editor/core';
+import { VANILLA_FILES } from '@kenshi-editor/core';
 import {
   detectGameInstalls,
   gamedataPoPath,
-  installedModFiles,
   isInGameFolders,
   isKenshiDir,
+  listInstalledMods,
   listWorldFiles,
   manualInstall,
   planModLoad,
   readIfUnknown,
-  readModsCfg,
+  readModSummary,
   SCHEMA_FILES,
   translationFilePath,
   vanillaFilePaths,
@@ -33,30 +33,29 @@ export function gameFromDir(dir: string): GameInstallInfo | undefined {
   return { kenshi: g.kenshi, workshop: g.workshop, source: 'manual' };
 }
 
-export function describeMod(path: string, source: ModEntry['source'], cfg: readonly string[]): ModEntry {
-  const fileName = basename(path);
-  const entry: ModEntry = { fileName, path, source };
-  const idx = cfg.indexOf(fileName.toLowerCase());
-  if (idx >= 0) entry.loadIndex = idx;
-  try {
-    const { header, recordCount } = readModHeader(readFileSync(path));
-    if (header) {
-      entry.author = decodeText(header.author);
-      entry.description = decodeText(header.description);
-      entry.dependencies = splitModList(header.dependencies);
-      entry.references = splitModList(header.references);
-    }
-    if (recordCount !== undefined) entry.recordCount = recordCount;
-  } catch (e) {
-    entry.error = e instanceof Error ? e.message : String(e);
-  }
+/** Мод с заголовком (читается только начало файла). */
+export function describeMod(path: string, source: ModEntry['source'], extra: Partial<ModEntry> = {}): ModEntry {
+  const entry: ModEntry = { fileName: basename(path), path, source, ...extra };
+  const h = readModSummary(path);
+  if (h.author !== undefined) entry.author = h.author;
+  if (h.description !== undefined) entry.description = h.description;
+  if (h.dependencies) entry.dependencies = h.dependencies;
+  if (h.references) entry.references = h.references;
+  if (h.recordCount !== undefined) entry.recordCount = h.recordCount;
+  if (h.error !== undefined) entry.error = h.error;
   return entry;
 }
 
 /** Моды из `mods/` и мастерской с заголовками; порядок `mods.cfg` — в `loadIndex`. */
 export function listMods(game: GameInstallInfo): ModEntry[] {
-  const cfg = readModsCfg(game).map((s) => s.toLowerCase());
-  return installedModFiles(game).map((m) => describeMod(m.path, m.source, cfg));
+  return listInstalledMods(game).mods.map((m) =>
+    describeMod(m.path, m.source, {
+      enabled: m.enabled,
+      ...(m.loadIndex !== undefined ? { loadIndex: m.loadIndex } : {}),
+      ...(m.workshopId !== undefined ? { workshopId: m.workshopId } : {}),
+      ...(m.shadowedBy !== undefined ? { shadowedBy: m.shadowedBy } : {}),
+    }),
+  );
 }
 
 function readNamed(name: string, path: string): NamedBytes {
@@ -80,6 +79,7 @@ export function loadProject(req: ProjectRequest): ProjectBundle {
     ...(req.modPath !== undefined ? { modPath: req.modPath } : {}),
     ...(req.modName !== undefined ? { modName: req.modName } : {}),
     ...(req.dependencies ? { dependencies: req.dependencies } : {}),
+    ...(req.contextMods ? { context: req.contextMods } : {}),
   });
   const known = new Set(req.known ?? []);
   const vanilla = vanillaFilePaths(game).map((p, i) => readCached(VANILLA_FILES[i]!, p, known));
@@ -92,6 +92,7 @@ export function loadProject(req: ProjectRequest): ProjectBundle {
     vanilla,
     dependencies: plan.dependencies.map((d) => readCached(d.name, d.path, known)),
     missingDependencies: plan.missingDependencies,
+    ...(plan.context.length ? { contextMods: plan.context } : {}),
     schema: {
       fcsDef: readFileSync(join(game.kenshi, SCHEMA_FILES.fcsDef), 'utf8'),
       ...(fcsEnums !== undefined ? { fcsEnums } : {}),

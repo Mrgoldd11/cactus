@@ -25,6 +25,11 @@ export interface LoadContextOptions {
    * references из заголовка мода. Ванильные имена пропускаются: ваниль грузится всегда.
    */
   dependencies?: readonly string[];
+  /**
+   * Другие моды для контекста (имена .mod): грузятся слоями на своих местах по `mods.cfg`,
+   * но в заголовок мода не пишутся. Так видно, как мод ляжет поверх других модов.
+   */
+  context?: readonly string[];
   /** Загрузить схему FCS (по умолчанию да, если fcs.def есть) или взять уже прочитанную. */
   schema?: boolean | GameSchema;
   /** Загрузить русский gamedata.po для поиска (по умолчанию да, если файл есть) или взять уже прочитанный. */
@@ -39,6 +44,8 @@ export interface LoadedContext {
   missingDependencies: string[];
   /** Пути загруженных зависимостей по порядку. */
   dependencyPaths: string[];
+  /** Моды контекста, которые нашлись (не зависимости). */
+  context: string[];
 }
 
 export function loadVanillaLayers(paths: GamePaths): Layer[] {
@@ -70,13 +77,21 @@ export interface ModLoadPlan {
   dependencies: { name: string; path: string }[];
   /** Зависимости, которых нет ни в `mods/`, ни в мастерской. */
   missingDependencies: string[];
+  /**
+   * Моды контекста (`options.context`), которые нашлись и не входят в зависимости: стоят
+   * среди `dependencies` на своих местах по `mods.cfg`, в заголовок мода не попадают.
+   */
+  context: string[];
 }
 
 /**
  * Что грузить: файл мода (если есть), его зависимости по порядку `mods.cfg`, отсутствующие.
  * Ванильные имена и сам мод из зависимостей убираются.
  */
-export function planModLoad(paths: GamePaths, options: { modPath?: string; modName?: string; dependencies?: readonly string[] }): ModLoadPlan {
+export function planModLoad(
+  paths: GamePaths,
+  options: { modPath?: string; modName?: string; dependencies?: readonly string[]; context?: readonly string[] },
+): ModLoadPlan {
   let mod: DataFile | undefined;
   let modName = options.modName ?? 'new.mod';
   let modPath: string | undefined;
@@ -90,7 +105,17 @@ export function planModLoad(paths: GamePaths, options: { modPath?: string; modNa
   const vanillaNames = new Set<string>(VANILLA_FILES.map((f) => f.toLowerCase()));
   const requested =
     options.dependencies ?? (mod?.header ? [...splitModList(mod.header.dependencies), ...splitModList(mod.header.references)] : []);
-  const unique = [...new Set(requested.filter((d) => !vanillaNames.has(d.toLowerCase()) && d.toLowerCase() !== modName.toLowerCase()))];
+  const keep = (d: string): boolean => !vanillaNames.has(d.toLowerCase()) && d.toLowerCase() !== modName.toLowerCase();
+  const requestedLower = new Set(requested.map((d) => d.toLowerCase()));
+  const contextOnly = (options.context ?? []).filter((d) => keep(d) && !requestedLower.has(d.toLowerCase()));
+  const seen = new Set<string>();
+  const unique = [...requested.filter(keep), ...contextOnly].filter((d) => {
+    const k = d.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const contextLower = new Set(contextOnly.map((d) => d.toLowerCase()));
   const cfg = readModsCfg(paths).map((s) => s.toLowerCase());
   const rank = (n: string): number => {
     const i = cfg.indexOf(n.toLowerCase());
@@ -99,12 +124,15 @@ export function planModLoad(paths: GamePaths, options: { modPath?: string; modNa
   unique.sort((a, b) => rank(a) - rank(b));
   const dependencies: { name: string; path: string }[] = [];
   const missingDependencies: string[] = [];
+  const context: string[] = [];
   for (const dep of unique) {
     const p = findInstalledMod(paths, dep);
-    if (p) dependencies.push({ name: dep, path: p });
-    else missingDependencies.push(dep);
+    if (p) {
+      dependencies.push({ name: dep, path: p });
+      if (contextLower.has(dep.toLowerCase())) context.push(dep);
+    } else if (!contextLower.has(dep.toLowerCase())) missingDependencies.push(dep);
   }
-  return { modName, ...(modPath !== undefined ? { modPath } : {}), ...(mod ? { mod } : {}), dependencies, missingDependencies };
+  return { modName, ...(modPath !== undefined ? { modPath } : {}), ...(mod ? { mod } : {}), dependencies, missingDependencies, context };
 }
 
 export function loadModContext(options: LoadContextOptions): LoadedContext {
@@ -114,6 +142,7 @@ export function loadModContext(options: LoadContextOptions): LoadedContext {
     ...(options.modPath !== undefined ? { modPath: options.modPath } : {}),
     ...(options.modName !== undefined ? { modName: options.modName } : {}),
     ...(options.dependencies ? { dependencies: options.dependencies } : {}),
+    ...(options.context ? { context: options.context } : {}),
   });
   const layers: Layer[] = [...vanilla];
   for (const dep of plan.dependencies) layers.push({ name: dep.name, file: readDataFile(readFileSync(dep.path)) });
@@ -126,7 +155,7 @@ export function loadModContext(options: LoadContextOptions): LoadedContext {
     ...(typeof wantSchema === 'object' ? { schema: wantSchema } : wantSchema ? { schema: loadGameSchema(paths) } : {}),
     ...(typeof wantPo === 'object' ? { po: wantPo } : wantPo ? { po: loadGamedataPo(paths) } : {}),
   });
-  return { ctx, missingDependencies: plan.missingDependencies, dependencyPaths: plan.dependencies.map((d) => d.path) };
+  return { ctx, missingDependencies: plan.missingDependencies, dependencyPaths: plan.dependencies.map((d) => d.path), context: plan.context };
 }
 
 /** Записать мод (только изменения) в файл и считать контекст сохранённым. */

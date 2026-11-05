@@ -13,3 +13,4 @@ export * from './enums.ts';
 export * from './stable-ids.ts';
 export * from './editor-view.ts';
 export * from './step-title.ts';
+export * from './load-order.ts';

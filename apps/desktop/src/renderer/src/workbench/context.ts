@@ -34,6 +34,8 @@ export interface Workbench {
   searchRef: RefObject<HTMLInputElement | null>;
   /** Категория в дереве — фильтр списка записей. */
   category: ValueStore<string>;
+  /** Пересобрать контекст с другими зависимостями или модами контекста (правки сохраняются). */
+  reload: (change: { dependencies?: string[]; contextMods?: string[] }) => Promise<void>;
 }
 
 export const WorkbenchContext = createContext<Workbench | null>(null);

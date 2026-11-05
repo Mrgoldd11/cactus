@@ -231,3 +231,22 @@ describe('kedit: этап 2', () => {
     expect(readDataFileSync(out).records.map((r) => r.stringId)).toEqual(['101-Ids.mod', '102-Ids.mod']);
   });
 });
+
+describe('kedit mods', () => {
+  it('list: порядок mods.cfg, нет файла, выключенные; --json', async () => {
+    writeFileSync(join(fx.game, 'data', 'mods.cfg'), 'Gone.mod\r\nMy.mod\r\n');
+    mkdirSync(join(fx.game, 'mods', 'Off'), { recursive: true });
+    writeDataFileSync(join(fx.game, 'mods', 'Off', 'Off.mod'), dataFile([]));
+    const r = await run('mods', '--full');
+    expect(r.code).toBe(0);
+    const lines = r.out.split('\n');
+    expect(lines[1]).toBe('  1. Gone.mod  [нет файла]');
+    expect(lines[2]).toMatch(/^ {2}2\. My\.mod {2}\[mods\] {2}записей 2, автор test$/);
+    expect(lines).toContain('Выключены:');
+    expect(r.out).toContain('     Off.mod  [mods]');
+    const j = JSON.parse((await run('mods', 'list', '--json')).out) as { order: string[]; mods: { fileName: string; enabled: boolean }[] };
+    expect(j.order).toEqual(['Gone.mod', 'My.mod']);
+    expect(j.mods.find((m) => m.fileName === 'Off.mod')!.enabled).toBe(false);
+    expect((await run('mods', 'nope')).code).toBe(2);
+  });
+});

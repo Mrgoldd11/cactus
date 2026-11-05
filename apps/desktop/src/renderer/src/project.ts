@@ -225,6 +225,11 @@ export class Project {
     return this.ctx.modName;
   }
 
+  /** Моды контекста: лежат слоями под модом, но не записаны в его заголовке. */
+  get contextMods(): string[] {
+    return this.bundle.contextMods ?? [];
+  }
+
   subscribe(fn: () => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
@@ -287,15 +292,29 @@ export class Project {
   }
 }
 
-/** Новый контекст с другими зависимостями; правки мода переносятся (история отмены — нет). */
-export async function reloadWithDependencies(p: Project, dependencies: string[]): Promise<Project> {
-  p.ctx.setModInfo({ dependencies });
+/**
+ * Новый контекст с другими зависимостями или модами контекста; правки мода переносятся
+ * (история отмены — нет). Не заданное берётся из прежнего проекта.
+ */
+export async function reloadProject(p: Project, change: { dependencies?: string[]; contextMods?: string[] }): Promise<Project> {
+  if (change.dependencies) p.ctx.setModInfo({ dependencies: change.dependencies });
   const mod = p.ctx.buildModFile();
   const wasDirty = p.dirty;
-  const req = { game: p.bundle.game, modName: p.ctx.modName, dependencies: [...dependencies, ...p.ctx.info.references] };
+  const contextMods = change.contextMods ?? p.contextMods;
+  const req: ProjectRequest = {
+    game: p.bundle.game,
+    modName: p.ctx.modName,
+    dependencies: [...p.ctx.info.dependencies, ...p.ctx.info.references],
+    ...(contextMods.length ? { contextMods } : {}),
+  };
   let bundle = await window.kedit.openProject({ ...req, known: parsedFiles.keys() });
   if ([...bundle.vanilla, ...bundle.dependencies].some((f) => f.key !== undefined && f.bytes.length === 0 && !parsedFiles.has(f.key))) {
     bundle = await window.kedit.openProject(req);
   }
   return new Project(bundle, { mod, ...(p.path !== undefined ? { path: p.path } : {}), carriedDirty: wasDirty || p.ctx.dirty });
+}
+
+/** Новый контекст с другими зависимостями (моды контекста остаются). */
+export function reloadWithDependencies(p: Project, dependencies: string[]): Promise<Project> {
+  return reloadProject(p, { dependencies });
 }

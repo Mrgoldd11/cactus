@@ -8,7 +8,7 @@ import type { Lang, WorkspaceSettings } from '../../../shared/api.ts';
 import { useT } from '../i18n.ts';
 import { isTypingIn, shortcut } from '../keys.ts';
 import { useProjectVersion, tryEdit } from '../hooks.ts';
-import { MOD_CHANGES_ID, reloadWithDependencies, type Project } from '../project.ts';
+import { MOD_CHANGES_ID, reloadProject, reloadWithDependencies, type Project } from '../project.ts';
 import { LangSwitch } from '../App.tsx';
 import { DependenciesModal, ModInfoModal, NewRecordModal, ValidationModal } from './Modals.tsx';
 import { useAiChangesets, useLiveStatus } from '../live.ts';
@@ -97,8 +97,13 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
       },
       searchRef,
       category,
+      reload: (change) =>
+        reloadProject(project, change).then(onReplace, (e: unknown) => {
+          const msg = e instanceof Error ? e.message : String(e);
+          setStatus({ text: () => msg, kind: 'error' });
+        }),
     }),
-    [project, selection, go, report, open, category],
+    [project, selection, go, report, open, category, onReplace],
   );
 
   // Записи, которых больше нет (отменили создание), убрать из выбора.

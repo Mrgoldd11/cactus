@@ -1975,3 +1975,32 @@ button.small.active {
   font-size: 0.8em;
   white-space: nowrap;
 }
+
+/* Панель «Моды» */
+.mods-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: 4px;
+  padding: 6px;
+  box-sizing: border-box;
+}
+.mods-panel-bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.mods-panel-bar input[type='search'] {
+  flex: 1;
+  min-width: 140px;
+}
+.mods-panel-note {
+  font-size: 12px;
+}
+.mods-panel .tag {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}

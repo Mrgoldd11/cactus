@@ -25,6 +25,12 @@ export interface ModEntry {
   recordCount?: number;
   /** Место в `data/mods.cfg` (с 0), если мод включён. */
   loadIndex?: number;
+  /** Номер предмета мастерской (папка), если мод оттуда. */
+  workshopId?: string;
+  /** Есть в `mods.cfg`. */
+  enabled?: boolean;
+  /** Такой же файл есть в `mods/`, игра возьмёт его, а не этот. */
+  shadowedBy?: string;
   error?: string;
 }
 
@@ -35,6 +41,8 @@ export interface ProjectRequest {
   modName?: string;
   /** Зависимости (имена .mod); по умолчанию — из заголовка мода. */
   dependencies?: string[];
+  /** Другие моды слоями под модом (по порядку `mods.cfg`), без записи в его заголовок. */
+  contextMods?: string[];
   /** Ключи файлов, уже разобранных в окне (`ParsedFileCache`): их байты не присылаются. */
   known?: string[];
 }
@@ -57,6 +65,8 @@ export interface ProjectBundle {
   vanilla: NamedBytes[];
   dependencies: NamedBytes[];
   missingDependencies: string[];
+  /** Какие из `dependencies` — моды контекста (не записаны в заголовке мода). */
+  contextMods?: string[];
   schema: { fcsDef: string; fcsEnums?: string; fcsLayout?: string };
   /** Русский перевод `locale/ru_RU/gamedata.po`. */
   po?: string;
