@@ -15,6 +15,8 @@ import {
   formatRecordDiff,
   formatDialogueTree,
   formatWhere,
+  formatTalk,
+  simulateTalk,
   whereInGame,
   formatTypeSchema,
   listTypes,
@@ -38,7 +40,8 @@ import {
   type RecordDiff,
   type RecordStatus,
 } from '@kenshi-editor/core';
-import { loadWorld, readDataFileSync } from '@kenshi-editor/core/node';
+import { loadTranslation, loadWorld, readDataFileSync, readModsCfg } from '@kenshi-editor/core/node';
+import { basename } from 'node:path';
 import { runBuild } from './build.ts';
 import { UsageError, Workspace } from './workspace.ts';
 
@@ -68,6 +71,8 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
   refs <id|имя>           ссылки из записи и на неё  --from  --to
   where <id|имя>          где запись в игре: цепочка обратных ссылок до городов/зданий с координатами
       --tree  дерево обратных ссылок целиком;  --limit N — фактов (по умолчанию 20)
+  talk <персонаж>         какие диалоги у персонажа на событие, откуда, какой выберет игра, начало разговора
+      --event N  событие (по умолчанию 1 — клик игрока);  --mods  с модами игрока из mods.cfg
   diff                    что мод (--mod) меняет относительно нижних слоёв; итог «новых N, изменённых M»
       --status added,changed,removed  только записи с такими изменениями
   diff <a.mod> <b.mod>    разница двух файлов
@@ -105,6 +110,8 @@ const OPTIONS = {
   from: { type: 'boolean' },
   to: { type: 'boolean' },
   enum: { type: 'string' },
+  event: { type: 'string' },
+  mods: { type: 'boolean' },
   out: { type: 'string' },
   name: { type: 'string' },
   force: { type: 'boolean' },
@@ -143,6 +150,11 @@ class Command {
   }
 
   get deps(): string[] | undefined {
+    if (this.values.mods) {
+      // Моды игрока по порядку mods.cfg (кроме самого --mod).
+      const own = this.values.mod !== undefined ? basename(this.values.mod).toLowerCase() : undefined;
+      return readModsCfg(this.ws.paths).filter((n) => n.toLowerCase() !== own);
+    }
     const d = this.values.deps;
     if (d === undefined) return undefined;
     return d
@@ -302,6 +314,15 @@ const COMMANDS: Record<string, Handler> = {
     }
     const limit = int(c.values.limit, 'limit', 20);
     c.io.out(formatWhere(res, { tree: c.values.tree ?? false, maxFacts: limit === 0 ? Infinity : limit }));
+    return 0;
+  },
+  talk(c) {
+    const ctx = c.ctx();
+    const sid = c.resolve(ctx, c.arg(0, '<персонаж>'), ['CHARACTER']);
+    const translation = loadTranslation(c.ws.paths);
+    const sim = simulateTalk(ctx, sid, int(c.values.event, 'event', 1), translation ? { translation } : {});
+    if (c.values.json) c.io.out(JSON.stringify(sim, null, 1));
+    else for (const l of formatTalk(sim)) c.io.out(l);
     return 0;
   },
   diff(c) {

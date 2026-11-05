@@ -5,7 +5,8 @@
  * Проверяется то, что задаёт мод: ключи его записей, а не унаследованные значения ваниль.
  * Отдельно — записи нижних слоёв, которые ссылаются на удалённые модом записи; висячие ссылки
  * на записи, удалённые зависимостью (не ванилью) или модом поверх слоя, где ссылка появилась;
- * диалоги без реплик.
+ * диалоги без реплик; свои диалоги, которые по очкам не уступают ванильным с действием (арест,
+ * атака, торговля, найм).
  */
 import { itemTypeName } from '../format/item-types.ts';
 import type { GameRecord } from '../format/types.ts';
@@ -15,6 +16,7 @@ import type { ModContext } from './context.ts';
 import { isRemovalMarker, isRemovedRef, SCALAR_DICTS, scalarMap } from './record-ops.ts';
 import { isVanillaLayer } from '../vanilla.ts';
 import { decodeText } from '../text.ts';
+import { ACTION_KIND_LABELS, dialogActionKinds, dialogScore, EVENT_TALK, packageDialogs, squadIndex, talkSources, type ActionKind, type SquadIndex } from '../dialog/talk.ts';
 
 export type IssueCode =
   | 'broken-ref'
@@ -26,7 +28,8 @@ export type IssueCode =
   | 'enum-value'
   | 'remove-missing'
   | 'empty-dialogue'
-  | 'dangling-ref';
+  | 'dangling-ref'
+  | 'overrides-action';
 
 export interface ValidationIssue {
   severity: 'error' | 'warning';
@@ -81,6 +84,7 @@ export function validateMod(ctx: ModContext, options: ValidateOptions = {}): Val
   }
   checkDependencyDeletions(ctx, issues);
   checkEmptyDialogues(ctx, issues);
+  checkActionOverrides(ctx, issues);
   for (const sid of deletedByMod) {
     for (const e of ctx.referencesTo(sid)) {
       if (ctx.status(e.source) === 'deleted') continue;
@@ -144,6 +148,65 @@ function checkEmptyDialogues(ctx: ModContext, issues: ValidationIssue[]): void {
           target: r.target,
           message: `ссылка на диалог ${r.target} без реплик — в игре он ничего не скажет`,
         });
+      }
+    }
+  }
+}
+
+/**
+ * Диалог, который мод дописал в пакет (`dialogs`) или персонажу (`dialogue`, клик), при очках не
+ * меньше, чем у уже бывшего там диалога того же события с действием (арест, атака, торговля, найм):
+ * игра может выбрать диалог мода, и действие не случится (паладины не арестуют, торговец не
+ * откроет меню). Свой диалог стоит сделать запасным — `score bonus` ниже, например −100.
+ */
+function checkActionOverrides(ctx: ModContext, issues: ValidationIssue[]): void {
+  let sq: SquadIndex | undefined;
+  const kinds = new Map<string, ActionKind[]>();
+  const kindsOf = (d: string): ActionKind[] => {
+    let k = kinds.get(d);
+    if (!k) kinds.set(d, (k = dialogActionKinds(ctx, d)));
+    return k;
+  };
+  const playable = (d: string): boolean => {
+    const r = ctx.get(d);
+    return r !== undefined && !r.bools.get('locked') && (r.refs.get('lines') ?? []).length > 0;
+  };
+  const check = (holder: string, key: string, added: { dialog: string; event: number }, rivals: readonly string[]): void => {
+    const mine = ctx.get(added.dialog);
+    if (!mine || !playable(added.dialog)) return;
+    const my = dialogScore(mine);
+    for (const rv of new Set(rivals)) {
+      if (rv === added.dialog || ctx.status(rv) === 'new' || !playable(rv)) continue;
+      const act = kindsOf(rv);
+      const theirs = dialogScore(ctx.get(rv));
+      if (!act.length || my < theirs) continue;
+      issues.push({
+        severity: 'warning',
+        code: 'overrides-action',
+        stringId: holder,
+        key,
+        target: added.dialog,
+        message: `диалог ${added.dialog} «${ctx.name(added.dialog) ?? ''}» (очки ${my}) не уступает ${rv} «${ctx.name(rv) ?? ''}» (очки ${theirs}, ${act.map((a) => ACTION_KIND_LABELS[a]).join(', ')}) на событии ${added.event}: игра может выбрать диалог мода, и действие не случится; сделайте свой диалог запасным (score bonus ниже)`,
+      });
+    }
+  };
+  for (const delta of ctx.modRecords()) {
+    if (isRemovalMarker(delta)) continue;
+    const t = itemTypeName(delta.type);
+    if (t !== 'DIALOGUE_PACKAGE' && t !== 'CHARACTER') continue;
+    const cat = t === 'CHARACTER' ? 'dialogue' : 'dialogs';
+    const before = new Set((ctx.lower(delta.stringId)?.refs.get(cat) ?? []).map((r) => `${r.target}|${t === 'CHARACTER' ? 0 : r.v0}`));
+    const added = (delta.refs.get(cat) ?? []).filter((r) => !isRemovedRef(r) && !before.has(`${r.target}|${t === 'CHARACTER' ? 0 : r.v0}`));
+    if (!added.length) continue;
+    const rec = ctx.get(delta.stringId);
+    if (!rec) continue;
+    for (const a of added) {
+      if (t === 'DIALOGUE_PACKAGE') {
+        const rivals = packageDialogs(ctx, delta.stringId).filter((d) => d.event === a.v0).map((d) => d.dialog);
+        check(delta.stringId, cat, { dialog: a.target, event: a.v0 }, rivals);
+      } else {
+        sq ??= squadIndex(ctx);
+        check(delta.stringId, cat, { dialog: a.target, event: EVENT_TALK }, talkSources(ctx, rec, EVENT_TALK, sq).map((x) => x.dialog));
       }
     }
   }

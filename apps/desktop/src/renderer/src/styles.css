@@ -1057,3 +1057,67 @@ tr.fs-removed td:first-child {
   gap: 6px;
   margin-top: 6px;
 }
+
+/* разговор */
+.talk {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.talk-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.talk-summary button.link {
+  font-weight: 600;
+}
+.talk-table td {
+  vertical-align: top;
+}
+.talk-row.tv-shadowed,
+.talk-row.tv-locked,
+.talk-row.tv-empty {
+  opacity: 0.6;
+}
+.badge.tv-wins {
+  border-color: var(--new);
+  color: var(--new);
+}
+.badge.tv-if-conditions,
+.badge.tv-tie {
+  border-color: var(--changed);
+}
+.badge.tv-missing,
+.badge.tv-empty {
+  border-color: var(--error);
+}
+.talk-action {
+  margin: 2px 4px 0 0;
+}
+.talk-action.ta-arrest,
+.talk-action.ta-attack {
+  border-color: var(--deleted);
+}
+.talk-action.ta-trade,
+.talk-action.ta-recruit {
+  border-color: var(--accent);
+}
+.talk-opening {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  background: var(--bg2);
+}
+.talk-line-block {
+  margin: 4px 0;
+}
+.talk-choice {
+  margin-left: 24px;
+}
+.talk-table td.talk-conds {
+  min-width: 340px;
+}
+.talk-table .dg-cond {
+  overflow-wrap: normal;
+}

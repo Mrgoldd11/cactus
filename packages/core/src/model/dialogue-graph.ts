@@ -104,8 +104,8 @@ export interface DialogueGraphOptions {
   translation?: TranslationIndex;
 }
 
-/** Есть ли у реплики хоть одно условие (ссылки-условия, `target is type`, ограничение повтора). */
-function hasConditions(rec: GameRecord): boolean {
+/** Есть ли у реплики или диалога хоть одно условие (ссылки-условия, `target is type`, ограничение повтора). */
+export function hasConditions(rec: GameRecord): boolean {
   if ((rec.ints.get('target is type') ?? 0) !== 0 || (rec.ints.get('repetition limit') ?? 0) !== 0) return true;
   return DIALOGUE_CONDITION_CATEGORIES.some((c) => (rec.refs.get(c)?.length ?? 0) > 0);
 }

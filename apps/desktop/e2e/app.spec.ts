@@ -337,6 +337,45 @@ test('граф диалога: реплики по-русски, выбор иг
   }
 });
 
+test('разговор: какой диалог выберет игра у персонажа, начало разговора, другое событие', async () => {
+  const { app, page } = await launch();
+  try {
+    await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('open-vanilla').click();
+    await waitEditor(page);
+    // Трактирщик болотников: торговый «Swamp Barman» без условий побеждает, остальные — при условиях.
+    await selectRecord(page, '50638-rebirth.mod', '50638-rebirth.mod');
+    await page.getByTestId('tab-talk').click();
+    const talk = page.getByTestId('talk');
+    await expect(talk.getByTestId('talk-candidate')).toHaveCount(5);
+    const win = talk.locator('[data-testid="talk-candidate"][data-verdict="wins"]');
+    await expect(win).toHaveAttribute('data-dialog', '48721-Dialogue.mod');
+    await expect(win).toContainText('торговля');
+    await expect(talk.locator('[data-testid="talk-candidate"][data-verdict="locked"]')).toContainText('найм');
+    await expect(talk.getByTestId('talk-summary')).toContainText('Игра выберет');
+    // Начало разговора — по-русски из перевода игры, с вариантами игрока.
+    const opening = talk.getByTestId('talk-opening');
+    await expect(opening).toContainText('Пляшущий Скелет', { timeout: 60_000 });
+    await expect(opening.locator('.talk-choice').first()).toContainText('Давай торговать');
+    await page.screenshot({ path: join(shots, '16-talk.png') });
+
+    // Другое событие: «объявление» — диалогов нет; «вижу нейтральный отряд» — драка с атакой.
+    await talk.getByTestId('talk-event').selectOption('2');
+    await expect(talk.getByTestId('talk-summary')).toContainText('диалогов нет');
+    await talk.getByTestId('talk-event').selectOption('3');
+    await expect(talk.locator('[data-testid="talk-candidate"][data-dialog="49204-Dialogue.mod"]')).toContainText('атака');
+
+    // Переход к диалогу из таблицы.
+    await talk.getByTestId('talk-event').selectOption('1');
+    await win.locator('td').nth(1).getByRole('button').first().click();
+    await expect(page.getByTestId('record-sid')).toHaveText('48721-Dialogue.mod');
+    // У не-персонажей вкладки нет.
+    await expect(page.getByTestId('tab-talk')).toHaveCount(0);
+  } finally {
+    await closeApp(app);
+  }
+});
+
 test('живая связь с ИИ: MCP подключается к окну, правки — набором изменений, принять и откатить', async () => {
   const { app, page, liveFile } = await launch();
   let session: Session | undefined;

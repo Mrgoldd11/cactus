@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { LiveClient } from './live-client.ts';
 import { readFileSync } from 'node:fs';
-import { base64ToBytes, ModContext, readDataFile, type GameSchema, type Layer, type LiveSnapshot, type LiveState, type PoFile, type ProposeResult, type AiChangeset, type EditOp, type WorldIndex } from '@kenshi-editor/core';
+import { base64ToBytes, ModContext, readDataFile, type GameSchema, type Layer, type LiveSnapshot, type LiveState, type PoFile, type ProposeResult, type TranslationIndex, type AiChangeset, type EditOp, type WorldIndex } from '@kenshi-editor/core';
 import {
   gamedataPoPath,
   hasGame,
@@ -16,6 +16,7 @@ import {
   loadModContext,
   loadVanillaLayers,
   loadWorld,
+  loadTranslation,
   liveDiscoveryPath,
   readLiveDiscovery,
   resolveModPath,
@@ -48,6 +49,7 @@ export class Session {
   private vanillaCache?: Layer[];
   private schemaCache?: GameSchema;
   private poCache?: PoFile | null;
+  private translationCache?: TranslationIndex | null;
   private current?: OpenResult;
   private worldCache?: { key: string; world: WorldIndex };
   private live?: { client: LiveClient; state: LiveState; synced?: { session: number; version: number } };
@@ -66,6 +68,12 @@ export class Session {
   schema(): GameSchema {
     if (!hasGame(this.paths)) throw new SessionError(`Нет игры в ${this.paths.kenshi}`);
     return (this.schemaCache ??= loadGameSchema(this.paths));
+  }
+
+  /** Русский перевод текстов игры (`ru_RU.translation`), если есть. */
+  translation(): TranslationIndex | undefined {
+    if (this.translationCache === undefined) this.translationCache = hasGame(this.paths) ? (loadTranslation(this.paths) ?? null) : null;
+    return this.translationCache ?? undefined;
   }
 
   po(): PoFile | undefined {

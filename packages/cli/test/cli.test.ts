@@ -1,13 +1,13 @@
 /**
  * Команды kedit на маленькой синтетической «папке игры» (без файлов Kenshi).
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { decodeText } from '@kenshi-editor/core';
-import { readDataFileSync } from '@kenshi-editor/core/node';
+import { readDataFileSync, writeDataFileSync } from '@kenshi-editor/core/node';
 import { main } from '../src/main.ts';
-import { makeFixture, type Fixture } from './fixture.ts';
+import { CHAR, dataFile, makeFixture, rec, type Fixture } from './fixture.ts';
 
 let fx: Fixture;
 const run = async (...argv: string[]): Promise<{ code: number; out: string; err: string }> => {
@@ -84,6 +84,25 @@ describe('kedit: поиск и просмотр', () => {
     expect(r.out).toContain('путь: ← CHARACTER «Bandit» (Разбойник) [A] (vendors)');
     const j = JSON.parse((await run('where', 'X', '--json')).out) as { facts: { role: string; holder?: { id: string } }[] };
     expect(j.facts[0]).toMatchObject({ role: 'related', holder: { id: 'A' } });
+  });
+});
+
+describe('kedit talk', () => {
+  it('без диалогов; клик из мода игрока (--mods из mods.cfg); JSON', async () => {
+    expect((await run('talk', 'Bandit')).out).toContain('диалогов на это событие нет');
+    mkdirSync(join(fx.game, 'mods', 'Talk'), { recursive: true });
+    writeDataFileSync(join(fx.game, 'mods', 'Talk', 'Talk.mod'), dataFile([rec(CHAR, 'A', 'Bandit', (r) => r.refs.set('dialogue', [{ target: 'D1', v0: 0, v1: 0, v2: 0 }]))]));
+    writeFileSync(join(fx.game, 'data', 'mods.cfg'), 'Talk.mod\n');
+    const r = await run('talk', 'Bandit', '--mods');
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('▶ greet (D1) — выберет игра');
+    expect(r.out).toContain('откуда: персонаж (dialogue); слой Dialogue.mod');
+    expect(r.out).toContain('«Hello there»');
+    expect(r.out).toContain('NPC: «Hello there» [очки 0]');
+    const j = JSON.parse((await run('talk', 'A', '--mods', '--json')).out) as { winner: string; candidates: { verdict: string }[] };
+    expect(j.winner).toBe('D1');
+    // Событие 3: `dialogue` персонажа не участвует.
+    expect((await run('talk', 'A', '--mods', '--event', '3')).out).toContain('диалогов на это событие нет');
   });
 });
 

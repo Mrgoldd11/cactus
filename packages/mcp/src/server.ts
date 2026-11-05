@@ -32,6 +32,8 @@ import {
   type ModContext,
   formatWhere,
   whereInGame,
+  formatTalk,
+  simulateTalk,
 } from '@kenshi-editor/core';
 import { SessionError, type Session } from './session.ts';
 
@@ -295,6 +297,27 @@ export function createServer(session: Session): McpServer {
         const res = whereInGame(ctx, id, { world: session.world() });
         const max = a.limit ?? 20;
         return formatWhere(res, { tree: a.tree ?? false, maxFacts: max === 0 ? Infinity : max }).split('\n');
+      }),
+  );
+
+  server.registerTool(
+    'talk',
+    {
+      title: 'Разговор с персонажем',
+      description:
+        'Симулятор разговора: какие диалоги есть у персонажа на событие (1 — игрок заговорил, по умолчанию), откуда каждый (персонаж, его пакет, отряд, фракция; слой-источник), очки, условия, действия (арест, атака, торговля, найм) и вердикт: какой выберет игра, какой сработает только при условиях, какой не прозвучит. Затем начало разговора победителя с русским текстом и выбором игрока. Оценка по данным: точная формула игры неизвестна.',
+      inputSchema: {
+        id: z.string().describe('Id или имя персонажа (CHARACTER)'),
+        event: z.number().int().min(0).optional().describe('Событие (DIALOGUE_PACKAGE dialogs v0); 1 — разговор по клику'),
+      },
+      annotations: { ...READ, title: 'Разговор с персонажем' },
+    },
+    (a) =>
+      run(() => {
+        const ctx = session.ctx();
+        const id = resolveId(ctx, a.id, ['CHARACTER']);
+        const translation = session.translation();
+        return formatTalk(simulateTalk(ctx, id, a.event ?? 1, translation ? { translation } : {}));
       }),
   );
 
