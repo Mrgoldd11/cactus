@@ -149,8 +149,16 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
     const r = await project.save(saveAs);
     if (r.ok) setStatus({ text: (s) => `${s.saved}: ${r.path}`, kind: 'info' });
     else if (r.cancelled) setStatus({ text: (s) => s.saveCancelled, kind: 'info' });
+    else if (r.workshop === true) setStatus({ text: (s) => s.saveWorkshop, kind: 'error' });
     else setStatus({ text: (s) => `${s.saveFailed}: ${r.error ?? ''}`, kind: 'error' });
   };
+  const copyForEditing = async (): Promise<void> => {
+    blurActive();
+    const r = await project.copyForEditing();
+    if (r.ok) setStatus({ text: (s) => `${s.copiedForEditing}: ${r.path}`, kind: 'info' });
+    else if (!r.cancelled) setStatus({ text: (s) => `${s.copyFailed}: ${r.error ?? ''}`, kind: 'error' });
+  };
+  const prov = project.provenance;
 
   const keyHandler = useRef<(e: KeyboardEvent) => void>(() => undefined);
   keyHandler.current = (e: KeyboardEvent): void => {
@@ -267,6 +275,21 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
         </span>
         <LangSwitch lang={lang} onLang={onLang} />
       </div>
+      {prov?.inWorkshop === true && (
+        <div className="banner warn" data-testid="workshop-banner">
+          <span>{t.workshopBanner(prov.workshopId)}</span>
+          <button className="small primary" onClick={() => void copyForEditing()} data-testid="copy-for-editing" title={t.copyForEditingTip}>
+            {t.copyForEditing}
+          </button>
+        </div>
+      )}
+      {prov?.copyOf && (
+        <div className={`banner ${prov.copyOf.changed === true ? 'warn' : 'info'}`} data-testid="copy-banner" title={prov.copyOf.source}>
+          <span>{t.copyBanner(prov.copyOf.workshopId, prov.copyOf.author, prov.copyOf.copiedAt.slice(0, 10))}</span>
+          {prov.copyOf.changed === true && <span data-testid="copy-origin-changed">{t.copyOriginChanged}</span>}
+          {prov.copyOf.gone === true && <span className="muted">{t.copyOriginGone}</span>}
+        </div>
+      )}
       {project.bundle.missingDependencies.length > 0 && (
         <div className="banner error">
           {t.missingDeps}: {project.bundle.missingDependencies.join(', ')}

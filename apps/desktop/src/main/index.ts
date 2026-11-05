@@ -23,6 +23,7 @@ import {
   type GameInstallInfo,
   type LiveReply,
   type LiveStatus,
+  type CopyModResult,
   type ModOrderResult,
   type ProjectRequest,
   type SaveRequest,
@@ -31,13 +32,17 @@ import {
   type WorldRequest,
 } from '../shared/api.ts';
 import {
+  copyMod,
   detectGames,
   gameFromDir,
   listMods,
   loadProject,
   loadWorldBytes,
   modInstallPath,
+  isWorkshopPath,
   needsConfirmation,
+  planCopy,
+  provenanceOf,
   readIconDataUrl,
   readModOrder,
   readTranslationBytes,
@@ -75,13 +80,19 @@ function windowOf(e: IpcMainInvokeEvent): BrowserWindow | undefined {
   return BrowserWindow.fromWebContents(e.sender) ?? undefined;
 }
 
+function games(): GameInstallInfo[] {
+  return [...knownGames, ...(currentGame ? [currentGame] : [])];
+}
+
 function isGamePath(path: string): boolean {
-  return [...knownGames, ...(currentGame ? [currentGame] : [])].some((g) => needsConfirmation(g, path));
+  return games().some((g) => needsConfirmation(g, path));
 }
 
 async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<SaveResult> {
   if (!request.path.toLowerCase().endsWith('.mod')) return { ok: false, cancelled: false, error: 'not a .mod path' };
-  const req = { ...request, path: modInstallPath([...knownGames, ...(currentGame ? [currentGame] : [])], request.path) };
+  const req = { ...request, path: modInstallPath(games(), request.path) };
+  // Мастерская — чужие файлы (Steam перезапишет их при обновлении): только копия в mods/.
+  if (isWorkshopPath(games(), req.path)) return { ok: false, cancelled: false, workshop: true, error: req.path };
   const win = windowOf(e);
   if (isGamePath(req.path)) {
     const ru = settings.lang === 'ru';
@@ -101,9 +112,52 @@ async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<Sav
     writeMod(req.path, req.bytes);
     settings.recent = [req.path, ...settings.recent.filter((p) => p !== req.path)].slice(0, 10);
     writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
-    return { ok: true, path: req.path };
+    const game = games().find((g) => needsConfirmation(g, req.path)) ?? currentGame;
+    const provenance = game ? provenanceOf(game, req.path) : undefined;
+    return { ok: true, path: req.path, ...(provenance ? { provenance } : {}) };
   } catch (err) {
     log('error', 'saveMod', req.path, err);
+    return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Копия чужого мода для правки: `mods/<имя>/<имя>.mod` + файл происхождения. Это запись в папку
+ * игры — всегда с подтверждением; оригинал только читается.
+ */
+async function copyModForEditing(e: IpcMainInvokeEvent, game: GameInstallInfo, path: string): Promise<CopyModResult> {
+  const known = games().some((g) => resolve(g.kenshi).toLowerCase() === resolve(game.kenshi).toLowerCase());
+  if (!known) return { ok: false, cancelled: false, error: 'unknown game folder' };
+  const ru = settings.lang === 'ru';
+  let plan;
+  try {
+    plan = planCopy(game, path);
+  } catch (err) {
+    return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  if (plan.error !== undefined) return { ok: false, cancelled: false, error: plan.error };
+  const enWarnings = [
+    ...(plan.shadowsOriginal ? ['The copy has the same name and hides the original: the game and the editor will use the file from mods/. Delete the copy folder to get the original back.'] : []),
+    ...(plan.origin.workshopId !== undefined ? ["The author may update the mod; the copy stays as it is. Do not upload the copy to the workshop without the author's permission."] : []),
+  ];
+  const options = {
+    type: 'warning' as const,
+    buttons: ru ? ['Скопировать', 'Отмена'] : ['Copy', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    title: ru ? 'Копия мода для правки' : 'Copy the mod for editing',
+    message: ru
+      ? 'Мод из мастерской не меняем: Steam перезапишет его при обновлении. Скопировать мод в папку игры и править копию?'
+      : 'Workshop mods are never changed: Steam overwrites them on update. Copy the mod into the game folder and edit the copy?',
+    detail: [`${ru ? 'Откуда' : 'From'}: ${plan.source}`, `${ru ? 'Куда' : 'To'}: ${plan.dest}`, '', ...(ru ? plan.warnings : enWarnings)].join('\n'),
+  };
+  const win = windowOf(e);
+  const r = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+  if (r.response !== 0) return { ok: false, cancelled: true };
+  try {
+    return { ok: true, ...copyMod(game, path) };
+  } catch (err) {
+    log('error', 'copyModForEditing', path, err);
     return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
@@ -229,6 +283,7 @@ function registerIpc(): void {
     return r.canceled ? null : (r.filePath || null);
   });
   ipcMain.handle(IPC.saveMod, saveMod);
+  ipcMain.handle(IPC.copyModForEditing, copyModForEditing);
   ipcMain.handle(IPC.loadWorld, (_e, req: WorldRequest) => loadWorldBytes(req));
   ipcMain.handle(IPC.readIcon, (_e, game: GameInstallInfo, iconPath: string) => readIconDataUrl(game, iconPath));
   ipcMain.handle(IPC.readTranslation, (_e, game: GameInstallInfo) => readTranslationBytes(game));

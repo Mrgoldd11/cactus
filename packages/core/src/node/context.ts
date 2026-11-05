@@ -177,11 +177,20 @@ export function resolveModPath(paths: GamePaths, spec: string, cwd = '.'): strin
   return findInstalledMod(paths, spec.toLowerCase().endsWith('.mod') ? spec : `${spec}.mod`);
 }
 
+function isInside(root: string, path: string): boolean {
+  const r = relative(resolve(root).toLowerCase(), resolve(path).toLowerCase());
+  return r === '' || (!r.startsWith('..') && !isAbsolute(r));
+}
+
 /** Лежит ли путь в папке игры или мастерской (туда без явного разрешения не пишем). */
 export function isInGameFolders(paths: GamePaths, path: string): boolean {
-  const inside = (root: string): boolean => {
-    const r = relative(resolve(root).toLowerCase(), resolve(path).toLowerCase());
-    return r === '' || (!r.startsWith('..') && !isAbsolute(r));
-  };
-  return inside(paths.kenshi) || inside(paths.workshop);
+  return isInside(paths.kenshi, path) || isInside(paths.workshop, path);
+}
+
+/**
+ * Лежит ли путь в мастерской Steam. Туда не пишем никогда, даже с разрешением: это чужие
+ * файлы, Steam перезапишет их при обновлении. Править — копию (`copyModForEditing`).
+ */
+export function isInWorkshop(paths: GamePaths, path: string): boolean {
+  return isInside(paths.workshop, path);
 }

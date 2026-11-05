@@ -31,6 +31,8 @@ export interface ModEntry {
   enabled?: boolean;
   /** Такой же файл есть в `mods/`, игра возьмёт его, а не этот. */
   shadowedBy?: string;
+  /** Копия чужого мода (`.kedit-origin.json`): номер мастерской оригинала или путь к нему. */
+  copyOf?: string;
   error?: string;
 }
 
@@ -56,6 +58,27 @@ export interface NamedBytes {
   key?: string;
 }
 
+/** Откуда файл мода: из мастерской (только чтение) или копия чужого мода. */
+export interface ModProvenance {
+  /** Файл в мастерской Steam: сохранить в него нельзя, только в копию в `mods/`. */
+  inWorkshop?: boolean;
+  workshopId?: string;
+  /** Копия чужого мода (файл `<имя>.kedit-origin.json` рядом). */
+  copyOf?: {
+    source: string;
+    workshopId?: string;
+    author?: string;
+    copiedAt: string;
+    /** Оригинал изменился после копирования (автор обновил мод). */
+    changed?: boolean;
+    /** Оригинала больше нет. */
+    gone?: boolean;
+  };
+}
+
+/** Копия чужого мода для правки (после подтверждения в диалоге main). */
+export type CopyModResult = { ok: true; path: string; provenance?: ModProvenance } | { ok: false; cancelled: boolean; error?: string };
+
 /** Всё, что нужно окну, чтобы собрать контекст редактирования. */
 export interface ProjectBundle {
   game: GameInstallInfo;
@@ -72,6 +95,8 @@ export interface ProjectBundle {
   po?: string;
   /** Путь сохранения по умолчанию для нового мода. */
   suggestedPath: string;
+  /** Откуда открытый мод (мастерская, копия). */
+  provenance?: ModProvenance;
 }
 
 export interface SaveRequest {
@@ -84,7 +109,7 @@ export type ModOrderResult =
   | { ok: true; path: string; changed: boolean; backup?: string }
   | { ok: false; cancelled: boolean; error?: string; stale?: boolean };
 
-export type SaveResult = { ok: true; path: string } | { ok: false; cancelled: boolean; error?: string };
+export type SaveResult = { ok: true; path: string; provenance?: ModProvenance } | { ok: false; cancelled: boolean; error?: string; workshop?: boolean };
 
 export type Lang = 'en' | 'ru';
 
@@ -151,8 +176,10 @@ export interface KeditApi {
   openProject(req: ProjectRequest): Promise<ProjectBundle>;
   /** Диалог «Сохранить как». */
   chooseSavePath(defaultPath: string): Promise<string | null>;
-  /** Записать мод. В папку игры/мастерской — только после подтверждения в диалоге main. */
+  /** Записать мод. В папку игры — только после подтверждения в диалоге main; в мастерскую — никогда. */
   saveMod(req: SaveRequest): Promise<SaveResult>;
+  /** Скопировать чужой мод в `mods/<имя>/<имя>.mod` для правки (main спросит подтверждение). */
+  copyModForEditing(game: GameInstallInfo, path: string): Promise<CopyModResult>;
   /** Байты файлов уровня (города, здания, зоны) ванили и модов — для «Где в игре». */
   loadWorld(req: WorldRequest): Promise<WorldFileBytes[]>;
   /** Иконка предмета (поле `icon`, путь относительно папки игры) как data URL; null — нет файла. */
@@ -180,6 +207,7 @@ export const IPC = {
   openProject: 'kedit:open-project',
   chooseSavePath: 'kedit:choose-save-path',
   saveMod: 'kedit:save-mod',
+  copyModForEditing: 'kedit:copy-mod-for-editing',
   loadWorld: 'kedit:load-world',
   readIcon: 'kedit:read-icon',
   readTranslation: 'kedit:read-translation',

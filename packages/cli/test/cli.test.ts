@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, onTestFinished } from 'vitest';
 import { decodeText } from '@kenshi-editor/core';
-import { readDataFileSync, writeDataFileSync } from '@kenshi-editor/core/node';
+import { defaultWorkshopDir, readDataFileSync, writeDataFileSync } from '@kenshi-editor/core/node';
 import { main } from '../src/main.ts';
 import { CHAR, dataFile, makeFixture, rec, type Fixture } from './fixture.ts';
 
@@ -191,6 +191,12 @@ describe('kedit build', () => {
     const f = readDataFileSync(inGame);
     expect(f.records.map((x) => [x.stringId, decodeText(x.name)])).toEqual([['Y', 'Big shield']]);
     expect(readFileSync(inGame).length).toBeGreaterThan(0);
+    // В мастерскую — никогда, даже с --force (до записи дело не доходит).
+    const inWorkshop = join(defaultWorkshopDir(fx.game), '123', 'Out.mod');
+    const ws = await run('build', script, '--out', inWorkshop, '--force');
+    expect(ws.code).toBe(2);
+    expect(ws.err).toContain('мастерской');
+    expect(existsSync(inWorkshop)).toBe(false);
   });
 });
 
@@ -304,5 +310,26 @@ describe('kedit mods', () => {
     expect((await run('mods', 'move', 'My')).code).toBe(2);
     expect((await run('mods', 'move', 'My', '--top', '--bottom')).code).toBe(2);
     expect((await run('mods', 'enable', 'My')).out).toContain('без изменений');
+  });
+
+  it('mods copy: без --force только показ; копия байт в байт + откуда; вторая — ошибка', async () => {
+    const src = join(fx.game, 'mods', 'My', 'My.mod');
+    const before = readFileSync(src);
+    const dest = join(fx.game, 'mods', 'My edit', 'My edit.mod');
+    const dry = await run('mods', 'copy', 'My', '--name', 'My edit');
+    expect(dry.code, dry.err).toBe(0);
+    expect(dry.out).toContain(`куда:   ${dest}`);
+    expect(dry.out).toContain('добавьте --force');
+    expect(existsSync(dest)).toBe(false);
+    const w = await run('mods', 'copy', 'My', '--name', 'My edit', '--force');
+    expect(w.code, w.err).toBe(0);
+    expect(Buffer.compare(readFileSync(dest), before)).toBe(0);
+    expect(Buffer.compare(readFileSync(src), before)).toBe(0);
+    const origin = JSON.parse(readFileSync(join(fx.game, 'mods', 'My edit', 'My edit.kedit-origin.json'), 'utf8')) as { source: string; size: number };
+    expect(origin).toMatchObject({ source: src, size: before.length });
+    expect((await run('mods', 'copy', 'My', '--name', 'My edit', '--force')).code).toBe(2);
+    // Сам в себя (тот же путь в mods/) — ошибка.
+    expect((await run('mods', 'copy', 'My', '--force')).code).toBe(2);
+    expect((await run('mods', 'copy', 'Nope')).code).toBe(2);
   });
 });

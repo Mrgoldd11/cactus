@@ -178,7 +178,7 @@ export function StartScreen({ games, game, onGame, onChooseFolder, folderError, 
                           {m.fileName}
                           {m.error !== undefined && <span className="error"> ⚠</span>}
                         </td>
-                        <td>{m.source}</td>
+                        <td>{m.copyOf !== undefined ? t.modsCopyOf(m.copyOf) : m.source}</td>
                         <td>{m.author}</td>
                         <td className="num">{m.recordCount}</td>
                         <td>

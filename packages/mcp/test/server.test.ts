@@ -161,6 +161,12 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect(existsSync(inGame)).toBe(false);
     expect((await call('save', { path: inGame, force: true })).isError).toBe(false);
     expect(readDataFileSync(inGame).records.map((r) => r.stringId)).toEqual(['Y']);
+    // Мастерская — никогда, даже с force.
+    const inWorkshop = join(defaultWorkshopDir(fx.game), '123', 'Fresh.mod');
+    const ws = await call('save', { path: inWorkshop, force: true });
+    expect(ws.isError).toBe(true);
+    expect(ws.text).toContain('мастерской');
+    expect(existsSync(inWorkshop)).toBe(false);
   });
 });
 

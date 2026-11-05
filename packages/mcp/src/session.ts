@@ -12,6 +12,7 @@ import {
   hasGame,
   loadGamedataPo,
   isInGameFolders,
+  isInWorkshop,
   loadGameSchema,
   loadModContext,
   loadVanillaLayers,
@@ -159,6 +160,9 @@ export class Session {
     if (!cur) throw new SessionError('Мод не открыт: сначала open_mod');
     const target = path !== undefined ? resolve(this.cwd, path) : cur.path;
     if (target === undefined) throw new SessionError('Мод новый: укажите path');
+    if (isInWorkshop(this.paths, target)) {
+      throw new SessionError(`${target} — в мастерской Steam; туда не пишем никогда, даже с force. Править чужой мод — в копии в mods/ (kedit mods copy или кнопка в редакторе)`);
+    }
     if (!force && isInGameFolders(this.paths, target)) {
       throw new SessionError(`${target} — в папке игры или мастерской; запись туда только с force: true`);
     }

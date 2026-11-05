@@ -67,6 +67,7 @@ function roleOf(project: Project, fileName: string): Role {
 }
 
 export function sourceLabel(t: Strings, m: ModEntry): string {
+  if (m.copyOf !== undefined) return t.modsCopyOf(m.copyOf);
   return m.source === 'workshop' ? `${t.modsWorkshop} ${m.workshopId ?? ''}`.trim() : m.source;
 }
 

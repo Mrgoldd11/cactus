@@ -47,7 +47,7 @@ import {
 import { loadModLayers, loadTranslation, loadWorld, readDataFileSync, readModsCfg } from '@kenshi-editor/core/node';
 import { basename } from 'node:path';
 import { runBuild } from './build.ts';
-import { modsChange, modsList } from './mods.ts';
+import { modsChange, modsCopy, modsList } from './mods.ts';
 import { UsageError, Workspace } from './workspace.ts';
 
 export interface Io {
@@ -88,6 +88,8 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
   mods move <мод>         переставить в mods.cfg:  --top (раньше всех) | --bottom (побеждает) | --after X | --before X
   mods enable|disable <мод>  включить (в конец или --top/--after X…) / выключить
       без --force только показывает, что изменится; --force — записать mods.cfg (копия рядом, игра закрыта)
+  mods copy <мод|путь>    чужой мод → копия для правки в mods/<имя>/<имя>.mod (+ откуда копия)  --name Имя  --force
+      оригинал из мастерской не меняется; без --force только показывает, что будет
   touched <id|имя>        какие моды из mods.cfg меняют запись и что именно  --all  все установленные
   conflicts               моды, которые меняют одно поле по-разному, и кто победит (поздний в mods.cfg)
       --mod <путь|имя.mod>  только конфликты этого мода;  --all  все установленные, не только mods.cfg
@@ -456,7 +458,10 @@ const COMMANDS: Record<string, Handler> = {
         force: v.force ?? false,
       });
     }
-    throw new UsageError(`mods ${sub}? (list, move, enable, disable)`);
+    if (sub === 'copy') {
+      return modsCopy(c.ws, c.io, c.args[1], { ...(c.values.name !== undefined ? { name: c.values.name } : {}), force: c.values.force ?? false });
+    }
+    throw new UsageError(`mods ${sub}? (list, move, enable, disable, copy)`);
   },
 
   async build(c) {

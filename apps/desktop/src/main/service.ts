@@ -8,23 +8,30 @@ import { VANILLA_FILES } from '@kenshi-editor/core';
 import {
   detectGameInstalls,
   gamedataPoPath,
+  copyModForEditing,
   isInGameFolders,
+  isInWorkshop,
   isKenshiDir,
   listInstalledMods,
   listWorldFiles,
   manualInstall,
   modsCfgPath,
+  originChanged,
+  planModCopy,
   planModLoad,
+  readModOrigin,
   readIfUnknown,
   readModSummary,
   readModsCfgText,
   SCHEMA_FILES,
   translationFilePath,
   vanillaFilePaths,
+  workshopIdOf,
   worldDirs,
   writeModsCfg,
+  type ModCopyPlan,
 } from '@kenshi-editor/core/node';
-import type { GameInstallInfo, ModEntry, ModOrderResult, NamedBytes, ProjectBundle, ProjectRequest, WorldFileBytes, WorldRequest } from '../shared/api.ts';
+import type { GameInstallInfo, ModEntry, ModOrderResult, ModProvenance, NamedBytes, ProjectBundle, ProjectRequest, WorldFileBytes, WorldRequest } from '../shared/api.ts';
 
 export function detectGames(cwd?: string): GameInstallInfo[] {
   return detectGameInstalls(cwd).map((g) => ({ kenshi: g.kenshi, workshop: g.workshop, source: g.source }));
@@ -75,8 +82,15 @@ export function listMods(game: GameInstallInfo): ModEntry[] {
       ...(m.loadIndex !== undefined ? { loadIndex: m.loadIndex } : {}),
       ...(m.workshopId !== undefined ? { workshopId: m.workshopId } : {}),
       ...(m.shadowedBy !== undefined ? { shadowedBy: m.shadowedBy } : {}),
+      ...copyOfEntry(m.source, m.path),
     }),
   );
+}
+
+function copyOfEntry(source: string, path: string): { copyOf?: string } {
+  if (source !== 'mods') return {};
+  const o = readModOrigin(path);
+  return o ? { copyOf: o.workshopId ?? o.source } : {};
 }
 
 function readNamed(name: string, path: string): NamedBytes {
@@ -121,9 +135,50 @@ export function loadProject(req: ProjectRequest): ProjectBundle {
     },
     suggestedPath: plan.modPath ?? join(game.kenshi, 'mods', plan.modName.replace(/\.mod$/i, ''), plan.modName),
   };
-  if (plan.modPath !== undefined) bundle.mod = readNamed(plan.modName, plan.modPath);
+  if (plan.modPath !== undefined) {
+    bundle.mod = readNamed(plan.modName, plan.modPath);
+    const provenance = provenanceOf(game, plan.modPath);
+    if (provenance) bundle.provenance = provenance;
+  }
   if (po !== undefined) bundle.po = po;
   return bundle;
+}
+
+/** Откуда файл мода: из мастерской (сохранять нельзя) или копия чужого мода (`.kedit-origin.json`). */
+export function provenanceOf(game: GameInstallInfo, path: string): ModProvenance | undefined {
+  if (isInWorkshop(game, path)) {
+    const id = workshopIdOf(game, path);
+    return { inWorkshop: true, ...(id !== undefined ? { workshopId: id } : {}) };
+  }
+  const o = readModOrigin(path);
+  if (!o) return undefined;
+  const changed = originChanged(o);
+  return {
+    copyOf: {
+      source: o.source,
+      copiedAt: o.copiedAt,
+      ...(o.workshopId !== undefined ? { workshopId: o.workshopId } : {}),
+      ...(o.author !== undefined ? { author: o.author } : {}),
+      ...(changed === undefined ? { gone: true } : changed ? { changed: true } : {}),
+    },
+  };
+}
+
+/** Путь в мастерской Steam: туда не пишем никогда. */
+export function isWorkshopPath(games: readonly GameInstallInfo[], path: string): boolean {
+  return games.some((g) => isInWorkshop(g, path));
+}
+
+/** План копии чужого мода (ничего не пишет). */
+export function planCopy(game: GameInstallInfo, path: string): ModCopyPlan {
+  return planModCopy(game, path);
+}
+
+/** Скопировать мод в `mods/<имя>/<имя>.mod` (после подтверждения в main). */
+export function copyMod(game: GameInstallInfo, path: string): { path: string; provenance?: ModProvenance } {
+  const plan = copyModForEditing(game, path);
+  const provenance = provenanceOf(game, plan.dest);
+  return { path: plan.dest, ...(provenance ? { provenance } : {}) };
 }
 
 /** Нужно ли подтверждение: путь в папке игры или мастерской. */

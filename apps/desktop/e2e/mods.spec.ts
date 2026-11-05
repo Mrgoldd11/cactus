@@ -239,3 +239,66 @@ test('моды слоями: панель «Моды», два мода под �
     rmSync(dirname(dirname(dirname(game.kenshi))), { recursive: true, force: true });
   }
 });
+
+test('чужой мод из мастерской: сохранить в оригинал нельзя, копия для правки в mods/', async () => {
+  const game = makeGame();
+  const original = join(game.workshop, '900001', 'Katana Rebalance.mod');
+  const before = readFileSync(original);
+  const copy = join(game.kenshi, 'mods', 'Katana Rebalance', 'Katana Rebalance.mod');
+  const { app, page } = await launch(game);
+  try {
+    const row = page.getByTestId('mods-table').locator('tr', { hasText: 'Katana Rebalance.mod' });
+    await expect(row).toBeVisible({ timeout: 60_000 });
+    await row.getByRole('button').click();
+    await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
+    await expect(page.getByTestId('workshop-banner')).toContainText('900001');
+
+    await page.locator('.dv-tab', { hasText: 'Инспектор' }).click();
+    await selectRecord(page, 'katana', KATANA);
+    await page.getByTestId('field-filter').fill('cut damage');
+    const input = page.getByTestId(`field-${CUT}`);
+    await expect(input).toHaveValue('2');
+    await input.fill('3');
+    await input.press('Enter');
+    await expect(page.getByTestId('save')).toHaveClass(/primary/);
+    await expect(input).toHaveValue('3');
+    await page.screenshot({ path: join(shots, '31-workshop-copy.png') });
+
+    // Ctrl+S в файл мастерской — отказ без окна подтверждения, файл не тронут.
+    await stubMessageBox(app, 0);
+    await page.getByTestId('save').click();
+    await expect(page.getByTestId('status-msg')).toContainText('мастерской Steam');
+    expect((await messageBox(app)).calls).toBe(0);
+    expect(Buffer.compare(readFileSync(original), before)).toBe(0);
+
+    // «Отмена» в окне копии — ничего не создаётся.
+    await stubMessageBox(app, 1);
+    await page.getByTestId('copy-for-editing').click();
+    await expect.poll(async () => (await messageBox(app)).calls).toBe(1);
+    expect(existsSync(copy)).toBe(false);
+
+    // «Скопировать»: копия байт в байт + файл происхождения; правки остаются, сохраняются в копию.
+    await stubMessageBox(app, 0);
+    await page.getByTestId('copy-for-editing').click();
+    await expect(page.getByTestId('copy-banner')).toContainText('900001', { timeout: 30_000 });
+    await expect(page.getByTestId('workshop-banner')).toHaveCount(0);
+    const box = await messageBox(app);
+    expect(box.detail).toContain(copy);
+    expect(box.detail).toContain('закроет оригинал');
+    expect(Buffer.compare(readFileSync(copy), before)).toBe(0);
+    const origin = JSON.parse(readFileSync(join(dirname(copy), 'Katana Rebalance.kedit-origin.json'), 'utf8')) as { source: string; workshopId: string };
+    expect(origin).toMatchObject({ source: original, workshopId: '900001' });
+    await expect(page.getByTestId('save')).toHaveClass(/primary/);
+
+    await stubMessageBox(app, 0);
+    await page.getByTestId('save').click();
+    await expect(page.getByTestId('status-msg')).toContainText('Сохранено', { timeout: 30_000 });
+    expect((await messageBox(app)).detail).toBe(copy);
+    expect(Buffer.compare(readFileSync(copy), before)).not.toBe(0);
+    expect(Buffer.compare(readFileSync(original), before)).toBe(0);
+    await expect(page.getByTestId('copy-banner')).toBeVisible();
+  } finally {
+    await closeApp(app);
+    rmSync(dirname(dirname(dirname(game.kenshi))), { recursive: true, force: true });
+  }
+});

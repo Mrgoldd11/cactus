@@ -26,7 +26,7 @@ import {
   type RecordStatus,
   type TranslationIndex,
 } from '@kenshi-editor/core';
-import type { GameInstallInfo, KeditApi, NamedBytes, ProjectBundle, ProjectRequest, SaveResult } from '../../shared/api.ts';
+import type { CopyModResult, GameInstallInfo, KeditApi, ModProvenance, NamedBytes, ProjectBundle, ProjectRequest, SaveResult } from '../../shared/api.ts';
 
 export interface IndexEntry {
   sid: string;
@@ -117,6 +117,8 @@ export class Project {
   readonly tree: CategoryNode[];
   /** Путь файла мода (куда сохранять); undefined — новый мод, ещё не сохранён. */
   path: string | undefined;
+  /** Откуда файл мода: мастерская (сохранять нельзя — только копия) или копия чужого мода. */
+  provenance: ModProvenance | undefined;
   version = 0;
   /** Изменения перенесены из прежнего контекста (смена зависимостей) и ещё не сохранены. */
   private carriedDirty: boolean;
@@ -128,7 +130,7 @@ export class Project {
   private translationPromise: Promise<TranslationIndex | undefined> | undefined;
   private readonly icons = new Map<string, Promise<string | null>>();
 
-  constructor(bundle: ProjectBundle, options: { mod?: DataFile; path?: string; carriedDirty?: boolean } = {}) {
+  constructor(bundle: ProjectBundle, options: { mod?: DataFile; path?: string; carriedDirty?: boolean; provenance?: ModProvenance | undefined } = {}) {
     this.bundle = bundle;
     const vanilla: Layer[] = bundle.vanilla.map((f) => ({ name: f.name, file: layerFile(f) }));
     const deps: Layer[] = bundle.dependencies.map((f) => ({ name: f.name, file: layerFile(f) }));
@@ -142,6 +144,7 @@ export class Project {
       ...(bundle.po !== undefined ? { po: parsePo(bundle.po) } : {}),
     });
     this.path = options.path ?? bundle.mod?.path;
+    this.provenance = 'provenance' in options ? options.provenance : bundle.provenance;
     this.carriedDirty = options.carriedDirty ?? false;
     for (const sid of this.ctx.allStringIds()) this.reindex(sid);
     this.ids = [...this.index.keys()];
@@ -285,10 +288,26 @@ export class Project {
     if (result.ok) {
       this.ctx.markSaved();
       this.path = result.path;
+      this.provenance = result.provenance;
       this.carriedDirty = false;
       this.bump();
     }
     return result;
+  }
+
+  /**
+   * Чужой мод из мастерской: скопировать файл в `mods/<имя>/<имя>.mod` (main спросит) и дальше
+   * сохранять в копию. Несохранённые правки остаются — копия байт в байт равна оригиналу.
+   */
+  async copyForEditing(): Promise<CopyModResult> {
+    if (this.path === undefined) return { ok: false, cancelled: false, error: 'not saved' };
+    const r = await window.kedit.copyModForEditing(this.bundle.game, this.path);
+    if (r.ok) {
+      this.path = r.path;
+      this.provenance = r.provenance;
+      this.bump();
+    }
+    return r;
   }
 }
 
@@ -311,7 +330,7 @@ export async function reloadProject(p: Project, change: { dependencies?: string[
   if ([...bundle.vanilla, ...bundle.dependencies].some((f) => f.key !== undefined && f.bytes.length === 0 && !parsedFiles.has(f.key))) {
     bundle = await window.kedit.openProject(req);
   }
-  return new Project(bundle, { mod, ...(p.path !== undefined ? { path: p.path } : {}), carriedDirty: wasDirty || p.ctx.dirty });
+  return new Project(bundle, { mod, ...(p.path !== undefined ? { path: p.path } : {}), carriedDirty: wasDirty || p.ctx.dirty, provenance: p.provenance });
 }
 
 /** Новый контекст с другими зависимостями (моды контекста остаются). */

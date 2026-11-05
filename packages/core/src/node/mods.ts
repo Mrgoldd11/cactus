@@ -6,9 +6,14 @@
  *
  * `mods.cfg` пишет только `writeModsCfg`: конец строки как был (CRLF по умолчанию), копия
  * рядом перед записью. `__mods.list` (его ведёт лаунчер) не трогается.
+ *
+ * Чужой мод (из мастерской) правят только в копии: `copyModForEditing` кладёт его байт в байт
+ * в `mods/<имя>/<имя>.mod` и рядом `<имя>.kedit-origin.json` — откуда копия (путь, номер
+ * мастерской, дата, SHA-256 оригинала). Оригинал не меняется никогда.
  */
 import { execFileSync } from 'node:child_process';
-import { closeSync, copyFileSync, existsSync, openSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { readModHeader } from '../format/read.ts';
 import { decodeText } from '../text.ts';
@@ -196,6 +201,120 @@ export function writeModsCfg(paths: GamePaths, names: readonly string[], options
   }
   writeFileSync(path, text, 'utf-8');
   return { path, ...(backup !== undefined ? { backup } : {}), changed: true };
+}
+
+/** Откуда взята копия мода: файл `<имя>.kedit-origin.json` рядом с копией. */
+export interface ModOrigin {
+  /** Путь оригинала на момент копирования. */
+  source: string;
+  /** Имя файла оригинала. */
+  sourceFileName: string;
+  /** Номер предмета мастерской, если оригинал оттуда. */
+  workshopId?: string;
+  author?: string;
+  /** Когда скопирован (ISO). */
+  copiedAt: string;
+  size: number;
+  /** SHA-256 оригинала — понять, обновился ли он с тех пор. */
+  sha256: string;
+}
+
+export const ORIGIN_SUFFIX = '.kedit-origin.json';
+
+export interface ModCopyPlan {
+  source: string;
+  /** Имя копии без `.mod`. */
+  name: string;
+  /** `mods/<имя>/<имя>.mod`. */
+  dest: string;
+  originPath: string;
+  origin: ModOrigin;
+  /** Копия с тем же именем закроет оригинал: игра возьмёт файл из `mods/`. */
+  shadowsOriginal: boolean;
+  /** Оригинал в `mods.cfg` — копия с тем же именем встанет на его место. */
+  enabled: boolean;
+  /** Почему копировать нельзя (папка уже есть, плохое имя…). */
+  error?: string;
+  /** Предупреждения для пользователя. */
+  warnings: string[];
+}
+
+const BAD_NAME = /[<>:"/\\|?*]/;
+const hasControlChar = (s: string): boolean => {
+  for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) < 32) return true;
+  return false;
+};
+
+function sha256(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+/** Что сделает `copyModForEditing` (ничего не пишет). `name` — имя копии, по умолчанию как у оригинала. */
+export function planModCopy(paths: GamePaths, source: string, options: { name?: string } = {}): ModCopyPlan {
+  const src = resolve(source);
+  const sourceFileName = basename(src);
+  const name = (options.name ?? sourceFileName).trim().replace(/\.mod$/i, '');
+  const dest = join(paths.kenshi, 'mods', name, `${name}.mod`);
+  const originPath = join(dirname(dest), `${name}${ORIGIN_SUFFIX}`);
+  const bytes = readFileSync(src);
+  const workshopId = workshopIdOf(paths, src);
+  const origin: ModOrigin = { source: src, sourceFileName, ...(workshopId !== undefined ? { workshopId } : {}), copiedAt: new Date().toISOString(), size: bytes.length, sha256: sha256(bytes) };
+  try {
+    const author = readModHeader(bytes).header?.author;
+    if (author && author.length > 0) origin.author = decodeText(author);
+  } catch {
+    // Заголовок не прочитался — копируем всё равно, байт в байт.
+  }
+  const shadowsOriginal = `${name}.mod`.toLowerCase() === sourceFileName.toLowerCase();
+  const enabled = readModsCfgText(paths).names.some((n) => n.toLowerCase() === sourceFileName.toLowerCase());
+  const plan: ModCopyPlan = { source: src, name, dest, originPath, origin, shadowsOriginal, enabled, warnings: [] };
+  if (name === '' || BAD_NAME.test(name) || hasControlChar(name) || name.endsWith('.') || name.endsWith(' ')) plan.error = `Плохое имя мода: «${name}»`;
+  else if (resolve(dest).toLowerCase() === src.toLowerCase()) plan.error = 'Это и есть файл в mods/ — копировать некуда; дайте копии другое имя';
+  else if (existsSync(dirname(dest))) plan.error = `Папка ${dirname(dest)} уже есть — выберите другое имя или удалите её сами`;
+  if (shadowsOriginal) {
+    plan.warnings.push(
+      workshopId !== undefined
+        ? 'Копия с тем же именем закроет оригинал из мастерской: игра и редактор возьмут файл из mods/. Чтобы вернуть оригинал, удалите папку копии.'
+        : 'Копия с тем же именем закроет оригинал.',
+    );
+  } else if (enabled) {
+    plan.warnings.push(`Копия под другим именем: в mods.cfg включён оригинал «${sourceFileName}», копию надо включить отдельно (и выключить оригинал, если правки должны его заменить).`);
+  }
+  if (workshopId !== undefined) plan.warnings.push('Автор мода может его обновить — копия останется прежней. Не выкладывайте копию в мастерскую без разрешения автора.');
+  return plan;
+}
+
+/**
+ * Скопировать мод для правки: байт в байт в `mods/<имя>/<имя>.mod` плюс файл происхождения.
+ * Оригинал только читается. Если папка копии уже есть — ошибка (ничего не перезаписываем).
+ */
+export function copyModForEditing(paths: GamePaths, source: string, options: { name?: string } = {}): ModCopyPlan {
+  const plan = planModCopy(paths, source, options);
+  if (plan.error !== undefined) throw new Error(plan.error);
+  const bytes = readFileSync(plan.source);
+  if (sha256(bytes) !== plan.origin.sha256) throw new Error(`${plan.source} изменился во время копирования`);
+  mkdirSync(dirname(plan.dest), { recursive: true });
+  writeFileSync(plan.dest, bytes, { flag: 'wx' });
+  writeFileSync(plan.originPath, `${JSON.stringify(plan.origin, null, 2)}\n`, { flag: 'wx' });
+  return plan;
+}
+
+/** Файл происхождения копии рядом с модом (`<имя>.kedit-origin.json`), если есть. */
+export function readModOrigin(modPath: string): ModOrigin | undefined {
+  const p = join(dirname(modPath), `${basename(modPath).replace(/\.mod$/i, '')}${ORIGIN_SUFFIX}`);
+  if (!existsSync(p)) return undefined;
+  try {
+    const o = JSON.parse(readFileSync(p, 'utf8')) as Partial<ModOrigin>;
+    return typeof o.source === 'string' && typeof o.sha256 === 'string' ? (o as ModOrigin) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Изменился ли оригинал копии с момента копирования: `undefined` — оригинала больше нет. */
+export function originChanged(origin: ModOrigin): boolean | undefined {
+  if (!existsSync(origin.source)) return undefined;
+  return sha256(readFileSync(origin.source)) !== origin.sha256;
 }
 
 export interface ModLayers {

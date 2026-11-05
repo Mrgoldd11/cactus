@@ -2,7 +2,9 @@
  * kedit mods — установленные моды и порядок загрузки (`data/mods.cfg`).
  */
 import { applyModsCfgChange, describeOrderChange, type ModPlace, type ModsCfgChange } from '@kenshi-editor/core';
-import { listInstalledMods, modsCfgPath, readModSummary, writeModsCfg, type InstalledMod } from '@kenshi-editor/core/node';
+import { existsSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { copyModForEditing, listInstalledMods, modsCfgPath, planModCopy, readModSummary, writeModsCfg, type InstalledMod } from '@kenshi-editor/core/node';
 import { UsageError, type Workspace } from './workspace.ts';
 
 export interface ModsOut {
@@ -126,5 +128,36 @@ export function modsChange(ws: Workspace, io: ModsOut, op: 'move' | 'enable' | '
     throw new UsageError(e instanceof Error ? e.message : String(e));
   }
   io.out(`${r.path}: записан${r.backup ? `, копия: ${r.backup}` : ''}`);
+  return 0;
+}
+
+/**
+ * `kedit mods copy <мод|путь> [--name Имя] [--force]`: чужой мод (обычно из мастерской) —
+ * байт в байт в `mods/<имя>/<имя>.mod` и рядом `<имя>.kedit-origin.json` (откуда копия).
+ * Оригинал только читается. Без `--force` — только показать, что будет.
+ */
+export function modsCopy(ws: Workspace, io: ModsOut, spec: string | undefined, o: { name?: string; force?: boolean }): number {
+  ws.requireGame();
+  if (spec === undefined) throw new UsageError('mods copy: нужно имя мода или путь к .mod');
+  const asPath = resolve(ws.cwd, spec);
+  let src = existsSync(asPath) && statSync(asPath).isFile() ? asPath : undefined;
+  if (src === undefined) {
+    const name = modFileName(spec);
+    const same = listInstalledMods(ws.paths).mods.filter((m) => m.fileName.toLowerCase() === name.toLowerCase());
+    // Есть и копия, и оригинал — берём оригинал из мастерской.
+    src = (same.find((m) => m.source === 'workshop') ?? same[0])?.path;
+  }
+  if (src === undefined) throw new UsageError(`Мод не найден: ${spec} (нет в mods/ и в мастерской)`);
+  const plan = planModCopy(ws.paths, src, o.name !== undefined ? { name: o.name } : {});
+  io.out(`откуда: ${plan.source}${plan.origin.workshopId !== undefined ? ` (мастерская ${plan.origin.workshopId})` : ''}`);
+  io.out(`куда:   ${plan.dest}`);
+  for (const w of plan.warnings) io.out(`! ${w}`);
+  if (plan.error !== undefined) throw new UsageError(plan.error);
+  if (!o.force) {
+    io.out('ничего не записано: это папка игры — чтобы скопировать, добавьте --force');
+    return 0;
+  }
+  copyModForEditing(ws.paths, src, o.name !== undefined ? { name: o.name } : {});
+  io.out(`скопирован байт в байт; откуда копия — ${plan.originPath}`);
   return 0;
 }

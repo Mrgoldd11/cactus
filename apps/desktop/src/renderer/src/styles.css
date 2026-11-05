@@ -340,6 +340,12 @@ textarea {
   gap: 10px;
   align-items: center;
 }
+.banner.warn {
+  background: #3d3420;
+}
+.banner.info {
+  background: #22303d;
+}
 .panes {
   flex: 1;
   min-height: 0;

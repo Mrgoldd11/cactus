@@ -8,7 +8,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { applyOps, parseStableIds, StableIds, type EditOp, type Layer, type ModContext, type ModInfo } from '@kenshi-editor/core';
-import { isInGameFolders, saveModContext, type GamePaths, type LoadedContext } from '@kenshi-editor/core/node';
+import { isInGameFolders, isInWorkshop, saveModContext, type GamePaths, type LoadedContext } from '@kenshi-editor/core/node';
 import { UsageError, type OpenOptions, type Workspace } from './workspace.ts';
 
 export interface BuildEnv {
@@ -65,6 +65,9 @@ export interface BuildResult {
 export async function runBuild(ws: Workspace, req: BuildRequest, log: (line: string) => void): Promise<BuildResult> {
   const source = resolve(ws.cwd, req.source);
   const outPath = resolve(ws.cwd, req.out);
+  if (isInWorkshop(ws.paths, outPath)) {
+    throw new UsageError(`${outPath} — в мастерской Steam; туда не пишем никогда. Сделайте копию: kedit mods copy <мод>`);
+  }
   if (!req.force && isInGameFolders(ws.paths, outPath)) {
     throw new UsageError(`${outPath} — в папке игры или мастерской; запись туда только с --force`);
   }

@@ -6,7 +6,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { applyModsCfgChange, describeOrderChange, emptyRecord, encodeText, FileType, itemTypeId, joinModList, formatModsCfg, parseModsCfg, placeMod, setModEnabled, type DataFile } from '../src/index.ts';
-import { listInstalledMods, planModLoad, readModSummary, workshopIdOf, writeDataFileSync, writeModsCfg, type GamePaths } from '../src/node/index.ts';
+import {
+  copyModForEditing,
+  isInWorkshop,
+  listInstalledMods,
+  originChanged,
+  planModCopy,
+  planModLoad,
+  readModOrigin,
+  readModSummary,
+  workshopIdOf,
+  writeDataFileSync,
+  writeModsCfg,
+  type GamePaths,
+} from '../src/node/index.ts';
 
 const ITEM = itemTypeId('ITEM')!;
 
@@ -135,5 +148,55 @@ describe('запись mods.cfg', () => {
     expect(again).toMatchObject({ changed: false });
     expect(readdirSync(join(g.kenshi, 'data')).filter((f) => f.includes('.bak-'))).toHaveLength(1);
     expect(existsSync(join(g.kenshi, 'data', '__mods.list'))).toBe(false);
+  });
+});
+
+describe('копия чужого мода для правки', () => {
+  it('из мастерской в mods/<имя>/<имя>.mod байт в байт + файл происхождения; оригинал не тронут', () => {
+    const g = game();
+    const src = join(g.workshop, '222', 'B.mod');
+    const before = readFileSync(src);
+    expect(isInWorkshop(g, src)).toBe(true);
+    expect(isInWorkshop(g, join(g.kenshi, 'mods', 'B', 'B.mod'))).toBe(false);
+
+    const plan = planModCopy(g, src);
+    expect(plan.error).toBeUndefined();
+    expect(plan.dest).toBe(join(g.kenshi, 'mods', 'B', 'B.mod'));
+    expect(plan.shadowsOriginal).toBe(true);
+    expect(plan.enabled).toBe(true);
+    expect(plan.origin).toMatchObject({ workshopId: '222', sourceFileName: 'B.mod', author: 'автор', size: before.length });
+    expect(plan.warnings.join(' ')).toMatch(/закроет оригинал/);
+    expect(existsSync(plan.dest)).toBe(false);
+
+    copyModForEditing(g, src);
+    expect(Buffer.compare(readFileSync(plan.dest), before)).toBe(0);
+    expect(Buffer.compare(readFileSync(src), before)).toBe(0);
+    const origin = readModOrigin(plan.dest)!;
+    expect(origin).toMatchObject({ source: src, workshopId: '222', sha256: plan.origin.sha256 });
+    expect(originChanged(origin)).toBe(false);
+    // Игра и редактор теперь берут копию: оригинал затенён.
+    const b = listInstalledMods(g).mods.filter((m) => m.fileName === 'B.mod');
+    expect(b.find((m) => m.source === 'workshop')!.shadowedBy).toBe(plan.dest);
+    // Вторая копия в ту же папку — ошибка, ничего не перезаписывается.
+    expect(() => copyModForEditing(g, src)).toThrow(/уже есть/);
+    writeFileSync(src, Buffer.concat([before, Buffer.from([0])]));
+    expect(originChanged(origin)).toBe(true);
+  });
+
+  it('под другим именем: не закрывает оригинал, предупреждает про mods.cfg; плохие имена — ошибка', () => {
+    const g = game();
+    const src = join(g.workshop, '222', 'B.mod');
+    const plan = copyModForEditing(g, src, { name: 'B (правка).mod' });
+    expect(plan.dest).toBe(join(g.kenshi, 'mods', 'B (правка)', 'B (правка).mod'));
+    expect(plan.shadowsOriginal).toBe(false);
+    expect(plan.warnings.join(' ')).toMatch(/включить отдельно/);
+    expect(existsSync(join(g.kenshi, 'mods', 'B (правка)', 'B (правка).kedit-origin.json'))).toBe(true);
+    expect(planModCopy(g, src, { name: 'a/b' }).error).toMatch(/Плохое имя/);
+    expect(planModCopy(g, src, { name: 'a\\b' }).error).toMatch(/Плохое имя/);
+    expect(planModCopy(g, src, { name: `a${String.fromCharCode(9)}b` }).error).toMatch(/Плохое имя/);
+    expect(planModCopy(g, src, { name: '  ' }).error).toMatch(/Плохое имя/);
+    // Мод из mods/ под тем же именем — это он сам.
+    expect(planModCopy(g, join(g.kenshi, 'mods', 'Mine', 'Mine.mod')).error).toMatch(/другое имя/);
+    expect(readModOrigin(join(g.kenshi, 'mods', 'Mine', 'Mine.mod'))).toBeUndefined();
   });
 });
