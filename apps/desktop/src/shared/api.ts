@@ -74,6 +74,15 @@ export interface Settings {
   gameDir?: string;
   /** Недавно открытые моды. */
   recent: string[];
+  /** Раскладка рабочего пространства (панели и их места). */
+  workspace?: WorkspaceSettings;
+}
+
+export interface WorkspaceSettings {
+  /** Снимок раскладки dockview (`toJSON`). */
+  layout?: unknown;
+  /** Последняя выбранная готовая раскладка: её ставит «Сбросить раскладку». */
+  preset?: string;
 }
 
 export interface WorldFileBytes {

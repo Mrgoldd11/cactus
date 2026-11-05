@@ -20,8 +20,8 @@ const KATANA = '476-gamedata.base';
 const WEAPON_VENDOR = '2235-gamedata.base';
 const CUT = 'cut damage multiplier';
 
-async function launch(): Promise<{ app: ElectronApplication; page: Page; liveFile: string }> {
-  const userData = mkdtempSync(join(tmpdir(), 'kedit-e2e-'));
+/** Запустить приложение; `userData` — продолжить с настройками прошлого запуска. */
+async function launch(userData = mkdtempSync(join(tmpdir(), 'kedit-e2e-'))): Promise<{ app: ElectronApplication; page: Page; liveFile: string; userData: string }> {
   const env: Record<string, string> = { KEDIT_USER_DATA: userData };
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && k !== 'ELECTRON_RENDERER_URL') env[k] = v;
   // Свой файл обнаружения живой связи: не трогать файл открытого у пользователя редактора.
@@ -30,7 +30,7 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page; liveFil
   const app = await electron.launch({ args: ['.'], cwd: appDir, env });
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
-  return { app, page, liveFile };
+  return { app, page, liveFile, userData };
 }
 
 /**
@@ -486,4 +486,63 @@ test('живая связь с ИИ: MCP подключается к окну, �
   }
   // Окно закрыто — файл обнаружения убран.
   expect(existsSync(liveFile)).toBe(false);
+});
+
+/** Группа dockview, в которой стоит вкладка с этим текстом. */
+function groupOfTab(page: Page, title: string) {
+  return page.locator('.dv-groupview').filter({ has: page.locator('.dv-tab', { hasText: title }) });
+}
+
+test('рабочее пространство: перетащил панель, закрыл другую — после перезапуска раскладка та же', async () => {
+  let userData: string;
+  {
+    const run = await launch();
+    userData = run.userData;
+    const { app, page } = run;
+    try {
+      await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
+      await page.getByTestId('open-vanilla').click();
+      await waitEditor(page);
+      await expect(page.locator('.dv-tab')).toHaveCount(3);
+      await expect(groupOfTab(page, 'Записи').locator('.dv-tab')).toHaveCount(1);
+
+      // Вкладку «Записи» — в середину инспектора: одна группа с двумя вкладками.
+      const target = groupOfTab(page, 'Инспектор').locator('.dv-content-container');
+      await page.locator('.dv-tab', { hasText: 'Записи' }).dragTo(target);
+      await expect(groupOfTab(page, 'Записи').locator('.dv-tab')).toHaveCount(2);
+
+      // «Категории» закрыть через меню «Окно», «Где в игре» открыть.
+      await page.getByTestId('window-menu').click();
+      await page.getByTestId('window-panel-categories').click();
+      await expect(page.locator('.dv-tab', { hasText: 'Категории' })).toHaveCount(0);
+      await page.getByTestId('window-menu').click();
+      await page.getByTestId('window-panel-where').click();
+      await expect(page.locator('.dv-tab', { hasText: 'Где в игре' })).toHaveCount(1);
+      await page.screenshot({ path: join(shots, '17-workspace-moved.png') });
+      // Раскладка пишется с задержкой.
+      await page.waitForTimeout(800);
+    } finally {
+      await closeApp(app);
+    }
+  }
+  const { app, page } = await launch(userData);
+  try {
+    await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('open-vanilla').click();
+    await waitEditor(page);
+    await expect(groupOfTab(page, 'Записи').locator('.dv-tab')).toHaveCount(2);
+    await expect(groupOfTab(page, 'Записи').locator('.dv-tab', { hasText: 'Инспектор' })).toHaveCount(1);
+    await expect(page.locator('.dv-tab', { hasText: 'Категории' })).toHaveCount(0);
+    await expect(page.locator('.dv-tab', { hasText: 'Где в игре' })).toHaveCount(1);
+
+    // «Сбросить раскладку» возвращает готовую раскладку «Данные».
+    await page.getByTestId('window-menu').click();
+    await page.getByTestId('window-reset').click();
+    await expect(page.locator('.dv-tab')).toHaveCount(3);
+    await expect(page.locator('.dv-tab', { hasText: 'Категории' })).toHaveCount(1);
+    await expect(groupOfTab(page, 'Записи').locator('.dv-tab')).toHaveCount(1);
+  } finally {
+    await closeApp(app);
+    rmSync(userData, { recursive: true, force: true });
+  }
 });

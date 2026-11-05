@@ -2,7 +2,7 @@
  * Окна: зависимости мода, сведения о моде, проверка мода, новая запись.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { itemTypeId, validateMod, formatIssue } from '@kenshi-editor/core';
+import { itemTypeId, validateMod, formatIssue, type ValidationIssue } from '@kenshi-editor/core';
 import type { ModEntry } from '../../../shared/api.ts';
 import { useT } from '../i18n.ts';
 import { tryEdit } from '../hooks.ts';
@@ -185,25 +185,29 @@ export function ValidationModal({ project, onGo, onClose }: { project: Project; 
       wide
       testId="validation-modal"
     >
-      {issues.length === 0 ? (
-        <p data-testid="validation-ok">✓</p>
-      ) : (
-        <ul className="issues">
-          {issues.map((i, n) => (
-            <li key={n} className={i.severity}>
-              <button
-                className="link"
-                onClick={() => {
-                  onGo(i.stringId);
-                }}
-              >
-                {formatIssue(project.ctx, i)}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <IssueList project={project} issues={issues} onGo={onGo} />
     </Modal>
+  );
+}
+
+/** Список проблем проверки мода (окно «Проверка» и панель «Диагностика»). */
+export function IssueList({ project, issues, onGo }: { project: Project; issues: readonly ValidationIssue[]; onGo: (sid: string) => void }): ReactNode {
+  if (issues.length === 0) return <p data-testid="validation-ok">✓</p>;
+  return (
+    <ul className="issues">
+      {issues.map((i, n) => (
+        <li key={n} className={i.severity}>
+          <button
+            className="link"
+            onClick={() => {
+              onGo(i.stringId);
+            }}
+          >
+            {formatIssue(project.ctx, i)}
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 

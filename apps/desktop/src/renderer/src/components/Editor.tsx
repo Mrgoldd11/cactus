@@ -1,20 +1,26 @@
 /**
- * Окно открытого проекта: панель команд, дерево категорий, список записей, редактор записи,
- * строка состояния. Навигация по записям с историей (назад/вперёд), горячие клавиши.
+ * Окно открытого проекта: панель команд, рабочее пространство из панелей (dockview), строка
+ * состояния. Навигация по записям — через общий выбор (назад/вперёд), горячие клавиши.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { OTHER_TYPES_ID, type CategoryNode } from '@kenshi-editor/core';
-import type { Lang } from '../../../shared/api.ts';
-import { useT, type Strings } from '../i18n.ts';
+import type { DockviewApi } from 'dockview-react';
+import type { Lang, WorkspaceSettings } from '../../../shared/api.ts';
+import { useT } from '../i18n.ts';
 import { useProjectVersion, tryEdit } from '../hooks.ts';
 import { MOD_CHANGES_ID, reloadWithDependencies, type Project } from '../project.ts';
 import { LangSwitch } from '../App.tsx';
-import { CategoryTree } from './CategoryTree.tsx';
-import { RecordList } from './RecordList.tsx';
-import { RecordEditor } from './RecordEditor.tsx';
 import { DependenciesModal, ModInfoModal, NewRecordModal, ValidationModal } from './Modals.tsx';
-import { AiPanel } from './AiPanel.tsx';
 import { useAiChangesets, useLiveStatus } from '../live.ts';
+import { SelectionService, useSelectionVersion } from '../workbench/selection.ts';
+import { ValueStore, useStore } from '../workbench/store.ts';
+import { findNode, initialCategory } from '../workbench/category.ts';
+import type { StatusMessage, Workbench as WorkbenchValue } from '../workbench/context.ts';
+import { Workbench } from '../workbench/Workbench.tsx';
+import { WindowMenu } from '../workbench/WindowMenu.tsx';
+import { applyPreset, isPreset, openPanel, type PresetId } from '../workbench/layouts.ts';
+import type { PanelParams } from '../workbench/registry.ts';
+
+export type { StatusMessage } from '../workbench/context.ts';
 
 interface Props {
   project: Project;
@@ -24,22 +30,7 @@ interface Props {
   onLang: (l: Lang) => void;
 }
 
-export interface StatusMessage {
-  /** Текст собирается при показе — сообщение переводится при смене языка. */
-  text: (t: Strings) => string;
-  kind: 'info' | 'error';
-}
-
 type ModalKind = 'deps' | 'info' | 'validate' | 'new';
-
-function findNode(nodes: readonly CategoryNode[], id: string): CategoryNode | undefined {
-  for (const n of nodes) {
-    if (n.id === id) return n;
-    const c = findNode(n.children, id);
-    if (c) return c;
-  }
-  return undefined;
-}
 
 function isTyping(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
@@ -53,37 +44,93 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
   const t = useT();
   const version = useProjectVersion(project);
   const ctx = project.ctx;
-  const everythingId = project.tree.find((n) => n.type === undefined && n.id !== OTHER_TYPES_ID)?.id ?? MOD_CHANGES_ID;
-  const [nodeId, setNodeId] = useState<string>(() => (ctx.modRecords().length > 0 ? MOD_CHANGES_ID : everythingId));
-  const [nav, setNav] = useState<{ stack: string[]; pos: number }>({ stack: [], pos: -1 });
+  const selection = useMemo(() => new SelectionService(), [project]);
+  const category = useMemo(() => new ValueStore(initialCategory(project)), [project]);
+  useSelectionVersion(selection);
+  const nodeId = useStore(category);
   const [status, setStatus] = useState<StatusMessage | undefined>();
   const [modal, setModal] = useState<ModalKind | undefined>();
   const searchRef = useRef<HTMLInputElement>(null);
-  const selected = nav.stack[nav.pos];
   const aiChangesets = useAiChangesets();
   const liveStatus = useLiveStatus();
-  const [aiOpen, setAiOpen] = useState(false);
   const aiPending = aiChangesets.filter((c) => c.status === 'pending').length;
-  // Пришла новая правка ИИ — показать панель.
-  const aiSeen = useRef(0);
+  const apiRef = useRef<DockviewApi | undefined>(undefined);
+  const [, setLayoutTick] = useState(0);
+  // Сохранённая раскладка читается до первого показа рабочего пространства.
+  const [workspace, setWorkspace] = useState<WorkspaceSettings | undefined | null>(null);
+  const [preset, setPreset] = useState<PresetId>('data');
   useEffect(() => {
-    if (aiChangesets.length > aiSeen.current) setAiOpen(true);
-    aiSeen.current = aiChangesets.length;
-  }, [aiChangesets.length]);
-
-  const select = useCallback((sid: string) => {
-    setNav((n) => (n.stack[n.pos] === sid ? n : { stack: [...n.stack.slice(0, n.pos + 1), sid].slice(-200), pos: Math.min(n.pos + 1, 199) }));
+    void window.kedit.getSettings().then((s) => {
+      const p = s.workspace?.preset;
+      if (isPreset(p)) setPreset(p);
+      setWorkspace(s.workspace);
+    });
   }, []);
-  const back = (): void => {
-    setNav((n) => (n.pos > 0 ? { ...n, pos: n.pos - 1 } : n));
-  };
-  const forward = (): void => {
-    setNav((n) => (n.pos < n.stack.length - 1 ? { ...n, pos: n.pos + 1 } : n));
-  };
+
+  const go = useCallback(
+    (sid: string) => {
+      selection.select({ kind: 'record', sid });
+    },
+    [selection],
+  );
 
   const report = useCallback((err: string | undefined) => {
     if (err !== undefined) setStatus({ text: (s) => `${s.editFailed}: ${err}`, kind: 'error' });
   }, []);
+
+  const tRef = useRef(t);
+  tRef.current = t;
+  const open = useCallback((panelId: string, params?: PanelParams) => {
+    const api = apiRef.current;
+    if (api) openPanel(api, tRef.current, panelId, params, params?.sid !== undefined ? panelId : undefined);
+  }, []);
+
+  const wb = useMemo<WorkbenchValue>(
+    () => ({
+      project,
+      selection,
+      go,
+      report,
+      status: setStatus,
+      open,
+      newRecord: () => {
+        setModal('new');
+      },
+      searchRef,
+      category,
+    }),
+    [project, selection, go, report, open, category],
+  );
+
+  // Записи, которых больше нет (отменили создание), убрать из выбора.
+  useEffect(() => {
+    selection.prune((sid) => project.record(sid) !== undefined);
+  }, [selection, project, version]);
+
+  // Пришла новая правка ИИ — показать панель.
+  const aiSeen = useRef(0);
+  useEffect(() => {
+    if (aiChangesets.length > aiSeen.current) open('ai');
+    aiSeen.current = aiChangesets.length;
+  }, [aiChangesets.length, open]);
+  const aiOpen = apiRef.current?.getPanel('ai') !== undefined;
+  const toggleAi = (): void => {
+    const p = apiRef.current?.getPanel('ai');
+    if (p) p.api.close();
+    else open('ai');
+  };
+
+  const choosePreset = (p: PresetId): void => {
+    setPreset(p);
+    if (apiRef.current) applyPreset(apiRef.current, p, t);
+  };
+
+  const back = (): void => {
+    selection.back();
+  };
+  const forward = (): void => {
+    selection.forward();
+  };
 
   const undo = (): void => {
     const cs = ctx.undo();
@@ -110,8 +157,11 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
       void save(e.shiftKey);
     } else if (mod && key === 'f') {
       e.preventDefault();
-      searchRef.current?.focus();
-      searchRef.current?.select();
+      if (!searchRef.current) open('records');
+      requestAnimationFrame(() => {
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      });
     } else if (e.altKey && e.key === 'ArrowLeft') back();
     else if (e.altKey && e.key === 'ArrowRight') forward();
     else if (mod && !isTyping(e.target) && ((key === 'z' && e.shiftKey) || key === 'y')) {
@@ -133,7 +183,6 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
   }, []);
 
   const node = nodeId === MOD_CHANGES_ID ? undefined : findNode(project.tree, nodeId);
-  const ids = useMemo(() => project.idsForNode(node ?? MOD_CHANGES_ID), [project, node, version]);
   const modCount = useMemo(() => ctx.modRecords().length, [ctx, version]);
 
   const applyDeps = (deps: string[]): void => {
@@ -165,10 +214,10 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
           ↷ {t.redo}
         </button>
         <span className="sep" />
-        <button disabled={nav.pos <= 0} onClick={back} title={`${t.back} (Alt+←)`}>
+        <button disabled={!selection.canBack} onClick={back} title={`${t.back} (Alt+←)`}>
           ←
         </button>
-        <button disabled={nav.pos >= nav.stack.length - 1} onClick={forward} title={`${t.forward} (Alt+→)`}>
+        <button disabled={!selection.canForward} onClick={forward} title={`${t.forward} (Alt+→)`}>
           →
         </button>
         <span className="sep" />
@@ -195,14 +244,14 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
         >
           {t.validation}
         </button>
+        <span className="sep" />
+        <WindowMenu api={apiRef.current} preset={preset} onPreset={choosePreset} onOpen={open} />
         <span className="grow" />
         <button
           data-testid="live-status"
           className={`live-btn${liveStatus.clients.length > 0 ? ' connected' : ''}${aiOpen ? ' active' : ''}`}
           title={liveStatus.clients.length > 0 ? `${t.aiConnected}: ${liveStatus.clients.map((c) => c.name).join(', ')}` : t.aiChanges}
-          onClick={() => {
-            setAiOpen((o) => !o);
-          }}
+          onClick={toggleAi}
         >
           <span className="live-dot" />
           {t.aiButton}
@@ -219,45 +268,20 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
           {t.missingDeps}: {project.bundle.missingDependencies.join(', ')}
         </div>
       )}
-      <div className={`panes${aiOpen ? ' with-ai' : ''}`}>
-        <CategoryTree project={project} version={version} selected={nodeId} onSelect={setNodeId} modCount={modCount} />
-        <RecordList
-          project={project}
-          version={version}
-          ids={ids}
-          selected={selected}
-          onSelect={select}
-          searchRef={searchRef}
-          onNew={() => {
-            setModal('new');
+      {workspace !== null && (
+        <Workbench
+          wb={wb}
+          initial={workspace}
+          preset={preset}
+          onApi={(api) => {
+            apiRef.current = api;
+            setLayoutTick((n) => n + 1);
           }}
-          onDuplicate={(sid) => {
-            report(
-              tryEdit(() => {
-                select(ctx.duplicateRecord(sid));
-              }),
-            );
+          onChange={() => {
+            setLayoutTick((n) => n + 1);
           }}
-          onReport={report}
         />
-        {selected !== undefined ? (
-          <RecordEditor key="editor" project={project} version={version} sid={selected} onGo={select} onReport={report} />
-        ) : (
-          <div className="record-editor empty muted">{t.noSelection}</div>
-        )}
-        {aiOpen && (
-          <AiPanel
-            project={project}
-            changesets={aiChangesets}
-            status={liveStatus}
-            onGo={select}
-            onReport={report}
-            onClose={() => {
-              setAiOpen(false);
-            }}
-          />
-        )}
-      </div>
+      )}
       <div className="statusbar" data-testid="statusbar">
         <span>
           {t.modRecords}: {modCount}
@@ -292,7 +316,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
           project={project}
           onGo={(sid) => {
             setModal(undefined);
-            select(sid);
+            go(sid);
           }}
           onClose={() => {
             setModal(undefined);
@@ -307,7 +331,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
             setModal(undefined);
             report(
               tryEdit(() => {
-                select(ctx.createRecord(type, name));
+                go(ctx.createRecord(type, name));
               }),
             );
           }}
