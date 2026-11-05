@@ -1,7 +1,8 @@
 /**
  * Команды kedit на маленькой синтетической «папке игры» (без файлов Kenshi).
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, onTestFinished } from 'vitest';
 import { decodeText } from '@kenshi-editor/core';
@@ -331,5 +332,29 @@ describe('kedit mods', () => {
     // Сам в себя (тот же путь в mods/) — ошибка.
     expect((await run('mods', 'copy', 'My', '--force')).code).toBe(2);
     expect((await run('mods', 'copy', 'Nope')).code).toBe(2);
+  });
+});
+
+describe('kedit strings', () => {
+  it('тексты мода → CSV → мод-перевод с зависимостью от оригинала; в папку игры без --force — нет', async () => {
+    const out = mkdtempSync(join(tmpdir(), 'kedit-tr-'));
+    const s = await run('strings', 'My');
+    expect(s.code, s.err).toBe(0);
+    expect(s.out).toContain('My.mod → My RUS.mod: текстов 1, переведено 0, как в оригинале 0, нет перевода 1');
+    expect(s.out).toContain('  [нет] 1-My.mod name (Magic hat): "Magic hat"');
+    const csvPath = join(out, 'my.csv');
+    expect((await run('strings', 'My', '--out', csvPath)).code).toBe(0);
+    writeFileSync(csvPath, readFileSync(csvPath, 'utf8').replace(/,\r\n$/, ',Волшебная шляпа\r\n'));
+    const modPath = join(out, 'My RUS.mod');
+    const b = await run('strings', 'My', '--import', csvPath, '--out', modPath);
+    expect(b.code, b.err).toBe(0);
+    expect(b.out).toContain('применено 1');
+    const f = readDataFileSync(modPath);
+    expect(decodeText(f.header!.dependencies)).toBe('My.mod');
+    expect(f.records.map((r) => [r.stringId, decodeText(r.name), r.floats.size])).toEqual([['1-My.mod', 'Волшебная шляпа', 0]]);
+    expect((await run('strings', 'My', '--mod', modPath)).out).toContain('переведено 1');
+    // Папка игры — только с --force.
+    expect((await run('strings', 'My', '--out', join(fx.game, 'my.csv'))).code).toBe(2);
+    expect((await run('strings', 'My', '--out', join(out, 'x.txt'))).code).toBe(2);
   });
 });

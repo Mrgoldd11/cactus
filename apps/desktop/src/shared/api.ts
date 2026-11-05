@@ -159,6 +159,11 @@ export interface LiveStatus {
 
 export type LiveReply = { ok: true; result: unknown } | { ok: false; error: string };
 
+/** Текстовый файл (выгрузка перевода): CSV, JSON или PO. */
+export type TextFileKind = 'csv' | 'json' | 'po';
+
+export type SaveTextResult = { ok: true; path: string } | { ok: false; cancelled: true } | { ok: false; cancelled: false; error: string };
+
 export interface KeditApi {
   detectGames(): Promise<GameInstallInfo[]>;
   /** Диалог выбора папки игры; null — отменено или в папке нет игры. */
@@ -184,6 +189,13 @@ export interface KeditApi {
   loadWorld(req: WorldRequest): Promise<WorldFileBytes[]>;
   /** Иконка предмета (поле `icon`, путь относительно папки игры) как data URL; null — нет файла. */
   readIcon(game: GameInstallInfo, iconPath: string): Promise<string | null>;
+  /**
+   * Диалог «Сохранить» и запись текста (UTF-8). В папку игры и мастерской не пишет — ошибка
+   * `game-folder` (выгрузка перевода — рабочий файл, ему там не место).
+   */
+  saveTextFile(defaultName: string, kind: TextFileKind, text: string): Promise<SaveTextResult>;
+  /** Диалог «Открыть» для CSV/JSON/PO и текст файла; null — отменено. */
+  openTextFile(): Promise<{ path: string; text: string } | { error: string } | null>;
   /** Байты перевода текстов записей `locale/ru_RU/ru_RU.translation` (реплики); null — нет файла. */
   readTranslation(game: GameInstallInfo): Promise<Uint8Array | null>;
   getSettings(): Promise<Settings>;
@@ -211,6 +223,8 @@ export const IPC = {
   loadWorld: 'kedit:load-world',
   readIcon: 'kedit:read-icon',
   readTranslation: 'kedit:read-translation',
+  saveTextFile: 'kedit:save-text-file',
+  openTextFile: 'kedit:open-text-file',
   getSettings: 'kedit:get-settings',
   setSettings: 'kedit:set-settings',
   setDirty: 'kedit:set-dirty',

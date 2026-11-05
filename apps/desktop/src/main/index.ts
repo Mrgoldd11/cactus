@@ -11,7 +11,7 @@
  *
  * Меню окна — `menu.ts`, журнал ошибок в файл — `log.ts`.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { describeOrderChange, type LiveRequestBody } from '@kenshi-editor/core';
@@ -28,6 +28,8 @@ import {
   type ProjectRequest,
   type SaveRequest,
   type SaveResult,
+  type SaveTextResult,
+  type TextFileKind,
   type Settings,
   type WorldRequest,
 } from '../shared/api.ts';
@@ -86,6 +88,46 @@ function games(): GameInstallInfo[] {
 
 function isGamePath(path: string): boolean {
   return games().some((g) => needsConfirmation(g, path));
+}
+
+const TEXT_FILTERS: Record<TextFileKind, { name: string; extensions: string[] }> = {
+  csv: { name: 'CSV (Excel, LibreOffice)', extensions: ['csv'] },
+  json: { name: 'JSON', extensions: ['json'] },
+  po: { name: 'gettext PO (Poedit)', extensions: ['po'] },
+};
+
+/** Выгрузка перевода: диалог и запись; папка игры и мастерская — отказ. */
+async function saveTextFile(e: IpcMainInvokeEvent, defaultName: string, kind: TextFileKind, text: string): Promise<SaveTextResult> {
+  const win = windowOf(e);
+  const opts = { defaultPath: join(app.getPath('documents'), defaultName), filters: [TEXT_FILTERS[kind]] };
+  const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+  if (r.canceled || !r.filePath) return { ok: false, cancelled: true };
+  const path = r.filePath;
+  if (isGamePath(path) || isWorkshopPath(games(), path)) return { ok: false, cancelled: false, error: 'game-folder' };
+  try {
+    writeFileSync(path, text, 'utf8');
+    return { ok: true, path };
+  } catch (err) {
+    log('error', 'saveTextFile', path, err);
+    return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Файл перевода больше этого — не текст выгрузки (защита от случайного выбора). */
+const MAX_TEXT_FILE = 64 * 1024 * 1024;
+
+async function openTextFile(e: IpcMainInvokeEvent): Promise<{ path: string; text: string } | { error: string } | null> {
+  const win = windowOf(e);
+  const opts = { properties: ['openFile' as const], defaultPath: app.getPath('documents'), filters: [{ name: 'CSV, JSON, PO', extensions: ['csv', 'json', 'po', 'txt'] }] };
+  const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+  const path = r.canceled ? undefined : r.filePaths[0];
+  if (path === undefined) return null;
+  try {
+    if (statSync(path).size > MAX_TEXT_FILE) return { error: 'too-big' };
+    return { path, text: readFileSync(path, 'utf8') };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<SaveResult> {
@@ -287,6 +329,8 @@ function registerIpc(): void {
   ipcMain.handle(IPC.loadWorld, (_e, req: WorldRequest) => loadWorldBytes(req));
   ipcMain.handle(IPC.readIcon, (_e, game: GameInstallInfo, iconPath: string) => readIconDataUrl(game, iconPath));
   ipcMain.handle(IPC.readTranslation, (_e, game: GameInstallInfo) => readTranslationBytes(game));
+  ipcMain.handle(IPC.saveTextFile, saveTextFile);
+  ipcMain.handle(IPC.openTextFile, openTextFile);
   ipcMain.handle(IPC.getSettings, () => settings);
   ipcMain.handle(IPC.setSettings, (_e, patch: Partial<Settings>) => {
     const langChanged = patch.lang !== undefined && patch.lang !== settings.lang;

@@ -48,6 +48,7 @@ import { loadModLayers, loadTranslation, loadWorld, readDataFileSync, readModsCf
 import { basename } from 'node:path';
 import { runBuild } from './build.ts';
 import { modsChange, modsCopy, modsList } from './mods.ts';
+import { runStrings } from './strings.ts';
 import { UsageError, Workspace } from './workspace.ts';
 
 export interface Io {
@@ -93,6 +94,10 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
   touched <id|имя>        какие моды из mods.cfg меняют запись и что именно  --all  все установленные
   conflicts               моды, которые меняют одно поле по-разному, и кто победит (поздний в mods.cfg)
       --mod <путь|имя.mod>  только конфликты этого мода;  --all  все установленные, не только mods.cfg
+  strings <оригинал.mod>  тексты мода для перевода: оригинал, перевод, статус; итог «переведено N из M»
+      --mod <перевод.mod>  статусы в этом моде-переводе (+ проверка: лишние тексты, правки не текстов)
+      --todo  только непереведённое;  --out тексты.csv|.json|.po — выгрузить (PO — для Poedit)
+      --import <файл> --out <перевод.mod> [--name Имя.mod]  собрать мод-перевод из файла (CSV/JSON/PO)
 
 Общие:
   --game <папка Kenshi>   иначе KENSHI_DIR, kenshi-paths.json или найденная установка Steam/GOG
@@ -134,6 +139,8 @@ const OPTIONS = {
   bottom: { type: 'boolean' },
   after: { type: 'string' },
   before: { type: 'string' },
+  import: { type: 'string' },
+  todo: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 } as const;
 
@@ -462,6 +469,20 @@ const COMMANDS: Record<string, Handler> = {
       return modsCopy(c.ws, c.io, c.args[1], { ...(c.values.name !== undefined ? { name: c.values.name } : {}), force: c.values.force ?? false });
     }
     throw new UsageError(`mods ${sub}? (list, move, enable, disable, copy)`);
+  },
+
+  strings(c) {
+    const v = c.values;
+    return runStrings(c.ws, c.io, c.arg(0, '<оригинал.mod>'), {
+      ...(v.mod !== undefined ? { mod: v.mod } : {}),
+      ...(c.deps ? { deps: c.deps } : {}),
+      ...(v.out !== undefined ? { out: v.out } : {}),
+      ...(v.import !== undefined ? { import: v.import } : {}),
+      ...(v.name !== undefined ? { name: v.name } : {}),
+      todo: v.todo ?? false,
+      force: v.force ?? false,
+      json: v.json ?? false,
+    });
   },
 
   async build(c) {

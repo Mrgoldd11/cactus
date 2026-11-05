@@ -2052,3 +2052,50 @@ button.small.active {
 tr[draggable='true'] {
   cursor: grab;
 }
+
+/* Панель «Перевод»: оригинал и поле перевода рядом. */
+.tr-actions {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  margin-left: auto;
+}
+.tr-table td {
+  vertical-align: top;
+}
+.tr-original {
+  white-space: pre-wrap;
+  max-width: 40ch;
+}
+.tr-translation {
+  min-width: 30ch;
+  width: 40%;
+}
+.tr-translation textarea {
+  width: 100%;
+  min-height: 2.2em;
+  resize: vertical;
+}
+.tr-status {
+  white-space: nowrap;
+}
+.tr-status.tr-todo {
+  color: var(--muted);
+}
+.tr-status.tr-same {
+  color: var(--changed);
+}
+.tr-import-report {
+  position: relative;
+  padding: 4px 24px 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.tr-import-report > button.link {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+}
+.tr-checks summary {
+  cursor: pointer;
+}

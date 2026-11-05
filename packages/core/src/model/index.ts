@@ -15,3 +15,4 @@ export * from './editor-view.ts';
 export * from './step-title.ts';
 export * from './load-order.ts';
 export * from './conflicts.ts';
+export * from './translate.ts';

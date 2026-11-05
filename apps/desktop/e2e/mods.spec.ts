@@ -302,3 +302,85 @@ test('чужой мод из мастерской: сохранить в ори�
     rmSync(dirname(dirname(dirname(game.kenshi))), { recursive: true, force: true });
   }
 });
+
+test('перевод: панель «Перевод» — оригинал и перевод рядом, выгрузка CSV и загрузка обратно', async () => {
+  const game = makeGame();
+  const ARMOUR = itemTypeId('ARMOUR')!;
+  const hat = (sid: string, name: string, desc: string): GameRecord => {
+    const r = emptyRecord(ARMOUR, sid, encodeText(name));
+    r.strings.set('description', encodeText(desc));
+    return r;
+  };
+  mkdirSync(join(game.kenshi, 'mods', 'Hats'), { recursive: true });
+  writeFileSync(join(game.kenshi, 'mods', 'Hats', 'Hats.mod'), modFile([hat('1-Hats.mod', 'Straw hat', 'Light and cheap.'), hat('2-Hats.mod', 'Iron hat', 'Heavy, "very" heavy.')]));
+  const tmp = mkdtempSync(join(tmpdir(), 'kedit-tr-'));
+  const csv = join(tmp, 'hats.csv');
+  const { app, page } = await launch(game);
+  try {
+    await page.getByTestId('new-mod-name').fill('Hats RUS');
+    await page.getByTestId('create-mod').click();
+    await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
+
+    await openPanel(page, 'translate');
+    const panel = page.getByTestId('translate-panel');
+    await expect(panel).toContainText('Выберите мод');
+    await page.getByTestId('tr-add-source').selectOption('Hats.mod');
+    await expect(page.getByTestId('tr-summary')).toHaveText('переведено 0 из 4', { timeout: 60_000 });
+    await expect(page.getByTestId('tr-source')).toHaveValue('Hats.mod');
+
+    // Перевод в поле — в мод: статус «есть», запись в моде, зависимость от оригинала.
+    const row = (sid: string, field: string) => page.getByTestId('tr-table').locator(`tr[data-sid="${sid}"][data-field="${field}"]`);
+    const input = row('1-Hats.mod', 'name').getByTestId('tr-input');
+    await input.fill('Соломенная шляпа');
+    await input.press('Control+Enter');
+    await expect(row('1-Hats.mod', 'name')).toHaveAttribute('data-status', 'done');
+    await expect(page.getByTestId('tr-summary')).toHaveText('переведено 1 из 4');
+    await expect(page.getByTestId('save')).toHaveClass(/primary/);
+
+    await page.getByTestId('tr-filter-todo').check();
+    await expect(page.getByTestId('tr-table').locator('tbody tr')).toHaveCount(3);
+    await page.getByTestId('tr-filter-all').check();
+
+    // Выгрузка CSV во временную папку (окно «Сохранить» подменено).
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = () => Promise.resolve({ canceled: false, filePath: p });
+      dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [p] });
+    }, csv);
+    await page.getByTestId('tr-export-csv').click();
+    await expect(page.getByTestId('status-msg')).toContainText('Сохранено');
+    const text = readFileSync(csv, 'utf8');
+    expect(text).toContain('Straw hat');
+    expect(text).toContain('Соломенная шляпа');
+
+    // Переводчик заполнил файл (в Excel) — загрузка: одна отмена, отчёт.
+    const filled = text
+      .replace('"Heavy, ""very"" heavy.",', '"Heavy, ""very"" heavy.","Тяжёлая, ""очень"" тяжёлая."')
+      .replace('Iron hat,Iron hat,', 'Iron hat,Iron hat,Железная шляпа')
+      .replace('Light and cheap.,', 'Light and cheap.,Лёгкая и дешёвая.');
+    expect(filled).not.toBe(text);
+    writeFileSync(csv, filled);
+    await page.getByTestId('tr-import').click();
+    await expect(page.getByTestId('tr-import-report')).toContainText('Загружено переводов: 3, уже такие же: 1');
+    await expect(page.getByTestId('tr-summary')).toHaveText('переведено 4 из 4');
+    await expect(row('2-Hats.mod', 'description').getByTestId('tr-input')).toHaveValue('Тяжёлая, "очень" тяжёлая.');
+    await expect(page.getByTestId('tr-checks')).toContainText('Меняются только тексты');
+    await page.screenshot({ path: join(shots, '32-translate.png') });
+
+    await page.keyboard.press('Control+KeyZ');
+    await expect(page.getByTestId('tr-summary')).toHaveText('переведено 1 из 4');
+    await page.keyboard.press('Control+KeyY');
+    await expect(page.getByTestId('tr-summary')).toHaveText('переведено 4 из 4');
+
+    // Выгрузка в папку игры — отказ.
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = () => Promise.resolve({ canceled: false, filePath: p });
+    }, join(game.kenshi, 'mods', 'x.csv'));
+    await page.getByTestId('tr-export-po').click();
+    await expect(page.getByTestId('status-msg')).toContainText('вне игры');
+    expect(existsSync(join(game.kenshi, 'mods', 'x.csv'))).toBe(false);
+  } finally {
+    await closeApp(app);
+    rmSync(tmp, { recursive: true, force: true });
+    rmSync(dirname(dirname(dirname(game.kenshi))), { recursive: true, force: true });
+  }
+});
