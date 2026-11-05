@@ -17,6 +17,8 @@
  */
 import type { GameRecord } from '../format/types.ts';
 import { itemTypeName } from '../format/item-types.ts';
+import { decodeText } from '../text.ts';
+import { translatedText, type TranslationIndex } from '../locale/translation.ts';
 import type { ModContext } from '../model/context.ts';
 import { CHOICE_SPEAKERS } from '../model/dialogue-graph.ts';
 import { alwaysPasses, chooseOdds, chooseOrder, dialogueScore, isEmptyNode, type ChooseEnv } from '../model/dialogue-score.ts';
@@ -270,4 +272,59 @@ export function playConversation(ctx: ModContext, character: string, input: Play
     }
   }
   return { character, event, steps, waiting };
+}
+
+const PLAY_WHY_LABELS: Record<PlayWhy, string> = {
+  chosen: 'выбран',
+  'chosen-random': 'выбран случайно среди равных',
+  random: 'мог выпасть случайно',
+  outscored: 'перебит (очков меньше или позже в списке игры)',
+  fails: 'не подходит в этом раскладе (условия, шанс, locked)',
+  empty: 'пустой узел без продолжения',
+  missing: 'записи нет',
+};
+
+const pctOf = (x: number): string => `${String(Math.round(x * 100))}%`;
+
+/**
+ * Разговор из `playConversation` текстом (MCP, CLI): по шагам — из чего игра выбирала и почему,
+ * что прозвучало, ответы игрока с id (их передают в `answers` следующего вызова).
+ */
+export function formatPlay(ctx: ModContext, res: PlayResult, options: { translation?: TranslationIndex; mode?: PlayMode } = {}): string[] {
+  const tr = options.translation;
+  const label = (sid: string): string => {
+    const rec = ctx.get(sid);
+    if (!rec) return sid;
+    if (itemTypeName(rec.type) !== 'DIALOGUE_LINE') return `«${ctx.localizedName(sid) ?? decodeText(rec.name)}» (${sid})`;
+    const raw = rec.strings.get('text0');
+    const en = raw !== undefined ? decodeText(raw) : '';
+    const text = translatedText(tr, sid, 'text0', en) ?? en;
+    return `«${text.replace(/\s+/g, ' ').trim() || '(пусто)'}» (${sid})`;
+  };
+  const who = (sid: string): string => (isChoiceRecord(ctx.get(sid)) ? 'игрок' : 'NPC');
+  const c = ctx.get(res.character);
+  const out = [
+    `${ctx.localizedName(res.character) ?? (c ? decodeText(c.name) : res.character)} (${res.character}), событие ${String(res.event)}; расклад: ${options.mode === 'none' ? 'только без условий' : 'условия выполнены'}`,
+  ];
+  res.steps.forEach((s, i) => {
+    out.push(`шаг ${String(i + 1)}${s.from === '' ? ' (начало)' : ` (после ${s.from})`}:`);
+    const shown = s.options.filter((o) => o.why !== 'missing');
+    if (shown.length > 1 || (shown.length === 1 && shown[0]!.why !== 'chosen')) {
+      for (const o of shown) out.push(`  ${o.why.startsWith('chosen') ? '▶' : '·'} ${label(o.sid)} — ${PLAY_WHY_LABELS[o.why]}, очки ${String(o.score)}${o.odds > 0 && o.odds < 1 ? `, шанс ${pctOf(o.odds)}` : ''}`);
+    }
+    for (const lv of s.path) {
+      const ch = lv.options.find((o) => o.why.startsWith('chosen'));
+      if (ch && lv.options.length > 1) out.push(`  в ${lv.node}: ${label(ch.sid)} из ${String(lv.options.length)}`);
+    }
+    if (s.said !== undefined) out.push(`  ${who(s.said)}: ${label(s.said)}`);
+    if (s.answers.length) {
+      out.push('  ответы игрока:');
+      for (const a of s.answers) out.push(`    ${a.sid === s.answered ? '▶' : '-'} ${label(a.sid)}${a.shown ? '' : ' — скрыт (условия не выполнены)'}`);
+      if (s.npcToo) out.push(`    ${s.answered === PLAY_NPC ? '▶' : '-'} NPC продолжает сам (${PLAY_NPC})`);
+    }
+    if (s.end === 'nothing-next') out.push('  конец: дальше ничего нет');
+    else if (s.end === 'nothing-fits') out.push('  конец: ничего не подходит');
+  });
+  if (res.waiting) out.push('ждёт ответа игрока: передайте id ответа (или @npc) в answers');
+  return out;
 }

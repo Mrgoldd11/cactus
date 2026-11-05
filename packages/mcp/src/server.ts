@@ -34,6 +34,10 @@ import {
   whereInGame,
   formatTalk,
   simulateTalk,
+  describeChangeset,
+  formatPlay,
+  playConversation,
+  type Changeset,
 } from '@kenshi-editor/core';
 import { SessionError, type Session } from './session.ts';
 
@@ -94,6 +98,10 @@ const limit = (d: number): z.ZodOptional<z.ZodNumber> => z.number().int().min(0)
 const values = z.array(z.number().int()).max(3).optional().describe('Значения ссылки (до трёх чисел); по умолчанию — из схемы');
 const scalar = z.union([z.boolean(), z.number(), z.string(), z.array(z.number())]);
 const dict = z.string().optional().describe('Словарь: bool, int, float, str, file, vec3, vec4 (если не ясно из схемы)');
+const enumIn = z.union([z.number().int(), z.string()]);
+const speaker = enumIn.optional().describe('Кто говорит: npc, player или TalkerEnum (T_ME, T_TARGET, …); по умолчанию после реплики NPC — ответ игрока, иначе NPC');
+const lineText = { text: z.string().optional(), texts: z.array(z.string()).optional().describe('Несколько формулировок (игра выбирает случайно)') };
+const as = z.string().optional().describe('Псевдоним новой записи ($x)');
 
 const editOp = z.discriminatedUnion('op', [
   z.object({ op: z.literal('create'), type: z.union([z.string(), z.number()]), name: z.string(), id: z.string().optional(), as: z.string().optional() }),
@@ -117,6 +125,17 @@ const editOp = z.discriminatedUnion('op', [
     references: z.array(z.string()).optional(),
     lastId: z.number().int().optional(),
   }),
+  z.object({ op: z.literal('addLine'), parent: z.string(), speaker, ...lineText, as }),
+  z.object({ op: z.literal('insertLine'), parent: z.string(), child: z.string(), speaker, ...lineText, as }),
+  z.object({ op: z.literal('link'), parent: z.string(), child: z.string() }),
+  z.object({ op: z.literal('unlink'), parent: z.string(), child: z.string() }),
+  z.object({ op: z.literal('setText'), id: z.string(), ...lineText }),
+  z.object({ op: z.literal('duplicateLine'), id: z.string(), parent: z.string().optional(), as }),
+  z.object({ op: z.literal('deleteLines'), lines: z.array(z.string()).optional(), links: z.array(z.object({ parent: z.string(), child: z.string() })).optional() }),
+  z.object({ op: z.literal('revertLine'), id: z.string() }),
+  z.object({ op: z.literal('addCondition'), id: z.string(), cond: enumIn, value: z.number().int(), who: enumIn.optional(), cmp: enumIn.optional(), tag: z.number().int().optional(), as }),
+  z.object({ op: z.literal('addEffect'), id: z.string(), action: enumIn, values: z.array(z.number().int()).max(3).optional(), as }),
+  z.object({ op: z.literal('removeAction'), id: z.string(), category: z.enum(['conditions', 'effects']), action: z.string() }),
 ]);
 
 /** Убрать ключи со значением undefined (exactOptionalPropertyTypes). */
@@ -142,6 +161,8 @@ export function createServer(session: Session): McpServer {
         'Сначала open_mod (или работайте по ванили без него). Записи — по строковому id или имени (show, tree, refs, diff); find ищет по англ. и рус. имени.',
         'Правки (edit) — пачкой операций, одна отмена на пачку; save пишет только изменения. В папку игры save пишет только с force: true.',
         'Схема типов и полей с описаниями из fcs.def — инструмент schema и ресурсы kenshi://schema/…',
+        'Диалоги: tree — дерево, talk — какой диалог выберет игра у персонажа, play — разговор по шагам с ответами игрока; правки графа — операции edit addLine, insertLine, link, unlink, setText, duplicateLine, deleteLines, addCondition, addEffect.',
+        'history — шаги понятными словами; undo/redo с to — отмена или повтор до шага.',
         'Если открыт Kenshi Mod Editor — connect_editor: дальше всё читается из окна редактора, а edit отправляет правки в окно набором изменений; пользователь их принимает или откатывает (editor_changes — их состояние). save и undo в этом режиме делает пользователь.',
       ].join('\n'),
     },
@@ -305,7 +326,7 @@ export function createServer(session: Session): McpServer {
     {
       title: 'Разговор с персонажем',
       description:
-        'Симулятор разговора: какие диалоги есть у персонажа на событие (1 — игрок заговорил, по умолчанию), откуда каждый (персонаж, его пакет, отряд, фракция; слой-источник), очки, условия, действия (арест, атака, торговля, найм) и вердикт: какой выберет игра, какой сработает только при условиях, какой не прозвучит. Затем начало разговора победителя с русским текстом и выбором игрока. Оценка по данным: точная формула игры неизвестна.',
+        'Симулятор разговора: какие диалоги есть у персонажа на событие (1 — игрок заговорил, по умолчанию), откуда каждый (персонаж, его пакет, отряд, фракция; слой-источник), очки, условия, действия (арест, атака, торговля, найм) и вердикт: какой выберет игра, какой сработает только при условиях, какой не прозвучит. Затем начало разговора победителя с русским текстом и выбором игрока. Выбор считается по правилу из кода игры (очки, порядок, розыгрыш поровну, шансы). Разговор дальше по шагам — play.',
       inputSchema: {
         id: z.string().describe('Id или имя персонажа (CHARACTER)'),
         event: z.number().int().min(0).optional().describe('Событие (DIALOGUE_PACKAGE dialogs v0); 1 — разговор по клику'),
@@ -365,6 +386,11 @@ export function createServer(session: Session): McpServer {
       }),
   );
 
+  /** Название шага понятными словами, как в окне редактора. */
+  const title = (ctx: ModContext, cs: Changeset): string => {
+    const tr = session.translation();
+    return `#${String(cs.id)} ${describeChangeset(ctx, cs, tr ? { translation: tr } : {}).ru}`;
+  };
   server.registerTool(
     'edit',
     {
@@ -375,6 +401,12 @@ export function createServer(session: Session): McpServer {
         'rename {id,name}; set {id,field,value,dict?} — enum-поле можно задать именем (DR_ONCE_ONLY, ONCE_ONLY) или числом; reset {id,field,dict?} — вернуть значение нижнего слоя;',
         'addRef {id,category,target,values?}; removeRef {id,category,target}; setRefs {id,category,refs:[{target,values?}]};',
         'info {author?,description?,dependencies?,references?,version?,lastId?} — заголовок мода.',
+        'Граф диалога (как в редакторе; parent — диалог или реплика, child — реплика):',
+        'addLine {parent,speaker?,text?|texts?,as?} — новая реплика в конце ветки; insertLine {parent,child,speaker?,text?,as?} — вместо связи parent→child: parent→новая→child;',
+        'link {parent,child} — связь (петля, общий ответ); unlink {parent,child}; setText {id,text|texts}; duplicateLine {id,parent?,as?} — копия со своими условиями;',
+        'deleteLines {lines?,links?:[{parent,child}]} — удалить реплики (с их условиями) и связи; revertLine {id} — реплику игры как в игре;',
+        'addCondition {id,cond,value,who?,cmp?,tag?} — cond: DialogConditionEnum (DC_…), who: TalkerEnum, cmp: ComparisonEnum (CE_EQUALS, CE_LESS, CE_MORE); addEffect {id,action,values?} — DialogActionEnum (DA_…); removeAction {id,category,action}.',
+        'Ванильные реплики можно править: правка ложится слоем мода поверх игры.',
       ].join('\n'),
       inputSchema: {
         ops: z.array(editOp).min(1),
@@ -399,29 +431,58 @@ export function createServer(session: Session): McpServer {
         const aliases = Object.entries(r.aliases);
         if (aliases.length) lines.push(`псевдонимы: ${aliases.map(([k, v]) => `${k} = ${v}`).join(', ')}`);
         const cs = ctx.history().undo.at(-1);
-        if (cs && ctx.history().undo.length > before) lines.push(...formatChangeset(ctx, cs));
+        if (cs && ctx.history().undo.length > before) lines.push(title(ctx, cs), ...formatChangeset(ctx, cs).slice(1));
         else lines.push('ничего не изменилось');
         return lines;
       }),
   );
 
-  const step = (dir: 'undo' | 'redo'): Promise<ToolResult> =>
+  const stepTo = {
+    to: z.number().int().min(0).optional().describe('Номер шага #N из history: отменить/повторить всё до него включительно (undo to: 0 — мод как при открытии)'),
+  };
+  const step = (dir: 'undo' | 'redo', to: number | undefined): Promise<ToolResult> =>
     run(() => {
       if (session.editor) throw new SessionError('Подключены к редактору: отмену делает пользователь в окне (или откатывает набор изменений)');
       const ctx = session.ctx();
-      const cs = dir === 'undo' ? ctx.undo() : ctx.redo();
-      if (!cs) return [dir === 'undo' ? 'отменять нечего' : 'повторять нечего'];
-      return [`${dir === 'undo' ? 'отменено' : 'повторено'}: #${cs.id} ${cs.label}`];
+      let done: Changeset[];
+      if (to === undefined) {
+        const cs = dir === 'undo' ? ctx.undo() : ctx.redo();
+        done = cs ? [cs] : [];
+      } else if (dir === 'undo') {
+        const first = ctx.history().undo[0];
+        done = to === 0 ? (first ? ctx.undoTo(first.id) : []) : ctx.undoTo(to);
+      } else done = ctx.redoTo(to);
+      if (!done.length) return [dir === 'undo' ? 'отменять нечего' : 'повторять нечего'];
+      return [`${dir === 'undo' ? 'отменено' : 'повторено'}:`, ...done.map((cs) => `  ${title(ctx, cs)}`)];
     });
-  server.registerTool('undo', { title: 'Отменить', description: 'Отменить последнюю правку.', annotations: { ...EDIT, title: 'Отменить' } }, () => step('undo'));
-  server.registerTool('redo', { title: 'Повторить', description: 'Повторить отменённую правку.', annotations: { ...EDIT, title: 'Повторить' } }, () => step('redo'));
+  server.registerTool(
+    'undo',
+    {
+      title: 'Отменить',
+      description: 'Отменить последнюю правку или (to) все правки до шага #N включительно. Ответ — отменённые шаги понятными словами.',
+      inputSchema: stepTo,
+      annotations: { ...EDIT, title: 'Отменить' },
+    },
+    (a) => step('undo', a.to),
+  );
+  server.registerTool(
+    'redo',
+    {
+      title: 'Повторить',
+      description: 'Повторить отменённую правку или (to) все отменённые до шага #N включительно.',
+      inputSchema: stepTo,
+      annotations: { ...EDIT, title: 'Повторить' },
+    },
+    (a) => step('redo', a.to),
+  );
 
   server.registerTool(
     'history',
     {
       title: 'История правок',
-      description: 'Правки сессии (последние сверху) и отменённые; detail — изменения одной правки по номеру.',
-      inputSchema: { detail: z.number().int().optional().describe('Номер правки (#N)') },
+      description:
+        'Шаги правок понятными словами, как в окне редактора («Добавлен ответ игрока „…“», «Изменено «damage» у «Катана» → 20»): действующие по порядку до «вы здесь», ниже — отменённые (их вернёт redo). detail — изменения одного шага по номеру.',
+      inputSchema: { detail: z.number().int().optional().describe('Номер шага (#N)') },
       annotations: { ...READ, title: 'История правок' },
     },
     (a) =>
@@ -431,13 +492,45 @@ export function createServer(session: Session): McpServer {
         if (a.detail !== undefined) {
           const cs = [...undo, ...redo].find((c) => c.id === a.detail);
           if (!cs) throw new SessionError(`Нет правки #${a.detail}`);
-          return formatChangeset(ctx, cs);
+          return [title(ctx, cs), ...formatChangeset(ctx, cs).slice(1)];
         }
-        const lines = [...undo].reverse().map((c) => `#${c.id} ${c.label}`);
-        if (redo.length) lines.push(`отменено: ${[...redo].reverse().map((c) => `#${c.id} ${c.label}`).join(', ')}`);
-        if (!lines.length) lines.push('правок нет');
-        lines.push(ctx.dirty ? 'есть несохранённые изменения' : 'всё сохранено');
+        const state = ctx.dirty ? 'есть несохранённые изменения' : 'всё сохранено';
+        if (!undo.length && !redo.length) return ['правок нет', state];
+        const done = ['#0 мод как при открытии', ...undo.map((c) => title(ctx, c))];
+        const lines = [...done.slice(0, -1), `${done.at(-1) ?? ''}  ← вы здесь`];
+        if (redo.length) lines.push('отменено (redo вернёт):', ...[...redo].reverse().map((c) => `  ${title(ctx, c)}`));
+        lines.push(state);
         return lines;
+      }),
+  );
+
+  server.registerTool(
+    'play',
+    {
+      title: 'Разговор по шагам',
+      description:
+        'Проигрыватель разговора, как в окне редактора: персонаж + событие → какой диалог игра выберет и почему остальные нет (по правилу из кода игры), что скажет NPC, какие ответы увидит игрок. answers — id ответов игрока по порядку (или @npc — «NPC продолжает сам»), чтобы пройти дальше. mode: met — условия считаются выполненными (по умолчанию), none — проходят только реплики без условий; assume — для отдельных записей: условия выполнены (true) или нет (false).',
+      inputSchema: {
+        id: z.string().describe('Id или имя персонажа (CHARACTER)'),
+        event: z.number().int().min(0).optional().describe('Событие; 1 — игрок заговорил (по умолчанию)'),
+        answers: z.array(z.string()).optional().describe('Ответы игрока по порядку: id реплик из прошлого вывода или @npc'),
+        mode: z.enum(['met', 'none']).optional(),
+        assume: z.record(z.string(), z.boolean()).optional().describe('id диалога или реплики → условия выполнены (true) или нет (false)'),
+      },
+      annotations: { ...READ, title: 'Разговор по шагам' },
+    },
+    (a) =>
+      run(() => {
+        const ctx = session.ctx();
+        const id = resolveId(ctx, a.id, ['CHARACTER']);
+        const res = playConversation(ctx, id, {
+          event: a.event ?? 1,
+          ...(a.mode ? { mode: a.mode } : {}),
+          ...(a.answers ? { answers: a.answers } : {}),
+          ...(a.assume ? { assume: new Map(Object.entries(a.assume)) } : {}),
+        });
+        const tr = session.translation();
+        return formatPlay(ctx, res, { ...(tr ? { translation: tr } : {}), ...(a.mode ? { mode: a.mode } : {}) });
       }),
   );
 

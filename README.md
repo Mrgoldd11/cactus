@@ -246,7 +246,11 @@ stdio-сервер `kenshi-mod-editor` на `@modelcontextprotocol/sdk`:
 - инструменты: `open_mod`, `find`, `show`, `tree`, `refs`, `where`, `talk`, `diff`, `validate`, `schema` —
   как в CLI; `connect_editor` и `editor_changes` — живая связь с окном (ниже);
   `edit` (пачка операций, как в JSON-плане, одним набором изменений, `$псевдонимы`
-  для новых записей), `undo`, `redo`, `history`, `save`;
+  для новых записей; для графа диалога — `addLine`, `insertLine`, `link`, `unlink`,
+  `setText`, `duplicateLine`, `deleteLines`, `revertLine`, `addCondition`, `addEffect`,
+  `removeAction`, значения перечислений можно давать именами), `play` (разговор по шагам,
+  как проигрыватель в окне), `undo`/`redo` (с `to` — до шага #N), `history` (шаги
+  понятными словами, как в окне, с отметкой «вы здесь»), `save`;
 - ресурсы: `kenshi://schema/types`, `kenshi://schema/type/{ТИП}` (поля с описаниями из
   `fcs.def`), `kenshi://schema/enum/{ИМЯ}`;
 - ответы короткие: ссылки с именами целей, длинные списки — страницами (`offset`, `limit`).

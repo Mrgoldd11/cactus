@@ -36,7 +36,7 @@ describe('kenshi-mcp: чтение', () => {
   it('список инструментов и ресурсов', async () => {
     const tools = (await client.listTools()).tools.map((t) => t.name);
     expect(tools).toEqual(
-      expect.arrayContaining(['open_mod', 'find', 'show', 'tree', 'refs', 'where', 'talk', 'diff', 'validate', 'edit', 'undo', 'redo', 'history', 'save', 'schema']),
+      expect.arrayContaining(['open_mod', 'find', 'show', 'tree', 'refs', 'where', 'talk', 'diff', 'validate', 'edit', 'undo', 'redo', 'history', 'play', 'save', 'schema']),
     );
     const res = await client.listResources();
     expect(res.resources.map((r) => r.uri)).toEqual(expect.arrayContaining(['kenshi://schema/types', 'kenshi://schema/type/CHARACTER']));
@@ -110,9 +110,9 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect(edit.text).toContain('псевдонимы: $p = 2-My.mod');
     expect(edit.text).toContain('#1 кирка');
     expect(edit.text).toContain('+ ITEM 2-My.mod «Pick»');
-    expect((await call('undo')).text).toBe('отменено: #1 кирка');
+    expect((await call('undo')).text).toBe('отменено:\n  #1 кирка');
     expect((await call('find', { text: 'pick' })).text).toBe('ничего не найдено');
-    expect((await call('redo')).text).toBe('повторено: #1 кирка');
+    expect((await call('redo')).text).toBe('повторено:\n  #1 кирка');
     const hist = await call('history');
     expect(hist.text).toContain('#1 кирка');
     expect(hist.text).toContain('есть несохранённые изменения');
@@ -143,5 +143,52 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect(existsSync(inGame)).toBe(false);
     expect((await call('save', { path: inGame, force: true })).isError).toBe(false);
     expect(readDataFileSync(inGame).records.map((r) => r.stringId)).toEqual(['Y']);
+  });
+});
+
+describe('kenshi-mcp: граф диалога и история', () => {
+  it('операции графа, понятные шаги истории, undo/redo до шага', async () => {
+    await call('open_mod', { name: 'Talk.mod' });
+    const r1 = await call('edit', { ops: [{ op: 'addLine', parent: 'L1', speaker: 'player', text: 'Да', as: '$a' }] });
+    expect(r1.isError, r1.text).toBe(false);
+    const r2 = await call('edit', { ops: [{ op: 'insertLine', parent: 'L1', child: 'L2', text: 'Подожди', as: '$m' }] });
+    expect(r2.isError, r2.text).toBe(false);
+    const tree = (await call('tree', { id: 'D1' })).text;
+    expect(tree).toContain('Да');
+    expect(tree).toContain('Подожди');
+    const sid = /\$m = (\S+)/.exec(r2.text)?.[1];
+    expect(sid).toBeTruthy();
+    const r3 = await call('edit', { ops: [{ op: 'setText', id: sid, text: 'Стой' }, { op: 'duplicateLine', id: sid, as: '$c' }] });
+    expect(r3.isError, r3.text).toBe(false);
+    const r4 = await call('edit', { ops: [{ op: 'unlink', parent: 'L1', child: sid }] });
+    expect(r4.isError, r4.text).toBe(false);
+    const bad = await call('edit', { ops: [{ op: 'addLine', parent: 'L1', speaker: 'T_NOPE' }] });
+    expect(bad.isError).toBe(true);
+
+    const hist = (await call('history')).text;
+    expect(hist).toContain('#1 Добавлен ответ игрока „Да“');
+    expect(hist).toContain('#2 Вставлен ответ игрока „Подожди“ между репликами');
+    expect(hist).toContain('#0 мод как при открытии');
+    expect(hist).toMatch(/#4 .*← вы здесь/);
+    expect(hist).not.toMatch(/правок$/m);
+
+    const back = await call('undo', { to: 2 });
+    expect(back.text.split('\n')).toHaveLength(4);
+    expect((await call('tree', { id: 'D1' })).text).not.toContain('Подожди');
+    const h2 = (await call('history')).text;
+    expect(h2).toMatch(/#1 .*← вы здесь/);
+    expect(h2).toContain('отменено (redo вернёт):');
+    expect((await call('redo', { to: 3 })).text.split('\n')).toHaveLength(3);
+    expect((await call('tree', { id: 'D1' })).text).toContain('Стой');
+    await call('undo', { to: 0 });
+    expect((await call('history')).text).toMatch(/#0 мод как при открытии\s+← вы здесь|правок нет/);
+    expect((await call('tree', { id: 'D1' })).text).not.toContain('Да');
+  });
+
+  it('play: проигрыватель разговора', async () => {
+    const r = await call('play', { id: 'Bandit' });
+    expect(r.isError, r.text).toBe(false);
+    expect(r.text).toContain('Разбойник (A), событие 1');
+    expect((await call('play', { id: 'D1' })).isError).toBe(true);
   });
 });

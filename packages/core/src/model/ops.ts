@@ -11,8 +11,22 @@ import { DICT_FOR_KIND, findField } from '../schema/game-schema.ts';
 import type { ModContext, ModInfo } from './context.ts';
 import { EditError } from './context.ts';
 import { resolveTypeFilter } from './search.ts';
-import { fieldEnum, parseEnumValue } from './enums.ts';
+import { fieldEnum, getEnum, parseEnumValue } from './enums.ts';
 import { SCALAR_DICTS, scalarMap, type ScalarDict, type ScalarValueMap } from './record-ops.ts';
+import { CHOICE_SPEAKERS } from './dialogue-graph.ts';
+import {
+  addCondition,
+  addEffect,
+  addLine,
+  deleteGraphItems,
+  duplicateLine,
+  insertLineBetween,
+  linkLine,
+  removeAction,
+  revertLine,
+  setLineTexts,
+  unlinkLine,
+} from '../dialog/edit.ts';
 
 export type JsonScalar = boolean | number | string | number[];
 
@@ -28,7 +42,22 @@ export type EditOp =
   | { op: 'addRef'; id: string; category: string; target: string; values?: number[] }
   | { op: 'removeRef'; id: string; category: string; target: string }
   | { op: 'setRefs'; id: string; category: string; refs: { target: string; values?: number[] }[] }
-  | ({ op: 'info' } & Partial<Omit<ModInfo, 'fileName'>>);
+  | ({ op: 'info' } & Partial<Omit<ModInfo, 'fileName'>>)
+  // ── граф диалога (те же команды ядра, что у редактора) ──
+  | { op: 'addLine'; parent: string; speaker?: EnumInput; text?: string; texts?: string[]; as?: string }
+  | { op: 'insertLine'; parent: string; child: string; speaker?: EnumInput; text?: string; texts?: string[]; as?: string }
+  | { op: 'link'; parent: string; child: string }
+  | { op: 'unlink'; parent: string; child: string }
+  | { op: 'setText'; id: string; text?: string; texts?: string[] }
+  | { op: 'duplicateLine'; id: string; parent?: string; as?: string }
+  | { op: 'deleteLines'; lines?: string[]; links?: { parent: string; child: string }[] }
+  | { op: 'revertLine'; id: string }
+  | { op: 'addCondition'; id: string; cond: EnumInput; value: number; who?: EnumInput; cmp?: EnumInput; tag?: number; as?: string }
+  | { op: 'addEffect'; id: string; action: EnumInput; values?: number[]; as?: string }
+  | { op: 'removeAction'; id: string; category: 'conditions' | 'effects'; action: string };
+
+/** Значение перечисления: число или имя (`T_TARGET`, `DC_HAS_TAG`, «равно»). */
+export type EnumInput = number | string;
 
 export interface ApplyOpsResult {
   /** Псевдоним → строковый id созданной записи. */
@@ -128,8 +157,38 @@ export function coerceValue<D extends ScalarDict>(dict: D, value: JsonScalar, ke
   }
 }
 
+/**
+ * Метка по умолчанию. Одна операция графа диалога получает ту же метку, что и правка в окне
+ * редактора, — тогда история называет шаг понятно («Добавлен ответ игрока „…“»).
+ */
+function defaultLabel(ops: readonly EditOp[]): string {
+  const op = ops.length === 1 ? ops[0] : undefined;
+  switch (op?.op) {
+    case 'addLine':
+      return 'новая реплика';
+    case 'insertLine':
+      return 'вставить реплику';
+    case 'duplicateLine':
+      return 'копия реплики';
+    case 'deleteLines':
+      return (op.lines?.length ?? 0) === 1 && !op.links?.length ? 'удалить реплику' : 'удалить выделенное';
+    case 'revertLine':
+      return 'как в игре';
+    case 'addCondition':
+      return 'новое условие';
+    case 'addEffect':
+      return 'новое действие';
+    case 'removeAction':
+      return op.category === 'conditions' ? 'убрать условие' : 'убрать действие';
+    case 'setText':
+      return `${op.id}: текст`;
+    default:
+      return `${ops.length} правок`;
+  }
+}
+
 /** Выполнить операции одной транзакцией. При ошибке ничего не меняется. */
-export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = `${ops.length} правок`): ApplyOpsResult {
+export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = defaultLabel(ops)): ApplyOpsResult {
   const aliases: Record<string, string> = {};
   const created: string[] = [];
   const touched = new Set<string>();
@@ -225,7 +284,102 @@ export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = `${ops
         ctx.setModInfo(patch);
         return;
       }
+      case 'addLine':
+      case 'insertLine': {
+        const parent = id(op.parent);
+        const speaker = op.speaker !== undefined ? speakerOf(op.speaker) : nextSpeaker(parent);
+        const sid =
+          op.op === 'addLine'
+            ? addLine(ctx, parent, { speaker })
+            : insertLineBetween(ctx, parent, id(op.child), { speaker });
+        const texts = op.texts ?? (op.text !== undefined ? [op.text] : undefined);
+        if (texts) setLineTexts(ctx, sid, texts);
+        alias(op.as, sid);
+        created.push(sid);
+        touched.add(sid).add(parent);
+        if (op.op === 'insertLine') touched.add(id(op.child));
+        return;
+      }
+      case 'link':
+      case 'unlink': {
+        const parent = id(op.parent);
+        if (op.op === 'link') linkLine(ctx, parent, id(op.child));
+        else unlinkLine(ctx, parent, id(op.child));
+        touched.add(parent);
+        return;
+      }
+      case 'setText': {
+        const texts = op.texts ?? (op.text !== undefined ? [op.text] : undefined);
+        if (!texts) throw new EditError('нужен text или texts');
+        setLineTexts(ctx, id(op.id), texts);
+        break;
+      }
+      case 'duplicateLine': {
+        const sid = duplicateLine(ctx, id(op.id), op.parent !== undefined ? id(op.parent) : undefined);
+        alias(op.as, sid);
+        created.push(sid);
+        touched.add(sid);
+        if (op.parent !== undefined) touched.add(id(op.parent));
+        return;
+      }
+      case 'deleteLines': {
+        const lines = (op.lines ?? []).map(id);
+        const links = (op.links ?? []).map((l) => ({ parent: id(l.parent), child: id(l.child) }));
+        if (!lines.length && !links.length) throw new EditError('нужны lines или links');
+        deleteGraphItems(ctx, { lines, links });
+        for (const s of [...lines, ...links.map((l) => l.parent)]) touched.add(s);
+        return;
+      }
+      case 'revertLine':
+        revertLine(ctx, id(op.id));
+        break;
+      case 'addCondition': {
+        const a = addCondition(ctx, id(op.id), {
+          cond: enumArg('DialogConditionEnum', op.cond),
+          who: op.who !== undefined ? enumArg('TalkerEnum', op.who) : 0,
+          cmp: op.cmp !== undefined ? enumArg('ComparisonEnum', op.cmp) : 0,
+          value: op.value,
+          ...(op.tag !== undefined ? { tag: op.tag } : {}),
+        });
+        alias(op.as, a);
+        created.push(a);
+        touched.add(a);
+        break;
+      }
+      case 'addEffect': {
+        const a = addEffect(ctx, id(op.id), { action: enumArg('DialogActionEnum', op.action), ...(op.values ? { values: op.values } : {}) });
+        alias(op.as, a);
+        created.push(a);
+        touched.add(a);
+        break;
+      }
+      case 'removeAction':
+        removeAction(ctx, id(op.id), op.category, id(op.action));
+        break;
     }
     touched.add(id(op.id));
+  }
+
+  /** Значение перечисления по имени или числу (имена — из fcs_enums.def). */
+  function enumArg(name: string, v: EnumInput): number {
+    if (typeof v === 'number') return v;
+    if (/^-?\d+$/.test(v.trim())) return Number(v);
+    const def = getEnum(ctx.schema, name);
+    const n = def && parseEnumValue(def, v);
+    if (n === undefined) throw new EditError(`В ${name} нет значения «${v}»`);
+    return n;
+  }
+
+  /** Кто говорит: npc / player или TalkerEnum (T_ME, T_TARGET, …). */
+  function speakerOf(v: EnumInput): number {
+    if (v === 'npc') return 0;
+    if (v === 'player') return 1;
+    return enumArg('TalkerEnum', v);
+  }
+
+  /** Как в графе редактора: после реплики NPC — ответ игрока, иначе — реплика NPC. */
+  function nextSpeaker(parent: string): number {
+    const rec = ctx.get(parent) ?? ctx.lower(parent);
+    return rec && itemTypeName(rec.type) === 'DIALOGUE_LINE' && !CHOICE_SPEAKERS.has(rec.ints.get('speaker') ?? 0) ? 1 : 0;
   }
 }
