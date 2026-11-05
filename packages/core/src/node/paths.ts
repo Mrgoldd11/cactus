@@ -50,7 +50,9 @@ export function resolveGamePaths(cwd: string = process.cwd(), env: NodeJS.Proces
 }
 
 /** Ванильные слои в порядке загрузки. */
-export const VANILLA_FILES = ['gamedata.base', 'Newwworld.mod', 'Dialogue.mod', 'rebirth.mod'] as const;
+import { VANILLA_FILES } from '../vanilla.ts';
+
+export { VANILLA_FILES };
 
 export function vanillaFilePaths(paths: GamePaths): string[] {
   return VANILLA_FILES.map((f) => join(paths.kenshi, 'data', f));

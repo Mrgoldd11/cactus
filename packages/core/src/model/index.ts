@@ -7,3 +7,5 @@ export * from './validate.ts';
 export * from './dialogue.ts';
 export * from './ops.ts';
 export * from './schema-view.ts';
+export * from './enums.ts';
+export * from './stable-ids.ts';

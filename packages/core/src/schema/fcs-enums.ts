@@ -17,6 +17,8 @@ export interface EnumValue {
   description?: string;
   /** Группа (комментарий на отдельной строке перед значением, напр. `TASKS`). */
   group?: string;
+  /** Короткая подпись по-русски (`builtin-enums.ts`). */
+  label?: string;
 }
 
 export interface EnumDef {
@@ -24,6 +26,8 @@ export interface EnumDef {
   shared: boolean;
   values: EnumValue[];
   line: number;
+  /** Enum встроен в FCS, его нет в fcs_enums.def (`builtin-enums.ts`). */
+  builtin?: boolean;
 }
 
 export interface FcsEnums {

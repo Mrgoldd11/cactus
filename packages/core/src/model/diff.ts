@@ -114,3 +114,45 @@ export function diffDataFiles(a: DataFile, b: DataFile): RecordDiff[] {
   for (const [sid, r] of am) if (!bm.has(sid)) out.push(diffRecordStates(r, undefined)!);
   return out;
 }
+
+export type DiffChange = RecordDiff['change'];
+export const DIFF_CHANGES: readonly DiffChange[] = ['added', 'changed', 'removed'];
+
+const DIFF_CHANGE_ALIASES: Record<string, DiffChange> = {
+  added: 'added',
+  new: 'added',
+  changed: 'changed',
+  removed: 'removed',
+  deleted: 'removed',
+};
+
+/** `added,changed` (или new/deleted, как статусы записей) → список изменений. */
+export function parseDiffStatuses(text: string): DiffChange[] {
+  return text
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s !== '')
+    .map((s) => {
+      const c = DIFF_CHANGE_ALIASES[s];
+      if (!c) throw new Error(`Неизвестный статус разницы «${s}»: added, changed, removed`);
+      return c;
+    });
+}
+
+export function filterDiffs(diffs: readonly RecordDiff[], changes?: readonly DiffChange[]): RecordDiff[] {
+  if (!changes || changes.length === 0) return [...diffs];
+  const set = new Set(changes);
+  return diffs.filter((d) => set.has(d.change));
+}
+
+export function countDiffs(diffs: readonly RecordDiff[]): Record<DiffChange, number> {
+  const out: Record<DiffChange, number> = { added: 0, changed: 0, removed: 0 };
+  for (const d of diffs) out[d.change]++;
+  return out;
+}
+
+/** `всего 2950: новых 2628, изменённых 322, удалённых 0`. */
+export function formatDiffSummary(diffs: readonly RecordDiff[]): string {
+  const n = countDiffs(diffs);
+  return `всего ${diffs.length}: новых ${n.added}, изменённых ${n.changed}, удалённых ${n.removed}`;
+}

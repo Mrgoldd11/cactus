@@ -27,7 +27,8 @@ const game = hasGame(paths);
 const KNOWN_MOD_EXCEPTIONS = new Map<string, string>();
 
 /** Типы записей ванили, которых нет в fcs.def: FCS показывает их своими окнами. */
-const TYPES_WITHOUT_FCS_DEF = ['CAMERA', 'DAY_SCHEDULE', 'DIALOG_ACTION', 'FOLIAGE_BUILDING', 'ROAD'];
+// DIALOG_ACTION в fcs.def нет, его поля встроены в схему (builtin-enums.ts).
+const TYPES_WITHOUT_FCS_DEF = ['CAMERA', 'DAY_SCHEDULE', 'FOLIAGE_BUILDING', 'ROAD'];
 
 function expectRoundTrip(path: string): DataFile {
   const bytes = readFileSync(path);

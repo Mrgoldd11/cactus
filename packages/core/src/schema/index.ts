@@ -4,3 +4,4 @@ export * from './fcs-layout.ts';
 export * from './game-schema.ts';
 export * from './coverage.ts';
 export * from './infer.ts';
+export * from './builtin-enums.ts';

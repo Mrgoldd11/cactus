@@ -83,13 +83,15 @@ node packages/cli/bin/kedit.js --help
 find [текст] [ТИП]      записи по имени (англ. или рус.) или id; ТИП — имя или номер
     --type ТИП  --field ключ=знач (~ подстрока, != < > <= >=, ключ? — поле есть)
     --status new,changed,deleted,base  --anywhere текст  --exact  --mod-only
-show <id>...            поля и ссылки (с именами целей)  --layers  --max-refs N
-tree <id>               дерево диалога (dialogs/lines)  --full  --depth N  --max-nodes N
+show <id|имя>...        поля и ссылки (с именами целей)  --layers  --max-refs N
+tree <id|имя>           дерево диалога (dialogs/lines)  --full  --depth N  --max-nodes N
 mod <файл.mod> [текст]  записи файла мода со статусом  --brief
-refs <id>               ссылки из записи и на неё  --from  --to
-diff                    что мод (--mod) меняет относительно нижних слоёв
+refs <id|имя>           ссылки из записи и на неё  --from  --to
+diff                    что мод (--mod) меняет относительно нижних слоёв; итог «новых N, изменённых M»
+    --status added,changed,removed  только записи с такими изменениями
 diff <a.mod> <b.mod>    разница двух файлов
-validate                битые ссылки, поля вне схемы, не тот вид; код выхода 1 при ошибках
+validate                битые ссылки, поля вне схемы, не тот вид, диалоги без реплик,
+                        висячие ссылки на записи, удалённые зависимостями; код 1 при ошибках
 schema [ТИП]            типы записей / поля типа с описаниями из fcs.def  --enum ИМЯ
 build <скрипт.ts|план.json> --out <файл.mod> [--name Имя.mod] [--mod исходный] [-- аргументы]
 ```
@@ -98,6 +100,12 @@ build <скрипт.ts|план.json> --out <файл.mod> [--name Имя.mod] [
 `--deps a.mod,b.mod`, `--json`, `--offset`, `--limit`. Соответствие `tools/kdata.py`:
 `find`, `show`, `tree`, `mod` — те же команды (тип можно номером, как там), только данные
 берутся наложением слоёв, как в игре, а не слиянием файлов.
+
+Записи можно называть именем (англ. или рус.): если подходит несколько, команда выводит
+список с id и просит уточнить. Значения enum показываются именами (`DR_ONCE_ONLY «один раз» (5)`),
+в том числе поля `DIALOG_ACTION`, которых нет в `fcs.def` (условие, кто, сравнение, действие,
+`tag` по условию), и событие в `DIALOGUE_PACKAGE.dialogs`; в `tree` условия читаются строкой
+(`? собеседник: DC_RELATIONS < 20`). Операция `set` принимает имя значения enum вместо числа.
 
 ```bash
 node packages/cli/bin/kedit.js find людоед CHARACTER --mod "Skeleton Cannibal Friend"
@@ -111,6 +119,11 @@ node packages/cli/bin/kedit.js show 2604-gamedata.base --layers
 `--force`. Скрипт экспортирует по умолчанию `(env: BuildEnv) => ModContext`; JSON-план —
 `{ mod?, name?, dependencies?, info?, ops: [...] }`, операции: `create`, `duplicate`, `delete`,
 `restore`, `revert`, `rename`, `set`, `reset`, `addRef`, `removeRef`, `setRefs`, `info`.
+
+Постоянные id новых записей: `env.stableId('уникальное имя')` даёт `номер-Имя.mod`; таблица
+имя → номер — `ids.json` рядом со скриптом (`{ next, ids }`, как у Vanilla Talk). Новые имена
+дописываются после удачной сборки, номер не меняется и не переиспользуется; имена, которые
+больше не собираются, выводятся предупреждением.
 
 ### Пример: Skeleton Cannibal Friend
 
@@ -185,6 +198,7 @@ console.log(schema.types.get('WEAPON')?.fields.get('blunt damage multiplier')?.d
 - `src/model/` — редактирование без Node: `context.ts` (`ModContext`: слои, статусы,
   индекс ссылок, команды, undo/redo, сохранение отличий), `record-ops.ts` (наложение и
   разность записей), `ops.ts` (операции JSON для CLI/MCP), `search.ts`, `validate.ts`,
-  `diff.ts`, `present.ts`, `dialogue.ts`, `schema-view.ts`.
+  `diff.ts`, `present.ts`, `dialogue.ts`, `schema-view.ts`, `enums.ts` (имена значений enum),
+  `stable-ids.ts` (постоянные id по имени).
 - `src/node/` — то, что требует Node: пути к игре, загрузка файлов, `loadModContext`,
   `saveModContext`.

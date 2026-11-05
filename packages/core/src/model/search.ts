@@ -153,3 +153,30 @@ export function searchRecords(ctx: ModContext, q: SearchQuery): SearchHit[] {
 export function formatHit(h: SearchHit): string {
   return `${h.stringId}  ${h.type}  «${h.name}»${h.localizedName ? ` (${h.localizedName})` : ''}${h.status !== 'base' ? `  [${h.status}]` : ''}`;
 }
+
+export interface RecordLookup {
+  /** Найденная запись, если она одна. */
+  stringId?: string;
+  /** Подходящие записи, если их несколько (или ни одной). */
+  candidates: SearchHit[];
+}
+
+/**
+ * Запись по строковому id или имени (англ. или рус.): сначала id, потом точное имя, потом
+ * подстрока. `preferTypes` — при нескольких совпадениях оставить записи этих типов (для
+ * `tree` — диалоги), если такие есть.
+ */
+export function lookupRecord(ctx: ModContext, spec: string, options: { preferTypes?: readonly string[] } = {}): RecordLookup {
+  if (ctx.get(spec) ?? ctx.lower(spec)) return { stringId: spec, candidates: [] };
+  const narrow = (hits: SearchHit[]): SearchHit[] => {
+    if (hits.length <= 1 || !options.preferTypes) return hits;
+    const pref = hits.filter((h) => options.preferTypes!.includes(h.type));
+    return pref.length ? pref : hits;
+  };
+  for (const exact of [true, false]) {
+    const hits = narrow(searchRecords(ctx, { text: spec, exact }));
+    if (hits.length === 1) return { stringId: hits[0]!.stringId, candidates: [] };
+    if (hits.length > 1) return { candidates: hits };
+  }
+  return { candidates: [] };
+}

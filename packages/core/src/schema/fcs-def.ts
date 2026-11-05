@@ -57,6 +57,8 @@ export interface FieldDef {
   bitset?: boolean;
   /** Поле не описано в fcs.def, а выведено из данных (`withInferredFields`). */
   inferred?: boolean;
+  /** Поле не описано в fcs.def, но известно из FCS (`builtin-enums.ts`). */
+  builtin?: boolean;
   /** Номер строки в fcs.def (с 1); 0 у выведенных полей. */
   line: number;
 }

@@ -4,8 +4,9 @@
  */
 import { isItemTypeName } from '../format/item-types.ts';
 import { parseFcsDef, type FcsDef, type FieldCondition, type FieldDef, type FieldKind, type TranslateRule } from './fcs-def.ts';
-import { parseFcsEnums, type EnumDef, type FcsEnums } from './fcs-enums.ts';
+import { parseFcsEnums, type EnumDef, type EnumValue, type FcsEnums } from './fcs-enums.ts';
 import { parseFcsLayout, walkLayout, type FcsLayout, type LayoutNode } from './fcs-layout.ts';
+import { BUILTIN_ENUM_LABELS, BUILTIN_ENUMS, BUILTIN_FIELD_ENUMS } from './builtin-enums.ts';
 
 export interface TypeSchema {
   name: string;
@@ -19,6 +20,8 @@ export interface TypeSchema {
   sectionLines: number[];
   /** Типа нет в fcs.def, он выведен из данных. */
   inferred?: boolean;
+  /** Типа нет в fcs.def, но его поля известны из FCS (`builtin-enums.ts`). */
+  builtin?: boolean;
 }
 
 export type SchemaSource = 'fcs.def' | 'fcs_enums.def' | 'fcs_layout.def';
@@ -81,8 +84,12 @@ export function buildGameSchema(def: FcsDef, enums?: FcsEnums, layout?: FcsLayou
     }
   }
 
+  const enumMap = mergeBuiltinEnums(enums?.enums ?? new Map<string, EnumDef>(), (line, message) => {
+    warn('fcs_enums.def', line, message);
+  });
+  addBuiltinFields(types, enumMap);
+
   // Перекрёстные проверки.
-  const enumMap = enums?.enums ?? new Map<string, EnumDef>();
   const externalEnums = new Map<string, string[]>();
   for (const t of types.values()) {
     for (const f of t.fields.values()) {
@@ -118,6 +125,57 @@ export function buildGameSchema(def: FcsDef, enums?: FcsEnums, layout?: FcsLayou
   }
 
   return { types, enums: enumMap, layout: layout?.roots ?? [], externalEnums, warnings };
+}
+
+function labelled(enumName: string, v: EnumValue): EnumValue {
+  const label = BUILTIN_ENUM_LABELS[enumName]?.[v.name];
+  return label !== undefined ? { ...v, label } : v;
+}
+
+/** Перечисления из `builtin-enums.ts` поверх fcs_enums.def; разобранные данные не меняются. */
+function mergeBuiltinEnums(parsed: ReadonlyMap<string, EnumDef>, warn: (line: number, message: string) => void): Map<string, EnumDef> {
+  const out = new Map<string, EnumDef>();
+  for (const [name, e] of parsed) out.set(name, { ...e, values: e.values.map((v) => labelled(name, v)) });
+  for (const [name, names] of Object.entries(BUILTIN_ENUMS)) {
+    const e = out.get(name);
+    if (!e) {
+      out.set(name, { name, shared: false, line: 0, builtin: true, values: names.map((n, value) => labelled(name, { name: n, value })) });
+      continue;
+    }
+    if (!e.shared) continue;
+    // `enum shared`: номера по имени из C#, порядок и описания — из файла.
+    const seen = new Set<string>();
+    const values: EnumValue[] = [];
+    for (const v of e.values) {
+      const value = names.indexOf(v.name);
+      if (value < 0) {
+        warn(e.line, `${name}: значения ${v.name} нет в enum'е FCS — номер по порядку в файле`);
+        values.push(v);
+      } else values.push({ ...v, value });
+      seen.add(v.name);
+    }
+    for (const [value, n] of names.entries()) if (!seen.has(n)) values.push(labelled(name, { name: n, value }));
+    out.set(name, { ...e, values });
+  }
+  return out;
+}
+
+/** Поля из `BUILTIN_FIELD_ENUMS` для типов, которых нет в fcs.def (DIALOG_ACTION). */
+function addBuiltinFields(types: Map<string, TypeSchema>, enums: ReadonlyMap<string, EnumDef>): void {
+  for (const [typeName, fields] of Object.entries(BUILTIN_FIELD_ENUMS)) {
+    let t = types.get(typeName);
+    if (!t) {
+      t = { name: typeName, fields: new Map(), conditions: [], owned: [], translate: [], sectionLines: [], builtin: true };
+      types.set(typeName, t);
+    }
+    for (const [key, enumName] of Object.entries(fields)) {
+      if (t.fields.has(key)) continue;
+      const def: FieldDef = { name: key, kind: 'enum', enumName, line: 0, builtin: true };
+      const first = enums.get(enumName)?.values[0];
+      if (first) def.default = first.name;
+      t.fields.set(key, def);
+    }
+  }
 }
 
 /** Разобрать тексты файлов и собрать схему. */

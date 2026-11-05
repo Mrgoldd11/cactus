@@ -26,6 +26,10 @@ import {
   refLabel,
   formatRefValues,
   searchRecords,
+  lookupRecord,
+  filterDiffs,
+  formatDiffSummary,
+  parseDiffStatuses,
   validateMod,
   type ModContext,
   type Page,
@@ -56,11 +60,12 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
   find [текст] [ТИП]      записи по имени (англ. или рус.) или id; ТИП — имя или номер
       --type ТИП  --field ключ=знач (~ подстрока, != < > <= >=, ключ? — поле есть; можно несколько)
       --status new,changed,deleted,base  --anywhere текст  --exact  --mod-only
-  show <id>...            поля и ссылки (с именами целей)  --layers  --max-refs N
-  tree <id>               дерево диалога (dialogs/lines)  --full  --depth N  --max-nodes N
+  show <id|имя>...        поля и ссылки (с именами целей)  --layers  --max-refs N
+  tree <id|имя>           дерево диалога (dialogs/lines)  --full  --depth N  --max-nodes N
   mod <файл.mod> [текст]  записи файла мода со статусом; текст — подстрока где угодно  --brief
-  refs <id>               ссылки из записи и на неё  --from  --to
-  diff                    что мод (--mod) меняет относительно нижних слоёв
+  refs <id|имя>           ссылки из записи и на неё  --from  --to
+  diff                    что мод (--mod) меняет относительно нижних слоёв; итог «новых N, изменённых M»
+      --status added,changed,removed  только записи с такими изменениями
   diff <a.mod> <b.mod>    разница двух файлов
   validate                битые ссылки, поля вне схемы, не тот вид; код выхода 1 при ошибках
   schema [ТИП]            типы записей / поля типа с описаниями из fcs.def  --enum ИМЯ
@@ -163,6 +168,17 @@ class Command {
     return rec;
   }
 
+  /** Строковый id по id или имени; при нескольких совпадениях — список и ошибка. */
+  resolve(ctx: ModContext, spec: string, preferTypes?: readonly string[]): string {
+    const found = lookupRecord(ctx, spec, preferTypes ? { preferTypes } : {});
+    if (found.stringId !== undefined) return found.stringId;
+    if (found.candidates.length === 0) throw new UsageError(`Нет записи «${spec}» (ни id, ни имени)`);
+    const shown = found.candidates.slice(0, 20);
+    for (const h of shown) this.io.err(`  ${formatHit(h)}`);
+    if (found.candidates.length > shown.length) this.io.err(`  … ещё ${found.candidates.length - shown.length}`);
+    throw new UsageError(`«${spec}»: подходит записей ${found.candidates.length} — укажите id из списка`);
+  }
+
   /** Страница строк (или объектов в --json). */
   paged<T>(items: readonly T[], text: (item: T) => string[], json: (item: T) => unknown = (x) => x): void {
     const limit = int(this.values.limit, 'limit', 50);
@@ -202,7 +218,7 @@ const COMMANDS: Record<string, Handler> = {
     const ctx = c.ctx();
     const ids = c.args.length ? c.args : [c.arg(0, '<id>')];
     const max = c.values['max-refs'] !== undefined ? int(c.values['max-refs'], 'max-refs', 0) : undefined;
-    const recs = ids.map((sid) => c.record(ctx, sid));
+    const recs = ids.map((spec) => c.record(ctx, c.resolve(ctx, spec)));
     if (c.values.json) {
       c.io.out(JSON.stringify(recs.length === 1 ? recordToJson(ctx, recs[0]!, max !== undefined ? { maxRefsPerCategory: max } : {}) : recs.map((r) => recordToJson(ctx, r)), null, 1));
       return 0;
@@ -216,8 +232,7 @@ const COMMANDS: Record<string, Handler> = {
 
   tree(c) {
     const ctx = c.ctx();
-    const sid = c.arg(0, '<id>');
-    c.record(ctx, sid);
+    const sid = c.resolve(ctx, c.arg(0, '<id>'), ['DIALOGUE_PACKAGE', 'DIALOGUE', 'DIALOGUE_LINE', 'WORD_SWAPS']);
     const tree = buildDialogueTree(ctx, sid, {
       ...(c.values.depth !== undefined ? { maxDepth: int(c.values.depth, 'depth', 0) } : {}),
       ...(c.values['max-nodes'] !== undefined ? { maxNodes: int(c.values['max-nodes'], 'max-nodes', 0) } : {}),
@@ -244,8 +259,7 @@ const COMMANDS: Record<string, Handler> = {
 
   refs(c) {
     const ctx = c.ctx();
-    const sid = c.arg(0, '<id>');
-    c.record(ctx, sid);
+    const sid = c.resolve(ctx, c.arg(0, '<id>'));
     const both = !c.values.from && !c.values.to;
     type Row = { dir: 'from' | 'to'; source: string; category: string; target: string; values?: number[] };
     const rows: Row[] = [];
@@ -280,11 +294,19 @@ const COMMANDS: Record<string, Handler> = {
       ctx = c.ctx();
       diffs = ctx.modRecords().flatMap((r) => modRecordDiff(ctx, r.stringId) ?? []);
     }
-    c.paged(
-      diffs,
-      (d) => formatRecordDiff(ctx, d),
-      (d) => ({ stringId: d.stringId, change: d.change, name: ctx.name(d.stringId), changes: d.fields.map((f) => formatFieldChange(ctx, f)) }),
-    );
+    let changes;
+    try {
+      changes = c.values.status !== undefined ? parseDiffStatuses(c.values.status) : undefined;
+    } catch (e) {
+      throw new UsageError(`--status: ${(e as Error).message}`);
+    }
+    const shown = filterDiffs(diffs, changes);
+    if (c.values.json) {
+      c.paged(shown, () => [], (d) => ({ stringId: d.stringId, change: d.change, name: ctx.name(d.stringId), changes: d.fields.map((f) => formatFieldChange(ctx, f, d.after ?? d.before)) }));
+      return 0;
+    }
+    c.paged(shown, (d) => formatRecordDiff(ctx, d));
+    c.io.out(`${formatDiffSummary(diffs)}${changes ? `; показаны: ${changes.join(', ')}` : ''}`);
     return 0;
   },
 

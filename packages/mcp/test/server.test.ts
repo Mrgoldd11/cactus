@@ -60,7 +60,7 @@ describe('kenshi-mcp: чтение', () => {
     expect((await call('tree', { id: 'D1' })).text).toContain('↻ DIALOGUE_LINE L1');
     const missing = await call('show', { id: 'nope' });
     expect(missing.isError).toBe(true);
-    expect(missing.text).toBe('Нет записи nope');
+    expect(missing.text).toBe('Нет записи «nope» (ни id, ни имени)');
   });
 
   it('diff и validate', async () => {
@@ -68,6 +68,14 @@ describe('kenshi-mcp: чтение', () => {
     const diff = await call('diff');
     expect(diff.text).toContain('~ int money: 15 → 99');
     expect(diff.text).toContain('+ ITEM 1-My.mod «Magic hat»');
+    expect(diff.text).toContain('всего 2: новых 1, изменённых 1, удалённых 0');
+    const changed = await call('diff', { status: ['changed'] });
+    expect(changed.text).not.toContain('+ ITEM 1-My.mod');
+    expect(changed.text).toContain('показаны: changed');
+    expect((await call('show', { id: 'Разбойник' })).text).toContain('int money = 99');
+    const many = await call('show', { id: 'S' });
+    expect(many.isError).toBe(true);
+    expect(many.text).toContain('подходит записей');
     expect((await call('validate')).text).toBe('ошибок 0, предупреждений 0');
   });
 

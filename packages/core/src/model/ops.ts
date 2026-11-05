@@ -11,6 +11,7 @@ import { DICT_FOR_KIND, findField } from '../schema/game-schema.ts';
 import type { ModContext, ModInfo } from './context.ts';
 import { EditError } from './context.ts';
 import { resolveTypeFilter } from './search.ts';
+import { fieldEnum, parseEnumValue } from './enums.ts';
 import { SCALAR_DICTS, scalarMap, type ScalarDict, type ScalarValueMap } from './record-ops.ts';
 
 export type JsonScalar = boolean | number | string | number[];
@@ -79,6 +80,17 @@ export function fieldDict(ctx: ModContext, stringId: string, key: string, value?
   if (Array.isArray(value)) return value.length === 4 ? 'vec4s' : 'vec3s';
   if (value !== undefined) return 'strings';
   throw new EditError(`Не знаю вид поля ${key} у ${stringId}: укажите dict`);
+}
+
+/** Имя значения enum-поля (`DR_ONCE_ONLY`, `ONCE_ONLY`, «один раз») → число; прочее как есть. */
+function enumInput(ctx: ModContext, stringId: string, key: string, value: JsonScalar): JsonScalar {
+  if (typeof value !== 'string' || /^-?\d+$/.test(value.trim())) return value;
+  const rec = ctx.get(stringId) ?? ctx.lower(stringId);
+  const def = rec && fieldEnum(ctx.schema, itemTypeName(rec.type), key, rec);
+  if (!def) return value;
+  const n = parseEnumValue(def, value);
+  if (n === undefined) throw new EditError(`В ${def.name} нет значения «${value}»`);
+  return n;
 }
 
 /** Значение из JSON в значение словаря. */
@@ -177,8 +189,9 @@ export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = `${ops
         break;
       case 'set': {
         const sid = id(op.id);
-        const dict = fieldDict(ctx, sid, op.field, op.value, op.dict);
-        ctx.setField(sid, dict, op.field, coerceValue(dict, op.value, op.field));
+        const value = enumInput(ctx, sid, op.field, op.value);
+        const dict = fieldDict(ctx, sid, op.field, value, op.dict);
+        ctx.setField(sid, dict, op.field, coerceValue(dict, value, op.field));
         break;
       }
       case 'reset': {

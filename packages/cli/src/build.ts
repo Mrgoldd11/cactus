@@ -4,10 +4,10 @@
  * Скрипт (.ts/.js) экспортирует по умолчанию функцию `(env: BuildEnv) => ModContext`.
  * План (.json) — `{ mod?, name?, dependencies?, info?, ops: EditOp[] }` или просто массив операций.
  */
-import { readFileSync, statSync } from 'node:fs';
-import { basename, dirname, resolve } from 'node:path';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { applyOps, type EditOp, type Layer, type ModContext, type ModInfo } from '@kenshi-editor/core';
+import { applyOps, parseStableIds, StableIds, type EditOp, type Layer, type ModContext, type ModInfo } from '@kenshi-editor/core';
 import { isInGameFolders, saveModContext, type GamePaths, type LoadedContext } from '@kenshi-editor/core/node';
 import { UsageError, type OpenOptions, type Workspace } from './workspace.ts';
 
@@ -24,6 +24,14 @@ export interface BuildEnv {
   /** Контекст поверх ванили и зависимостей. */
   open(options?: OpenOptions): LoadedContext;
   log(line: string): void;
+  /**
+   * Постоянный строковый id новой записи по её уникальному имени (`номер-Имя.mod`). Таблица
+   * имя → номер — `ids.json` рядом со скриптом; новые имена дописываются туда после удачной
+   * сборки, имена, которые больше не собираются, выводятся предупреждением.
+   */
+  stableId(name: string): string;
+  /** Таблица постоянных id (номер `next` — для `lastId` в ModInfo). */
+  stableIds(): StableIds;
 }
 
 export type BuildScript = (env: BuildEnv) => ModContext | Promise<ModContext>;
@@ -62,6 +70,8 @@ export async function runBuild(ws: Workspace, req: BuildRequest, log: (line: str
   }
   const modName = req.name ?? basename(outPath);
   let ctx: ModContext;
+  const idsPath = join(dirname(source), 'ids.json');
+  let ids: StableIds | undefined;
   if (source.toLowerCase().endsWith('.json')) {
     const raw = JSON.parse(readFileSync(source, 'utf8')) as BuildPlan | EditOp[];
     const plan: BuildPlan = Array.isArray(raw) ? { ops: raw } : raw;
@@ -76,6 +86,8 @@ export async function runBuild(ws: Workspace, req: BuildRequest, log: (line: str
   } else {
     const mod = (await import(pathToFileURL(source).href)) as { default?: unknown };
     if (typeof mod.default !== 'function') throw new UsageError(`${req.source}: нет функции по умолчанию (export default)`);
+    const table = (): StableIds =>
+      (ids ??= new StableIds(modName, existsSync(idsPath) ? parseStableIds(readFileSync(idsPath, 'utf8')) : undefined));
     const env: BuildEnv = {
       paths: ws.paths,
       outPath,
@@ -84,9 +96,26 @@ export async function runBuild(ws: Workspace, req: BuildRequest, log: (line: str
       vanilla: () => ws.vanilla(),
       open: (o) => ws.open(o),
       log,
+      stableId: (name) => table().id(name),
+      stableIds: table,
     };
     ctx = await (mod.default as BuildScript)(env);
   }
   saveModContext(ctx, outPath);
+  // Таблица дописывается только после удачной записи мода.
+  if (ids) finishStableIds(ids, idsPath, log);
   return { ctx, outPath, bytes: statSync(outPath).size };
+}
+
+/** Дописать новые имена в ids.json и предупредить об именах, которые больше не собираются. */
+function finishStableIds(ids: StableIds, idsPath: string, log: (line: string) => void): void {
+  if (ids.added.length) {
+    writeFileSync(idsPath, JSON.stringify(ids.data, null, 1) + '\n');
+    log(`ids.json: добавлено ${ids.added.length} id (next=${ids.data.next})`);
+  }
+  const orphan = ids.orphans();
+  if (orphan.length) {
+    const sample = orphan.slice(0, 3).map((n) => `«${n}»`).join(', ');
+    log(`предупреждение: в ids.json ${orphan.length} имён больше не собираются (номера не переиспользуются): ${sample}${orphan.length > 3 ? '…' : ''}`);
+  }
 }

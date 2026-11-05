@@ -8,6 +8,7 @@ import type { GameRecord, Instance, Reference } from '../format/types.ts';
 import { applyLayer, isRemovedRef, SCALAR_DICTS, scalarMap, type ScalarDict, type ScalarValue } from './record-ops.ts';
 import type { Changeset, ModContext } from './context.ts';
 import { diffRecordStates, type FieldChange, type RecordDiff } from './diff.ts';
+import { describeDialogAction, describeRefValues, enumValue, fieldEnum, formatEnumValue } from './enums.ts';
 
 /** Кратчайшая запись float32, которая читается обратно в то же число. */
 export function formatFloat(v: number): string {
@@ -92,8 +93,9 @@ export function formatRecord(ctx: ModContext, rec: GameRecord, options: FormatRe
     if (o) out.push(`  слои: ${o.layers.join(' → ')}${o.deletedBelow ? ` (удалена в ${o.deletedBelow})` : ''}`);
   }
   for (const dict of SCALAR_DICTS) {
-    for (const [k, v] of scalarMap(rec, dict)) out.push(`  ${DICT_LABEL[dict]} ${k} = ${formatScalar(dict, v)}`);
+    for (const [k, v] of scalarMap(rec, dict)) out.push(`  ${DICT_LABEL[dict]} ${k} = ${formatFieldValue(ctx, rec, dict, k, v)}`);
   }
+  const typeName = itemTypeName(rec.type);
   const hide = new Set(options.hideCategories ?? []);
   const max = options.maxRefsPerCategory ?? Infinity;
   for (const [cat, list] of rec.refs) {
@@ -103,15 +105,31 @@ export function formatRecord(ctx: ModContext, rec: GameRecord, options: FormatRe
     }
     if (list.length === 0) continue;
     out.push(`  ref ${cat}:`);
-    for (const r of list.slice(0, max)) out.push(`    → ${refLabel(ctx, r.target)}  ${formatRefValues(r)}`);
+    for (const r of list.slice(0, max)) {
+      const note = isRemovedRef(r) ? undefined : (describeDialogAction(ctx, r, cat) ?? describeRefValues(ctx.schema, typeName, cat, r));
+      out.push(`    → ${refLabel(ctx, r.target)}  ${formatRefValues(r)}${note !== undefined ? `  — ${note}` : ''}`);
+    }
     if (list.length > max) out.push(`    … ещё ${list.length - max}`);
   }
   for (const [k, i] of rec.instances) out.push(`  inst ${k}: ${formatInstance(ctx, i)}`);
   return out;
 }
 
-/** Одна строка изменения поля/ссылки. */
-export function formatFieldChange(ctx: ModContext, c: FieldChange): string {
+/**
+ * Значение поля для показа: у enum — имя (`DR_ONCE_ONLY «один раз» (5)`), иначе как
+ * `formatScalar`.
+ */
+export function formatFieldValue(ctx: ModContext, rec: GameRecord, dict: ScalarDict, key: string, v: ScalarValue): string {
+  if (dict === 'ints') {
+    const def = fieldEnum(ctx.schema, itemTypeName(rec.type), key, rec);
+    if (def) return formatEnumValue(def, v as number);
+  }
+  return formatScalar(dict, v);
+}
+
+/** Одна строка изменения поля/ссылки; `rec` — запись после изменения (для имён enum). */
+export function formatFieldChange(ctx: ModContext, c: FieldChange, rec?: GameRecord): string {
+  const fmt = (dict: ScalarDict, key: string, v: ScalarValue): string => (rec ? formatFieldValue(ctx, rec, dict, key, v) : formatScalar(dict, v));
   switch (c.kind) {
     case 'name':
       return `имя: «${decodeText(c.before)}» → «${decodeText(c.after)}»`;
@@ -121,9 +139,9 @@ export function formatFieldChange(ctx: ModContext, c: FieldChange): string {
       return `флаги: 0x${c.before.toString(16)} → 0x${c.after.toString(16)}`;
     case 'field': {
       const label = `${DICT_LABEL[c.dict]} ${c.key}`;
-      if (c.before === undefined) return `+ ${label} = ${formatScalar(c.dict, c.after!)}`;
-      if (c.after === undefined) return `− ${label} (было ${formatScalar(c.dict, c.before)})`;
-      return `~ ${label}: ${formatScalar(c.dict, c.before)} → ${formatScalar(c.dict, c.after)}`;
+      if (c.before === undefined) return `+ ${label} = ${fmt(c.dict, c.key, c.after!)}`;
+      if (c.after === undefined) return `− ${label} (было ${fmt(c.dict, c.key, c.before)})`;
+      return `~ ${label}: ${fmt(c.dict, c.key, c.before)} → ${fmt(c.dict, c.key, c.after)}`;
     }
     case 'ref': {
       const label = `ref ${c.category} → ${refLabel(ctx, c.target.replace(/#\d+$/, ''))}`;
@@ -145,7 +163,7 @@ export function formatRecordDiff(ctx: ModContext, d: RecordDiff): string[] {
   const mark = d.change === 'added' ? '+' : d.change === 'removed' ? '−' : '~';
   const head = `${mark} ${itemTypeName(rec.type)} ${d.stringId} «${decodeText(rec.name)}»`;
   if (d.change !== 'changed') return [head];
-  return [head, ...d.fields.map((c) => `    ${formatFieldChange(ctx, c)}`)];
+  return [head, ...d.fields.map((c) => `    ${formatFieldChange(ctx, c, rec)}`)];
 }
 
 /** Что мод меняет в записи относительно нижних слоёв. */
@@ -219,7 +237,10 @@ export interface RecordJson {
   status?: string;
   layers?: string[];
   fields: Record<string, Record<string, boolean | number | string | number[]>>;
-  refs: Record<string, { target: string; name: string; values: number[] }[]>;
+  /** Имена значений enum-полей: поле → имя (`repetition limit` → `DR_ONCE_ONLY`). */
+  enums?: Record<string, string>;
+  /** `note` — условие/действие диалога или имя события пакета. */
+  refs: Record<string, { target: string; name: string; values: number[]; note?: string }[]>;
   instances: Record<string, { target: string; name: string; position: number[]; rotation: number[]; states: number }>;
 }
 
@@ -239,10 +260,21 @@ export function recordToJson(ctx: ModContext, rec: GameRecord, options: { maxRef
     for (const [k, v] of m) d[k] = v instanceof Uint8Array ? decodeText(v) : Array.isArray(v) ? [...v] : (v);
     out.fields[DICT_LABEL[dict]] = d;
   }
+  const typeName = itemTypeName(rec.type);
+  for (const [k, v] of rec.ints) {
+    const def = fieldEnum(ctx.schema, typeName, k, rec);
+    const ev = def && enumValue(def, v);
+    if (ev) (out.enums ??= {})[k] = ev.name;
+  }
   const max = options.maxRefsPerCategory ?? Infinity;
   for (const [cat, list] of rec.refs) {
     if (list.length === 0) continue;
-    out.refs[cat] = list.slice(0, max).map((r) => ({ target: r.target, name: ctx.name(r.target) ?? '<нет>', values: [r.v0, r.v1, r.v2] }));
+    out.refs[cat] = list.slice(0, max).map((r) => {
+      const item: RecordJson['refs'][string][number] = { target: r.target, name: ctx.name(r.target) ?? '<нет>', values: [r.v0, r.v1, r.v2] };
+      const note = isRemovedRef(r) ? undefined : (describeDialogAction(ctx, r, cat) ?? describeRefValues(ctx.schema, typeName, cat, r));
+      if (note !== undefined) item.note = note;
+      return item;
+    });
   }
   for (const [k, i] of rec.instances) {
     out.instances[k] = { target: i.target, name: ctx.name(i.target) ?? '<нет>', position: [...i.position], rotation: [...i.rotation], states: i.states.length };

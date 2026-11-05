@@ -3,7 +3,9 @@
  * схеме, значения не того вида, ссылки на записи не того типа, значения enum вне списка.
  *
  * Проверяется то, что задаёт мод: ключи его записей, а не унаследованные значения ваниль.
- * Отдельно — записи нижних слоёв, которые ссылаются на удалённые модом записи.
+ * Отдельно — записи нижних слоёв, которые ссылаются на удалённые модом записи; висячие ссылки
+ * на записи, удалённые зависимостью (не ванилью) или модом поверх слоя, где ссылка появилась;
+ * диалоги без реплик.
  */
 import { itemTypeName } from '../format/item-types.ts';
 import type { GameRecord } from '../format/types.ts';
@@ -11,6 +13,8 @@ import { DICT_FOR_KIND, findField, type GameSchema, type TypeSchema } from '../s
 import { withInferredFields } from '../schema/infer.ts';
 import type { ModContext } from './context.ts';
 import { isRemovalMarker, isRemovedRef, SCALAR_DICTS, scalarMap } from './record-ops.ts';
+import { isVanillaLayer } from '../vanilla.ts';
+import { decodeText } from '../text.ts';
 
 export type IssueCode =
   | 'broken-ref'
@@ -20,7 +24,9 @@ export type IssueCode =
   | 'wrong-kind'
   | 'wrong-target-type'
   | 'enum-value'
-  | 'remove-missing';
+  | 'remove-missing'
+  | 'empty-dialogue'
+  | 'dangling-ref';
 
 export interface ValidationIssue {
   severity: 'error' | 'warning';
@@ -73,6 +79,8 @@ export function validateMod(ctx: ModContext, options: ValidateOptions = {}): Val
     checkRefs(ctx, delta, issues);
     if (schema) checkSchema(ctx, schema, delta, rec, issues);
   }
+  checkDependencyDeletions(ctx, issues);
+  checkEmptyDialogues(ctx, issues);
   for (const sid of deletedByMod) {
     for (const e of ctx.referencesTo(sid)) {
       if (ctx.status(e.source) === 'deleted') continue;
@@ -87,6 +95,58 @@ export function validateMod(ctx: ModContext, options: ValidateOptions = {}): Val
     }
   }
   return dedupe(issues);
+}
+
+/**
+ * Записи, удалённые зависимостями (слоями после ванили, кроме самого мода), на которые в
+ * итоговом состоянии ещё ссылаются живые записи. Так выглядит `CHARACTER.dialogue`, когда
+ * поздний мод удалил диалог: игра получит ссылку в никуда.
+ */
+function checkDependencyDeletions(ctx: ModContext, issues: ValidationIssue[]): void {
+  for (const layer of ctx.layers) {
+    if (isVanillaLayer(layer.name)) continue;
+    for (const rec of layer.file.records) {
+      if (!isRemovalMarker(rec) || ctx.has(rec.stringId)) continue;
+      for (const e of ctx.referencesTo(rec.stringId)) {
+        if (!ctx.has(e.source)) continue;
+        issues.push({
+          severity: 'warning',
+          code: 'dangling-ref',
+          stringId: e.source,
+          key: e.category,
+          target: rec.stringId,
+          message: `ссылается на ${rec.stringId} «${decodeText(rec.name)}», которую удаляет ${layer.name}`,
+        });
+      }
+    }
+  }
+}
+
+/** DIALOGUE без реплик: свои и те, на которые мод ссылается. В игре такой диалог молчит. */
+function checkEmptyDialogues(ctx: ModContext, issues: ValidationIssue[]): void {
+  const empty = (sid: string): boolean => {
+    const rec = ctx.get(sid);
+    return rec !== undefined && itemTypeName(rec.type) === 'DIALOGUE' && (rec.refs.get('lines') ?? []).length === 0;
+  };
+  for (const delta of ctx.modRecords()) {
+    if (isRemovalMarker(delta)) continue;
+    if (empty(delta.stringId)) {
+      issues.push({ severity: 'warning', code: 'empty-dialogue', stringId: delta.stringId, key: 'lines', message: 'диалог без реплик (lines пуст) — в игре ничего не скажет' });
+    }
+    for (const [cat, list] of delta.refs) {
+      for (const r of list) {
+        if (isRemovedRef(r) || r.target === delta.stringId || ctx.delta(r.target) !== undefined || !empty(r.target)) continue;
+        issues.push({
+          severity: 'warning',
+          code: 'empty-dialogue',
+          stringId: delta.stringId,
+          key: cat,
+          target: r.target,
+          message: `ссылка на диалог ${r.target} без реплик — в игре он ничего не скажет`,
+        });
+      }
+    }
+  }
 }
 
 function dedupe(issues: ValidationIssue[]): ValidationIssue[] {

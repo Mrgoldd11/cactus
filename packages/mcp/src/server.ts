@@ -17,7 +17,10 @@ import {
   formatRecordDiff,
   formatRefValues,
   formatTypeSchema,
+  filterDiffs,
+  formatDiffSummary,
   listTypes,
+  lookupRecord,
   modRecordDiff,
   page,
   pageFooter,
@@ -59,6 +62,18 @@ function record(ctx: ModContext, sid: string): GameRecord {
   if (!rec) throw new SessionError(`Нет записи ${sid}`);
   return rec;
 }
+
+/** Id записи по id или имени (англ. или рус.); если подходит несколько — ошибка со списком. */
+function resolveId(ctx: ModContext, spec: string, preferTypes?: readonly string[]): string {
+  const r = lookupRecord(ctx, spec, preferTypes ? { preferTypes } : {});
+  if (r.stringId !== undefined) return r.stringId;
+  if (!r.candidates.length) throw new SessionError(`Нет записи «${spec}» (ни id, ни имени)`);
+  const list = r.candidates.slice(0, 20).map(formatHit);
+  if (r.candidates.length > 20) list.push(`… ещё ${r.candidates.length - 20}`);
+  throw new SessionError([`«${spec}»: подходит записей ${r.candidates.length} — укажите id:`, ...list].join('\n'));
+}
+
+const DIALOGUE_TYPES = ['DIALOGUE_PACKAGE', 'DIALOGUE', 'DIALOGUE_LINE', 'WORD_SWAPS'] as const;
 
 function statusSummary(ctx: ModContext): string {
   const counts = new Map<string, number>();
@@ -114,7 +129,7 @@ export function createServer(session: Session): McpServer {
     {
       instructions: [
         'Данные Kenshi: ваниль (gamedata.base → Newwworld.mod → Dialogue.mod → rebirth.mod), зависимости мода, сам мод.',
-        'Сначала open_mod (или работайте по ванили без него). Записи — по строковому id; find ищет по англ. и рус. имени.',
+        'Сначала open_mod (или работайте по ванили без него). Записи — по строковому id или имени (show, tree, refs, diff); find ищет по англ. и рус. имени.',
         'Правки (edit) — пачкой операций, одна отмена на пачку; save пишет только изменения. В папку игры save пишет только с force: true.',
         'Схема типов и полей с описаниями из fcs.def — инструмент schema и ресурсы kenshi://schema/…',
       ].join('\n'),
@@ -186,7 +201,7 @@ export function createServer(session: Session): McpServer {
       title: 'Показать запись',
       description: 'Итоговые поля и ссылки записи (ссылки с именами целей), статус; layers — какие слои её задают.',
       inputSchema: {
-        id: z.string().describe('Строковый id записи'),
+        id: z.string().describe('Строковый id или имя записи (англ. или рус.)'),
         max_refs: z.number().int().min(0).optional().describe('Ссылок на категорию, по умолчанию 20; 0 — все'),
         layers: z.boolean().optional(),
       },
@@ -196,7 +211,7 @@ export function createServer(session: Session): McpServer {
       guarded(() => {
         const ctx = session.ctx();
         const max = a.max_refs ?? 20;
-        return formatRecord(ctx, record(ctx, a.id), { showLayers: a.layers ?? false, ...(max > 0 ? { maxRefsPerCategory: max } : {}) });
+        return formatRecord(ctx, record(ctx, resolveId(ctx, a.id)), { showLayers: a.layers ?? false, ...(max > 0 ? { maxRefsPerCategory: max } : {}) });
       }),
   );
 
@@ -206,7 +221,7 @@ export function createServer(session: Session): McpServer {
       title: 'Дерево диалога',
       description: 'Дерево диалога по ссылкам dialogs/lines: реплики, условия, действия. Повторы и циклы не разворачиваются.',
       inputSchema: {
-        id: z.string(),
+        id: z.string().describe('Id или имя диалога, пакета или реплики'),
         depth: z.number().int().min(1).optional().describe('Глубина, по умолчанию 6'),
         max_nodes: z.number().int().min(1).optional().describe('Узлов, по умолчанию 60'),
         full: z.boolean().optional().describe('Все поля реплик'),
@@ -216,8 +231,8 @@ export function createServer(session: Session): McpServer {
     (a) =>
       guarded(() => {
         const ctx = session.ctx();
-        record(ctx, a.id);
-        const tree = buildDialogueTree(ctx, a.id, { maxDepth: a.depth ?? 6, maxNodes: a.max_nodes ?? 60 });
+        const id = resolveId(ctx, a.id, DIALOGUE_TYPES);
+        const tree = buildDialogueTree(ctx, id, { maxDepth: a.depth ?? 6, maxNodes: a.max_nodes ?? 60 });
         return formatDialogueTree(ctx, tree, { full: a.full ?? false });
       }),
   );
@@ -228,7 +243,7 @@ export function createServer(session: Session): McpServer {
       title: 'Ссылки записи',
       description: 'Ссылки из записи (→ категория: цель) и на неё (← источник категория).',
       inputSchema: {
-        id: z.string(),
+        id: z.string().describe('Id или имя записи'),
         direction: z.enum(['from', 'to', 'both']).optional().describe('По умолчанию both'),
         offset,
         limit: limit(50),
@@ -238,14 +253,14 @@ export function createServer(session: Session): McpServer {
     (a) =>
       guarded(() => {
         const ctx = session.ctx();
-        record(ctx, a.id);
+        const id = resolveId(ctx, a.id);
         const dir = a.direction ?? 'both';
         const lines: string[] = [];
         if (dir !== 'to') {
-          for (const e of ctx.referencesFrom(a.id)) lines.push(`→ ${e.category}: ${refLabel(ctx, e.target)}${e.ref ? `  ${formatRefValues(e.ref)}` : ''}`);
+          for (const e of ctx.referencesFrom(id)) lines.push(`→ ${e.category}: ${refLabel(ctx, e.target)}${e.ref ? `  ${formatRefValues(e.ref)}` : ''}`);
         }
         if (dir !== 'from') {
-          for (const e of ctx.referencesTo(a.id)) lines.push(`← ${refLabel(ctx, e.source)} ${e.category}${e.ref ? `  ${e.ref.v0} ${e.ref.v1} ${e.ref.v2}` : ''}`);
+          for (const e of ctx.referencesTo(id)) lines.push(`← ${refLabel(ctx, e.source)} ${e.category}${e.ref ? `  ${e.ref.v0} ${e.ref.v1} ${e.ref.v2}` : ''}`);
         }
         return paged(lines, a.offset ?? 0, a.limit ?? 50, (l) => [l]);
       }),
@@ -255,16 +270,24 @@ export function createServer(session: Session): McpServer {
     'diff',
     {
       title: 'Что меняет мод',
-      description: 'Изменения мода относительно нижних слоёв: по всем записям мода или по одной (id).',
-      inputSchema: { id: z.string().optional(), offset, limit: limit(20) },
+      description: 'Изменения мода относительно нижних слоёв: по всем записям мода или по одной (id). Последняя строка — итог «новых N, изменённых M, удалённых K».',
+      inputSchema: {
+        id: z.string().optional().describe('Id или имя записи'),
+        status: z.array(z.enum(['added', 'changed', 'removed'])).optional().describe('Только такие изменения'),
+        offset,
+        limit: limit(20),
+      },
       annotations: { ...READ, title: 'Что меняет мод' },
     },
     (a) =>
       guarded(() => {
         const ctx = session.ctx();
-        const ids = a.id !== undefined ? [a.id] : ctx.modRecords().map((r) => r.stringId);
+        const ids = a.id !== undefined ? [resolveId(ctx, a.id)] : ctx.modRecords().map((r) => r.stringId);
         const diffs = ids.flatMap((sid) => modRecordDiff(ctx, sid) ?? []);
-        return paged(diffs, a.offset ?? 0, a.limit ?? 20, (d) => formatRecordDiff(ctx, d));
+        const shown = filterDiffs(diffs, a.status);
+        const lines = paged(shown, a.offset ?? 0, a.limit ?? 20, (d) => formatRecordDiff(ctx, d));
+        lines.push(`${formatDiffSummary(diffs)}${a.status ? `; показаны: ${a.status.join(', ')}` : ''}`);
+        return lines;
       }),
   );
 
@@ -272,7 +295,7 @@ export function createServer(session: Session): McpServer {
     'validate',
     {
       title: 'Проверить мод',
-      description: 'Битые ссылки, поля вне схемы, ссылки не на тот тип, дубли имён в моде.',
+      description: 'Битые ссылки, поля вне схемы, ссылки не на тот тип, значения вне enum, диалоги без реплик, висячие ссылки на записи, удалённые зависимостями.',
       inputSchema: { offset, limit: limit(50) },
       annotations: { ...READ, title: 'Проверить мод' },
     },
@@ -294,7 +317,7 @@ export function createServer(session: Session): McpServer {
       description: [
         'Пачка операций одной правкой (одна отмена). Новые записи можно назвать псевдонимом as: "$x" и ссылаться на него дальше (id/target: "$x").',
         'create {type,name,id?,as?}; duplicate {from,name?,id?,as?}; delete {id,removeReferences?}; restore {id}; revert {id} — убрать запись из мода;',
-        'rename {id,name}; set {id,field,value,dict?}; reset {id,field,dict?} — вернуть значение нижнего слоя;',
+        'rename {id,name}; set {id,field,value,dict?} — enum-поле можно задать именем (DR_ONCE_ONLY, ONCE_ONLY) или числом; reset {id,field,dict?} — вернуть значение нижнего слоя;',
         'addRef {id,category,target,values?}; removeRef {id,category,target}; setRefs {id,category,refs:[{target,values?}]};',
         'info {author?,description?,dependencies?,references?,version?,lastId?} — заголовок мода.',
       ].join('\n'),

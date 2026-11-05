@@ -489,7 +489,7 @@ describe('схема текстом и запись в JSON', () => {
       fcsDef: ['[CHARACTER]', 'general:', 'money: 0 "Деньги\\nв кошельке"', 'mood: Mood.CALM', 'vendors: ITEM (1,0,0)', ''].join('\n'),
       fcsEnums: ['enum Mood', '{', '  CALM, // спокоен', '  ANGRY', '}', ''].join('\n'),
     });
-    expect(listTypes(schema).map((t) => t.name)).toEqual(['CHARACTER']);
+    expect(listTypes(schema).map((t) => t.name)).toEqual(['CHARACTER', 'DIALOG_ACTION']);
     const text = formatTypeSchema(findTypeSchema(schema, 'character')!).join('\n');
     expect(text).toContain('general:');
     expect(text).toContain('money: int = 0 — Деньги в кошельке');

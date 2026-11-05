@@ -161,3 +161,43 @@ describe('kedit build', () => {
     expect(readFileSync(inGame).length).toBeGreaterThan(0);
   });
 });
+
+describe('kedit: этап 2', () => {
+  it('show/refs по имени; diff --status и итог', async () => {
+    expect((await run('show', 'Sword')).out).toContain('ITEM X «Sword» (Меч)');
+    expect((await run('show', 'разбойник')).out).toContain('CHARACTER A «Bandit»');
+    const many = await run('show', 'S');
+    expect(many.code).toBe(2);
+    expect(many.err).toContain('подходит записей');
+    expect((await run('refs', 'Sword')).out).toContain('Bandit');
+    const added = await run('diff', '--mod', 'My', '--status', 'added');
+    expect(added.out).toContain('+ ITEM 1-My.mod «Magic hat»');
+    expect(added.out).not.toContain('~ CHARACTER A');
+    expect(added.out).toContain('всего 2: новых 1, изменённых 1, удалённых 0; показаны: added');
+  });
+
+  it('build: env.stableId — номер по имени, ids.json рядом со скриптом, сироты', async () => {
+    const script = join(fx.game, 'ids-build.ts');
+    writeFileSync(
+      script,
+      [
+        'type Env = { modName: string; args: string[]; stableId(n: string): string; open(o: object): { ctx: { createRecord(t: number, n: string, o: { stringId: string }): string } } };',
+        'export default (env: Env) => {',
+        '  const { ctx } = env.open({ name: env.modName });',
+        '  for (const n of env.args) ctx.createRecord(4, n, { stringId: env.stableId(n) });',
+        '  return ctx;',
+        '};',
+      ].join('\n'),
+    );
+    const out = join(fx.game, '..', `kedit-ids-${Date.now()}.mod`);
+    const first = await run('build', script, '--out', out, '--name', 'Ids.mod', '--', 'a', 'b');
+    expect(first.code, first.err).toBe(0);
+    expect(first.err).toContain('ids.json: добавлено 2 id');
+    const table = JSON.parse(readFileSync(join(fx.game, 'ids.json'), 'utf8')) as { next: number; ids: Record<string, number> };
+    expect(table).toEqual({ next: 102, ids: { a: 100, b: 101 } });
+    const second = await run('build', script, '--out', out, '--name', 'Ids.mod', '--', 'b', 'c');
+    expect(second.code, second.err).toBe(0);
+    expect(second.err).toContain('больше не собираются');
+    expect(readDataFileSync(out).records.map((r) => r.stringId)).toEqual(['101-Ids.mod', '102-Ids.mod']);
+  });
+});
