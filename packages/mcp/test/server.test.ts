@@ -1,15 +1,17 @@
 /**
  * MCP-сервер через клиент SDK в памяти, на синтетической «папке игры» из тестов CLI.
  */
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { decodeText } from '@kenshi-editor/core';
-import { defaultWorkshopDir, readDataFileSync } from '@kenshi-editor/core/node';
+import { defaultWorkshopDir, readDataFileSync, writeDataFileSync } from '@kenshi-editor/core/node';
 import { createServer, Session } from '../src/index.ts';
-import { makeFixture, type Fixture } from '../../cli/test/fixture.ts';
+import { CHAR, dataFile, makeFixture, rec, type Fixture } from '../../cli/test/fixture.ts';
+
+const EOL = String.fromCharCode(13, 10);
 
 let fx: Fixture;
 let client: Client;
@@ -36,7 +38,7 @@ describe('kenshi-mcp: чтение', () => {
   it('список инструментов и ресурсов', async () => {
     const tools = (await client.listTools()).tools.map((t) => t.name);
     expect(tools).toEqual(
-      expect.arrayContaining(['open_mod', 'find', 'show', 'tree', 'refs', 'where', 'talk', 'diff', 'validate', 'edit', 'undo', 'redo', 'history', 'play', 'save', 'schema']),
+      expect.arrayContaining(['open_mod', 'find', 'show', 'tree', 'refs', 'where', 'talk', 'diff', 'validate', 'edit', 'undo', 'redo', 'history', 'play', 'save', 'schema', 'touched', 'conflicts']),
     );
     const res = await client.listResources();
     expect(res.resources.map((r) => r.uri)).toEqual(expect.arrayContaining(['kenshi://schema/types', 'kenshi://schema/type/CHARACTER']));
@@ -92,6 +94,22 @@ describe('kenshi-mcp: чтение', () => {
     expect((type.contents[0] as { text: string }).text).toContain('money: int = 0 — how much money');
     const en = await client.readResource({ uri: 'kenshi://schema/enum/Kind' });
     expect((en.contents[0] as { text: string }).text).toContain('TOOL = 0');
+  });
+});
+
+describe('kenshi-mcp: конфликты модов', () => {
+  it('touched и conflicts: моды mods.cfg и открытый мод с несохранёнными правками', async () => {
+    mkdirSync(join(fx.game, 'mods', 'Rich'), { recursive: true });
+    writeDataFileSync(join(fx.game, 'mods', 'Rich', 'Rich.mod'), dataFile([rec(CHAR, 'A', 'Bandit', (r) => r.ints.set('money', 500))]));
+    writeFileSync(join(fx.game, 'data', 'mods.cfg'), `Rich.mod${EOL}My.mod${EOL}`);
+    expect((await call('touched', { id: 'Bandit' })).text).toContain('A Bandit — модов: 2');
+    const all = await call('conflicts');
+    expect(all.text).toContain('money (ваниль 15): победит My.mod');
+    expect((await call('conflicts', { mod_only: true })).isError).toBe(true);
+    await call('open_mod', { mod: 'My' });
+    await call('edit', { ops: [{ op: 'set', id: 'A', field: 'money', value: 500 }] });
+    // Несохранённая правка открытого мода: значения совпали — конфликта нет.
+    expect((await call('conflicts', { mod_only: true })).text).toContain('записей с конфликтами 0');
   });
 });
 

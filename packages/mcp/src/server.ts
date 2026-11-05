@@ -38,6 +38,11 @@ import {
   formatPlay,
   playConversation,
   type Changeset,
+  findConflicts,
+  formatConflict,
+  formatTouches,
+  touchedBy,
+  isVanillaLayer,
 } from '@kenshi-editor/core';
 import { SessionError, type Session } from './session.ts';
 
@@ -595,6 +600,64 @@ export function createServer(session: Session): McpServer {
         if (!list.length) return ['наборов изменений нет'];
         const label: Record<string, string> = { pending: 'ждёт решения', accepted: 'принят', 'rolled-back': 'откачен', undone: 'отменён в окне' };
         return list.map((c) => `#${c.id} «${c.title}» — ${label[c.status] ?? c.status}; записи: ${c.touched.join(', ')}`);
+      }),
+  );
+
+  server.registerTool(
+    'touched',
+    {
+      title: 'Кто меняет запись',
+      description:
+        'Какие моды игрока (по порядку mods.cfg; all — все установленные) и открытый мод меняют запись и что именно: поля, ссылки, удаление. Поздний мод побеждает. Только чтение.',
+      inputSchema: {
+        id: z.string().describe('Строковый id или имя записи'),
+        all: z.boolean().optional().describe('Все установленные моды, не только включённые в mods.cfg'),
+      },
+      annotations: { ...READ, title: 'Кто меняет запись' },
+    },
+    (a) =>
+      run(() => {
+        const ctx = session.ctx();
+        let sid = a.id;
+        try {
+          sid = resolveId(ctx, a.id);
+        } catch (e) {
+          if (!(e instanceof SessionError) || !e.message.startsWith('Нет записи')) throw e;
+        }
+        const { layers, broken } = session.modLayers(a.all ?? false);
+        const r = touchedBy(layers, sid);
+        const nameOf = (s: string): string => refLabel(ctx, s);
+        const lines = [`${sid} ${ctx.name(sid) ?? ''} — модов: ${r.touches.length}${r.base ? '' : ' (записи нет в ванили)'}`, ...formatTouches(r, nameOf)];
+        for (const b of broken) lines.push(`не прочитан ${b.name}: ${b.error}`);
+        return lines;
+      }),
+  );
+
+  server.registerTool(
+    'conflicts',
+    {
+      title: 'Конфликты модов',
+      description:
+        'Записи и поля, которые несколько модов меняют по-разному, значения каждого мода и кто победит (поздний в mods.cfg). mod_only — только конфликты открытого мода. Только чтение.',
+      inputSchema: {
+        mod_only: z.boolean().optional().describe('Только конфликты открытого мода (его несохранённые правки тоже)'),
+        all: z.boolean().optional().describe('Все установленные моды, не только включённые в mods.cfg'),
+        offset,
+        limit: limit(20),
+      },
+      annotations: { ...READ, title: 'Конфликты модов' },
+    },
+    (a) =>
+      run(() => {
+        const ctx = session.ctx();
+        const { layers, broken, opened } = session.modLayers(a.all ?? false);
+        if (a.mod_only && opened === undefined) throw new SessionError('Мод не открыт или в нём нет записей: open_mod');
+        const found = findConflicts(layers, a.mod_only && opened !== undefined ? { only: opened } : {});
+        const nameOf = (s: string): string => refLabel(ctx, s);
+        const fields = found.reduce((n, x) => n + x.fields.length, 0);
+        const head = [`модов ${layers.filter((l) => !isVanillaLayer(l.name)).length}; записей с конфликтами ${found.length}, полей ${fields}`];
+        for (const b of broken) head.push(`не прочитан ${b.name}: ${b.error}`);
+        return [...head, ...paged(found, a.offset ?? 0, a.limit ?? 20, (x) => formatConflict(x, nameOf))];
       }),
   );
 

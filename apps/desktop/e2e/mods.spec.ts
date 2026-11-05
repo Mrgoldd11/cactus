@@ -158,6 +158,20 @@ test('моды слоями: панель «Моды», два мода под �
     await selectRecord(page, 'katana', KATANA);
     await page.getByTestId('field-filter').fill('cut damage');
     await expect(page.getByTestId(`field-${CUT}`)).toHaveValue('2');
+    // Инспектор: кто ещё меняет запись и сколько полей в конфликте.
+    await expect(page.getByTestId('record-others')).toContainText('Sharp Katana.mod, Katana Rebalance.mod');
+    await expect(page.getByTestId('record-conflicts')).toContainText('полей в конфликте: 1');
+
+    // Панель «Конфликты»: урон катаны, победит Katana Rebalance (ниже в mods.cfg).
+    await openPanel(page, 'conflicts');
+    const row = page.getByTestId('conflicts-table').locator(`tr[data-sid="${KATANA}"][data-field="floats:${CUT}"]`);
+    await expect(row).toBeVisible();
+    await expect(row.getByTestId('conflict-winner')).toHaveText('Katana Rebalance.mod');
+    await expect(row).toContainText('1.5 — Sharp Katana.mod');
+    await expect(row).toContainText('2 — Katana Rebalance.mod');
+    // weight mult меняет только один мод — не конфликт.
+    await expect(page.getByTestId('conflicts-table').locator('tr[data-field="floats:weight mult"]')).toHaveCount(0);
+    await page.screenshot({ path: join(shots, '29-conflicts.png') });
 
     // mods.cfg не менялся.
     expect(readFileSync(game.cfg, 'utf-8')).toBe('Sharp Katana.mod\r\nKatana Rebalance.mod\r\n');

@@ -35,12 +35,16 @@ import {
   formatDiffSummary,
   parseDiffStatuses,
   validateMod,
+  findConflicts,
+  formatConflict,
+  formatTouches,
+  touchedBy,
   type ModContext,
   type Page,
   type RecordDiff,
   type RecordStatus,
 } from '@kenshi-editor/core';
-import { loadTranslation, loadWorld, readDataFileSync, readModsCfg } from '@kenshi-editor/core/node';
+import { loadModLayers, loadTranslation, loadWorld, readDataFileSync, readModsCfg } from '@kenshi-editor/core/node';
 import { basename } from 'node:path';
 import { runBuild } from './build.ts';
 import { modsList } from './mods.ts';
@@ -81,6 +85,9 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
   schema [ТИП]            типы записей / поля типа с описаниями из fcs.def  --enum ИМЯ
   build <скрипт.ts|план.json> --out <файл.mod> [--name Имя.mod] [--mod исходный] [-- аргументы]
   mods [list]             установленные моды: порядок mods.cfg, откуда (mods/мастерская)  --full  --json
+  touched <id|имя>        какие моды из mods.cfg меняют запись и что именно  --all  все установленные
+  conflicts               моды, которые меняют одно поле по-разному, и кто победит (поздний в mods.cfg)
+      --mod <путь|имя.mod>  только конфликты этого мода;  --all  все установленные, не только mods.cfg
 
 Общие:
   --game <папка Kenshi>   иначе KENSHI_DIR, kenshi-paths.json или найденная установка Steam/GOG
@@ -117,6 +124,7 @@ const OPTIONS = {
   out: { type: 'string' },
   name: { type: 'string' },
   force: { type: 'boolean' },
+  all: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 } as const;
 
@@ -387,6 +395,44 @@ const COMMANDS: Record<string, Handler> = {
     if (!t) throw new UsageError(`Нет типа ${c.args[0]}`);
     if (c.values.json) c.io.out(JSON.stringify({ ...t, fields: [...t.fields.values()] }, null, 1));
     else for (const l of formatTypeSchema(t)) c.io.out(l);
+    return 0;
+  },
+
+  touched(c) {
+    const spec = c.arg(0, '<id|имя>');
+    const vanilla = c.ws.open({ po: true });
+    const nameOf = (sid: string): string => vanilla.ctx.name(sid) ?? sid;
+    let sid = spec;
+    try {
+      sid = c.resolve(vanilla.ctx, spec);
+    } catch (e) {
+      // Записи нет в ванили — её могут создавать моды: ищем как есть.
+      if (!(e instanceof UsageError) || !e.message.startsWith('Нет записи')) throw e;
+    }
+    const { layers, broken } = loadModLayers(c.ws.paths, c.ws.vanilla(), { all: c.values.all ?? false });
+    for (const b of broken) c.io.err(`не прочитан ${b.name}: ${b.error}`);
+    const r = touchedBy(layers, sid);
+    if (c.values.json) {
+      c.io.out(JSON.stringify({ sid, name: nameOf(sid), inVanilla: r.base !== undefined, touches: r.touches }, null, 1));
+      return 0;
+    }
+    c.io.out(`${sid} ${vanilla.ctx.name(sid) ?? '(нет в ванили)'} — модов: ${r.touches.length}`);
+    for (const l of formatTouches(r, nameOf)) c.io.out(l);
+    return 0;
+  },
+
+  conflicts(c) {
+    const extra = c.values.mod !== undefined ? c.ws.modPath(c.values.mod) : undefined;
+    const vanilla = c.ws.open({ po: true });
+    const nameOf = (sid: string): string => vanilla.ctx.name(sid) ?? sid;
+    const { layers, broken } = loadModLayers(c.ws.paths, c.ws.vanilla(), { all: c.values.all ?? false, ...(extra !== undefined ? { extra: { name: basename(extra), path: extra } } : {}) });
+    for (const b of broken) c.io.err(`не прочитан ${b.name}: ${b.error}`);
+    const found = findConflicts(layers, extra !== undefined ? { only: basename(extra) } : {});
+    if (!c.values.json) {
+      const fields = found.reduce((n, x) => n + x.fields.length, 0);
+      c.io.out(`модов ${layers.length - vanilla.ctx.layers.length}; записей с конфликтами ${found.length}, полей ${fields}`);
+    }
+    c.paged(found, (x) => formatConflict(x, nameOf));
     return 0;
   },
 

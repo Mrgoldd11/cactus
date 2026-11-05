@@ -9,6 +9,8 @@ import { readDataFileSync, writeDataFileSync } from '@kenshi-editor/core/node';
 import { main } from '../src/main.ts';
 import { CHAR, dataFile, makeFixture, rec, type Fixture } from './fixture.ts';
 
+const EOL = String.fromCharCode(13, 10);
+
 let fx: Fixture;
 const run = async (...argv: string[]): Promise<{ code: number; out: string; err: string }> => {
   fx.io.lines.length = 0;
@@ -248,5 +250,28 @@ describe('kedit mods', () => {
     expect(j.order).toEqual(['Gone.mod', 'My.mod']);
     expect(j.mods.find((m) => m.fileName === 'Off.mod')!.enabled).toBe(false);
     expect((await run('mods', 'nope')).code).toBe(2);
+  });
+
+  it('touched и conflicts: кто меняет запись, кто побеждает, --mod', async () => {
+    mkdirSync(join(fx.game, 'mods', 'Rich'), { recursive: true });
+    writeDataFileSync(join(fx.game, 'mods', 'Rich', 'Rich.mod'), dataFile([rec(CHAR, 'A', 'Bandit', (r) => r.ints.set('money', 500))]));
+    writeFileSync(join(fx.game, 'data', 'mods.cfg'), `My.mod${EOL}Rich.mod${EOL}`);
+    const t = await run('touched', 'Bandit');
+    expect(t.code, t.err).toBe(0);
+    expect(t.out).toContain('A Bandit — модов: 2');
+    expect(t.out).toContain('    money = 99');
+    expect(t.out).toContain('    vendors → Sword = удалить');
+    expect(t.out).toContain('  Rich.mod');
+    const c = await run('conflicts');
+    expect(c.code, c.err).toBe(0);
+    expect(c.out).toContain('модов 2; записей с конфликтами 1, полей 1');
+    expect(c.out).toContain('money (ваниль 15): победит Rich.mod');
+    expect(c.out).toContain('    → Rich.mod: 500');
+    expect((await run('conflicts', '--mod', 'Rich')).out).toContain('записей с конфликтами 1');
+    writeFileSync(join(fx.game, 'data', 'mods.cfg'), `My.mod${EOL}`);
+    expect((await run('conflicts')).out).toContain('записей с конфликтами 0');
+    expect((await run('conflicts', '--all')).out).toContain('победит Rich.mod');
+    const j = JSON.parse((await run('touched', 'A', '--all', '--json')).out) as { touches: { layer: string }[] };
+    expect(j.touches.map((x) => x.layer)).toEqual(['My.mod', 'Rich.mod']);
   });
 });

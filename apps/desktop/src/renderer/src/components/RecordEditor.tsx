@@ -4,6 +4,10 @@
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import {
+  contextLayers,
+  isVanillaLayer,
+  recordConflicts,
+  touchedBy,
   decodeText,
   defaultValue,
   encodeText,
@@ -34,6 +38,7 @@ import { RecordPicker } from './RecordPicker.tsx';
 import { WhereTab } from './WhereTab.tsx';
 import { DIALOGUE_GRAPH_TYPES, DialogueGraphTab } from './DialogueGraphTab.tsx';
 import { TalkTab } from './TalkTab.tsx';
+import { conflictFieldLabel } from '../workbench/panels/conflicts.tsx';
 
 interface Props {
   project: Project;
@@ -55,6 +60,11 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
   const deleted = status === 'deleted';
   const backRefs = useMemo(() => ctx.referencesTo(sid), [ctx, sid, version]);
   const groups = useMemo(() => refGroups(ctx, sid), [ctx, sid, version]);
+  const others = useMemo(() => {
+    const report = touchedBy(contextLayers(ctx), sid);
+    const layers = report.touches.map((x) => x.layer).filter((l) => l !== ctx.modName && !isVanillaLayer(l));
+    return { layers, conflicts: recordConflicts(report) };
+  }, [ctx, sid, version]);
   const refCount = groups.reduce((n, g) => n + g.rows.filter((r) => r.state !== 'removed').length, 0);
 
   if (!rec) {
@@ -105,6 +115,20 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
             </span>
           )}
         </div>
+        {others.layers.length > 0 && (
+          <div className="record-others muted" data-testid="record-others">
+            {t.alsoChangedBy}: {others.layers.join(', ')}
+            {others.conflicts.length > 0 && (
+              <span
+                className="warn"
+                data-testid="record-conflicts"
+                title={others.conflicts.map((f) => t.conflictFieldTip(conflictFieldLabel(t, project, f), f.winner)).join('\n')}
+              >
+                ⚠ {t.conflictFields(others.conflicts.length)}
+              </span>
+            )}
+          </div>
+        )}
         {deleted && (
           <div className="banner error">
             {t.status_deleted}

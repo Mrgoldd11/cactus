@@ -5,8 +5,8 @@
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { LiveClient } from './live-client.ts';
-import { readFileSync } from 'node:fs';
-import { base64ToBytes, ModContext, readDataFile, type GameSchema, type Layer, type LiveSnapshot, type LiveState, type PoFile, type ProposeResult, type TranslationIndex, type AiChangeset, type EditOp, type WorldIndex } from '@kenshi-editor/core';
+import { readFileSync, statSync } from 'node:fs';
+import { base64ToBytes, type DataFile, ModContext, readDataFile, type GameSchema, type Layer, type LiveSnapshot, type LiveState, type PoFile, type ProposeResult, type TranslationIndex, type AiChangeset, type EditOp, type WorldIndex } from '@kenshi-editor/core';
 import {
   gamedataPoPath,
   hasGame,
@@ -18,6 +18,8 @@ import {
   loadWorld,
   loadTranslation,
   liveDiscoveryPath,
+  loadModLayers,
+  type ModLayers,
   readLiveDiscovery,
   resolveModPath,
   saveModContext,
@@ -54,6 +56,8 @@ export class Session {
   private worldCache?: { key: string; world: WorldIndex };
   private live?: { client: LiveClient; state: LiveState; synced?: { session: number; version: number } };
   private readonly depCache = new Map<string, Layer>();
+  /** Разобранные моды игрока для конфликтов: путь → размер/время и файл. */
+  private readonly modFileCache = new Map<string, { stamp: string; file: DataFile }>();
 
   constructor(paths: GamePaths, cwd: string) {
     this.paths = paths;
@@ -121,6 +125,31 @@ export class Session {
     const key = modFiles.join('\n');
     if (this.worldCache?.key !== key) this.worldCache = { key, world: loadWorld(this.paths, { modFiles }).world };
     return this.worldCache.world;
+  }
+
+  /**
+   * Слои для конфликтов: ваниль, моды из `mods.cfg` (с `all` — все установленные) и открытый
+   * мод (его записи как есть сейчас, с несохранёнными правками) на его месте или последним.
+   * Файлы модов читаются один раз, пока не изменились. Только чтение.
+   */
+  modLayers(all: boolean): ModLayers & { opened?: string } {
+    const read = (path: string): DataFile => {
+      const st = statSync(path);
+      const stamp = `${st.size}:${st.mtimeMs}`;
+      const hit = this.modFileCache.get(path);
+      if (hit?.stamp === stamp) return hit.file;
+      const file = readDataFile(readFileSync(path));
+      this.modFileCache.set(path, { stamp, file });
+      return file;
+    };
+    const cur = this.current;
+    const opened = cur && cur.ctx.modRecords().length > 0 ? cur.ctx.modName : undefined;
+    const r = loadModLayers(this.paths, this.vanilla(), {
+      all,
+      read,
+      ...(cur && opened !== undefined ? { extra: { name: opened, records: cur.ctx.modRecords() } } : {}),
+    });
+    return { ...r, ...(opened !== undefined ? { opened } : {}) };
   }
 
   /** Записать мод. Без пути — туда, откуда открыт. В папку игры — только с `force`. */

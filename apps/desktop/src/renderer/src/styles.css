@@ -1999,6 +1999,20 @@ button.small.active {
 .mods-panel-note {
   font-size: 12px;
 }
+.conflict-winner {
+  font-weight: 600;
+}
+.conflicts-table td {
+  vertical-align: top;
+}
+.record-others {
+  font-size: 12px;
+}
+.record-others .warn {
+  color: var(--changed);
+  margin-left: 6px;
+  cursor: help;
+}
 .mods-panel .tag {
   margin-left: 4px;
   font-size: 11px;

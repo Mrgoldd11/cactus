@@ -14,6 +14,9 @@ import { readModHeader } from '../format/read.ts';
 import { decodeText } from '../text.ts';
 import { splitModList } from '../format/helpers.ts';
 import { formatModsCfg, parseModsCfg, type ModsCfgText } from '../model/load-order.ts';
+import type { ConflictLayer } from '../model/conflicts.ts';
+import type { DataFile, GameRecord } from '../format/types.ts';
+import { readDataFile } from '../format/read.ts';
 import { installedModFiles, type GamePaths } from './paths.ts';
 
 export type ModSource = 'mods' | 'workshop';
@@ -192,4 +195,57 @@ export function writeModsCfg(paths: GamePaths, names: readonly string[], options
   }
   writeFileSync(path, text, 'utf-8');
   return { path, ...(backup !== undefined ? { backup } : {}), changed: true };
+}
+
+export interface ModLayers {
+  layers: ConflictLayer[];
+  /** Моды, которые не удалось прочитать: имя и ошибка. */
+  broken: { name: string; error: string }[];
+}
+
+export interface ModLayersOptions {
+  /** Ещё и выключенные моды (после включённых, по имени). */
+  all?: boolean;
+  /**
+   * Свой мод: встаёт на своё место в `mods.cfg` (вместо установленного файла с тем же именем)
+   * или, если его там нет, последним. `records` — записи как есть сейчас (несохранённые правки).
+   */
+  extra?: { name: string; path?: string; records?: readonly GameRecord[] };
+  /** Чтение файла мода (можно с кэшем); по умолчанию — разбор файла с диска. */
+  read?: (path: string) => DataFile;
+}
+
+/**
+ * Слои для поиска конфликтов: `vanilla`, затем моды. Без `all` — включённые по порядку
+ * `mods.cfg`. Моды из `mods/` важнее таких же из мастерской (как в игре).
+ */
+export function loadModLayers(paths: GamePaths, vanilla: readonly ConflictLayer[], options: ModLayersOptions = {}): ModLayers {
+  const read = options.read ?? ((p: string) => readDataFile(readFileSync(p)));
+  const { mods } = listInstalledMods(paths);
+  const loaded = mods.filter((m) => !m.shadowedBy && (options.all || m.enabled));
+  const rank = (m: InstalledMod): number => m.loadIndex ?? Number.MAX_SAFE_INTEGER;
+  loaded.sort((a, b) => rank(a) - rank(b) || a.fileName.localeCompare(b.fileName));
+  type Item = { name: string; path?: string; records?: readonly GameRecord[] };
+  const items: Item[] = loaded.map((m) => ({ name: m.fileName, path: m.path }));
+  const extra = options.extra;
+  if (extra) {
+    const i = items.findIndex((f) => f.name.toLowerCase() === extra.name.toLowerCase());
+    const item: Item = { name: i >= 0 ? items[i]!.name : extra.name, ...(extra.path !== undefined ? { path: extra.path } : {}), ...(extra.records ? { records: extra.records } : {}) };
+    if (i >= 0) items[i] = item;
+    else items.push(item);
+  }
+  const layers: ConflictLayer[] = [...vanilla];
+  const broken: ModLayers['broken'] = [];
+  for (const it of items) {
+    if (it.records) {
+      layers.push({ name: it.name, file: { records: it.records } });
+      continue;
+    }
+    try {
+      layers.push({ name: it.name, file: read(it.path!) });
+    } catch (e) {
+      broken.push({ name: it.name, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return { layers, broken };
 }
