@@ -4,17 +4,14 @@
  * Высота узла оценивается по числу строк текста.
  */
 import type { DialogueGraph, DialogueGraphNode } from '@kenshi-editor/core';
+import { layoutTree, type Placed } from './tree-layout.ts';
+
+export type { Placed };
 
 export const NODE_WIDTH = 300;
 const COLUMN_GAP = 90;
 const ROW_GAP = 18;
 const CHARS_PER_LINE = 42;
-
-export interface Placed {
-  x: number;
-  y: number;
-  height: number;
-}
 
 /** Оценка высоты карточки узла (px). */
 export function nodeHeight(n: DialogueGraphNode, maxTexts: number): number {
@@ -34,28 +31,12 @@ export function layoutDialogue(graph: DialogueGraph, maxTexts: number): Map<stri
     list.push(e.target);
     kids.set(e.source, list);
   }
-  const out = new Map<string, Placed>();
-  let cursor = 0;
-  const place = (id: string): { top: number; bottom: number } => {
-    const n = byId.get(id)!;
-    const h = nodeHeight(n, maxTexts);
-    const x = n.depth * (NODE_WIDTH + COLUMN_GAP);
-    const children = kids.get(id) ?? [];
-    if (children.length === 0) {
-      const y = cursor;
-      cursor += h + ROW_GAP;
-      out.set(id, { x, y, height: h });
-      return { top: y, bottom: y + h };
-    }
-    const spans = children.map(place);
-    const top = spans[0]!.top;
-    const bottom = spans[spans.length - 1]!.bottom;
-    // Родитель по центру потомков, но не выше уже занятого места.
-    const y = Math.max(top, (top + bottom) / 2 - h / 2);
-    out.set(id, { x, y, height: h });
-    if (y + h + ROW_GAP > cursor) cursor = y + h + ROW_GAP;
-    return { top: Math.min(top, y), bottom: Math.max(bottom, y + h) };
-  };
-  place(graph.root);
-  return out;
+  return layoutTree([graph.root], {
+    width: NODE_WIDTH,
+    columnGap: COLUMN_GAP,
+    rowGap: ROW_GAP,
+    kids: (id) => kids.get(id) ?? [],
+    depth: (id) => byId.get(id)!.depth,
+    height: (id) => nodeHeight(byId.get(id)!, maxTexts),
+  });
 }

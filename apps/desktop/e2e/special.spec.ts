@@ -209,3 +209,62 @@ test('массовые правки: предпросмотр, применен�
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('графы: исследования, крафт, состав города; правка числа в ссылке, отмена, сохранение', async () => {
+  const { app, page } = await launch();
+  const dir = mkdtempSync(join(tmpdir(), 'kedit-special-'));
+  const BARK = '1076-gamedata.base';
+  const ARMOR_SHOP = '1177-gamedata.base';
+  try {
+    await newMod(page, 'KeditE2E Graphs');
+    await openPanel(page, 'graphs');
+    const panel = page.getByTestId('graphs-panel');
+    const canvas = page.getByTestId('graph-canvas');
+
+    // Исследования: все узлы, требования — связи, поиск подсвечивает.
+    expect(Number(await canvas.getAttribute('data-nodes'))).toBeGreaterThan(100);
+    expect(Number(await canvas.getAttribute('data-links'))).toBeGreaterThan(50);
+    await page.getByTestId('graphs-search').fill('wall');
+    await expect(page.getByTestId('graphs-found')).not.toContainText(/: 0$/);
+    await page.getByTestId('graphs-category').selectOption('Defence');
+    const defence = Number(await canvas.getAttribute('data-nodes'));
+    expect(defence).toBeGreaterThan(3);
+    expect(defence).toBeLessThan(100);
+    await page.screenshot({ path: join(shots, '36-graphs.png') });
+
+    // Крафт: станок → вещи → из чего.
+    await page.getByTestId('graphs-mode').selectOption('craft');
+    await page.getByTestId('graphs-focus').selectOption('2929-gamedata.base');
+    expect(Number(await canvas.getAttribute('data-nodes'))).toBeGreaterThan(50);
+    await expect(panel.locator('[data-testid="graph-node"][data-kind="station"]')).toHaveCount(1);
+
+    // Состав города: Bark → отряды (свои и от фракции) → люди.
+    await page.getByTestId('graphs-mode').selectOption('squads');
+    await page.getByTestId('graphs-kind').selectOption('TOWN');
+    await page.getByTestId('graphs-search').fill(BARK);
+    await page.getByTestId('graphs-focus').selectOption(BARK);
+    expect(Number(await canvas.getAttribute('data-nodes'))).toBeGreaterThan(15);
+    await panel.locator(`[data-testid="graph-node"][data-sid="${ARMOR_SHOP}"]`).click();
+    await expect(page.getByTestId('graphs-picked')).toBeVisible();
+    await expect(page.getByTestId('graphs-where')).toBeEnabled();
+    const link = panel.locator('[data-testid="graph-link"][data-category="residents"]');
+    await expect(link.getByTestId('graph-link-v0')).toHaveValue('1');
+    await link.getByTestId('graph-link-v0').fill('2');
+    await link.getByTestId('graph-link-apply').click();
+    await expect(page.getByTestId('save')).toHaveClass(/primary/);
+    await expect(link.getByTestId('graph-link-v0')).toHaveValue('2');
+
+    await page.getByTestId('undo').click();
+    await expect(link.getByTestId('graph-link-v0')).toHaveValue('1');
+    await page.getByTestId('redo').click();
+    await expect(link.getByTestId('graph-link-v0')).toHaveValue('2');
+
+    const recs = await saveAndValidate(app, page, join(dir, 'Graphs.mod'));
+    expect(recs.map((r) => r.stringId)).toEqual([BARK]);
+    expect([...recs[0]!.refs.keys()]).toEqual(['residents']);
+    expect(recs[0]!.refs.get('residents')!.find((r) => r.target === ARMOR_SHOP)).toMatchObject({ v0: 2, v1: 3 });
+  } finally {
+    await closeApp(app);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -2269,3 +2269,91 @@ input.invalid {
 .bulk-table .bulk-after { color: var(--new); }
 .bulk-skipped { padding: 4px 8px; }
 .bulk-skipped ul { margin: 4px 0; padding-left: 18px; }
+
+/* Панель «Графы» (исследования, крафт, состав отрядов и городов). */
+.graphs-panel .dg-canvas {
+  min-height: 200px;
+}
+.gr-node {
+  user-select: none;
+  width: 240px;
+  box-sizing: border-box;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--muted);
+  border-radius: 4px;
+  padding: 3px 8px 5px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.gr-title {
+  font-weight: 600;
+  min-height: 22px;
+  line-height: 22px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gr-sub {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gr-line {
+  font-size: 11px;
+  color: #9fb7d6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gr-node.gr-research { border-left-color: var(--accent); }
+.gr-node.gr-station,
+.gr-node.gr-town { border-left-color: var(--changed); }
+.gr-node.gr-squad { border-left-color: #c678dd; }
+.gr-node.gr-char { border-left-color: var(--new); }
+.gr-node.gr-animal { border-left-color: #56b6c2; }
+.gr-node.gr-vendor { border-left-color: #d19a66; }
+.gr-node.gr-item { border-left-color: var(--new); }
+.gr-node.gr-root { background: #24303d; }
+.gr-node.gr-matched { background: #3a3520; }
+.gr-node.gr-missing { border-color: var(--error); color: var(--error); }
+.gr-node.gr-st-new { box-shadow: inset 0 0 0 1px var(--new); }
+.gr-node.gr-st-changed { box-shadow: inset 0 0 0 1px var(--changed); }
+.gr-node.gr-picked {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.dg-canvas .react-flow__edge.gr-edge-picked path {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+.gr-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  max-height: 40%;
+  overflow: auto;
+}
+.gr-details-head,
+.gr-chips,
+.gr-link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.gr-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gr-value {
+  width: 64px;
+}

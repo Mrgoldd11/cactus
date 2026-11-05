@@ -2,7 +2,7 @@
  * Специальные редакторы (этап 5) на ванили установленной игры. Без игры тесты пропускаются.
  */
 import { describe, expect, it } from 'vitest';
-import { applyBulk, compareTable, factionMatrix, parseFieldFilter, previewBulk, type Layer, type ModContext } from '../src/index.ts';
+import { applyBulk, compareTable, craftingStations, factionMatrix, parseFieldFilter, previewBulk, researchGraph, squadComposition, townComposition, type Layer, type ModContext } from '../src/index.ts';
 import { hasGame, loadModContext, loadVanillaLayers, resolveGamePaths } from '../src/node/index.ts';
 
 const paths = resolveGamePaths();
@@ -48,5 +48,29 @@ describe.skipIf(!game)('специальные редакторы на вани�
     for (const r of recs) expect([...r.ints.keys()]).toEqual(['value']);
     c.undo();
     expect(c.modRecords()).toHaveLength(0);
+  });
+
+  it('графы: исследования с требованиями и ценой, станки крафта, состав Bark и отряда людоедов', () => {
+    const g = researchGraph(ctx());
+    expect(g.nodes.length).toBeGreaterThan(150);
+    expect(g.categories).toContain('Defence');
+    const walls = g.nodes.find((n) => n.sid === '2915-gamedata.base')!;
+    expect(walls.requires.map((l) => l.target)).toContain('2910-gamedata.base');
+    expect(walls.cost.length).toBeGreaterThan(0);
+    expect(walls.unlocks.length).toBeGreaterThan(0);
+
+    const st = craftingStations(ctx());
+    expect(st.length).toBeGreaterThan(50);
+    expect(st.find((s) => s.sid === '2929-gamedata.base')!.products.length).toBeGreaterThan(20);
+
+    const bark = townComposition(ctx(), '1076-gamedata.base')!;
+    expect(bark.usesFaction).toBe(true);
+    expect(bark.squads.some((s) => s.field === 'residents')).toBe(true);
+    expect(bark.squads.some((s) => s.field === 'faction residents' && s.link.from === 'defaultEmpireFactionSID')).toBe(true);
+    expect(bark.squads.some((s) => s.field === 'bar squads')).toBe(true);
+
+    const cannibals = squadComposition(ctx(), '2609-gamedata.base')!;
+    expect(cannibals.members.some((m) => m.field === 'leader')).toBe(true);
+    expect(cannibals.members.some((m) => m.field === 'squad' && m.max > m.min)).toBe(true);
   });
 });
