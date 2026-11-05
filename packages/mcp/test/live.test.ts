@@ -101,6 +101,20 @@ describe('живая связь с редактором', () => {
     expect((await call('open_mod', { mod: 'Other' })).isError).toBe(false);
   });
 
+  it('bulk в режиме редактора: предпросмотр по окну, apply — набор изменений', async () => {
+    await call('connect_editor');
+    applyOps(editorCtx, [{ op: 'set', id: 'Y', field: 'weight', value: 5 }], 'руками');
+    const pre = await call('bulk', { type: 'ITEM', op: 'add', field: 'weight', value: '1' });
+    expect(pre.text).toContain('Y  «Shield»  weight: 5 → 6');
+    expect(host.pending).toBe(0);
+    const r = await call('bulk', { type: 'ITEM', op: 'add', field: 'weight', value: '1', apply: true });
+    expect(r.isError, r.text).toBe(false);
+    expect(r.text).toContain('ждёт решения пользователя');
+    expect(host.pending).toBe(1);
+    expect(editorCtx.get('X')?.floats.get('weight')).toBe(3);
+    expect(editorCtx.get('Y')?.floats.get('weight')).toBe(6);
+  });
+
   it('редактор закрылся — понятная ошибка, дальше без него', async () => {
     await call('connect_editor');
     await server.close();

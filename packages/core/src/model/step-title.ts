@@ -255,6 +255,12 @@ class Describer {
         en: `Relation ${a} ${arrow} ${b}: ${reset ? 'default' : v}`,
       };
     }
+    const bulk = /^массово: (\S+) (.*) \((\d+) записей\)$/s.exec(label);
+    if (bulk) {
+      const [, field, what, n] = bulk;
+      const en = what!.replace(/^замена /, 'replace ');
+      return { ru: `Массовая правка ${field}: ${what} (записей: ${n})`, en: `Bulk edit ${field}: ${en} (records: ${n})` };
+    }
     const created = /^создать «(.*)»$/s.exec(label);
     if (created) {
       const d = this.added()[0];

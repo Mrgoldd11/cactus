@@ -2,7 +2,7 @@
  * Специальные редакторы (этап 5) на ванили установленной игры. Без игры тесты пропускаются.
  */
 import { describe, expect, it } from 'vitest';
-import { compareTable, factionMatrix, type Layer, type ModContext } from '../src/index.ts';
+import { applyBulk, compareTable, factionMatrix, parseFieldFilter, previewBulk, type Layer, type ModContext } from '../src/index.ts';
 import { hasGame, loadModContext, loadVanillaLayers, resolveGamePaths } from '../src/node/index.ts';
 
 const paths = resolveGamePaths();
@@ -33,5 +33,20 @@ describe.skipIf(!game)('специальные редакторы на вани�
     expect(katana.cells.get('cut damage multiplier')!.value).toBeGreaterThan(0);
     const r = t.range('cut damage multiplier')!;
     expect(r.max).toBeGreaterThan(r.min);
+  });
+
+  it('массовая правка: цена оружия от 300 × 2 — одна правка, в моде только поле value', () => {
+    const c = loadModContext({ paths, dependencies: [], vanilla: vanilla(), schema: false }).ctx;
+    const p = previewBulk(c, { type: 'WEAPON', fields: [parseFieldFilter('value>=300')] }, { kind: 'mul', field: 'value', value: '2' });
+    expect(p.matched).toBeGreaterThan(5);
+    expect(p.changes).toHaveLength(p.matched);
+    expect(c.modRecords()).toHaveLength(0);
+    applyBulk(c, p);
+    expect(c.history().undo).toHaveLength(1);
+    const recs = c.buildModFile().records;
+    expect(recs).toHaveLength(p.changes.length);
+    for (const r of recs) expect([...r.ints.keys()]).toEqual(['value']);
+    c.undo();
+    expect(c.modRecords()).toHaveLength(0);
   });
 });

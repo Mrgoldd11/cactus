@@ -358,3 +358,32 @@ describe('kedit strings', () => {
     expect((await run('strings', 'My', '--out', join(out, 'x.txt'))).code).toBe(2);
   });
 });
+
+describe('kedit bulk', () => {
+  it('предпросмотр по умолчанию, --apply пишет одну правку, защита папки игры', async () => {
+    const pre = await run('bulk', 'ITEM', '--mul', 'weight=1.5');
+    expect(pre.code, pre.err).toBe(0);
+    expect(pre.out).toContain('X  «Sword»  weight: 2 → 3');
+    expect(pre.out).toContain('Y  «Shield»  weight: 1 → 1.5');
+    expect(pre.out).toContain('подошло записей 2, изменится 2, пропущено 0');
+    expect(pre.out).toContain('ничего не записано');
+
+    // Условие по полю, замена имени по regex.
+    const ren = await run('bulk', 'ITEM', '--field', 'weight>1', '--replace', 'name', '--find', '^S(\\w)', '--regex', '--with', 'Big s$1');
+    expect(ren.out).toContain('X  «Sword»  name: Sword → Big sword');
+    expect(ren.out).toContain('изменится 1,');
+
+    // Без --out/--mod — некуда писать; в папку игры — только с --force.
+    expect((await run('bulk', 'ITEM', '--mul', 'weight=2', '--apply')).code).toBe(2);
+    expect((await run('bulk', 'ITEM', '--mul', 'weight=2', '--apply', '--out', join(fx.game, 'x.mod'))).code).toBe(2);
+    expect((await run('bulk', 'ITEM', '--mul', 'weight=2', '--set', 'weight=1')).code).toBe(2);
+
+    const out = join(mkdtempSync(join(tmpdir(), 'kedit-bulk-')), 'Bulk.mod');
+    const ok = await run('bulk', 'ITEM', 'sword', '--add', 'weight=0.5', '--apply', '--out', out);
+    expect(ok.code, ok.err).toBe(0);
+    expect(ok.out).toContain('записано');
+    const f = readDataFileSync(out);
+    expect(f.records.map((r) => r.stringId)).toEqual(['X']);
+    expect([...f.records[0]!.floats]).toEqual([['weight', 2.5]]);
+  });
+});

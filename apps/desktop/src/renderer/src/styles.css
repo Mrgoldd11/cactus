@@ -2261,3 +2261,11 @@ tr[draggable='true'] {
 input.invalid {
   border-color: var(--error);
 }
+
+/* ── Массовые правки ── */
+.bulk-op input:not([type='checkbox']) { min-width: 9em; }
+.bulk-error { color: var(--error); padding: 2px 8px; }
+.bulk-table .bulk-before { color: var(--deleted); text-decoration: line-through; opacity: 0.8; }
+.bulk-table .bulk-after { color: var(--new); }
+.bulk-skipped { padding: 4px 8px; }
+.bulk-skipped ul { margin: 4px 0; padding-left: 18px; }

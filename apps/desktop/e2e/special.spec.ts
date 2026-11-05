@@ -157,3 +157,55 @@ test('сравнение предметов: сортировка, столбц�
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('массовые правки: предпросмотр, применение одной отменой, замена имени, сохранение', async () => {
+  const { app, page } = await launch();
+  const dir = mkdtempSync(join(tmpdir(), 'kedit-special-'));
+  const KATANA = '476-gamedata.base';
+  try {
+    await newMod(page, 'KeditE2E Bulk');
+    await openPanel(page, 'bulk');
+    const panel = page.getByTestId('bulk-panel');
+    await page.getByTestId('bulk-type').selectOption('WEAPON');
+    await page.getByTestId('bulk-filter').fill('value>=300');
+    await page.getByTestId('bulk-op').selectOption('mul');
+    await page.getByTestId('bulk-field').fill('value');
+    await page.getByTestId('bulk-value').fill('2');
+    const katana = panel.locator(`[data-testid="bulk-row"][data-sid="${KATANA}"]`);
+    await expect(katana).toHaveAttribute('data-before', '500');
+    await expect(katana).toHaveAttribute('data-after', '1000');
+    const rows = await panel.getByTestId('bulk-row').count();
+    expect(rows).toBeGreaterThan(5);
+    await expect(page.getByTestId('bulk-summary')).toContainText(`изменится ${rows}`);
+    // Предпросмотр ничего не меняет.
+    await expect(page.getByTestId('save')).not.toHaveClass(/primary/);
+    await page.screenshot({ path: join(shots, '35-bulk.png') });
+
+    await page.getByTestId('bulk-apply').click();
+    await expect(page.getByTestId('save')).toHaveClass(/primary/);
+    // После применения при тех же условиях — 1000 → 2000 (данные уже новые).
+    await expect(katana).toHaveAttribute('data-before', '1000');
+
+    // Одна отмена — вся пачка назад.
+    await page.getByTestId('undo').click();
+    await expect(katana).toHaveAttribute('data-before', '500');
+    await page.getByTestId('redo').click();
+    await expect(katana).toHaveAttribute('data-before', '1000');
+
+    // Неверный regex — понятная ошибка, кнопка выключена.
+    await page.getByTestId('bulk-op').selectOption('replace');
+    await page.getByTestId('bulk-field').fill('name');
+    await page.getByTestId('bulk-regex').check();
+    await page.getByTestId('bulk-find').fill('(');
+    await expect(page.getByTestId('bulk-error')).toBeVisible();
+    await expect(page.getByTestId('bulk-apply')).toBeDisabled();
+
+    const recs = await saveAndValidate(app, page, join(dir, 'Bulk.mod'));
+    expect(recs).toHaveLength(rows);
+    const k = recs.find((r) => r.stringId === KATANA)!;
+    expect([...k.ints]).toEqual([['value', 1000]]);
+  } finally {
+    await closeApp(app);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

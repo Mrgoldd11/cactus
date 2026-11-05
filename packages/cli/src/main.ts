@@ -47,6 +47,7 @@ import {
 import { loadModLayers, loadTranslation, loadWorld, readDataFileSync, readModsCfg } from '@kenshi-editor/core/node';
 import { basename } from 'node:path';
 import { runBuild } from './build.ts';
+import { runBulk } from './bulk.ts';
 import { modsChange, modsCopy, modsList } from './mods.ts';
 import { runStrings } from './strings.ts';
 import { UsageError, Workspace } from './workspace.ts';
@@ -84,6 +85,9 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
   diff <a.mod> <b.mod>    разница двух файлов
   validate                битые ссылки, поля вне схемы, не тот вид; код выхода 1 при ошибках
   schema [ТИП]            типы записей / поля типа с описаниями из fcs.def  --enum ИМЯ
+  bulk <ТИП> [текст]      массовая правка записей типа (текст — подстрока имени или id), условия --field, --mod-only
+      --set|--mul|--add ПОЛЕ=ЗНАЧ  или  --replace ПОЛЕ --find ТЕКСТ --with ТЕКСТ [--regex] [--case] (ПОЛЕ name — имя записи)
+      по умолчанию только предпросмотр «было → станет»; --apply — записать в --out или в --mod (одна правка)
   build <скрипт.ts|план.json> --out <файл.mod> [--name Имя.mod] [--mod исходный] [-- аргументы]
   mods [list]             установленные моды: порядок mods.cfg, откуда (mods/мастерская)  --full  --json
   mods move <мод>         переставить в mods.cfg:  --top (раньше всех) | --bottom (побеждает) | --after X | --before X
@@ -141,6 +145,15 @@ const OPTIONS = {
   before: { type: 'string' },
   import: { type: 'string' },
   todo: { type: 'boolean' },
+  set: { type: 'string' },
+  mul: { type: 'string' },
+  add: { type: 'string' },
+  replace: { type: 'string' },
+  find: { type: 'string' },
+  with: { type: 'string' },
+  regex: { type: 'boolean' },
+  case: { type: 'boolean' },
+  apply: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 } as const;
 
@@ -483,6 +496,39 @@ const COMMANDS: Record<string, Handler> = {
       force: v.force ?? false,
       json: v.json ?? false,
     });
+  },
+
+  bulk(c) {
+    const v = c.values;
+    const type = v.type ?? c.arg(0, '<ТИП>');
+    const text = v.type !== undefined ? c.args[0] : c.args[1];
+    const limit = int(v.limit, 'limit', 50);
+    return runBulk(
+      c.ws,
+      c.ctx(),
+      {
+        type,
+        ...(text !== undefined && text !== '' ? { text } : {}),
+        fields: (v.field ?? []).map(parseFieldFilter),
+        modOnly: v['mod-only'] ?? false,
+        ...(v.set !== undefined ? { set: v.set } : {}),
+        ...(v.mul !== undefined ? { mul: v.mul } : {}),
+        ...(v.add !== undefined ? { add: v.add } : {}),
+        ...(v.replace !== undefined ? { replace: v.replace } : {}),
+        ...(v.find !== undefined ? { find: v.find } : {}),
+        ...(v.with !== undefined ? { with: v.with } : {}),
+        regex: v.regex ?? false,
+        caseSensitive: v.case ?? false,
+        apply: v.apply ?? false,
+        ...(v.mod !== undefined ? { mod: v.mod } : {}),
+        ...(v.out !== undefined ? { out: v.out } : {}),
+        force: v.force ?? false,
+      },
+      limit === 0 ? Infinity : limit,
+      (l) => {
+        c.io.out(l);
+      },
+    );
   },
 
   async build(c) {

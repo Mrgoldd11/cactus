@@ -5,7 +5,10 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
+  applyBulk,
   applyOps,
+  formatBulkPreview,
+  previewBulk,
   buildDialogueTree,
   findTypeSchema,
   formatChangeset,
@@ -167,6 +170,7 @@ export function createServer(session: Session): McpServer {
         'Правки (edit) — пачкой операций, одна отмена на пачку; save пишет только изменения. В папку игры save пишет только с force: true.',
         'Схема типов и полей с описаниями из fcs.def — инструмент schema и ресурсы kenshi://schema/…',
         'Диалоги: tree — дерево, talk — какой диалог выберет игра у персонажа, play — разговор по шагам с ответами игрока; правки графа — операции edit addLine, insertLine, link, unlink, setText, duplicateLine, deleteLines, addCondition, addEffect.',
+        'Массовые правки — bulk: сначала предпросмотр «было → станет», применяет только с apply: true.',
         'history — шаги понятными словами; undo/redo с to — отмена или повтор до шага.',
         'Если открыт Kenshi Mod Editor — connect_editor: дальше всё читается из окна редактора, а edit отправляет правки в окно набором изменений; пользователь их принимает или откатывает (editor_changes — их состояние). save и undo в этом режиме делает пользователь.',
       ].join('\n'),
@@ -439,6 +443,52 @@ export function createServer(session: Session): McpServer {
         if (cs && ctx.history().undo.length > before) lines.push(title(ctx, cs), ...formatChangeset(ctx, cs).slice(1));
         else lines.push('ничего не изменилось');
         return lines;
+      }),
+  );
+
+  server.registerTool(
+    'bulk',
+    {
+      title: 'Массовая правка',
+      description: [
+        'Записи одного типа по условиям → одна операция над полем: set (задать), mul (умножить), add (прибавить), replace (заменить текст; field "name" — имя записи).',
+        'По умолчанию только предпросмотр «было → станет», ничего не меняет. apply: true — применить одной правкой (одна отмена);',
+        'если подключён редактор — отправляет набор изменений в окно, пользователь принимает или откатывает. Сохранение — отдельно (save).',
+      ].join('\n'),
+      inputSchema: {
+        type: z.union([z.string(), z.number()]).describe('Тип записей: имя (WEAPON) или номер'),
+        text: z.string().optional().describe('Подстрока имени (англ. или рус.) или id'),
+        fields: z.array(z.string()).optional().describe('Условия: ключ=знач, ключ~подстрока, != < > <= >=, ключ? — поле есть'),
+        mod_only: z.boolean().optional().describe('Только записи, которые уже есть в моде'),
+        op: z.enum(['set', 'mul', 'add', 'replace']),
+        field: z.string().describe('Ключ поля (для replace можно name)'),
+        value: z.string().describe('set — значение (enum — имя или число); mul/add — число; replace — на что заменить'),
+        find: z.string().optional().describe('replace: что искать'),
+        regex: z.boolean().optional().describe('replace: find — регулярное выражение ($1 — группы)'),
+        case_sensitive: z.boolean().optional(),
+        apply: z.boolean().optional().describe('true — применить; без него только предпросмотр'),
+        limit: limit(50),
+      },
+      annotations: { ...EDIT, title: 'Массовая правка' },
+    },
+    (a) =>
+      run(async () => {
+        const ctx = session.ctx();
+        const p = previewBulk(
+          ctx,
+          compact({ type: a.type, text: a.text === '' ? undefined : a.text, fields: a.fields?.map(parseFieldFilter), modOnly: a.mod_only }),
+          compact({ kind: a.op, field: a.field, value: a.value, find: a.find, regex: a.regex, caseSensitive: a.case_sensitive }),
+        );
+        const lines = formatBulkPreview(p, a.limit === 0 ? Infinity : (a.limit ?? 50));
+        if (!a.apply) return [...lines, 'предпросмотр: ничего не изменено (apply: true — применить)'];
+        if (p.ops.length === 0) return [...lines, 'менять нечего'];
+        if (session.editor) {
+          const r = await session.propose(p.label, p.ops);
+          return [...lines, `в редакторе: набор изменений #${r.changeset.id} «${r.changeset.title}» — ждёт решения пользователя (принять / откатить)`];
+        }
+        applyBulk(ctx, p);
+        const cs = ctx.history().undo.at(-1);
+        return [...lines, cs ? `применено: ${title(ctx, cs)}` : 'применено'];
       }),
   );
 

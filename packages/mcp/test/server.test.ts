@@ -152,6 +152,22 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect((await call('history')).text).toContain('всё сохранено');
   });
 
+  it('bulk: предпросмотр ничего не меняет, apply — одна правка', async () => {
+    const pre = await call('bulk', { type: 'ITEM', op: 'mul', field: 'weight', value: '2' });
+    expect(pre.isError, pre.text).toBe(false);
+    expect(pre.text).toContain('X  «Sword»  weight: 2 → 4');
+    expect(pre.text).toContain('предпросмотр: ничего не изменено');
+    expect((await call('history')).text).not.toContain('#1');
+    const bad = await call('bulk', { type: 'ITEM', op: 'replace', field: 'name', value: 'x', find: '(', regex: true });
+    expect(bad.isError).toBe(true);
+    const ok = await call('bulk', { type: 'ITEM', fields: ['weight>1'], op: 'replace', field: 'name', find: 'sword', value: 'Sabre', apply: true });
+    expect(ok.isError, ok.text).toBe(false);
+    expect(ok.text).toContain('X  «Sword»  name: Sword → Sabre');
+    expect(ok.text).toContain('применено: #1');
+    expect((await call('undo')).text).toContain('отменено:');
+    expect((await call('find', { text: 'sabre' })).text).toBe('ничего не найдено');
+  });
+
   it('новый мод: save требует путь; force пишет в mods/', async () => {
     await call('open_mod', { name: 'Fresh.mod' });
     await call('edit', { ops: [{ op: 'rename', id: 'Y', name: 'Big shield' }] });

@@ -18,3 +18,4 @@ export * from './conflicts.ts';
 export * from './translate.ts';
 export * from './factions.ts';
 export * from './compare.ts';
+export * from './bulk.ts';
