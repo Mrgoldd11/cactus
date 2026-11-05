@@ -14,6 +14,7 @@ import {
   parsePo,
   readDataFile,
   withInferredFields,
+  WorldIndex,
   writeDataFile,
   type CategoryNode,
   type DataFile,
@@ -54,6 +55,8 @@ export class Project {
   private ids: string[] = [];
   private readonly listeners = new Set<() => void>();
   private typeCache: { version: number; map: Map<string, string[]> } | undefined;
+  private worldPromise: Promise<WorldIndex> | undefined;
+  private readonly icons = new Map<string, Promise<string | null>>();
 
   constructor(bundle: ProjectBundle, options: { mod?: DataFile; path?: string; carriedDirty?: boolean } = {}) {
     this.bundle = bundle;
@@ -161,6 +164,29 @@ export class Project {
     this.version++;
     window.kedit.setDirty(this.dirty, this.title);
     for (const fn of this.listeners) fn();
+  }
+
+  /**
+   * Мир (города, здания, зоны) ванили, зависимостей и мода — для «Где в игре». Читается при
+   * первом запросе (десятки мегабайт), затем из кеша.
+   */
+  world(): Promise<WorldIndex> {
+    this.worldPromise ??= (async () => {
+      const modPaths = [...this.bundle.dependencies.map((d) => d.path), ...(this.path !== undefined ? [this.path] : [])];
+      const files = await window.kedit.loadWorld({ game: this.bundle.game, modPaths });
+      return new WorldIndex(files.map((f) => ({ layer: f.layer, path: f.path, file: readDataFile(f.bytes) })));
+    })();
+    return this.worldPromise;
+  }
+
+  /** Иконка предмета по полю `icon` как data URL (или null). */
+  icon(iconPath: string): Promise<string | null> {
+    let p = this.icons.get(iconPath);
+    if (!p) {
+      p = window.kedit.readIcon(this.bundle.game, iconPath);
+      this.icons.set(iconPath, p);
+    }
+    return p;
   }
 
   /** Сохранить: в известный путь или с выбором пути (`saveAs`, новый мод). */

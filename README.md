@@ -111,6 +111,9 @@ cd node_modules/.pnpm/electron@*/node_modules/electron && node install.js
   для полей, которых нет в `fcs.def`, столбец «Ваниль» и сброс поля к нижнему слою;
 - ссылки: добавление через поиск записи нужного типа, значения v0–v2 с подписями из схемы,
   переход к цели, вкладка «Кто ссылается», вкладка «Изменения» — отличия от ванили по полям;
+- вкладка «Где в игре»: цепочка обратных ссылок от записи до места в мире (катана ← список
+  торговца оружием ← отряд ← города Груз и Хэн) с координатами из файлов уровня и иконкой
+  предмета, если она есть; каждый шаг пути открывается щелчком;
 - отмена и повтор (Ctrl+Z / Ctrl+Y), сохранение (Ctrl+S, Ctrl+Shift+S — «как»), назад и вперёд
   по истории переходов (Alt+← / Alt+→), поиск (Ctrl+F), проверка мода, язык EN/RU.
 
@@ -148,6 +151,8 @@ show <id|имя>...        поля и ссылки (с именами целе�
 tree <id|имя>           дерево диалога (dialogs/lines)  --full  --depth N  --max-nodes N
 mod <файл.mod> [текст]  записи файла мода со статусом  --brief
 refs <id|имя>           ссылки из записи и на неё  --from  --to
+where <id|имя>          где запись в игре: цепочка обратных ссылок до города и координаты
+                        из файлов уровня (ваниль и leveldata модов)  --tree  --limit N
 diff                    что мод (--mod) меняет относительно нижних слоёв; итог «новых N, изменённых M»
     --status added,changed,removed  только записи с такими изменениями
 diff <a.mod> <b.mod>    разница двух файлов
@@ -204,7 +209,7 @@ node packages/cli/bin/kedit.js build packages/cli/examples/skeleton-cannibal-fri
 
 stdio-сервер `kenshi-mod-editor` на `@modelcontextprotocol/sdk`:
 
-- инструменты: `open_mod`, `find`, `show`, `tree`, `refs`, `diff`, `validate`, `schema` —
+- инструменты: `open_mod`, `find`, `show`, `tree`, `refs`, `where`, `diff`, `validate`, `schema` —
   как в CLI; `edit` (пачка операций, как в JSON-плане, одним набором изменений, `$псевдонимы`
   для новых записей), `undo`, `redo`, `history`, `save`;
 - ресурсы: `kenshi://schema/types`, `kenshi://schema/type/{ТИП}` (поля с описаниями из
@@ -261,5 +266,8 @@ console.log(schema.types.get('WEAPON')?.fields.get('blunt damage multiplier')?.d
   разность записей), `ops.ts` (операции JSON для CLI/MCP), `search.ts`, `validate.ts`,
   `diff.ts`, `present.ts`, `dialogue.ts`, `schema-view.ts`, `enums.ts` (имена значений enum),
   `stable-ids.ts` (постоянные id по имени).
+- `src/world/` — мир из файлов уровня (`.zone`, `.level`): `world.ts` (`WorldIndex`: города,
+  здания с отрядами, экземпляры записей в зонах с наложением слоёв), `where.ts`
+  (`whereInGame` — цепочка обратных ссылок до места в мире, `formatWhere`).
 - `src/node/` — то, что требует Node: пути к игре, загрузка файлов, `loadModContext`,
-  `saveModContext`.
+  `saveModContext`, `loadWorld`.

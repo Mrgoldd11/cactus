@@ -74,6 +74,17 @@ describe('kedit: поиск и просмотр', () => {
     expect(to.out).toBe('← Bandit [A] vendors  3 0 0');
     expect((await run('refs', 'A', '--from')).out).toBe('→ vendors: Sword [X]  1 0 0');
   });
+
+  it('where: цепочка обратных ссылок; без папок уровня — без координат', async () => {
+    const r = await run('where', 'Sword');
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('ITEM «Sword» (Меч) [X]');
+    // В фикстуре предмет прямо в `vendors` персонажа (в игре там VENDOR_LIST) — просто связь.
+    expect(r.out).toContain('Связано с «Разбойник» — место в мире не найдено');
+    expect(r.out).toContain('путь: ← CHARACTER «Bandit» (Разбойник) [A] (vendors)');
+    const j = JSON.parse((await run('where', 'X', '--json')).out) as { facts: { role: string; holder?: { id: string } }[] };
+    expect(j.facts[0]).toMatchObject({ role: 'related', holder: { id: 'A' } });
+  });
 });
 
 describe('kedit: разница, проверка, схема', () => {

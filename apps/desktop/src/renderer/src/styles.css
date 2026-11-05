@@ -738,3 +738,65 @@ tr.fs-removed td:first-child {
 .issues li.warning button {
   color: var(--changed);
 }
+
+/* где в игре */
+.where {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.where-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.where-icon {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.where-fact {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  background: var(--bg2);
+}
+.where-summary {
+  line-height: 1.6;
+}
+.where-summary button.link.strong {
+  font-weight: 600;
+}
+.where-line {
+  margin-top: 2px;
+  line-height: 1.6;
+}
+.where-step {
+  margin-right: 6px;
+  white-space: nowrap;
+}
+.where-step .badge.tiny {
+  margin-left: 0;
+}
+.where-places {
+  margin-top: 4px;
+}
+.where-table td {
+  vertical-align: top;
+}
+.badge.role-sold {
+  border-color: var(--new);
+}
+.badge.role-carried,
+.badge.role-loot {
+  border-color: var(--changed);
+}
+.small {
+  font-size: 12px;
+}
+.where-table .where-step {
+  white-space: normal;
+}

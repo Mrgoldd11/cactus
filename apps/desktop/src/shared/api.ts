@@ -75,6 +75,20 @@ export interface Settings {
   recent: string[];
 }
 
+export interface WorldFileBytes {
+  /** Слой (имя .mod), из которого файл. */
+  layer: string;
+  /** Имя файла в папке `leveldata` (`zone.42.22.zone`). */
+  path: string;
+  bytes: Uint8Array;
+}
+
+export interface WorldRequest {
+  game: GameInstallInfo;
+  /** Файлы .mod (зависимости по порядку, затем сам мод), чьи папки `leveldata` наложить. */
+  modPaths: string[];
+}
+
 export interface KeditApi {
   detectGames(): Promise<GameInstallInfo[]>;
   /** Диалог выбора папки игры; null — отменено или в папке нет игры. */
@@ -87,6 +101,10 @@ export interface KeditApi {
   chooseSavePath(defaultPath: string): Promise<string | null>;
   /** Записать мод. В папку игры/мастерской — только после подтверждения в диалоге main. */
   saveMod(req: SaveRequest): Promise<SaveResult>;
+  /** Байты файлов уровня (города, здания, зоны) ванили и модов — для «Где в игре». */
+  loadWorld(req: WorldRequest): Promise<WorldFileBytes[]>;
+  /** Иконка предмета (поле `icon`, путь относительно папки игры) как data URL; null — нет файла. */
+  readIcon(game: GameInstallInfo, iconPath: string): Promise<string | null>;
   getSettings(): Promise<Settings>;
   setSettings(patch: Partial<Settings>): Promise<Settings>;
   /** Есть ли несохранённые изменения (main спросит при закрытии окна). */
@@ -101,6 +119,8 @@ export const IPC = {
   openProject: 'kedit:open-project',
   chooseSavePath: 'kedit:choose-save-path',
   saveMod: 'kedit:save-mod',
+  loadWorld: 'kedit:load-world',
+  readIcon: 'kedit:read-icon',
   getSettings: 'kedit:get-settings',
   setSettings: 'kedit:set-settings',
   setDirty: 'kedit:set-dirty',

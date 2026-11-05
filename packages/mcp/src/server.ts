@@ -30,6 +30,8 @@ import {
   validateMod,
   type GameRecord,
   type ModContext,
+  formatWhere,
+  whereInGame,
 } from '@kenshi-editor/core';
 import { SessionError, type Session } from './session.ts';
 
@@ -263,6 +265,29 @@ export function createServer(session: Session): McpServer {
           for (const e of ctx.referencesTo(id)) lines.push(`← ${refLabel(ctx, e.source)} ${e.category}${e.ref ? `  ${e.ref.v0} ${e.ref.v1} ${e.ref.v2}` : ''}`);
         }
         return paged(lines, a.offset ?? 0, a.limit ?? 50, (l) => [l]);
+      }),
+  );
+
+  server.registerTool(
+    'where',
+    {
+      title: 'Где в игре',
+      description:
+        'Где запись встречается в игре: цепочка обратных ссылок (предмет ← список торговца ← отряд ← город) до городов, зданий, фракций и биомов, с координатами из файлов уровня. Каждый шаг пути — с категорией ссылки. Итог вида «Продаётся у «Оружейник» (отряд …): Груз, Хэн». `tree` — ещё и дерево обратных ссылок.',
+      inputSchema: {
+        id: z.string().describe('Id или имя записи'),
+        tree: z.boolean().optional().describe('Показать и дерево обратных ссылок'),
+        limit: limit(20),
+      },
+      annotations: { ...READ, title: 'Где в игре' },
+    },
+    (a) =>
+      guarded(() => {
+        const ctx = session.ctx();
+        const id = resolveId(ctx, a.id);
+        const res = whereInGame(ctx, id, { world: session.world() });
+        const max = a.limit ?? 20;
+        return formatWhere(res, { tree: a.tree ?? false, maxFacts: max === 0 ? Infinity : max }).split('\n');
       }),
   );
 

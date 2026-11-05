@@ -1,6 +1,6 @@
 /**
  * Редактор записи: заголовок (имя, id, тип, статус, слои) и вкладки — поля по схеме fcs.def,
- * ссылки с выбором записи, обратные ссылки, разница с ванилью по полям.
+ * ссылки с выбором записи, обратные ссылки, «где в игре», разница с ванилью по полям.
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import {
@@ -31,6 +31,7 @@ import { tryEdit } from '../hooks.ts';
 import type { Project } from '../project.ts';
 import { CommitInput } from './widgets.tsx';
 import { RecordPicker } from './RecordPicker.tsx';
+import { WhereTab } from './WhereTab.tsx';
 
 interface Props {
   project: Project;
@@ -40,7 +41,7 @@ interface Props {
   onReport: (err: string | undefined) => void;
 }
 
-type Tab = 'fields' | 'refs' | 'back' | 'diff';
+type Tab = 'fields' | 'refs' | 'back' | 'where' | 'diff';
 
 export function RecordEditor({ project, version, sid, onGo, onReport }: Props): ReactNode {
   const t = useT();
@@ -119,12 +120,14 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
         <TabButton tab="fields" cur={tab} set={setTab} label={t.tabFields} />
         <TabButton tab="refs" cur={tab} set={setTab} label={`${t.tabRefs} (${refCount})`} />
         <TabButton tab="back" cur={tab} set={setTab} label={`${t.tabBackRefs} (${backRefs.length})`} />
+        <TabButton tab="where" cur={tab} set={setTab} label={t.tabWhere} />
         <TabButton tab="diff" cur={tab} set={setTab} label={t.tabDiff} marked={status !== 'base'} />
       </div>
       <div className="tab-body">
         {tab === 'fields' && <FieldsTab ctx={ctx} rec={rec} sid={sid} version={version} disabled={deleted} edit={edit} />}
         {tab === 'refs' && <RefsTab project={project} sid={sid} groups={groups} disabled={deleted} edit={edit} onGo={onGo} />}
         {tab === 'back' && <BackRefsTab project={project} sid={sid} entries={backRefs} onGo={onGo} />}
+        {tab === 'where' && <WhereTab project={project} sid={sid} version={version} onGo={onGo} />}
         {tab === 'diff' && <DiffTab ctx={ctx} sid={sid} version={version} onGo={onGo} />}
       </div>
     </div>

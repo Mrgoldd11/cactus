@@ -14,6 +14,8 @@ import {
   formatRecord,
   formatRecordDiff,
   formatDialogueTree,
+  formatWhere,
+  whereInGame,
   formatTypeSchema,
   listTypes,
   modRecordDiff,
@@ -36,7 +38,7 @@ import {
   type RecordDiff,
   type RecordStatus,
 } from '@kenshi-editor/core';
-import { readDataFileSync } from '@kenshi-editor/core/node';
+import { loadWorld, readDataFileSync } from '@kenshi-editor/core/node';
 import { runBuild } from './build.ts';
 import { UsageError, Workspace } from './workspace.ts';
 
@@ -64,6 +66,8 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
   tree <id|имя>           дерево диалога (dialogs/lines)  --full  --depth N  --max-nodes N
   mod <файл.mod> [текст]  записи файла мода со статусом; текст — подстрока где угодно  --brief
   refs <id|имя>           ссылки из записи и на неё  --from  --to
+  where <id|имя>          где запись в игре: цепочка обратных ссылок до городов/зданий с координатами
+      --tree  дерево обратных ссылок целиком;  --limit N — фактов (по умолчанию 20)
   diff                    что мод (--mod) меняет относительно нижних слоёв; итог «новых N, изменённых M»
       --status added,changed,removed  только записи с такими изменениями
   diff <a.mod> <b.mod>    разница двух файлов
@@ -94,6 +98,7 @@ const OPTIONS = {
   layers: { type: 'boolean' },
   'max-refs': { type: 'string' },
   full: { type: 'boolean' },
+  tree: { type: 'boolean' },
   depth: { type: 'string' },
   'max-nodes': { type: 'string' },
   brief: { type: 'boolean' },
@@ -127,6 +132,8 @@ class Command {
   readonly values: Values;
   readonly args: string[];
   private ctxCache?: ModContext;
+  /** Файлы .mod, наложенные на ваниль (зависимости, затем мод) — для папок `leveldata`. */
+  modFiles: string[] = [];
 
   constructor(io: Io, values: Values, args: string[]) {
     this.io = io;
@@ -148,10 +155,12 @@ class Command {
   ctx(): ModContext {
     if (this.ctxCache) return this.ctxCache;
     const deps = this.deps;
-    const { ctx, missingDependencies } = this.ws.open({
-      ...(this.values.mod !== undefined ? { mod: this.values.mod } : {}),
+    const mod = this.values.mod !== undefined ? this.ws.modPath(this.values.mod) : undefined;
+    const { ctx, missingDependencies, dependencyPaths } = this.ws.open({
+      ...(mod !== undefined ? { mod } : {}),
       ...(deps ? { dependencies: deps } : {}),
     });
+    this.modFiles = [...dependencyPaths, ...(mod !== undefined ? [mod] : [])];
     if (missingDependencies.length) this.io.err(`нет зависимостей: ${missingDependencies.join(', ')}`);
     return (this.ctxCache = ctx);
   }
@@ -280,6 +289,21 @@ const COMMANDS: Record<string, Handler> = {
     return 0;
   },
 
+
+  where(c) {
+    const ctx = c.ctx();
+    const sid = c.resolve(ctx, c.arg(0, '<id>'));
+    const { world, errors } = loadWorld(c.ws.paths, { modFiles: c.modFiles });
+    for (const e of errors) c.io.err(`уровень не прочитан: ${e.path}: ${e.message}`);
+    const res = whereInGame(ctx, sid, { world });
+    if (c.values.json) {
+      c.io.out(JSON.stringify(res, null, 1));
+      return 0;
+    }
+    const limit = int(c.values.limit, 'limit', 20);
+    c.io.out(formatWhere(res, { tree: c.values.tree ?? false, maxFacts: limit === 0 ? Infinity : limit }));
+    return 0;
+  },
   diff(c) {
     let ctx: ModContext;
     let diffs: RecordDiff[];

@@ -4,7 +4,7 @@
  */
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import type { GameSchema, Layer, ModContext, PoFile } from '@kenshi-editor/core';
+import type { GameSchema, Layer, ModContext, PoFile, WorldIndex } from '@kenshi-editor/core';
 import {
   gamedataPoPath,
   hasGame,
@@ -13,6 +13,7 @@ import {
   loadGameSchema,
   loadModContext,
   loadVanillaLayers,
+  loadWorld,
   resolveModPath,
   saveModContext,
   type GamePaths,
@@ -44,6 +45,7 @@ export class Session {
   private schemaCache?: GameSchema;
   private poCache?: PoFile | null;
   private current?: OpenResult;
+  private worldCache?: { key: string; world: WorldIndex };
 
   constructor(paths: GamePaths, cwd: string) {
     this.paths = paths;
@@ -92,6 +94,18 @@ export class Session {
       ...(this.po() ? { po: this.po()! } : { po: false }),
     });
     return { ...loaded, ...(path !== undefined ? { path } : {}) };
+  }
+
+  /**
+   * Мир (города, здания, экземпляры в зонах) ванили и папок `leveldata` зависимостей и
+   * открытого мода. Читается один раз на набор модов (~1–2 с).
+   */
+  world(): WorldIndex {
+    const cur = this.current;
+    const modFiles = [...(cur?.dependencyPaths ?? []), ...(cur?.path !== undefined ? [cur.path] : [])];
+    const key = modFiles.join('\n');
+    if (this.worldCache?.key !== key) this.worldCache = { key, world: loadWorld(this.paths, { modFiles }).world };
+    return this.worldCache.world;
   }
 
   /** Записать мод. Без пути — туда, откуда открыт. В папку игры — только с `force`. */

@@ -235,3 +235,40 @@ test('сценарий: копия катаны, имя и урон, в ассо
     await app.close();
   }
 });
+
+test('где в игре: катана → торговец оружием → Груз и Хэн; иконка предмета', async () => {
+  const { app, page } = await launch();
+  try {
+    await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('open-vanilla').click();
+    await waitEditor(page);
+    await selectRecord(page, 'katana', KATANA);
+    await page.getByTestId('tab-where').click();
+    const where = page.getByTestId('where');
+    await expect(where).toBeVisible();
+    // Мир читается при первом открытии вкладки.
+    await expect(where).toContainText('Мир: городов', { timeout: 60_000 });
+    const fact = where.locator('[data-testid="where-fact"][data-holder="56131-rebirth.mod"]');
+    await expect(fact).toContainText('Продаётся у');
+    await expect(fact).toContainText('Груз');
+    await expect(fact).toContainText('Хэн');
+    await expect(fact).toContainText('(weapons)');
+    await expect(fact).toContainText('(vendors)');
+    await expect(fact.locator('[data-place="1078-gamedata.base"]')).toContainText('68773');
+    await expect(fact.locator('[data-place="1074-gamedata.base"]')).toContainText('зона 42.22');
+    await fact.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: join(shots, '10-where-katana.png') });
+
+    // Щелчок по шагу пути открывает запись.
+    await fact.getByRole('button', { name: 'weapon vendor UC big city' }).click();
+    await expect(page.getByTestId('record-sid')).toHaveText('52318-rebirth.mod');
+
+    await selectRecord(page, 'steel bars', '579-gamedata.base');
+    await page.getByTestId('tab-where').click();
+    await expect(page.getByTestId('where-icon')).toBeVisible();
+    await expect(page.getByTestId('where-fact').first()).toBeVisible();
+    await page.screenshot({ path: join(shots, '11-where-icon.png') });
+  } finally {
+    await app.close();
+  }
+});

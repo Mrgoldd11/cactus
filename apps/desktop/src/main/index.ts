@@ -8,8 +8,19 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
-import { IPC, type GameInstallInfo, type ProjectRequest, type SaveRequest, type SaveResult, type Settings } from '../shared/api.ts';
-import { detectGames, gameFromDir, listMods, loadProject, modInstallPath, needsConfirmation, saveDialogDefaultPath, writeMod } from './service.ts';
+import { IPC, type GameInstallInfo, type ProjectRequest, type SaveRequest, type SaveResult, type Settings, type WorldRequest } from '../shared/api.ts';
+import {
+  detectGames,
+  gameFromDir,
+  listMods,
+  loadProject,
+  loadWorldBytes,
+  modInstallPath,
+  needsConfirmation,
+  readIconDataUrl,
+  saveDialogDefaultPath,
+  writeMod,
+} from './service.ts';
 
 // Отдельная папка данных (e2e запускает приложение с чистыми настройками).
 if (process.env['KEDIT_USER_DATA']) app.setPath('userData', process.env['KEDIT_USER_DATA']);
@@ -101,6 +112,8 @@ function registerIpc(): void {
     return r.canceled ? null : (r.filePath || null);
   });
   ipcMain.handle(IPC.saveMod, saveMod);
+  ipcMain.handle(IPC.loadWorld, (_e, req: WorldRequest) => loadWorldBytes(req));
+  ipcMain.handle(IPC.readIcon, (_e, game: GameInstallInfo, iconPath: string) => readIconDataUrl(game, iconPath));
   ipcMain.handle(IPC.getSettings, () => settings);
   ipcMain.handle(IPC.setSettings, (_e, patch: Partial<Settings>) => {
     settings = { ...settings, ...patch };

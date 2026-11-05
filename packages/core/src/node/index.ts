@@ -7,6 +7,7 @@ export * from './paths.ts';
 export * from './schema.ts';
 export * from './context.ts';
 export * from './detect.ts';
+export * from './world.ts';
 
 export function readDataFileSync(path: string, options?: ReadOptions): DataFile {
   return readDataFile(readFileSync(path), options);

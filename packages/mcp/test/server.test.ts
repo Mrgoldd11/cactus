@@ -36,7 +36,7 @@ describe('kenshi-mcp: чтение', () => {
   it('список инструментов и ресурсов', async () => {
     const tools = (await client.listTools()).tools.map((t) => t.name);
     expect(tools).toEqual(
-      expect.arrayContaining(['open_mod', 'find', 'show', 'tree', 'refs', 'diff', 'validate', 'edit', 'undo', 'redo', 'history', 'save', 'schema']),
+      expect.arrayContaining(['open_mod', 'find', 'show', 'tree', 'refs', 'where', 'diff', 'validate', 'edit', 'undo', 'redo', 'history', 'save', 'schema']),
     );
     const res = await client.listResources();
     expect(res.resources.map((r) => r.uri)).toEqual(expect.arrayContaining(['kenshi://schema/types', 'kenshi://schema/type/CHARACTER']));
@@ -57,6 +57,7 @@ describe('kenshi-mcp: чтение', () => {
     expect(show.text).toContain('int money = 99');
     expect(show.text).toContain('→ Magic hat [1-My.mod]  3 0 0');
     expect((await call('refs', { id: '1-My.mod', direction: 'to' })).text).toBe('← Bandit [A] vendors  3 0 0');
+    expect((await call('where', { id: '1-My.mod' })).text).toContain('путь: ← CHARACTER «Bandit» (Разбойник) [A] (vendors)');
     expect((await call('tree', { id: 'D1' })).text).toContain('↻ DIALOGUE_LINE L1');
     const missing = await call('show', { id: 'nope' });
     expect(missing.isError).toBe(true);

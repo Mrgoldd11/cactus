@@ -3,7 +3,7 @@
  * что нужно окну для контекста, запись мода. Подтверждения и диалоги — в `index.ts`.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { decodeText, readModHeader, splitModList, VANILLA_FILES } from '@kenshi-editor/core';
 import {
   detectGameInstalls,
@@ -11,13 +11,15 @@ import {
   installedModFiles,
   isInGameFolders,
   isKenshiDir,
+  listWorldFiles,
   manualInstall,
   planModLoad,
   readModsCfg,
   SCHEMA_FILES,
   vanillaFilePaths,
+  worldDirs,
 } from '@kenshi-editor/core/node';
-import type { GameInstallInfo, ModEntry, NamedBytes, ProjectBundle, ProjectRequest } from '../shared/api.ts';
+import type { GameInstallInfo, ModEntry, NamedBytes, ProjectBundle, ProjectRequest, WorldFileBytes, WorldRequest } from '../shared/api.ts';
 
 export function detectGames(cwd?: string): GameInstallInfo[] {
   return detectGameInstalls(cwd).map((g) => ({ kenshi: g.kenshi, workshop: g.workshop, source: g.source }));
@@ -129,4 +131,25 @@ export function modInstallPath(games: readonly GameInstallInfo[], path: string):
 export function writeMod(path: string, bytes: Uint8Array): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, bytes);
+}
+
+/** Файлы уровня ванили и модов, сырыми байтами (разбирает окно). */
+export function loadWorldBytes(req: WorldRequest): WorldFileBytes[] {
+  return listWorldFiles(worldDirs(req.game, req.modPaths)).map((f) => ({ layer: f.layer, path: f.path, bytes: readFileSync(f.full) }));
+}
+
+const ICON_TYPES: Readonly<Record<string, string>> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
+
+/**
+ * Иконка по полю `icon` (`.\data\items\icons\katana.png`, относительно папки игры) как
+ * data URL. Только картинки внутри папки игры; иначе null.
+ */
+export function readIconDataUrl(game: GameInstallInfo, iconPath: string): string | null {
+  const mime = ICON_TYPES[extname(iconPath).toLowerCase()];
+  if (!mime) return null;
+  const full = resolve(game.kenshi, iconPath.replace(/\\/g, '/'));
+  const rel = relative(resolve(game.kenshi), full);
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return null;
+  if (!existsSync(full)) return null;
+  return `data:${mime};base64,${readFileSync(full).toString('base64')}`;
 }
