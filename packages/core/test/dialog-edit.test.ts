@@ -11,9 +11,12 @@ import {
   canMoveLine,
   conditionOf,
   decodeText,
+  deleteGraphItems,
   deleteLine,
   dialogueChecks,
   duplicateLine,
+  duplicateLines,
+  insertLineBetween,
   emptyRecord,
   encodeText,
   FileType,
@@ -205,6 +208,39 @@ describe('правка диалогов', () => {
     expect(ctx.status('L')).toBe('deleted');
     expect(targets(ctx, 'D')).toEqual([]);
     expect(ctx.get('C')).toBeDefined();
+  });
+
+  it('граф: вставить реплику между, удалить выделенное и копии — каждое одной отменой', () => {
+    const ctx = ctxOf();
+    // L → P2 (связь из игры) становится L → N → P2.
+    const n = insertLineBetween(ctx, 'L', 'P2', { speaker: 0, text: 'Wait' });
+    expect(targets(ctx, 'L')).toEqual(['P1', n]);
+    expect(targets(ctx, n)).toEqual(['P2']);
+    expect(removedLinks(ctx, 'L')).toEqual(['P2']);
+    ctx.undo();
+    expect(ctx.get(n)).toBeUndefined();
+    expect(targets(ctx, 'L')).toEqual(['P1', 'P2']);
+    expect(() => insertLineBetween(ctx, 'P2', 'L', { speaker: 0 })).toThrow(/нет/);
+
+    // Две новые реплики и связь петли — одна отмена; связи удаляемых реплик не мешают.
+    const a = addLine(ctx, 'P2', { speaker: 0, text: 'a' });
+    const c = addLine(ctx, a, { speaker: 1, text: 'c' });
+    deleteGraphItems(ctx, { lines: [a, c], links: [{ parent: 'P1', child: 'L' }, { parent: 'P2', child: a }] });
+    expect(ctx.get(a)).toBeUndefined();
+    expect(ctx.get(c)).toBeUndefined();
+    expect(targets(ctx, 'P1')).toEqual([]);
+    expect(targets(ctx, 'P2')).toEqual([]);
+    ctx.undo();
+    expect(targets(ctx, 'P2')).toEqual([a]);
+    expect(targets(ctx, a)).toEqual([c]);
+    expect(targets(ctx, 'P1')).toEqual(['L']);
+    expect(() => { deleteGraphItems(ctx, { lines: ['D'] }); }).toThrow(/не реплика/);
+
+    const [x, y] = duplicateLines(ctx, [{ sid: 'P1', parent: 'L' }, { sid: 'P2', parent: 'L' }]);
+    expect(targets(ctx, 'L')).toEqual(['P1', 'P2', x, y]);
+    ctx.undo();
+    expect(targets(ctx, 'L')).toEqual(['P1', 'P2']);
+    expect(ctx.get(x!)).toBeUndefined();
   });
 
   it('тексты: у ванильной реплики лишние становятся пустыми, у новой — убираются', () => {

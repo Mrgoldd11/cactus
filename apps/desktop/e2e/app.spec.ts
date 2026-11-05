@@ -703,3 +703,144 @@ test('ванильный диалог: новый ответ, связь пер�
     await closeApp(app);
   }
 });
+
+test('граф диалога: меню ПКМ, текст прямо в узле, F2, Ctrl+D, Delete, вставка между, отмена/повтор, сохранение', async () => {
+  const { app, page } = await launch();
+  try {
+    await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1600, 1000); });
+    await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('open-vanilla').click();
+    await waitEditor(page);
+    await page.getByTestId('window-menu').click();
+    await page.getByTestId('window-preset-dialogue').click();
+    await page.getByTestId('search').fill('61857-Dialogue.mod');
+    await page.getByTestId('record-list').locator('[data-sid="61857-Dialogue.mod"]').click();
+    const graph = page.getByTestId('dialogue-graph');
+    const stats = graph.getByTestId('dg-stats');
+    await expect(stats).toContainText('узлов 5', { timeout: 60_000 });
+    await expect(graph.getByTestId('dg-hint')).toContainText('ПКМ — меню');
+    const node = (sid: string) => graph.locator(`[data-testid="dg-node"][data-id="${sid}"]`);
+    const edge = (from: string, to: string) => graph.locator(`[data-testid^="rf__edge-${from}>${to}#"]`);
+    const menu = graph.getByTestId('dg-menu');
+    const edit = graph.getByTestId('dg-edit');
+    const editingId = async (): Promise<string> => (await graph.locator('.dg-node.dg-editing').getAttribute('data-id'))!;
+
+    // ПКМ по реплике — меню; «Добавить ответ игрока» — новый узел сразу с полем текста.
+    await node('61861-Dialogue.mod').locator('.dg-text').first().click({ button: 'right' });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByTestId('dg-menu-delete')).toBeVisible();
+    await expect(menu.getByTestId('dg-menu-edit')).toBeVisible();
+    await page.screenshot({ path: join(shots, '21-graph-menu.png') });
+    await menu.getByTestId('dg-menu-add-answer').click();
+    await expect(menu).toHaveCount(0);
+    await expect(stats).toContainText('узлов 6');
+    await expect(edit).toBeFocused();
+    const answer = await editingId();
+    expect(answer).toMatch(/^\d+-/);
+    await page.keyboard.type('Где ставить базу?');
+    await page.keyboard.press('Enter');
+    await expect(edit).toHaveCount(0);
+    await expect(node(answer)).toContainText('Где ставить базу?');
+    await expect(node(answer)).toHaveAttribute('data-status', 'new');
+
+    // Ctrl+Z снимает текст, Ctrl+Y возвращает.
+    await page.keyboard.press('Control+z');
+    await expect(node(answer)).not.toContainText('Где ставить базу?');
+    await page.keyboard.press('Control+y');
+    await expect(node(answer)).toContainText('Где ставить базу?');
+
+    // Двойной клик — правка; Esc — отмена без изменений.
+    await node(answer).locator('.dg-text').first().dblclick();
+    await expect(edit).toBeFocused();
+    await edit.fill('Не то');
+    await edit.press('Escape');
+    await expect(edit).toHaveCount(0);
+    await expect(node(answer)).toContainText('Где ставить базу?');
+
+    // F2 — правка; Enter сохраняет.
+    await node(answer).locator('.dg-text').first().click();
+    await page.keyboard.press('F2');
+    await expect(edit).toBeFocused();
+    await edit.fill('Повтори, где ставить базу?');
+    await page.screenshot({ path: join(shots, '22-graph-inline-edit.png') });
+    await edit.press('Enter');
+    await expect(node(answer)).toContainText('Повтори, где ставить базу?');
+
+    // Ctrl+D — копия рядом; Delete — удалить её (новая, без вопроса).
+    await page.keyboard.press('Control+d');
+    await expect(stats).toContainText('узлов 7');
+    const copyId = (await graph.locator('.dg-node.dg-selected').getAttribute('data-id'))!;
+    expect(copyId).not.toBe(answer);
+    await expect(node(copyId)).toContainText('Повтори, где ставить базу?');
+    await page.keyboard.press('Delete');
+    await expect(stats).toContainText('узлов 6');
+    await expect(node(copyId)).toHaveCount(0);
+
+    // ПКМ по связи — «Вставить реплику между»: новая встаёт посередине, сразу с полем текста.
+    await edge('61861-Dialogue.mod', answer).dispatchEvent('contextmenu');
+    await expect(menu).toHaveAttribute('data-kind', 'edge');
+    await menu.getByTestId('dg-menu-insert').click();
+    await expect(stats).toContainText('узлов 7');
+    await expect(edit).toBeFocused();
+    const mid = await editingId();
+    await page.keyboard.type('Погоди.');
+    await page.keyboard.press('Enter');
+    await expect(node(mid)).toContainText('Погоди.');
+    await expect(edge(mid, answer)).toHaveCount(1);
+    await expect(edge('61861-Dialogue.mod', answer)).toHaveCount(0);
+    // Две отмены: текст, затем вставку; два повтора — обратно.
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
+    await expect(stats).toContainText('узлов 6');
+    await expect(node(mid)).toHaveCount(0);
+    await page.keyboard.press('Control+y');
+    await page.keyboard.press('Control+y');
+    await expect(node(mid)).toContainText('Погоди.');
+
+    // Реплика из игры: ПКМ → «Удалить» спрашивает; удаление снимается отменой.
+    await graph.getByRole('button', { name: /Показать всё/ }).click();
+    await page.waitForTimeout(400);
+    await node('61860-Dialogue.mod').locator('.dg-text').first().click({ button: 'right' });
+    await menu.getByTestId('dg-menu-delete').click();
+    const ask = graph.getByTestId('dg-ask');
+    await expect(ask).toContainText('из игры: 1');
+    await page.screenshot({ path: join(shots, '23-graph-delete-ask.png') });
+    await ask.getByTestId('dg-ask-yes').click();
+    await expect(ask).toHaveCount(0);
+    await expect(node('61860-Dialogue.mod')).toHaveCount(0);
+    await page.keyboard.press('Control+z');
+    await expect(node('61860-Dialogue.mod')).toBeVisible();
+
+    // «Открыть реплику» показывает выбранную реплику в панели «Реплика».
+    await node(mid).locator('.dg-text').first().click();
+    await graph.getByTestId('dg-open-line').click();
+    await expect(page.getByTestId('line-inspector')).toHaveAttribute('data-sid', mid);
+
+    // Сохранение во временную папку; kedit validate — без ошибок.
+    const dir = mkdtempSync(join(tmpdir(), 'kedit-dg-'));
+    const out = join(dir, 'GraphEdit.mod');
+    try {
+      await stubSaveDialog(app, out);
+      await page.getByTestId('save').click();
+      await expect(page.getByTestId('save')).not.toHaveClass(/primary/);
+      const recs = recordsOf(out);
+      const a = recs.find((r) => r.stringId === answer)!;
+      expect(decodeText(a.strings.get('text0')!)).toBe('Повтори, где ставить базу?');
+      const m = recs.find((r) => r.stringId === mid)!;
+      expect(decodeText(m.strings.get('text0')!)).toBe('Погоди.');
+      expect(m.refs.get('lines')?.map((r) => r.target)).toEqual([answer]);
+      const parentLines = recs.find((r) => r.stringId === '61861-Dialogue.mod')!.refs.get('lines')?.map((r) => r.target) ?? [];
+      expect(parentLines).toContain(mid);
+      expect(parentLines).not.toContain(answer);
+      expect(recs.some((r) => r.stringId === copyId)).toBe(false);
+      expect(recs.some((r) => r.stringId === '61860-Dialogue.mod')).toBe(false);
+      const cli = join(editorRoot, 'packages/cli/bin/kedit.js');
+      const report = execFileSync(process.execPath, [cli, 'validate', '--mod', out], { cwd: editorRoot, encoding: 'utf8' });
+      expect(report).toContain('ошибок 0');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  } finally {
+    await closeApp(app);
+  }
+});

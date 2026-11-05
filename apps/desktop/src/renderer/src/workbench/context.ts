@@ -27,6 +27,8 @@ export interface Workbench {
   status: (msg: StatusMessage) => void;
   /** Открыть (или показать) панель; с `params.sid` у многоэкземплярной — отдельная вкладка. */
   open: (panelId: string, params?: PanelParams) => void;
+  /** Открыта ли где-нибудь панель этого вида. */
+  hasPanel: (panelId: string) => boolean;
   /** Окно создания записи. */
   newRecord: () => void;
   searchRef: RefObject<HTMLInputElement | null>;

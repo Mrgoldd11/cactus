@@ -22,12 +22,25 @@ function useSelectLine(dialog: string | undefined): (sid: string, parent?: strin
 }
 
 function GraphPanel({ def, params }: PanelProps): ReactNode {
-  const { project, go, report, selection } = useWorkbench();
+  const { project, go, report, selection, open, hasPanel } = useWorkbench();
   const { sid, version } = useFollowed(def, params);
   const select = useSelectLine(sid);
   if (sid === undefined) return <Empty />;
   const line = selection.latest((s) => s.kind === 'line');
-  return <DialogueGraphTab key={sid} project={project} sid={sid} version={version} onGo={go} selected={line?.kind === 'line' ? line.sid : undefined} onSelect={select} onReport={report} />;
+  return (
+    <DialogueGraphTab
+      key={sid}
+      project={project}
+      sid={sid}
+      version={version}
+      onGo={go}
+      selected={line?.kind === 'line' ? line.sid : undefined}
+      onSelect={select}
+      onReport={report}
+      onShowLine={() => { open('line'); }}
+      isLineOpen={() => hasPanel('line')}
+    />
+  );
 }
 
 function LinePanel({ def, params }: PanelProps): ReactNode {

@@ -849,6 +849,7 @@ tr.fs-removed td:first-child {
 .dg-canvas {
   flex: 1;
   min-height: 0;
+  position: relative;
 }
 .dg-canvas .react-flow {
   --xy-background-color: var(--bg);
@@ -988,6 +989,121 @@ tr.fs-removed td:first-child {
 .dg-end,
 .dg-hidden {
   font-style: italic;
+}
+.dg:focus {
+  outline: none;
+}
+/* Меню по правой кнопке мыши */
+.dg-menu {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+.dg-menu-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 10px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  border-radius: 4px;
+}
+.dg-menu-item:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+.dg-menu-item.danger {
+  color: var(--deleted);
+}
+.dg-menu-item.danger:hover:not(:disabled) {
+  background: var(--deleted);
+  color: #fff;
+}
+.dg-menu-keys {
+  opacity: 0.6;
+  font-size: 0.85em;
+}
+.dg-menu-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
+}
+.dg-menu-note {
+  padding: 4px 10px;
+}
+/* Текст прямо в узле */
+.dg-edit {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font: inherit;
+  margin-top: 2px;
+  user-select: text;
+}
+.dg-edit-hint {
+  margin-top: 2px;
+}
+.dg-node.dg-editing {
+  outline: 2px solid var(--new);
+  outline-offset: 1px;
+}
+/* Режим «связать с…» и вопрос перед удалением */
+.dg-banner {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  padding: 6px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+.dg-ask-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+.dg-ask {
+  max-width: 420px;
+  padding: 14px 16px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+}
+.dg-ask-text {
+  white-space: pre-line;
+  margin-bottom: 12px;
+}
+.dg-ask-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+/* Подсказка внизу графа и кнопка «Открыть реплику», когда панель закрыта */
+.dg-hint {
+  padding: 3px 6px;
+  border-top: 1px solid var(--border);
+}
+.dg-call {
+  animation: dg-call 1.6s ease-in-out 3;
+}
+@keyframes dg-call {
+  50% {
+    box-shadow: 0 0 0 4px rgba(79, 140, 201, 0.5);
+  }
 }
 
 /* Статус записи мода и инспектор реплики */

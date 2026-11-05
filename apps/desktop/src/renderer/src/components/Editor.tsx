@@ -93,6 +93,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
       report,
       status: setStatus,
       open,
+      hasPanel: (panelId) => apiRef.current?.panels.some((p) => p.api.component === panelId) ?? false,
       newRecord: () => {
         setModal('new');
       },

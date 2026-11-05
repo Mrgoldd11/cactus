@@ -254,6 +254,48 @@ export function deleteLine(ctx: ModContext, sid: string): void {
   });
 }
 
+/**
+ * Вставить новую реплику между `parent` и `child` (вместо связи `parent → child`:
+ * `parent → новая → child`). Одна отмена. Возвращает id новой реплики.
+ */
+export function insertLineBetween(ctx: ModContext, parent: string, child: string, line: NewLine): string {
+  if (!isLinked(ctx, parent, child)) throw new EditError('такой связи нет');
+  return ctx.transaction('вставить реплику', () => {
+    const sid = addLine(ctx, parent, line);
+    linkLine(ctx, sid, child);
+    unlinkLine(ctx, parent, child);
+    return sid;
+  });
+}
+
+/** Связь `lines` в графе: от `parent` к `child`. */
+export interface LineLink {
+  parent: string;
+  child: string;
+}
+
+/**
+ * Удалить выделенное в графе одной отменой: связи (только `lines`) и реплики (`deleteLine`).
+ * Связи, которые уйдут вместе с удаляемыми репликами, и уже удалённые реплики пропускаются.
+ */
+export function deleteGraphItems(ctx: ModContext, items: { lines?: readonly string[]; links?: readonly LineLink[] }): void {
+  const lines = [...new Set(items.lines ?? [])].filter((s) => ctx.get(s) !== undefined);
+  for (const s of lines) need(ctx, s, new Set([LINE]), 'реплика');
+  const gone = new Set(lines);
+  const links = (items.links ?? []).filter((l) => !gone.has(l.parent) && !gone.has(l.child) && isLinked(ctx, l.parent, l.child));
+  if (lines.length === 0 && links.length === 0) return;
+  ctx.transaction(lines.length === 1 && links.length === 0 ? 'удалить реплику' : 'удалить выделенное', () => {
+    for (const l of links) if (isLinked(ctx, l.parent, l.child)) unlinkLine(ctx, l.parent, l.child);
+    for (const s of lines) if (ctx.get(s) !== undefined) deleteLine(ctx, s);
+  });
+}
+
+/** Копии реплик (каждая — в ветку своего `parent`) одной отменой; id копий по порядку. */
+export function duplicateLines(ctx: ModContext, items: readonly { sid: string; parent?: string | undefined }[]): string[] {
+  for (const i of items) need(ctx, i.sid, new Set([LINE]), 'реплика');
+  return ctx.transaction(items.length === 1 ? 'копия реплики' : 'копии реплик', () => items.map((i) => duplicateLine(ctx, i.sid, i.parent)));
+}
+
 /** Тексты реплики `text0..N` (пустые в конце не считаются). */
 export function lineTexts(rec: GameRecord): string[] {
   const out: string[] = [];
