@@ -3,6 +3,7 @@
  * временную папку и в `editor/out/` (диалоги выбора файла подменяются в main).
  * Скриншоты — в `editor/out/screenshots/`.
  */
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -617,6 +618,87 @@ test('проигрыватель разговора: какой диалог в�
     await expect(howto.getByTestId('howto-example')).toContainText('Если ни одно условие не выполнено');
     await expect(howto).toContainText('всем поровну');
     await page.screenshot({ path: join(shots, '19-howto.png') });
+  } finally {
+    await closeApp(app);
+  }
+});
+
+test('ванильный диалог: новый ответ, связь перетаскиванием, отмена/повтор, сохранение, kedit validate без ошибок', async () => {
+  const { app, page } = await launch();
+  try {
+    await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1600, 1000); });
+    await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('open-vanilla').click();
+    await waitEditor(page);
+    await page.getByTestId('window-menu').click();
+    await page.getByTestId('window-preset-dialogue').click();
+    // «Grim talks to new ally»: 5 узлов. Последняя реплика Грима — «Grow me some hemp, got it?».
+    await page.getByTestId('search').fill('61857-Dialogue.mod');
+    await page.getByTestId('record-list').locator('[data-sid="61857-Dialogue.mod"]').click();
+    const graph = page.getByTestId('dialogue-graph');
+    await expect(graph.getByTestId('dg-stats')).toContainText('узлов 5', { timeout: 60_000 });
+    const node = (sid: string) => graph.locator(`[data-testid="dg-node"][data-id="${sid}"]`);
+    await node('61861-Dialogue.mod').locator('.dg-text').first().click();
+    const insp = page.getByTestId('line-inspector');
+    await expect(insp).toHaveAttribute('data-sid', '61861-Dialogue.mod');
+
+    // Новый ответ игрока под репликой: новая запись с новым id, текст.
+    await insp.getByTestId('ln-add-answer').click();
+    await expect(insp).not.toHaveAttribute('data-sid', '61861-Dialogue.mod');
+    const answer = (await insp.getAttribute('data-sid'))!;
+    expect(answer).toMatch(/^\d+-/);
+    await insp.getByTestId('ln-text-0').fill('Повтори-ка, где ставить базу?');
+    await insp.getByTestId('ln-text-0').blur();
+    await expect(graph.getByTestId('dg-stats')).toContainText('узлов 6');
+    await expect(node(answer)).toContainText('Повтори-ка');
+
+    // Связь: перетащить с правого края нового ответа на реплику «Set up a base…» (петля назад).
+    // «Показать всё», затем уменьшить: у края графа при перетаскивании вид сам прокручивается.
+    await graph.getByRole('button', { name: /Показать всё/ }).click();
+    await page.waitForTimeout(400);
+    await graph.locator('.react-flow__controls-zoomout').click();
+    await page.waitForTimeout(400);
+    const from = (await node(answer).locator('.react-flow__handle.source').boundingBox())!;
+    const to = (await node('61860-Dialogue.mod').locator('.react-flow__handle.target').boundingBox())!;
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+    await page.mouse.up();
+    await node(answer).locator('.dg-text').first().click();
+    await expect(insp).toHaveAttribute('data-sid', answer);
+    await expect(insp.getByTestId('ln-next-item')).toHaveCount(1);
+    await expect(insp.locator('[data-testid="ln-next-item"][data-sid="61860-Dialogue.mod"]')).toHaveCount(1);
+    await page.screenshot({ path: join(shots, '20-dialog-edit.png') });
+
+    // Отмена снимает связь, повтор возвращает.
+    await page.getByTestId('undo').click();
+    await expect(insp.getByTestId('ln-next-item')).toHaveCount(0);
+    await page.getByTestId('redo').click();
+    await expect(insp.getByTestId('ln-next-item')).toHaveCount(1);
+
+    // Сохранение во временную папку; kedit validate по сохранённому моду — без ошибок.
+    const dir = mkdtempSync(join(tmpdir(), 'kedit-dlg-'));
+    const out = join(dir, 'GrimAnswer.mod');
+    try {
+      await stubSaveDialog(app, out);
+      await page.getByTestId('save').click();
+      await expect(page.getByTestId('save')).not.toHaveClass(/primary/);
+      const recs = recordsOf(out);
+      const added = recs.find((r) => r.stringId === answer)!;
+      expect(itemTypeName(added.type)).toBe('DIALOGUE_LINE');
+      expect(added.ints.get('speaker')).toBe(1);
+      expect(decodeText(added.strings.get('text0')!)).toBe('Повтори-ка, где ставить базу?');
+      expect(added.refs.get('lines')?.map((r) => r.target)).toEqual(['61860-Dialogue.mod']);
+      const parent = recs.find((r) => r.stringId === '61861-Dialogue.mod')!;
+      expect(parent.refs.get('lines')?.map((r) => r.target)).toContain(answer);
+      // Ванильные записи, которые не трогали, в мод не попадают.
+      expect(recs.some((r) => r.stringId === '61859-Dialogue.mod')).toBe(false);
+      const cli = join(editorRoot, 'packages/cli/bin/kedit.js');
+      const report = execFileSync(process.execPath, [cli, 'validate', '--mod', out], { cwd: editorRoot, encoding: 'utf8' });
+      expect(report).toContain('ошибок 0');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   } finally {
     await closeApp(app);
   }
