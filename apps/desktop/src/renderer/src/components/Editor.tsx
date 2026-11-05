@@ -17,6 +17,7 @@ import { findNode, initialCategory } from '../workbench/category.ts';
 import type { StatusMessage, Workbench as WorkbenchValue } from '../workbench/context.ts';
 import { Workbench } from '../workbench/Workbench.tsx';
 import { WindowMenu } from '../workbench/WindowMenu.tsx';
+import { UndoRedoButtons, stepOf } from './History.tsx';
 import { applyPreset, isPreset, openPanel, type PresetId } from '../workbench/layouts.ts';
 import type { PanelParams } from '../workbench/registry.ts';
 
@@ -135,11 +136,11 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
 
   const undo = (): void => {
     const cs = ctx.undo();
-    if (cs) setStatus({ text: (s) => `${s.undo}: ${cs.label}`, kind: 'info' });
+    if (cs) setStatus({ text: (s) => `${s.undo}: ${stepOf(project, cs, lang).text}`, kind: 'info' });
   };
   const redo = (): void => {
     const cs = ctx.redo();
-    if (cs) setStatus({ text: (s) => `${s.redo}: ${cs.label}`, kind: 'info' });
+    if (cs) setStatus({ text: (s) => `${s.redo}: ${stepOf(project, cs, lang).text}`, kind: 'info' });
   };
   const save = async (saveAs: boolean): Promise<void> => {
     blurActive();
@@ -208,12 +209,13 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
           {t.saveAs}
         </button>
         <span className="sep" />
-        <button data-testid="undo" disabled={!ctx.canUndo} onClick={undo} title="Ctrl+Z">
-          ↶ {t.undo}
-        </button>
-        <button data-testid="redo" disabled={!ctx.canRedo} onClick={redo} title="Ctrl+Y">
-          ↷ {t.redo}
-        </button>
+        <UndoRedoButtons
+          project={project}
+          status={setStatus}
+          onAll={() => {
+            open('history');
+          }}
+        />
         <span className="sep" />
         <button disabled={!selection.canBack} onClick={back} title={`${t.back} (Alt+←)`}>
           ←

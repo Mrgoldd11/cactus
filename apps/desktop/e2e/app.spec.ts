@@ -465,6 +465,14 @@ test('живая связь с ИИ: MCP подключается к окну, �
     await expect(panel.locator('[data-testid="ai-changeset"][data-status="accepted"]')).toHaveCount(1);
     await expect(live.locator('.live-badge')).toHaveCount(0);
     await expect(page.getByTestId('field-weight kg')).toHaveValue('9');
+    // В списке шагов ↶ правки ИИ помечены отдельно, откат — тоже шаг.
+    await page.getByTestId('undo-menu').click();
+    const steps = page.getByTestId('undo-list').getByTestId('undo-step');
+    await expect(steps).toHaveCount(3);
+    await expect(steps.nth(0)).toContainText('Откат: ИИ: новое имя');
+    await expect(steps.nth(2)).toContainText('ИИ: катана тяжелее и острее');
+    await expect(steps.nth(2).locator('.hist-ai')).toBeVisible();
+    await page.keyboard.press('Escape');
 
     // ИИ видит решения пользователя и состояние окна.
     const list = await session.editorChangesets();
@@ -840,6 +848,83 @@ test('граф диалога: меню ПКМ, текст прямо в узл�
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  } finally {
+    await closeApp(app);
+  }
+});
+
+test('история правок: кружочки ↶ ↷ со списком шагов, панель «История», переход к шагу и обратно', async () => {
+  const { app, page } = await launch();
+  try {
+    await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('open-vanilla').click();
+    await waitEditor(page);
+    await selectRecord(page, 'katana', KATANA);
+    await page.getByTestId('field-filter').fill('cut damage');
+    const input = page.getByTestId(`field-${CUT}`);
+    const original = await input.inputValue();
+    // Три правки — три шага.
+    for (const v of ['1.1', '1.2', '1.3']) {
+      await input.fill(v);
+      await input.press('Enter');
+      await expect(input).toHaveValue(v);
+    }
+    await expect(page.getByTestId('undo')).toHaveAttribute('title', /Ctrl\+Z/);
+    await expect(page.getByTestId('undo')).toHaveAttribute('title', new RegExp(`Изменено «${CUT}»`));
+
+    // ▾ у кружочка назад: последние шаги, новые сверху, с понятными названиями.
+    await page.getByTestId('undo-menu').click();
+    const undoSteps = page.getByTestId('undo-list').getByTestId('undo-step');
+    await expect(undoSteps).toHaveCount(3);
+    await expect(undoSteps.first()).toContainText(`Изменено «${CUT}» у`);
+    await undoSteps.nth(1).hover();
+    await expect(page.getByTestId('undo-list')).toContainText('Отменить 2 шага');
+    await page.screenshot({ path: join(shots, '24-history-menu.png') });
+    // Щелчок по второму сверху — отменены два последних шага.
+    await undoSteps.nth(1).click();
+    await expect(page.getByTestId('undo-list')).toHaveCount(0);
+    await expect(input).toHaveValue('1.1');
+    // ↷ по одному шагу и правым щелчком — список повтора.
+    await page.getByTestId('redo').click();
+    await expect(input).toHaveValue('1.2');
+    await page.getByTestId('redo').click({ button: 'right' });
+    await expect(page.getByTestId('redo-list').getByTestId('redo-step')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('redo-list')).toHaveCount(0);
+    await page.getByTestId('redo').click();
+    await expect(input).toHaveValue('1.3');
+
+    // Панель «История» (из списка «Вся история…»): все шаги, где вы сейчас.
+    await page.getByTestId('undo-menu').click();
+    await page.getByTestId('history-all').click();
+    const panel = page.getByTestId('history-panel');
+    await expect(panel).toBeVisible();
+    const rows = panel.getByTestId('history-step');
+    await expect(rows).toHaveCount(4); // «Мод как при открытии» + 3 шага
+    await expect(rows.nth(3)).toHaveAttribute('data-state', 'current');
+    await expect(rows.nth(1)).toContainText(`Изменено «${CUT}»`);
+    // Щелчок по первому шагу — два последних отменены и стали серыми.
+    await rows.nth(1).click();
+    await expect(input).toHaveValue('1.1');
+    await expect(rows.nth(1)).toHaveAttribute('data-state', 'current');
+    await expect(panel.locator('[data-state="future"]')).toHaveCount(2);
+    await page.screenshot({ path: join(shots, '25-history-panel.png') });
+    // ↷ возвращает: список повтора, последний шаг — всё вернулось.
+    await page.getByTestId('redo-menu').click();
+    const redoSteps = page.getByTestId('redo-list').getByTestId('redo-step');
+    await expect(redoSteps).toHaveCount(2);
+    await redoSteps.last().click();
+    await expect(input).toHaveValue('1.3');
+    await expect(panel.locator('[data-state="future"]')).toHaveCount(0);
+    await expect(rows.nth(3)).toHaveAttribute('data-state', 'current');
+    // «Мод как при открытии» — отменить всё.
+    await rows.first().click();
+    await expect(input).toHaveValue(original);
+    await expect(page.getByTestId('undo')).toBeDisabled();
+    // Ctrl+Y вне поля ввода — повтор.
+    await panel.click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press('Control+y');
+    await expect(input).toHaveValue('1.1');
   } finally {
     await closeApp(app);
   }

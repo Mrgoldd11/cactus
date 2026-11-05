@@ -428,6 +428,50 @@ export class ModContext {
     return cs;
   }
 
+  /**
+   * Отменить правки до `id` включительно (меню «кружочка назад», панель «История»). Если такой
+   * действующей правки нет — EditError, ничего не меняется. Возвращает отменённые (новые первыми).
+   */
+  undoTo(id: number): Changeset[] {
+    if (this.depth > 0) throw new EditError('Нельзя отменять внутри транзакции');
+    if (!this.undoStack.some((c) => c.id === id)) throw new EditError(`Правки ${id} нет среди действующих`);
+    const out: Changeset[] = [];
+    for (;;) {
+      const cs = this.undo()!;
+      out.push(cs);
+      if (cs.id === id) return out;
+    }
+  }
+
+  /** Повторить отменённые правки до `id` включительно. Возвращает повторённые по порядку. */
+  redoTo(id: number): Changeset[] {
+    if (this.depth > 0) throw new EditError('Нельзя повторять внутри транзакции');
+    if (!this.redoStack.some((c) => c.id === id)) throw new EditError(`Правки ${id} нет среди отменённых`);
+    const out: Changeset[] = [];
+    for (;;) {
+      const cs = this.redo()!;
+      out.push(cs);
+      if (cs.id === id) return out;
+    }
+  }
+
+  /**
+   * Перейти к состоянию сразу после правки `id` (отменённой или действующей); `0` — к состоянию
+   * до всех правок истории. Возвращает, сколько правок отменено и повторено.
+   */
+  goToStep(id: number): { undone: number; redone: number } {
+    if (id === 0) {
+      const first = this.undoStack[0];
+      return { undone: first ? this.undoTo(first.id).length : 0, redone: 0 };
+    }
+    const i = this.undoStack.findIndex((c) => c.id === id);
+    if (i >= 0) {
+      const next = this.undoStack[i + 1];
+      return { undone: next ? this.undoTo(next.id).length : 0, redone: 0 };
+    }
+    return { undone: 0, redone: this.redoTo(id).length };
+  }
+
   /** Правка из истории отмены по id (только те, что сейчас действуют). */
   findChangeset(id: number): Changeset | undefined {
     return this.undoStack.find((c) => c.id === id);

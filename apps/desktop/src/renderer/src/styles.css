@@ -1814,3 +1814,164 @@ button.small.active {
 .howto-example {
   margin-bottom: 12px;
 }
+
+/* История правок: кружочки ↶ ↷ со списком шагов, панель «История» */
+.hist-buttons {
+  position: relative;
+  display: inline-flex;
+  gap: 6px;
+}
+.hist-split {
+  display: inline-flex;
+  align-items: center;
+}
+.hist-round {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 17px;
+  line-height: 1;
+}
+.hist-caret {
+  height: 22px;
+  margin-left: 1px;
+  padding: 0 4px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 10px;
+  opacity: 0.75;
+}
+.hist-caret:hover:not(:disabled) {
+  background: var(--bg3);
+  opacity: 1;
+}
+.hist-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+.hist-menu.redo {
+  left: 40px;
+}
+.hist-menu-head {
+  padding: 3px 8px 5px;
+  font-size: 0.85em;
+}
+.hist-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  border-radius: 4px;
+}
+.hist-menu-item.hot {
+  background: var(--sel);
+}
+.hist-menu-item:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.hist-menu-text,
+.hist-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hist-menu-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 4px 4px 0 8px;
+  border-top: 1px solid var(--border);
+  font-size: 0.85em;
+}
+.hist-ai {
+  padding: 0 5px;
+  border-radius: 8px;
+  background: #6b4fa8;
+  color: #fff;
+  font-size: 0.8em;
+  white-space: nowrap;
+}
+.hist-rb {
+  color: var(--muted);
+}
+.hist-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.hist-hint {
+  padding: 6px 10px;
+  font-size: 0.85em;
+  border-bottom: 1px solid var(--border);
+}
+.hist-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+}
+.hist-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 6px;
+  border: none;
+  border-left: 3px solid transparent;
+  background: transparent;
+  border-radius: 3px;
+  text-align: left;
+}
+.hist-row:hover {
+  background: var(--bg3);
+}
+.hist-row.current {
+  background: var(--sel);
+  border-left-color: var(--accent);
+  cursor: default;
+}
+.hist-row.future {
+  opacity: 0.45;
+  font-style: italic;
+}
+.hist-row.future:hover {
+  opacity: 0.8;
+}
+.hist-row.ai:not(.current) {
+  border-left-color: #6b4fa8;
+}
+.hist-pos {
+  width: 10px;
+  color: var(--accent);
+  font-size: 0.8em;
+}
+.hist-num {
+  min-width: 20px;
+  text-align: right;
+  font-size: 0.85em;
+}
+.hist-here {
+  color: var(--accent);
+  font-size: 0.8em;
+  white-space: nowrap;
+}
