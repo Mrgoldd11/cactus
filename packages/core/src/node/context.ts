@@ -61,14 +61,31 @@ export function findInstalledMod(paths: GamePaths, fileName: string): string | u
   return installedModFiles(paths).find((m) => basename(m.path).toLowerCase() === lower)?.path;
 }
 
-export function loadModContext(options: LoadContextOptions): LoadedContext {
-  const { paths } = options;
-  const vanilla = options.vanilla ?? loadVanillaLayers(paths);
+export interface ModLoadPlan {
+  modName: string;
+  /** Существующий файл мода (если есть). */
+  modPath?: string;
+  mod?: DataFile;
+  /** Зависимости, которые нашлись, в порядке загрузки (`mods.cfg`). */
+  dependencies: { name: string; path: string }[];
+  /** Зависимости, которых нет ни в `mods/`, ни в мастерской. */
+  missingDependencies: string[];
+}
+
+/**
+ * Что грузить: файл мода (если есть), его зависимости по порядку `mods.cfg`, отсутствующие.
+ * Ванильные имена и сам мод из зависимостей убираются.
+ */
+export function planModLoad(paths: GamePaths, options: { modPath?: string; modName?: string; dependencies?: readonly string[] }): ModLoadPlan {
   let mod: DataFile | undefined;
   let modName = options.modName ?? 'new.mod';
+  let modPath: string | undefined;
   if (options.modPath) {
     modName = basename(options.modPath);
-    if (existsSync(options.modPath)) mod = readDataFile(readFileSync(options.modPath));
+    if (existsSync(options.modPath)) {
+      mod = readDataFile(readFileSync(options.modPath));
+      modPath = options.modPath;
+    }
   }
   const vanillaNames = new Set<string>(VANILLA_FILES.map((f) => f.toLowerCase()));
   const requested =
@@ -80,28 +97,36 @@ export function loadModContext(options: LoadContextOptions): LoadedContext {
     return i < 0 ? cfg.length : i;
   };
   unique.sort((a, b) => rank(a) - rank(b));
-  const layers: Layer[] = [...vanilla];
+  const dependencies: { name: string; path: string }[] = [];
   const missingDependencies: string[] = [];
-  const dependencyPaths: string[] = [];
   for (const dep of unique) {
     const p = findInstalledMod(paths, dep);
-    if (!p) {
-      missingDependencies.push(dep);
-      continue;
-    }
-    dependencyPaths.push(p);
-    layers.push({ name: dep, file: readDataFile(readFileSync(p)) });
+    if (p) dependencies.push({ name: dep, path: p });
+    else missingDependencies.push(dep);
   }
+  return { modName, ...(modPath !== undefined ? { modPath } : {}), ...(mod ? { mod } : {}), dependencies, missingDependencies };
+}
+
+export function loadModContext(options: LoadContextOptions): LoadedContext {
+  const { paths } = options;
+  const vanilla = options.vanilla ?? loadVanillaLayers(paths);
+  const plan = planModLoad(paths, {
+    ...(options.modPath !== undefined ? { modPath: options.modPath } : {}),
+    ...(options.modName !== undefined ? { modName: options.modName } : {}),
+    ...(options.dependencies ? { dependencies: options.dependencies } : {}),
+  });
+  const layers: Layer[] = [...vanilla];
+  for (const dep of plan.dependencies) layers.push({ name: dep.name, file: readDataFile(readFileSync(dep.path)) });
   const wantSchema = options.schema ?? existsSync(join(paths.kenshi, 'fcs.def'));
   const wantPo = options.po ?? existsSync(gamedataPoPath(paths));
   const ctx = new ModContext({
     layers,
-    modName,
-    ...(mod ? { mod } : {}),
+    modName: plan.modName,
+    ...(plan.mod ? { mod: plan.mod } : {}),
     ...(typeof wantSchema === 'object' ? { schema: wantSchema } : wantSchema ? { schema: loadGameSchema(paths) } : {}),
     ...(typeof wantPo === 'object' ? { po: wantPo } : wantPo ? { po: loadGamedataPo(paths) } : {}),
   });
-  return { ctx, missingDependencies, dependencyPaths };
+  return { ctx, missingDependencies: plan.missingDependencies, dependencyPaths: plan.dependencies.map((d) => d.path) };
 }
 
 /** Записать мод (только изменения) в файл и считать контекст сохранённым. */

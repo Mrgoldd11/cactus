@@ -6,6 +6,7 @@ import type { DataFile } from '../format/types.ts';
 export * from './paths.ts';
 export * from './schema.ts';
 export * from './context.ts';
+export * from './detect.ts';
 
 export function readDataFileSync(path: string, options?: ReadOptions): DataFile {
   return readDataFile(readFileSync(path), options);

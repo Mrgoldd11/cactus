@@ -9,3 +9,4 @@ export * from './ops.ts';
 export * from './schema-view.ts';
 export * from './enums.ts';
 export * from './stable-ids.ts';
+export * from './editor-view.ts';

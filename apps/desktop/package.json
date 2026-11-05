@@ -1,0 +1,29 @@
+{
+  "name": "@kenshi-editor/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Kenshi mod editor: desktop app (Electron + React)",
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "e2e": "electron-vite build && playwright test"
+  },
+  "dependencies": {
+    "@kenshi-editor/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.2.1",
+    "electron": "45.2.3",
+    "electron-vite": "6.0.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "vite": "8.3.5"
+  }
+}

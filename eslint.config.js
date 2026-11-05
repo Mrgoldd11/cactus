@@ -3,7 +3,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'reports/**', 'out/**'] },
+  { ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'reports/**', '**/out/**'] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {
@@ -18,6 +18,10 @@ export default tseslint.config(
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
       '@typescript-eslint/no-non-null-assertion': 'off',
     },
+  },
+  {
+    files: ['apps/desktop/src/renderer/**'],
+    languageOptions: { globals: globals.browser },
   },
   {
     files: ['**/*.js'],

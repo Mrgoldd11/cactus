@@ -6,6 +6,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyOps,
+  buildCategoryTree,
+  defaultValue,
+  fieldRows,
+  matchesCategory,
+  refGroups,
   describeDialogAction,
   diffDataFiles,
   emptyRecord,
@@ -28,7 +33,9 @@ import {
   removalMarker,
   StableIds,
   validateMod,
+  type CategoryNode,
   type DataFile,
+  type FieldRow,
   type GameRecord,
   type Layer,
   type Reference,
@@ -199,5 +206,83 @@ describe('постоянные id', () => {
     expect(parseStableIds('{"next":5,"ids":{"a":1}}')).toEqual({ next: 5, ids: { a: 1 } });
     expect(() => parseStableIds('{"next":1,"ids":{"a":1}}')).toThrow(/не меньше next/);
     expect(() => parseStableIds('[]')).toThrow();
+  });
+});
+
+describe('редактор: категории, поля, ссылки', () => {
+  const ITEM = itemTypeId('ITEM')!;
+  const s = parseGameSchema({
+    fcsDef: [
+      '[ITEM]',
+      'item:',
+      'kind: Kind.TOOL "Что это"',
+      'mode: Kind.TOOL',
+      'heavy: False',
+      'extra: 1',
+      'text0: "" looped',
+      'condition "extra" if "mode" is Kind.FOOD',
+      'condition "heavy" if "mode" not Kind.TOOL',
+      'parts: ITEM (1, 2)',
+      '',
+    ].join('\n'),
+    fcsEnums: ['enum Kind', '{', '  TOOL,', '  FOOD', '}', ''].join('\n'),
+    fcsLayout: ['[FCS_LAYOUT]', 'Items:  ITEM "kind!=FOOD"', '\tFood:  ITEM "kind==FOOD"', '\tHeavy:  ITEM "heavy=true"', 'Everything:  NULL_ITEM', ''].join('\n'),
+  });
+  const base = file([
+    rec(ITEM, 'T', 'Tool', (r) => {
+      r.refs.set('parts', [ref('F', 1, 2), ref('H', 1, 2)]);
+      r.strings.set('text2', b('x'));
+    }),
+    rec(ITEM, 'F', 'Food', (r) => r.ints.set('kind', 1)),
+    rec(ITEM, 'H', 'Rock', (r) => r.bools.set('heavy', true)),
+    rec(CHAR, 'C', 'Guy'),
+  ]);
+  const make = (): ModContext => new ModContext({ layers: [{ name: 'gamedata.base', file: base }], modName: 't.mod', schema: s });
+
+  it('дерево: фильтры по enum (с умолчанием) и bool, прочие типы, всё', () => {
+    const ctx = make();
+    const tree = buildCategoryTree(s, ['ITEM', 'CHARACTER']);
+    expect(tree.map((n) => n.label)).toEqual(['Items', 'Everything', 'Other types']);
+    const count = (n: CategoryNode): string[] => [...ctx.records()].filter((r) => matchesCategory(s, r, n)).map((r) => r.stringId);
+    expect(count(tree[0]!)).toEqual(['T', 'H']);
+    expect(count(tree[0]!.children[0]!)).toEqual(['F']);
+    expect(count(tree[0]!.children[1]!)).toEqual(['H']);
+    expect(count(tree[1]!)).toHaveLength(4);
+    expect(count(tree[2]!)).toEqual([]);
+    expect(tree[2]!.children.map((n) => n.type)).toEqual(['CHARACTER']);
+  });
+
+  it('поля: состояние, enum, условия, повторяющиеся поля', () => {
+    const ctx = make();
+    ctx.setField('T', 'ints', 'mode', 1);
+    ctx.setField('T', 'ints', 'extra', 5);
+    const rows = fieldRows(ctx, 'T');
+    const by = (k: string): FieldRow => rows.find((r) => r.key === k)!;
+    expect(rows.map((r) => r.key)).toEqual(['kind', 'mode', 'heavy', 'extra', 'text0', 'text2']);
+    expect(by('kind')).toMatchObject({ state: 'default', hidden: false, category: 'item' });
+    expect(by('kind').enum?.name).toBe('Kind');
+    expect(by('mode')).toMatchObject({ state: 'added', value: 1 });
+    expect(by('extra').hidden).toBe(false);
+    expect(by('heavy').hidden).toBe(false);
+    expect(by('text2')).toMatchObject({ state: 'base', dict: 'strings' });
+    expect(defaultValue(s, by('kind').def!)).toBe(0);
+    ctx.undo();
+    ctx.undo();
+    const again = fieldRows(ctx, 'T');
+    expect(again.find((r) => r.key === 'extra')!.hidden).toBe(true);
+    expect(again.find((r) => r.key === 'heavy')!.hidden).toBe(true);
+  });
+
+  it('ссылки: подписи значений, добавленные, изменённые, убранные', () => {
+    const ctx = make();
+    ctx.removeReference('T', 'parts', 'H');
+    ctx.addReference('T', 'parts', 'C');
+    ctx.setReferences('T', 'parts', [ref('F', 9, 2), ref('C', 1, 2)]);
+    const g = refGroups(ctx, 'T').find((x) => x.category === 'parts')!;
+    expect(g.targetType).toBe('ITEM');
+    expect(g.valueLabels).toEqual(['v0', 'v1']);
+    expect(g.rows.map((r) => `${r.ref.target}:${r.state}`)).toEqual(['F:changed', 'C:added', 'H:removed']);
+    expect(g.rows[0]!.lower).toMatchObject({ v0: 1 });
+    expect(g.rows[1]).toMatchObject({ targetName: 'Guy', targetType: 'CHARACTER', targetStatus: 'base' });
   });
 });

@@ -7,3 +7,5 @@ reports/
 # локальный конфиг с путями к игре
 kenshi-paths.json
 out/
+test-results/
+playwright-report/

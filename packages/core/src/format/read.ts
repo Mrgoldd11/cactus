@@ -37,6 +37,15 @@ class DataFileReader {
     return text;
   }
 
+  /** Только тип файла и заголовок мода (без записей). */
+  readHeader(): { fileType: number; header?: ModHeader; recordCount?: number } {
+    const fileType = this.r.i32();
+    if (fileType !== FileType.Mod && fileType !== FileType.MergeMod) return { fileType };
+    const header = this.header(fileType);
+    this.r.i32();
+    return { fileType, header, recordCount: this.r.i32() };
+  }
+
   read(options: ReadOptions): DataFile {
     const r = this.r;
     const fileType = r.i32();
@@ -202,4 +211,9 @@ class DataFileReader {
 /** Разобрать файл данных (.base/.mod/.save…) из байтов. */
 export function readDataFile(bytes: Uint8Array, options: ReadOptions = {}): DataFile {
   return new DataFileReader(bytes).read(options);
+}
+
+/** Тип файла, заголовок мода и число записей — без чтения записей (для списка модов). */
+export function readModHeader(bytes: Uint8Array): { fileType: number; header?: ModHeader; recordCount?: number } {
+  return new DataFileReader(bytes).readHeader();
 }
