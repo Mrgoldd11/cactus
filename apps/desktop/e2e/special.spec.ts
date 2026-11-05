@@ -109,3 +109,51 @@ test('матрица отношений фракций: правка в обе �
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('сравнение предметов: сортировка, столбцы, правка в ячейке, отмена, сохранение', async () => {
+  const { app, page } = await launch();
+  const dir = mkdtempSync(join(tmpdir(), 'kedit-special-'));
+  const KATANA = '476-gamedata.base';
+  const CUT = 'cut damage multiplier';
+  try {
+    await newMod(page, 'KeditE2E Compare');
+    await openPanel(page, 'compare');
+    const panel = page.getByTestId('compare-panel');
+    await expect(page.getByTestId('cmp-table')).toBeVisible();
+    const cell = (sid: string, key: string) => panel.locator(`[data-testid="cmp-cell"][data-sid="${sid}"][data-field="${key}"]`);
+    const original = (await cell(KATANA, CUT).getAttribute('data-value'))!;
+
+    // Сортировка по убыванию: первая строка — наибольшее значение (▲).
+    await panel.locator(`[data-testid="cmp-head"][data-field="${CUT}"]`).click();
+    await panel.locator(`[data-testid="cmp-head"][data-field="${CUT}"]`).click();
+    await expect(panel.locator('tbody tr').first().locator(`[data-field="${CUT}"]`)).toHaveClass(/cmp-max/);
+
+    // Выбор столбцов.
+    await page.getByTestId('cmp-columns').click();
+    await page.getByTestId('cmp-col-weight mult').check();
+    await expect(panel.locator('[data-testid="cmp-head"][data-field="weight mult"]')).toBeVisible();
+
+    // Фильтр по полю и правка в ячейке.
+    await page.getByTestId('cmp-filter').fill(`${CUT}>0`);
+    await page.getByTestId('cmp-search').fill('katana');
+    await cell(KATANA, CUT).click();
+    await page.getByTestId('cmp-input').fill('1.9');
+    await page.getByTestId('cmp-input').press('Enter');
+    await expect(cell(KATANA, CUT)).toHaveAttribute('data-value', '1.9');
+    await expect(cell(KATANA, CUT)).toHaveClass(/cmp-mine/);
+    await page.screenshot({ path: join(shots, '34-compare.png') });
+
+    await page.getByTestId('undo').click();
+    await expect(cell(KATANA, CUT)).toHaveAttribute('data-value', original);
+    await expect(cell(KATANA, CUT)).not.toHaveClass(/cmp-mine/);
+    await page.getByTestId('redo').click();
+    await expect(cell(KATANA, CUT)).toHaveAttribute('data-value', '1.9');
+
+    const recs = await saveAndValidate(app, page, join(dir, 'Compare.mod'));
+    expect(recs).toHaveLength(1);
+    expect(recs[0]!.floats.get(CUT)).toBeCloseTo(1.9, 5);
+  } finally {
+    await closeApp(app);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -2199,3 +2199,65 @@ tr[draggable='true'] {
   padding: 1px 6px;
   border-radius: 3px;
 }
+
+/* Сравнение предметов */
+.cmp-table th.cmp-sort {
+  cursor: pointer;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: var(--bg2);
+  z-index: 1;
+}
+.cmp-cell {
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cmp-cell.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.cmp-cell input {
+  width: 90px;
+}
+.cmp-mine {
+  background: rgba(229, 192, 123, 0.22);
+}
+.cmp-mods {
+  background: rgba(79, 140, 201, 0.22);
+}
+.cmp-max .cmp-flag {
+  color: var(--new);
+}
+.cmp-min .cmp-flag {
+  color: var(--deleted);
+}
+.cmp-flag {
+  margin-left: 3px;
+  font-size: 9px;
+}
+.cmp-name {
+  white-space: nowrap;
+}
+.cmp-added {
+  margin-left: 4px;
+  color: var(--new);
+  font-weight: 600;
+}
+.cmp-picker {
+  border: 1px solid var(--border);
+  padding: 4px;
+  max-height: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cmp-picker-list {
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 2px 8px;
+}
+input.invalid {
+  border-color: var(--error);
+}
