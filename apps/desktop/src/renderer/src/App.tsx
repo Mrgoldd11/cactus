@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { GameInstallInfo, Lang, ProjectRequest, Settings } from '../../shared/api.ts';
 import { LangContext, STRINGS } from './i18n.ts';
-import { Project } from './project.ts';
+import { openProject, prefetchVanilla, type Project } from './project.ts';
 import { setLiveProject } from './live.ts';
 import { StartScreen } from './components/StartScreen.tsx';
 import { Editor } from './components/Editor.tsx';
@@ -31,6 +31,17 @@ export function App(): ReactNode {
   useEffect(() => {
     setLiveProject(project);
   }, [project]);
+
+  // Пока виден стартовый экран — готовить ваниль в фоне, чтобы «Ваниль» открылась сразу.
+  useEffect(() => {
+    if (!game || project || loading) return;
+    const id = setTimeout(() => {
+      void prefetchVanilla(game).catch(() => undefined);
+    }, 50);
+    return () => {
+      clearTimeout(id);
+    };
+  }, [game, project, loading]);
 
   const lang = useMemo(() => ({ lang: settings.lang, t: STRINGS[settings.lang] }), [settings.lang]);
 
@@ -61,10 +72,7 @@ export function App(): ReactNode {
     setError(undefined);
     void (async () => {
       try {
-        const bundle = await window.kedit.openProject(req);
-        // Дать окну нарисовать «Загрузка…» до тяжёлого разбора.
-        await new Promise((r) => setTimeout(r, 20));
-        const p = new Project(bundle);
+        const p = await openProject(req);
         setProject(p);
         p.bump();
       } catch (e) {

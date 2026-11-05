@@ -14,6 +14,7 @@ import {
   listWorldFiles,
   manualInstall,
   planModLoad,
+  readIfUnknown,
   readModsCfg,
   SCHEMA_FILES,
   translationFilePath,
@@ -62,6 +63,12 @@ function readNamed(name: string, path: string): NamedBytes {
   return { name, path, bytes: readFileSync(path) };
 }
 
+/** Файл, который окно может держать в кэше: байты — только если окно его ещё не знает. */
+function readCached(name: string, path: string, known: ReadonlySet<string>): NamedBytes {
+  const { key, bytes } = readIfUnknown(path, known);
+  return { name, path, key, bytes: bytes ?? new Uint8Array() };
+}
+
 function readOptional(path: string): string | undefined {
   return existsSync(path) ? readFileSync(path, 'utf8') : undefined;
 }
@@ -74,7 +81,8 @@ export function loadProject(req: ProjectRequest): ProjectBundle {
     ...(req.modName !== undefined ? { modName: req.modName } : {}),
     ...(req.dependencies ? { dependencies: req.dependencies } : {}),
   });
-  const vanilla = vanillaFilePaths(game).map((p, i) => readNamed(VANILLA_FILES[i]!, p));
+  const known = new Set(req.known ?? []);
+  const vanilla = vanillaFilePaths(game).map((p, i) => readCached(VANILLA_FILES[i]!, p, known));
   const fcsEnums = readOptional(join(game.kenshi, SCHEMA_FILES.fcsEnums));
   const fcsLayout = readOptional(join(game.kenshi, SCHEMA_FILES.fcsLayout));
   const po = readOptional(gamedataPoPath(game));
@@ -82,7 +90,7 @@ export function loadProject(req: ProjectRequest): ProjectBundle {
     game,
     modName: plan.modName,
     vanilla,
-    dependencies: plan.dependencies.map((d) => readNamed(d.name, d.path)),
+    dependencies: plan.dependencies.map((d) => readCached(d.name, d.path, known)),
     missingDependencies: plan.missingDependencies,
     schema: {
       fcsDef: readFileSync(join(game.kenshi, SCHEMA_FILES.fcsDef), 'utf8'),
@@ -136,7 +144,11 @@ export function writeMod(path: string, bytes: Uint8Array): void {
 
 /** Файлы уровня ванили и модов, сырыми байтами (разбирает окно). */
 export function loadWorldBytes(req: WorldRequest): WorldFileBytes[] {
-  return listWorldFiles(worldDirs(req.game, req.modPaths)).map((f) => ({ layer: f.layer, path: f.path, bytes: readFileSync(f.full) }));
+  const known = new Set(req.known ?? []);
+  return listWorldFiles(worldDirs(req.game, req.modPaths)).map((f) => {
+    const { key, bytes } = readIfUnknown(f.full, known);
+    return { layer: f.layer, path: f.path, key, bytes: bytes ?? new Uint8Array() };
+  });
 }
 
 const ICON_TYPES: Readonly<Record<string, string>> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };

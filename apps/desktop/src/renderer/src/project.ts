@@ -10,6 +10,7 @@ import {
   itemTypeName,
   matchesLayoutFilters,
   ModContext,
+  ParsedFileCache,
   OTHER_TYPES_ID,
   parseGameSchema,
   parsePo,
@@ -20,11 +21,12 @@ import {
   type CategoryNode,
   type DataFile,
   type GameRecord,
+  type GameSchema,
   type Layer,
   type RecordStatus,
   type TranslationIndex,
 } from '@kenshi-editor/core';
-import type { KeditApi, ProjectBundle, SaveResult } from '../../shared/api.ts';
+import type { GameInstallInfo, KeditApi, NamedBytes, ProjectBundle, ProjectRequest, SaveResult } from '../../shared/api.ts';
 
 export interface IndexEntry {
   sid: string;
@@ -37,6 +39,71 @@ export interface IndexEntry {
 
 /** Псевдо-узел дерева «Изменения мода». */
 export const MOD_CHANGES_ID = '__mod__';
+
+/**
+ * Разобранные файлы ванили, зависимостей и уровня — общие для всех проектов окна: повторное
+ * «Ваниль» или другой мод на той же игре не разбирает их заново. Ключ — путь, размер и время
+ * изменения файла (main сверяет его и присылает байты только изменившихся файлов).
+ */
+export const parsedFiles = new ParsedFileCache();
+
+/** Схема с выведенными полями для последнего набора файлов без мода (ваниль ± зависимости). */
+let inferredCache: { key: string; schema: GameSchema } | undefined;
+
+function layerFile(f: NamedBytes): DataFile {
+  return f.key !== undefined ? parsedFiles.take(f.key, f.bytes) : readDataFile(f.bytes);
+}
+
+/**
+ * Открыть проект: main присылает только файлы, которых нет в кэше окна. Если кэш успел
+ * что-то вытеснить между запросом и разбором — повторить запрос без кэша.
+ */
+export async function openProject(req: ProjectRequest): Promise<Project> {
+  await prefetching?.catch(() => undefined);
+  const bundle = await window.kedit.openProject({ ...req, known: parsedFiles.keys() });
+  // Дать окну нарисовать «Загрузка…» до разбора.
+  await new Promise((r) => setTimeout(r, 0));
+  try {
+    return new Project(bundle);
+  } catch (e) {
+    if (!(e instanceof Error) || e.name !== 'CacheMissError') throw e;
+    return new Project(await window.kedit.openProject({ ...req, known: [] }));
+  }
+}
+
+let prefetching: Promise<void> | undefined;
+let prefetchedFor: string | undefined;
+
+/**
+ * Подготовить ваниль в фоне, пока виден стартовый экран: прочитать и разобрать файлы по
+ * одному (между ними окно успевает отвечать) и вывести схему. Потом «Ваниль» открывается
+ * без разбора. Ошибки здесь не показываются — их покажет само открытие.
+ */
+export function prefetchVanilla(game: GameInstallInfo): Promise<void> {
+  if (prefetchedFor === game.kenshi && prefetching) return prefetching;
+  prefetchedFor = game.kenshi;
+  const yieldToUi = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+  prefetching = (async () => {
+    const bundle = await window.kedit.openProject({ game, modName: 'untitled.mod', dependencies: [], known: parsedFiles.keys() });
+    for (const f of bundle.vanilla) {
+      await yieldToUi();
+      if (f.key !== undefined) await parsedFiles.takeSliced(f.key, f.bytes, yieldToUi);
+    }
+    await yieldToUi();
+    inferredSchema(bundle, bundle.vanilla.map(layerFile), undefined);
+  })();
+  return prefetching;
+}
+
+function inferredSchema(bundle: ProjectBundle, files: DataFile[], mod: DataFile | undefined): GameSchema {
+  const build = (): GameSchema => withInferredFields(parseGameSchema(bundle.schema), mod ? [...files, mod] : files);
+  const keys = [...bundle.vanilla, ...bundle.dependencies].map((f) => f.key);
+  if (mod || keys.some((k) => k === undefined)) return build();
+  const { fcsDef, fcsEnums = '', fcsLayout = '' } = bundle.schema;
+  const key = JSON.stringify([fcsDef, fcsEnums, fcsLayout, ...keys]);
+  if (inferredCache?.key !== key) inferredCache = { key, schema: build() };
+  return inferredCache.schema;
+}
 
 declare global {
   interface Window {
@@ -63,10 +130,10 @@ export class Project {
 
   constructor(bundle: ProjectBundle, options: { mod?: DataFile; path?: string; carriedDirty?: boolean } = {}) {
     this.bundle = bundle;
-    const vanilla: Layer[] = bundle.vanilla.map((f) => ({ name: f.name, file: readDataFile(f.bytes) }));
-    const deps: Layer[] = bundle.dependencies.map((f) => ({ name: f.name, file: readDataFile(f.bytes) }));
+    const vanilla: Layer[] = bundle.vanilla.map((f) => ({ name: f.name, file: layerFile(f) }));
+    const deps: Layer[] = bundle.dependencies.map((f) => ({ name: f.name, file: layerFile(f) }));
     const mod = options.mod ?? (bundle.mod ? readDataFile(bundle.mod.bytes) : undefined);
-    const schema = withInferredFields(parseGameSchema(bundle.schema), [...vanilla, ...deps].map((l) => l.file).concat(mod ? [mod] : []));
+    const schema = inferredSchema(bundle, [...vanilla, ...deps].map((l) => l.file), mod);
     this.ctx = new ModContext({
       layers: [...vanilla, ...deps],
       modName: bundle.modName,
@@ -91,7 +158,7 @@ export class Project {
   }
 
   private reindex(sid: string): void {
-    const rec = this.record(sid);
+    const rec = this.ctx.headline(sid);
     if (!rec) {
       this.index.delete(sid);
       return;
@@ -176,8 +243,10 @@ export class Project {
   world(): Promise<WorldIndex> {
     this.worldPromise ??= (async () => {
       const modPaths = [...this.bundle.dependencies.map((d) => d.path), ...(this.path !== undefined ? [this.path] : [])];
-      const files = await window.kedit.loadWorld({ game: this.bundle.game, modPaths });
-      return new WorldIndex(files.map((f) => ({ layer: f.layer, path: f.path, file: readDataFile(f.bytes) })));
+      const req = { game: this.bundle.game, modPaths };
+      let files = await window.kedit.loadWorld({ ...req, known: parsedFiles.keys() });
+      if (files.some((f) => f.bytes.length === 0 && !parsedFiles.has(f.key))) files = await window.kedit.loadWorld(req);
+      return new WorldIndex(files.map((f) => ({ layer: f.layer, path: f.path, file: parsedFiles.take(f.key, f.bytes) })));
     })();
     return this.worldPromise;
   }
@@ -223,6 +292,10 @@ export async function reloadWithDependencies(p: Project, dependencies: string[])
   p.ctx.setModInfo({ dependencies });
   const mod = p.ctx.buildModFile();
   const wasDirty = p.dirty;
-  const bundle = await window.kedit.openProject({ game: p.bundle.game, modName: p.ctx.modName, dependencies: [...dependencies, ...p.ctx.info.references] });
+  const req = { game: p.bundle.game, modName: p.ctx.modName, dependencies: [...dependencies, ...p.ctx.info.references] };
+  let bundle = await window.kedit.openProject({ ...req, known: parsedFiles.keys() });
+  if ([...bundle.vanilla, ...bundle.dependencies].some((f) => f.key !== undefined && f.bytes.length === 0 && !parsedFiles.has(f.key))) {
+    bundle = await window.kedit.openProject(req);
+  }
   return new Project(bundle, { mod, ...(p.path !== undefined ? { path: p.path } : {}), carriedDirty: wasDirty || p.ctx.dirty });
 }

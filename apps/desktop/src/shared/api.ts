@@ -35,12 +35,17 @@ export interface ProjectRequest {
   modName?: string;
   /** Зависимости (имена .mod); по умолчанию — из заголовка мода. */
   dependencies?: string[];
+  /** Ключи файлов, уже разобранных в окне (`ParsedFileCache`): их байты не присылаются. */
+  known?: string[];
 }
 
 export interface NamedBytes {
   name: string;
   path: string;
+  /** Пусто, если файл есть в кэше окна под ключом `key`. */
   bytes: Uint8Array;
+  /** Ключ кэша (путь, размер, время изменения) — у ванили и зависимостей. */
+  key?: string;
 }
 
 /** Всё, что нужно окну, чтобы собрать контекст редактирования. */
@@ -90,13 +95,17 @@ export interface WorldFileBytes {
   layer: string;
   /** Имя файла в папке `leveldata` (`zone.42.22.zone`). */
   path: string;
+  /** Пусто, если файл есть в кэше окна под ключом `key`. */
   bytes: Uint8Array;
+  key: string;
 }
 
 export interface WorldRequest {
   game: GameInstallInfo;
   /** Файлы .mod (зависимости по порядку, затем сам мод), чьи папки `leveldata` наложить. */
   modPaths: string[];
+  /** Ключи файлов, уже разобранных в окне. */
+  known?: string[];
 }
 
 /** Живая связь с ИИ (MCP): сервер в main, запросы выполняет окно. */

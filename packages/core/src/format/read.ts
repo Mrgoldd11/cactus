@@ -31,8 +31,47 @@ class DataFileReader {
     this.r = new ByteReader(bytes);
   }
 
+  /** Ключи полей и id повторяются сотни тысяч раз: ASCII-строку берём из кэша по хешу байтов. */
+  private readonly idCache = new Map<number, string>();
+
   private id(): string {
-    const { text, latin1 } = decodeIdentifier(this.r.str());
+    const r = this.r;
+    const bytes = r.bytes;
+    const at = r.pos;
+    const n = r.i32();
+    if (n >= 0 && n <= 64 && r.pos + n <= bytes.length) {
+      const s = r.pos;
+      const e = s + n;
+      let h = 0x811c9dc5 ^ n;
+      let ascii = true;
+      for (let i = s; i < e; i++) {
+        const b = bytes[i]!;
+        if (b >= 0x80) {
+          ascii = false;
+          break;
+        }
+        h = Math.imul(h ^ b, 0x01000193);
+      }
+      if (ascii) {
+        r.pos = e;
+        const hit = this.idCache.get(h);
+        if (hit !== undefined && hit.length === n) {
+          let same = true;
+          for (let i = 0; i < n; i++) {
+            if (hit.charCodeAt(i) !== bytes[s + i]) {
+              same = false;
+              break;
+            }
+          }
+          if (same) return hit;
+        }
+        const text = String.fromCharCode.apply(null, bytes.subarray(s, e) as unknown as number[]);
+        this.idCache.set(h, text);
+        return text;
+      }
+    }
+    r.pos = at;
+    const { text, latin1 } = decodeIdentifier(r.str());
     if (latin1) (this.latin1Ids ??= new Set()).add(text);
     return text;
   }
@@ -47,6 +86,26 @@ class DataFileReader {
   }
 
   read(options: ReadOptions): DataFile {
+    const head = this.start(options);
+    for (let i = 0; i < head.records.length; i++) head.records[i] = this.record();
+    return this.finish(head);
+  }
+
+  /** То же, что `read`, но с паузами `pause()` примерно каждые `sliceMs` мс. */
+  async readSliced(options: ReadOptions, pause: () => Promise<void>, sliceMs: number): Promise<DataFile> {
+    const head = this.start(options);
+    let t = performance.now();
+    for (let i = 0; i < head.records.length; i++) {
+      head.records[i] = this.record();
+      if ((i & 127) === 127 && performance.now() - t > sliceMs) {
+        await pause();
+        t = performance.now();
+      }
+    }
+    return this.finish(head);
+  }
+
+  private start(options: ReadOptions): { fileType: number; header: ModHeader | undefined; lastId: number; records: GameRecord[] } {
     const r = this.r;
     const fileType = r.i32();
     if (fileType !== FileType.Data && fileType !== FileType.Mod && fileType !== FileType.MergeMod) {
@@ -55,8 +114,11 @@ class DataFileReader {
     const header = fileType === FileType.Mod || fileType === FileType.MergeMod ? this.header(fileType) : undefined;
     const lastId = r.i32();
     const count = r.count(60, 'записи');
-    const records: GameRecord[] = new Array<GameRecord>(count);
-    for (let i = 0; i < count; i++) records[i] = this.record();
+    return { fileType, header, lastId, records: new Array<GameRecord>(count) };
+  }
+
+  private finish({ fileType, header, lastId, records }: { fileType: number; header: ModHeader | undefined; lastId: number; records: GameRecord[] }): DataFile {
+    const r = this.r;
     const tail = r.take(r.remaining);
     const file: DataFile = { fileType, lastId, records, tail };
     if (header) file.header = header;
@@ -211,6 +273,15 @@ class DataFileReader {
 /** Разобрать файл данных (.base/.mod/.save…) из байтов. */
 export function readDataFile(bytes: Uint8Array, options: ReadOptions = {}): DataFile {
   return new DataFileReader(bytes).read(options);
+}
+
+/**
+ * Разобрать файл кусками, отдавая управление (`pause`, например `setTimeout 0`) примерно
+ * каждые `sliceMs` мс — чтобы окно не замирало на больших файлах. Результат тот же, что
+ * у `readDataFile`.
+ */
+export function readDataFileSliced(bytes: Uint8Array, pause: () => Promise<void>, sliceMs = 12, options: ReadOptions = {}): Promise<DataFile> {
+  return new DataFileReader(bytes).readSliced(options, pause, sliceMs);
 }
 
 /** Тип файла, заголовок мода и число записей — без чтения записей (для списка модов). */

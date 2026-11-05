@@ -53,11 +53,20 @@ export function withInferredFields(schema: GameSchema, files: readonly DataFile[
     if (target !== undefined) c.targets.set(target, (c.targets.get(target) ?? 0) + 1);
   };
 
+  // Ответы «описано ли поле» и «есть ли поле для объекта» — по типу один раз (55 тыс. записей).
+  const knownByType = new Map<string, Map<string, boolean>>();
+  const instByType = new Map<string, Map<string, boolean>>();
   for (const file of files) {
     for (const rec of file.records) {
       const type = itemTypeName(rec.type);
       const ts = schema.types.get(type);
-      const known = (key: string): boolean => ts !== undefined && findField(ts, key) !== undefined;
+      let memo = knownByType.get(type);
+      if (!memo) knownByType.set(type, (memo = new Map<string, boolean>()));
+      const known = (key: string): boolean => {
+        let k = memo.get(key);
+        if (k === undefined) memo.set(key, (k = ts !== undefined && findField(ts, key) !== undefined));
+        return k;
+      };
       for (const dict of Object.keys(KIND_FOR_DICT) as (keyof typeof KIND_FOR_DICT)[]) {
         for (const key of rec[dict].keys()) if (!known(key)) add(type, key, KIND_FOR_DICT[dict]);
       }
@@ -68,7 +77,13 @@ export function withInferredFields(schema: GameSchema, files: readonly DataFile[
       }
       for (const inst of rec.instances.values()) {
         const target = typeById.get(inst.target) ?? 'NULL_ITEM';
-        const has = ts && [...ts.fields.values()].some((f) => f.kind === 'instance' && (f.targetType === target || f.targetType === 'NULL_ITEM'));
+        let im = instByType.get(type);
+        if (!im) instByType.set(type, (im = new Map<string, boolean>()));
+        let has = im.get(target);
+        if (has === undefined) {
+          has = ts !== undefined && [...ts.fields.values()].some((f) => f.kind === 'instance' && (f.targetType === target || f.targetType === 'NULL_ITEM'));
+          im.set(target, has);
+        }
         if (!has) add(type, `→${target}`, 'instance', target);
       }
     }

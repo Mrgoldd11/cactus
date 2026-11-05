@@ -43,6 +43,9 @@ export function isValidUtf8(bytes: Uint8Array): boolean {
 }
 
 function asciiToString(bytes: Uint8Array): string {
+  // Короткие строки (ключи полей, id) — одним вызовом: `apply` с типизированным массивом
+  // не проходит через итератор, в отличие от `...` (это была половина времени разбора файла).
+  if (bytes.length <= 8192) return String.fromCharCode.apply(null, bytes as unknown as number[]);
   let out = '';
   // Кусками, чтобы не упереться в лимит аргументов на длинных строках.
   for (let i = 0; i < bytes.length; i += 8192) {

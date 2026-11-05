@@ -226,6 +226,20 @@ export class ModContext {
     return rec ?? undefined;
   }
 
+  /**
+   * Тип и имя записи без сборки всей записи — для индексов на десятки тысяч строк. Та же
+   * запись, что `get ?? lower ?? delta`: итоговая, для удалённой модом — нижних слоёв, иначе
+   * запись мода. У нижних слоёв тип и имя берутся из последнего слоя (так их накладывает
+   * `applyLayer`); маркер удаления последним — записи нет.
+   */
+  headline(stringId: string): Pick<GameRecord, 'type' | 'name'> | undefined {
+    if (!this.deltas.has(stringId)) {
+      const last = this.lowerEntries.get(stringId)?.at(-1)?.rec;
+      return last && !isRemovalMarker(last) ? last : undefined;
+    }
+    return this.get(stringId) ?? this.lower(stringId) ?? this.deltas.get(stringId);
+  }
+
   has(stringId: string): boolean {
     return this.get(stringId) !== undefined;
   }

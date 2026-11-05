@@ -14,6 +14,7 @@
     "build": "pnpm -r build",
     "report": "pnpm --filter @kenshi-editor/core report",
     "desktop": "pnpm --filter @kenshi-editor/desktop dev",
+    "desktop:start": "node apps/desktop/scripts/launch.ts",
     "desktop:e2e": "pnpm --filter @kenshi-editor/desktop e2e"
   },
   "devDependencies": {

@@ -196,7 +196,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
   return (
     <div className="editor" data-testid="editor">
       <div className="toolbar">
-        <button onClick={onClose} title={t.close}>
+        <button onClick={onClose} title={t.close} data-testid="home">
           ⌂
         </button>
         <span className="sep" />

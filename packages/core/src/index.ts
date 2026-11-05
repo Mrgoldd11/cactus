@@ -6,6 +6,7 @@ export * from './format/item-types.ts';
 export * from './format/read.ts';
 export * from './format/write.ts';
 export * from './format/helpers.ts';
+export * from './format/file-cache.ts';
 export * from './schema/index.ts';
 export * from './locale/po.ts';
 export * from './locale/translation.ts';
