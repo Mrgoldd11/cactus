@@ -16,7 +16,7 @@ import type { ModContext } from './context.ts';
 import { isRemovalMarker, isRemovedRef, SCALAR_DICTS, scalarMap } from './record-ops.ts';
 import { isVanillaLayer } from '../vanilla.ts';
 import { decodeText } from '../text.ts';
-import { ACTION_KIND_LABELS, dialogActionKinds, dialogScore, EVENT_TALK, packageDialogs, squadIndex, talkSources, type ActionKind, type SquadIndex } from '../dialog/talk.ts';
+import { ACTION_KIND_LABELS, dialogActionKinds, dialogBestTotal, dialogSortKey, EVENT_TALK, packageDialogs, squadIndex, talkSources, type ActionKind, type SquadIndex } from '../dialog/talk.ts';
 
 export type IssueCode =
   | 'broken-ref'
@@ -154,10 +154,11 @@ function checkEmptyDialogues(ctx: ModContext, issues: ValidationIssue[]): void {
 }
 
 /**
- * Диалог, который мод дописал в пакет (`dialogs`) или персонажу (`dialogue`, клик), при очках не
- * меньше, чем у уже бывшего там диалога того же события с действием (арест, атака, торговля, найм):
- * игра может выбрать диалог мода, и действие не случится (паладины не арестуют, торговец не
- * откроет меню). Свой диалог стоит сделать запасным — `score bonus` ниже, например −100.
+ * Диалог, который мод дописал в пакет (`dialogs`) или персонажу (`dialogue`, клик), может попасть в
+ * розыгрыш вместе с уже бывшим там диалогом того же события с действием (арест, атака, торговля,
+ * найм): его лучшие очки (с первой репликой, как у игры) не меньше, или игра ставит его в списке
+ * раньше. Тогда игра может выбрать диалог мода, и действие не случится (паладины не арестуют,
+ * торговец не откроет меню). Свой диалог стоит сделать запасным — `score bonus` ниже, например −100.
  */
 function checkActionOverrides(ctx: ModContext, issues: ValidationIssue[]): void {
   let sq: SquadIndex | undefined;
@@ -174,12 +175,13 @@ function checkActionOverrides(ctx: ModContext, issues: ValidationIssue[]): void 
   const check = (holder: string, key: string, added: { dialog: string; event: number }, rivals: readonly string[]): void => {
     const mine = ctx.get(added.dialog);
     if (!mine || !playable(added.dialog)) return;
-    const my = dialogScore(mine);
+    const my = dialogBestTotal(ctx, added.dialog) ?? 0;
+    const myKey = dialogSortKey(ctx, added.dialog);
     for (const rv of new Set(rivals)) {
       if (rv === added.dialog || ctx.status(rv) === 'new' || !playable(rv)) continue;
       const act = kindsOf(rv);
-      const theirs = dialogScore(ctx.get(rv));
-      if (!act.length || my < theirs) continue;
+      const theirs = dialogBestTotal(ctx, rv) ?? 0;
+      if (!act.length || (my < theirs && myKey <= dialogSortKey(ctx, rv))) continue;
       issues.push({
         severity: 'warning',
         code: 'overrides-action',

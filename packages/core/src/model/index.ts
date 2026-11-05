@@ -5,6 +5,7 @@ export * from './present.ts';
 export * from './search.ts';
 export * from './validate.ts';
 export * from './dialogue.ts';
+export * from './dialogue-score.ts';
 export * from './dialogue-graph.ts';
 export * from './ops.ts';
 export * from './schema-view.ts';

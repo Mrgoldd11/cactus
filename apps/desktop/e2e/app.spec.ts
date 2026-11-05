@@ -312,7 +312,6 @@ test('граф диалога: реплики по-русски, выбор иг
     await expect(graph.locator('[data-testid="dg-node"][data-id="5464-gamedata.base"]')).toBeInViewport();
     await page.screenshot({ path: join(shots, '12-dialogue-graph.png') });
 
-    // «Hunger arrest empire»: вторая реплика (условие на расу, очков меньше) не будет выбрана.
     // Узкое окно: стартовый вид от корня, а не пустая середина широкого дерева.
     await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1100, 640); });
     await selectRecord(page, '53976-Dialogue.mod', '53976-Dialogue.mod');
@@ -320,13 +319,20 @@ test('граф диалога: реплики по-русски, выбор иг
     await expect(graph.getByTestId('dg-stats')).toContainText('узлов 25');
     await expect(graph.locator('[data-testid="dg-node"][data-id="53976-Dialogue.mod"]')).toBeInViewport();
     await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1400, 900); });
-    const issue = graph.locator('[data-kind="shadowed"][data-node="53978-Dialogue.mod"]');
+    // По правилу игры реплика с условием на расу получает +2 и здесь не теряется.
+    await expect(graph.locator('[data-kind="shadowed"]')).toHaveCount(0);
+    // «Grim talks to new ally»: реплика с условием (очки 1) никогда не будет выбрана —
+    // соседняя без условий раньше в списке и с очками 5.
+    await selectRecord(page, '61857-Dialogue.mod', '61857-Dialogue.mod');
+    await page.getByTestId('tab-graph').click();
+    await expect(graph.getByTestId('dg-stats')).toContainText('узлов 5');
+    const issue = graph.locator('[data-kind="shadowed"][data-node="61859-Dialogue.mod"]');
     await expect(issue).toContainText('не будет выбрана');
     await expect(issue).toContainText(/реплика «[^»]*[а-яё]/i);
     await issue.getByRole('button').click();
     // Клик по проблеме — вид переходит к реплике.
     await expect(graph.locator('.react-flow__viewport')).toHaveAttribute('style', /scale\(1\)/);
-    await expect(graph.locator('[data-testid="dg-node"][data-id="53978-Dialogue.mod"] .dg-warn')).toBeInViewport();
+    await expect(graph.locator('[data-testid="dg-node"][data-id="61859-Dialogue.mod"] .dg-warn')).toBeInViewport();
     await page.screenshot({ path: join(shots, '13-dialogue-shadowed.png') });
 
     // Вкладки графа нет у записей не-диалогов: остаётся на месте прежняя вкладка «Поля».
@@ -352,12 +358,38 @@ test('разговор: какой диалог выберет игра у пе�
     await expect(win).toHaveAttribute('data-dialog', '48721-Dialogue.mod');
     await expect(win).toContainText('торговля');
     await expect(talk.locator('[data-testid="talk-candidate"][data-verdict="locked"]')).toContainText('найм');
-    await expect(talk.getByTestId('talk-summary')).toContainText('Игра выберет');
-    // Начало разговора — по-русски из перевода игры, с вариантами игрока.
+    await expect(talk.getByTestId('talk-summary')).toContainText('Без всяких условий игра выберет');
+    await expect(talk.getByTestId('talk-summary')).toContainText('перебивают это');
+    await expect(win.getByTestId('talk-why')).toContainText('подходит всегда');
+    await expect(talk.locator('[data-testid="talk-candidate"][data-verdict="if-conditions"]').first().getByTestId('talk-why')).toContainText('когда его условия выполнены');
+    // Начало разговора — по-русски из перевода игры, с вариантами игрока; у реплики с условиями — её шанс.
     const opening = talk.getByTestId('talk-opening');
     await expect(opening).toContainText('Пляшущий Скелет', { timeout: 60_000 });
     await expect(opening.locator('.talk-choice').first()).toContainText('Давай торговать');
+    await expect(opening.getByTestId('talk-line-odds').first()).toContainText('при условиях шанс 100%');
     await page.screenshot({ path: join(shots, '16-talk.png') });
+
+    // «Как игра выбирает»: окошко с правилами; закрывается повторным кликом, кликом мимо и Esc.
+    const rulesBtn = talk.getByTestId('talk-rules-btn');
+    const rules = page.getByTestId('talk-rules');
+    await rulesBtn.click();
+    await expect(rules).toBeVisible();
+    await expect(rules).toContainText('всем поровну');
+    await expect(rules).toContainText('не прозвучит');
+    await page.screenshot({ path: join(shots, '16b-talk-rules.png') });
+    await rules.click();
+    await expect(rules).toBeVisible();
+    await rulesBtn.click();
+    await expect(rules).toHaveCount(0);
+    await rulesBtn.click();
+    await expect(rules).toBeVisible();
+    // Клик мимо окошка (левый край строки итога окошко не закрывает собой).
+    await talk.getByTestId('talk-summary').click({ position: { x: 4, y: 4 } });
+    await expect(rules).toHaveCount(0);
+    await rulesBtn.click();
+    await expect(rules).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(rules).toHaveCount(0);
 
     // Другое событие: «объявление» — диалогов нет; «вижу нейтральный отряд» — драка с атакой.
     await talk.getByTestId('talk-event').selectOption('2');

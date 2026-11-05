@@ -94,6 +94,7 @@ function base(): DataFile {
       r.refs.set('dialogue package', [ref('PK')]);
     }),
     rec('CHARACTER', 'OTHER'),
+    rec('RACE', 'RACE'),
   ]);
 }
 
@@ -116,12 +117,27 @@ describe('симулятор разговора', () => {
     expect(talkSources(ctx, ctx.get('C')!, 3).map((s) => s.dialog)).toEqual(['D3']);
   });
 
-  it('вердикты: победитель по очкам, условия, ничья, перебит, заблокирован, пустой', () => {
+  it('вердикты: случайно из равных, условия, перебит, заблокирован, пустой', () => {
     const ctx = ctxOf();
     const sim = simulateTalk(ctx, 'C');
-    const v = Object.fromEntries(sim.candidates.map((x) => [x.dialog, x.verdict]));
-    expect(v).toEqual({ DC: 'if-conditions', DV: 'wins', DTIE: 'tie', DS: 'shadowed', DLOCK: 'locked', DEMPTY: 'empty' });
-    expect(sim.winner).toBe('DV');
+    // Порядок игры: по очкам (у DC +1 за условие), заблокированные и пустые — в конце.
+    expect(sim.candidates.map((x) => [x.dialog, x.verdict, x.score])).toEqual([
+      ['DC', 'if-conditions', 11],
+      ['DV', 'random', 0],
+      ['DTIE', 'random', 0],
+      ['DS', 'shadowed', -5],
+      ['DLOCK', 'locked', 2],
+      ['DEMPTY', 'empty', 0],
+    ]);
+    // DV и DTIE без условий и с равными очками: игра выбирает случайно, поровну.
+    expect(sim.winner).toBeUndefined();
+    expect(sim.pool).toEqual(['DV', 'DTIE']);
+    expect(sim.candidates.find((x) => x.dialog === 'DV')!.odds).toBeCloseTo(0.5);
+    expect(sim.candidates.find((x) => x.dialog === 'DV')!.with).toEqual(['DTIE']);
+    expect(sim.candidates.find((x) => x.dialog === 'DC')!.scoreParts).toEqual([
+      { key: 'bonus', value: 10 },
+      { key: 'conditions', value: 1 },
+    ]);
     const dv = sim.candidates.find((x) => x.dialog === 'DV')!;
     expect(dv.sources.map((s) => s.via)).toEqual(['character-package', 'faction']);
     expect(dv.actions).toEqual(['arrest']);
@@ -131,9 +147,37 @@ describe('симулятор разговора', () => {
     // Начало разговора: реплика NPC и выбор игрока под ней.
     expect(sim.opening.map((l) => [l.id, l.texts[0]?.en, l.choices.map((c) => c.texts[0]?.en)])).toEqual([['DV.L', 'DV says hi', ['Bye']]]);
     const text = formatTalk(sim).join('\n');
-    expect(text).toContain('▶ DV (DV) — выберет игра');
+    expect(sim.openingOf).toBe('DV');
+    expect(text).toContain('· DV (DV) — выпадет случайно: без условий выпадет случайно, шанс 50%; вместе с «DTIE»');
+    expect(text).toContain('итог: без условий игра выберет случайно один из 2');
+    expect(text).toContain('как выбирает игра');
     expect(text).toContain('действия: арест');
     expect(text).toContain('«DV says hi»');
+  });
+
+  it('правило игры: условие даёт очки, уже попавший в розыгрыш не выбывает, раса +2, предел −999', () => {
+    const ctx = ctxOf();
+    const bld = new DialogBuilder(ctx);
+    // Реплика A (0 очков, но с вариантом игрока: ключ 1) стоит в списке раньше B (1 очко, ключ 1):
+    // A попадает в розыгрыш первой и не выбывает, хотя у B очков больше.
+    const a = bld.line('A', SPEAKER.ME, ['A'], { children: [bld.line('A.p', SPEAKER.TARGET, ['ok'])] });
+    const bl = bld.line('B', SPEAKER.ME, ['B'], { score: 1 });
+    const w = bld.dialogue('W', [a, bl], [], { score: 4 });
+    // Раса собеседника: +2 при загрузке и ещё +2 в игре — 4, как у W с репликой A.
+    const r = bld.dialogue('R', [bld.line('R.l', SPEAKER.ME, ['R'])], [{ targetRace: ['RACE'] }]);
+    const low = bld.dialogue('LOW', [bld.line('LOW.l', SPEAKER.ME, ['low'])], [], { score: -1000 });
+    for (const d of [w, r, low]) bld.attachToCharacter('OTHER', d);
+    const sim = simulateTalk(ctx, 'OTHER');
+    const v = Object.fromEntries(sim.candidates.map((x) => [x.dialog, [x.verdict, x.odds]]));
+    expect(v[w]).toEqual(['wins', 1]);
+    // W начинает с A (итог 4) или B (итог 5) поровну; R (4) в розыгрыше только при A: 1/2 × 1/2.
+    expect(v[r]).toEqual(['tie', 0.25]);
+    // Очки ниже −999 игра не берёт никогда, даже если диалог один.
+    expect(v[low]).toEqual(['shadowed', undefined]);
+    expect(sim.opening.map((l) => [l.id, l.odds])).toEqual([
+      [a, 0.5],
+      [bl, 0.5],
+    ]);
   });
 
   it('без диалогов и не персонаж', () => {

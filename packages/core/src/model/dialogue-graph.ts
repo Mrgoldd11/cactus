@@ -2,14 +2,16 @@
  * Граф диалога для показа: узлы — записи (пакет, диалог, реплики) по одному разу, рёбра —
  * ссылки `dialogs` / `lines`, в том числе обратные (петли меню). Тексты реплик — с русским
  * переводом игры (`ru_RU.translation`), если он передан. Проверки: нет записи, диалог без
- * реплик, реплика NPC, которую никогда не выберут (соседняя реплика того же говорящего без
- * условий, со 100% шансом и бо́льшими очками всегда побеждает), ответвление обрезано лимитом.
+ * реплик, реплика NPC, которую никогда не выберут (соседняя реплика подходит всегда, стоит в
+ * списке игры раньше и очков у неё больше), ответвление обрезано лимитом. Очки — как у игры
+ * (`score bonus` с надбавками, см. `dialogue-score.ts`).
  */
 import { decodeText } from '../text.ts';
 import type { GameRecord } from '../format/types.ts';
 import { translatedText, type TranslationIndex } from '../locale/translation.ts';
 import type { ModContext } from './context.ts';
 import { buildDialogueTree, type DialogueNode } from './dialogue.ts';
+import { alwaysPasses, chooseOrder, DIALOGUE_CONDITION_CATEGORIES, dialogueScore, isEmptyNode, type ScorePart } from './dialogue-score.ts';
 import { formatEnumValue, getEnum, refValueEnum, shortEnumLabel } from './enums.ts';
 
 /**
@@ -17,27 +19,6 @@ import { formatEnumValue, getEnum, refValueEnum, shortEnumLabel } from './enums.
  * варианты выбора, а не случайный выбор игры.
  */
 export const CHOICE_SPEAKERS: ReadonlySet<number> = new Set([1, 2]);
-/** T_TARGET_WITH_RACE — говорит, только если есть собеседник нужной расы (условие). */
-const SPEAKER_TARGET_WITH_RACE = 7;
-
-/** Ссылки реплики/диалога, которые работают как условия (кроме `conditions`). */
-export const DIALOGUE_CONDITION_CATEGORIES = [
-  'conditions',
-  'target race',
-  'no target race',
-  'world state',
-  'in town of',
-  'my faction',
-  'target faction',
-  'is character',
-  'has package',
-  'my race',
-  'my subrace',
-  'target has item',
-  'target has item type',
-  'target carrying character',
-] as const;
-
 export interface DialogueGraphText {
   en: string;
   ru?: string;
@@ -64,7 +45,10 @@ export interface DialogueGraphNode {
   speakerLabel?: string;
   /** Реплика T_TARGET (вариант выбора игрока). */
   choice: boolean;
+  /** Очки, как их считает игра (`score bonus` с надбавками). */
   score?: number;
+  /** Из чего сложились очки. */
+  scoreParts?: ScorePart[];
   /** `chance temporary`, %. */
   chance?: number;
   conditions: string[];
@@ -104,16 +88,6 @@ export interface DialogueGraphOptions {
   translation?: TranslationIndex;
 }
 
-/** Есть ли у реплики или диалога хоть одно условие (ссылки-условия, `target is type`, ограничение повтора). */
-export function hasConditions(rec: GameRecord): boolean {
-  if ((rec.ints.get('target is type') ?? 0) !== 0 || (rec.ints.get('repetition limit') ?? 0) !== 0) return true;
-  return DIALOGUE_CONDITION_CATEGORIES.some((c) => (rec.refs.get(c)?.length ?? 0) > 0);
-}
-
-function score(rec: GameRecord): number {
-  return rec.ints.get('score bonus') ?? 0;
-}
-
 function chance(rec: GameRecord): number {
   return rec.floats.get('chance temporary') ?? 100;
 }
@@ -127,20 +101,27 @@ function shortName(ctx: ModContext, sid: string, translation?: TranslationIndex)
 }
 
 /**
- * Реплики NPC под одним узлом, которых игра не выберет: среди соседей с тем же говорящим
- * есть реплика без условий со 100% шансом и строго большими очками (`score bonus`).
+ * Реплики NPC под одним узлом, которых игра не выберет никогда: в списке игры раньше неё стоит
+ * соседняя реплика с текстом, которая подходит всегда (без условий, шанса, блокировки), и очков у
+ * неё больше. Игра идёт по списку сверху и на реплике с меньшими очками останавливается.
  * Реплики игрока (T_TARGET, T_TARGET_IF_PLAYER) — варианты выбора, их не сравниваем.
  */
 export function shadowedLines(ctx: ModContext, parent: string): { line: string; by: string }[] {
   const rec = ctx.get(parent);
   if (!rec) return [];
-  const kids = (rec.refs.get('lines') ?? []).map((r) => ({ sid: r.target, rec: ctx.get(r.target) })).filter((k): k is { sid: string; rec: GameRecord } => k.rec !== undefined);
+  const npc = (rec.refs.get('lines') ?? []).map((r) => r.target).filter((sid) => {
+    const r = ctx.get(sid);
+    return r !== undefined && !CHOICE_SPEAKERS.has(r.ints.get('speaker') ?? 0);
+  });
+  const order = chooseOrder(ctx, [...new Set(npc)]);
   const out: { line: string; by: string }[] = [];
-  for (const k of kids) {
-    const sp = k.rec.ints.get('speaker') ?? 0;
-    if (CHOICE_SPEAKERS.has(sp) || sp === SPEAKER_TARGET_WITH_RACE) continue;
-    const winner = kids.find((o) => o !== k && (o.rec.ints.get('speaker') ?? 0) === sp && !hasConditions(o.rec) && chance(o.rec) >= 100 && score(o.rec) > score(k.rec));
-    if (winner) out.push({ line: k.sid, by: winner.sid });
+  let sure: { sid: string; score: number } | undefined;
+  for (const sid of order) {
+    const r = ctx.get(sid);
+    if (!r) continue;
+    const s = dialogueScore(ctx, r).total;
+    if (sure && !isEmptyNode(r) && s < sure.score) out.push({ line: sid, by: sure.sid });
+    if (alwaysPasses(r) && !isEmptyNode(r) && (!sure || s > sure.score)) sure = { sid, score: s };
   }
   return out;
 }
@@ -181,7 +162,9 @@ export function buildDialogueGraph(ctx: ModContext, stringId: string, options: D
         node.texts.push(t);
       }
       if (n.type === 'DIALOGUE_LINE') {
-        node.score = score(rec);
+        const sc = dialogueScore(ctx, rec);
+        node.score = sc.total;
+        node.scoreParts = sc.parts;
         node.chance = chance(rec);
       }
     }
@@ -236,7 +219,7 @@ export function buildDialogueGraph(ctx: ModContext, stringId: string, options: D
         kind: 'shadowed',
         node: s.line,
         by: s.by,
-        text: `не будет выбрана: соседняя реплика «${shortName(ctx, s.by, options.translation)}» без условий, шанс 100%, очков больше`,
+        text: `не будет выбрана: соседняя реплика «${shortName(ctx, s.by, options.translation)}» подходит всегда, стоит раньше, и очков у неё больше`,
       };
       target.issues.push(i);
       issues.push(i);
