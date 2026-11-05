@@ -105,6 +105,8 @@ export interface KeditApi {
   loadWorld(req: WorldRequest): Promise<WorldFileBytes[]>;
   /** Иконка предмета (поле `icon`, путь относительно папки игры) как data URL; null — нет файла. */
   readIcon(game: GameInstallInfo, iconPath: string): Promise<string | null>;
+  /** Байты перевода текстов записей `locale/ru_RU/ru_RU.translation` (реплики); null — нет файла. */
+  readTranslation(game: GameInstallInfo): Promise<Uint8Array | null>;
   getSettings(): Promise<Settings>;
   setSettings(patch: Partial<Settings>): Promise<Settings>;
   /** Есть ли несохранённые изменения (main спросит при закрытии окна). */
@@ -121,6 +123,7 @@ export const IPC = {
   saveMod: 'kedit:save-mod',
   loadWorld: 'kedit:load-world',
   readIcon: 'kedit:read-icon',
+  readTranslation: 'kedit:read-translation',
   getSettings: 'kedit:get-settings',
   setSettings: 'kedit:set-settings',
   setDirty: 'kedit:set-dirty',

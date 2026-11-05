@@ -32,6 +32,7 @@ import type { Project } from '../project.ts';
 import { CommitInput } from './widgets.tsx';
 import { RecordPicker } from './RecordPicker.tsx';
 import { WhereTab } from './WhereTab.tsx';
+import { DIALOGUE_GRAPH_TYPES, DialogueGraphTab } from './DialogueGraphTab.tsx';
 
 interface Props {
   project: Project;
@@ -41,12 +42,12 @@ interface Props {
   onReport: (err: string | undefined) => void;
 }
 
-type Tab = 'fields' | 'refs' | 'back' | 'where' | 'diff';
+type Tab = 'fields' | 'refs' | 'back' | 'graph' | 'where' | 'diff';
 
 export function RecordEditor({ project, version, sid, onGo, onReport }: Props): ReactNode {
   const t = useT();
   const ctx = project.ctx;
-  const [tab, setTab] = useState<Tab>('fields');
+  const [chosenTab, setTab] = useState<Tab>('fields');
   const rec = project.record(sid);
   const status = ctx.status(sid);
   const origin = ctx.origin(sid);
@@ -63,6 +64,8 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
     );
   }
   const ru = ctx.localizedName(sid);
+  const hasGraph = DIALOGUE_GRAPH_TYPES.has(itemTypeName(rec.type));
+  const tab: Tab = chosenTab === 'graph' && !hasGraph ? 'fields' : chosenTab;
   const edit = (fn: () => void): void => {
     onReport(tryEdit(fn));
   };
@@ -120,6 +123,7 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
         <TabButton tab="fields" cur={tab} set={setTab} label={t.tabFields} />
         <TabButton tab="refs" cur={tab} set={setTab} label={`${t.tabRefs} (${refCount})`} />
         <TabButton tab="back" cur={tab} set={setTab} label={`${t.tabBackRefs} (${backRefs.length})`} />
+        {hasGraph && <TabButton tab="graph" cur={tab} set={setTab} label={t.tabGraph} />}
         <TabButton tab="where" cur={tab} set={setTab} label={t.tabWhere} />
         <TabButton tab="diff" cur={tab} set={setTab} label={t.tabDiff} marked={status !== 'base'} />
       </div>
@@ -127,6 +131,7 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
         {tab === 'fields' && <FieldsTab ctx={ctx} rec={rec} sid={sid} version={version} disabled={deleted} edit={edit} />}
         {tab === 'refs' && <RefsTab project={project} sid={sid} groups={groups} disabled={deleted} edit={edit} onGo={onGo} />}
         {tab === 'back' && <BackRefsTab project={project} sid={sid} entries={backRefs} onGo={onGo} />}
+        {tab === 'graph' && <DialogueGraphTab project={project} sid={sid} version={version} onGo={onGo} />}
         {tab === 'where' && <WhereTab project={project} sid={sid} version={version} onGo={onGo} />}
         {tab === 'diff' && <DiffTab ctx={ctx} sid={sid} version={version} onGo={onGo} />}
       </div>

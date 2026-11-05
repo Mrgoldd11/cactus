@@ -8,5 +8,6 @@ export * from './format/write.ts';
 export * from './format/helpers.ts';
 export * from './schema/index.ts';
 export * from './locale/po.ts';
+export * from './locale/translation.ts';
 export * from './model/index.ts';
 export * from './world/index.ts';

@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parsePo, type PoFile } from '../locale/po.ts';
+import { indexTranslation, type TranslationIndex } from '../locale/translation.ts';
+import { readDataFile } from '../format/read.ts';
 import { parseGameSchema, type GameSchema } from '../schema/game-schema.ts';
 import type { GamePaths } from './paths.ts';
 
@@ -28,4 +30,15 @@ export function gamedataPoPath(paths: GamePaths, language = 'ru_RU'): string {
 /** Прочитать перевод игры `locale/<язык>/gamedata.po`. */
 export function loadGamedataPo(paths: GamePaths, language = 'ru_RU'): PoFile {
   return parsePo(readFileSync(gamedataPoPath(paths, language), 'utf8'));
+}
+
+/** Перевод текстов записей (реплик и др.) `locale/<язык>/<язык>.translation`. */
+export function translationFilePath(paths: GamePaths, language = 'ru_RU'): string {
+  return join(paths.kenshi, 'locale', language, `${language}.translation`);
+}
+
+/** Прочитать перевод текстов записей; без файла — undefined. */
+export function loadTranslation(paths: GamePaths, language = 'ru_RU'): TranslationIndex | undefined {
+  const path = translationFilePath(paths, language);
+  return existsSync(path) ? indexTranslation(readDataFile(readFileSync(path))) : undefined;
 }

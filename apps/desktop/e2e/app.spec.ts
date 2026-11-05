@@ -272,3 +272,45 @@ test('где в игре: катана → торговец оружием → �
     await app.close();
   }
 });
+
+test('граф диалога: реплики по-русски, выбор игрока, петли; реплика, которую игра не выберет', async () => {
+  const { app, page } = await launch();
+  try {
+    await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('open-vanilla').click();
+    await waitEditor(page);
+    // «mercenary shop»: 18 узлов, 11 вариантов игрока, 9 возвратов к меню.
+    await selectRecord(page, '5464-gamedata.base', '5464-gamedata.base');
+    await page.getByTestId('tab-graph').click();
+    const graph = page.getByTestId('dialogue-graph');
+    await expect(graph.getByTestId('dg-stats')).toContainText('узлов 18, вариантов игрока 11, петель 9', { timeout: 60_000 });
+    await expect(graph.getByTestId('dg-stats')).not.toContainText('читаю перевод');
+    await expect(graph.locator('.dg-node.dg-choice').first()).toBeVisible();
+    // Тексты реплик — из перевода игры.
+    await expect(graph.locator('.dg-text').first()).toHaveText(/[а-яё]/i);
+    await expect(graph.locator('.react-flow__edge.dg-edge-back').first()).toBeAttached();
+    await expect(graph.locator('.react-flow__minimap-node')).toHaveCount(18);
+    // Стартовый вид — читаемый масштаб, корень виден.
+    await expect(graph.locator('.react-flow__viewport')).toHaveAttribute('style', /scale\(0\.85\)/);
+    await expect(graph.locator('[data-testid="dg-node"][data-id="5464-gamedata.base"]')).toBeInViewport();
+    await page.screenshot({ path: join(shots, '12-dialogue-graph.png') });
+
+    // «Hunger arrest empire»: вторая реплика (условие на расу, очков меньше) не будет выбрана.
+    await selectRecord(page, '53976-Dialogue.mod', '53976-Dialogue.mod');
+    await page.getByTestId('tab-graph').click();
+    const issue = graph.locator('[data-kind="shadowed"][data-node="53978-Dialogue.mod"]');
+    await expect(issue).toContainText('не будет выбрана');
+    await expect(issue).toContainText(/реплика «[^»]*[а-яё]/i);
+    await issue.getByRole('button').click();
+    // Клик по проблеме — вид переходит к реплике.
+    await expect(graph.locator('.react-flow__viewport')).toHaveAttribute('style', /scale\(1\)/);
+    await expect(graph.locator('[data-testid="dg-node"][data-id="53978-Dialogue.mod"] .dg-warn')).toBeInViewport();
+    await page.screenshot({ path: join(shots, '13-dialogue-shadowed.png') });
+
+    // Вкладки графа нет у записей не-диалогов: остаётся на месте прежняя вкладка «Поля».
+    await selectRecord(page, 'katana', KATANA);
+    await expect(page.getByTestId('tab-graph')).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});

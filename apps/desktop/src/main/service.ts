@@ -16,6 +16,7 @@ import {
   planModLoad,
   readModsCfg,
   SCHEMA_FILES,
+  translationFilePath,
   vanillaFilePaths,
   worldDirs,
 } from '@kenshi-editor/core/node';
@@ -152,4 +153,10 @@ export function readIconDataUrl(game: GameInstallInfo, iconPath: string): string
   if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return null;
   if (!existsSync(full)) return null;
   return `data:${mime};base64,${readFileSync(full).toString('base64')}`;
+}
+
+/** Перевод текстов записей (реплик) игры; null — файла нет. */
+export function readTranslationBytes(game: GameInstallInfo): Uint8Array | null {
+  const path = translationFilePath(game);
+  return existsSync(path) ? readFileSync(path) : null;
 }

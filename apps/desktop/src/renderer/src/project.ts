@@ -6,6 +6,7 @@
 import {
   buildCategoryTree,
   decodeText,
+  indexTranslation,
   itemTypeName,
   matchesLayoutFilters,
   ModContext,
@@ -21,6 +22,7 @@ import {
   type GameRecord,
   type Layer,
   type RecordStatus,
+  type TranslationIndex,
 } from '@kenshi-editor/core';
 import type { KeditApi, ProjectBundle, SaveResult } from '../../shared/api.ts';
 
@@ -56,6 +58,7 @@ export class Project {
   private readonly listeners = new Set<() => void>();
   private typeCache: { version: number; map: Map<string, string[]> } | undefined;
   private worldPromise: Promise<WorldIndex> | undefined;
+  private translationPromise: Promise<TranslationIndex | undefined> | undefined;
   private readonly icons = new Map<string, Promise<string | null>>();
 
   constructor(bundle: ProjectBundle, options: { mod?: DataFile; path?: string; carriedDirty?: boolean } = {}) {
@@ -177,6 +180,12 @@ export class Project {
       return new WorldIndex(files.map((f) => ({ layer: f.layer, path: f.path, file: readDataFile(f.bytes) })));
     })();
     return this.worldPromise;
+  }
+
+  /** Перевод реплик игры (`ru_RU.translation`), читается один раз; undefined — нет файла. */
+  translation(): Promise<TranslationIndex | undefined> {
+    this.translationPromise ??= window.kedit.readTranslation(this.bundle.game).then((b) => (b ? indexTranslation(readDataFile(b)) : undefined));
+    return this.translationPromise;
   }
 
   /** Иконка предмета по полю `icon` как data URL (или null). */

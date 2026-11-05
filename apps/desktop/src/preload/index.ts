@@ -12,6 +12,7 @@ const api: KeditApi = {
   saveMod: (req) => ipcRenderer.invoke(IPC.saveMod, req),
   loadWorld: (req) => ipcRenderer.invoke(IPC.loadWorld, req),
   readIcon: (game, iconPath) => ipcRenderer.invoke(IPC.readIcon, game, iconPath),
+  readTranslation: (game) => ipcRenderer.invoke(IPC.readTranslation, game),
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   setSettings: (patch) => ipcRenderer.invoke(IPC.setSettings, patch),
   setDirty: (dirty, title) => {

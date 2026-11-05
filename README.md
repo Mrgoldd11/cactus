@@ -114,6 +114,11 @@ cd node_modules/.pnpm/electron@*/node_modules/electron && node install.js
 - вкладка «Где в игре»: цепочка обратных ссылок от записи до места в мире (катана ← список
   торговца оружием ← отряд ← города Груз и Хэн) с координатами из файлов уровня и иконкой
   предмета, если она есть; каждый шаг пути открывается щелчком;
+- вкладка «Граф» у пакетов диалогов, диалогов и реплик: реплики узлами (кто говорит, тексты
+  по-русски из перевода игры `ru_RU.translation`, условия, действия, очки и шанс), варианты
+  игрока выделены, петли меню — пунктиром; сверху — проблемы: нет записи, диалог без реплик,
+  реплика, которую игра никогда не выберет (соседняя без условий со 100% шансом и бо́льшими
+  очками); щелчок по проблеме показывает реплику на графе;
 - отмена и повтор (Ctrl+Z / Ctrl+Y), сохранение (Ctrl+S, Ctrl+Shift+S — «как»), назад и вперёд
   по истории переходов (Alt+← / Alt+→), поиск (Ctrl+F), проверка мода, язык EN/RU.
 
@@ -260,14 +265,16 @@ console.log(schema.types.get('WEAPON')?.fields.get('blunt damage multiplier')?.d
   была байт в байт.
 - `src/schema/` — парсеры `fcs*.def`, сборка схемы (`parseGameSchema`), сверка с данными
   (`analyzeCoverage`) и дополнение схемы полями из данных (`withInferredFields`).
-- `src/locale/po.ts` — gettext PO и индекс переводов по строковым id записей.
+- `src/locale/po.ts` — gettext PO и индекс переводов по строковым id записей;
+  `src/locale/translation.ts` — переводы текстов реплик из `<язык>.translation` (формат `.mod`).
 - `src/model/` — редактирование без Node: `context.ts` (`ModContext`: слои, статусы,
   индекс ссылок, команды, undo/redo, сохранение отличий), `record-ops.ts` (наложение и
   разность записей), `ops.ts` (операции JSON для CLI/MCP), `search.ts`, `validate.ts`,
-  `diff.ts`, `present.ts`, `dialogue.ts`, `schema-view.ts`, `enums.ts` (имена значений enum),
+  `diff.ts`, `present.ts`, `dialogue.ts`, `dialogue-graph.ts` (граф диалога и проверки
+  недостижимых реплик), `schema-view.ts`, `enums.ts` (имена значений enum),
   `stable-ids.ts` (постоянные id по имени).
 - `src/world/` — мир из файлов уровня (`.zone`, `.level`): `world.ts` (`WorldIndex`: города,
   здания с отрядами, экземпляры записей в зонах с наложением слоёв), `where.ts`
   (`whereInGame` — цепочка обратных ссылок до места в мире, `formatWhere`).
 - `src/node/` — то, что требует Node: пути к игре, загрузка файлов, `loadModContext`,
-  `saveModContext`, `loadWorld`.
+  `saveModContext`, `loadWorld`, `loadTranslation`.

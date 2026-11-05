@@ -18,6 +18,7 @@ import {
   modInstallPath,
   needsConfirmation,
   readIconDataUrl,
+  readTranslationBytes,
   saveDialogDefaultPath,
   writeMod,
 } from './service.ts';
@@ -114,6 +115,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.saveMod, saveMod);
   ipcMain.handle(IPC.loadWorld, (_e, req: WorldRequest) => loadWorldBytes(req));
   ipcMain.handle(IPC.readIcon, (_e, game: GameInstallInfo, iconPath: string) => readIconDataUrl(game, iconPath));
+  ipcMain.handle(IPC.readTranslation, (_e, game: GameInstallInfo) => readTranslationBytes(game));
   ipcMain.handle(IPC.getSettings, () => settings);
   ipcMain.handle(IPC.setSettings, (_e, patch: Partial<Settings>) => {
     settings = { ...settings, ...patch };
