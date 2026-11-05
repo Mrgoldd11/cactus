@@ -1,12 +1,12 @@
 /**
  * Автопоиск установленной игры: Steam (реестр → библиотеки из `libraryfolders.vdf`), GOG
- * (реестр GOG.com\Games, стандартные папки), плюс то, что даёт `resolveGamePaths`
- * (KENSHI_DIR, kenshi-paths.json). Реестр читается через `reg query` (только Windows).
+ * (реестр GOG.com\Games, стандартные папки), плюс то, что задано явно (`configuredGamePaths`:
+ * KENSHI_DIR, kenshi-paths.json). Реестр читается через `reg query` (только Windows).
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { defaultWorkshopDir, KENSHI_APP_ID, resolveGamePaths, type GamePaths } from './paths.ts';
+import { configuredGamePaths, defaultWorkshopDir, KENSHI_APP_ID, type GamePaths } from './paths.ts';
 
 export type GameSource = 'config' | 'steam' | 'gog' | 'manual';
 
@@ -19,7 +19,7 @@ export function isKenshiDir(dir: string): boolean {
   return existsSync(join(dir, 'data', 'gamedata.base'));
 }
 
-/** Пути библиотек Steam из `libraryfolders.vdf` (KeyValues: `"path"  "D:\\SteamLibrary"`). */
+/** Пути библиотек Steam из `libraryfolders.vdf` (KeyValues: `"path"  "E:\\Games\\SteamLibrary"`). */
 export function parseSteamLibraryFolders(text: string): string[] {
   const out: string[] = [];
   for (const m of text.matchAll(/"path"\s+"((?:[^"\\]|\\.)*)"/g)) out.push(m[1]!.replace(/\\\\/g, '\\'));
@@ -108,8 +108,8 @@ export function detectGameInstalls(cwd: string = process.cwd()): GameInstall[] {
     seen.add(k);
     out.push(g);
   };
-  const cfg = resolveGamePaths(cwd);
-  if (isKenshiDir(cfg.kenshi)) add({ ...cfg, source: 'config' });
+  const cfg = configuredGamePaths(cwd);
+  if (cfg.kenshi && isKenshiDir(cfg.kenshi)) add({ kenshi: cfg.kenshi, workshop: cfg.workshop ?? defaultWorkshopDir(cfg.kenshi), source: 'config' });
   for (const g of findSteamInstalls()) add(g);
   for (const g of findGogInstalls()) add(g);
   return out;

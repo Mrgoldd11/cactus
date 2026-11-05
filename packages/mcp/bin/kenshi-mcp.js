@@ -4,7 +4,7 @@
 import { parseArgs } from 'node:util';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { defaultWorkshopDir, resolveGamePaths } from '@kenshi-editor/core/node';
-import { createServer, Session } from '../src/index.ts';
+import { createServer, editorGameDir, Session } from '../src/index.ts';
 
 const { values } = parseArgs({
   options: {
@@ -15,7 +15,7 @@ const { values } = parseArgs({
   strict: true,
 });
 
-const paths = values.game ? { kenshi: values.game, workshop: defaultWorkshopDir(values.game) } : resolveGamePaths(process.cwd(), process.env);
+const paths = values.game ? { kenshi: values.game, workshop: defaultWorkshopDir(values.game) } : resolveGamePaths(process.cwd(), process.env, { preferred: editorGameDir() });
 const session = new Session(paths, process.cwd());
 if (values.mod !== undefined) {
   const dependencies = values.deps?.split(',').map((s) => s.trim()).filter(Boolean);

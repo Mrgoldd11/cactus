@@ -81,7 +81,7 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
   build <скрипт.ts|план.json> --out <файл.mod> [--name Имя.mod] [--mod исходный] [-- аргументы]
 
 Общие:
-  --game <папка Kenshi>   иначе KENSHI_DIR, kenshi-paths.json или D:/SteamLibrary/...
+  --game <папка Kenshi>   иначе KENSHI_DIR, kenshi-paths.json или найденная установка Steam/GOG
   --mod <путь|имя.mod>    мод поверх ванили (и его зависимостей)
   --deps a.mod,b.mod      зависимости вместо записанных в моде ("" — без зависимостей)
   --json  --offset N  --limit N (по умолчанию 50, 0 — все)

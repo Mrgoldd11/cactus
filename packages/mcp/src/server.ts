@@ -154,7 +154,7 @@ export function createServer(session: Session): McpServer {
       return fn();
     });
   const server = new McpServer(
-    { name: SERVER_NAME, version: '0.1.0' },
+    { name: SERVER_NAME, version: '0.1.0-beta.1' },
     {
       instructions: [
         'Данные Kenshi: ваниль (gamedata.base → Newwworld.mod → Dialogue.mod → rebirth.mod), зависимости мода, сам мод.',

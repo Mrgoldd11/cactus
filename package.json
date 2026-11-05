@@ -15,7 +15,8 @@
     "report": "pnpm --filter @kenshi-editor/core report",
     "desktop": "pnpm --filter @kenshi-editor/desktop dev",
     "desktop:start": "node apps/desktop/scripts/launch.ts",
-    "desktop:e2e": "pnpm --filter @kenshi-editor/desktop e2e"
+    "desktop:e2e": "pnpm --filter @kenshi-editor/desktop e2e",
+    "beta": "node apps/desktop/scripts/beta.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

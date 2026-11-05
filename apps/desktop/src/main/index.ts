@@ -8,12 +8,16 @@
  * Живая связь с ИИ: main держит WebSocket-сервер на 127.0.0.1 (файл обнаружения `live.json`
  * во временной папке, `KEDIT_LIVE_FILE`; `KEDIT_LIVE=0` — выключить) и передаёт запросы
  * MCP окну — их выполняет `LiveHost` над открытым проектом.
+ *
+ * Меню окна — `menu.ts`, журнал ошибок в файл — `log.ts`.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import type { LiveRequestBody } from '@kenshi-editor/core';
 import { startLiveServer, type LiveServer } from '@kenshi-editor/core/node';
+import { initLog, log, watchWindow } from './log.ts';
+import { APP_TITLE, buildMenu } from './menu.ts';
 import {
   IPC,
   type GameInstallInfo,
@@ -55,6 +59,11 @@ function loadSettings(): Settings {
 }
 
 let settings = loadSettings();
+
+initLog(
+  join(app.getPath('userData'), 'logs'),
+  `start ${APP_TITLE} ${app.getVersion()}; Electron ${process.versions.electron}; ${process.platform} ${process.arch}; ${app.isPackaged ? 'packaged' : 'dev'}`,
+);
 let knownGames: GameInstallInfo[] = [];
 let currentGame: GameInstallInfo | undefined;
 const dirtyWindows = new Map<number, string>();
@@ -91,6 +100,7 @@ async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<Sav
     writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
     return { ok: true, path: req.path };
   } catch (err) {
+    log('error', 'saveMod', req.path, err);
     return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
@@ -171,7 +181,12 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.openProject, (_e, req: ProjectRequest) => {
     currentGame = req.game;
-    return loadProject(req);
+    try {
+      return loadProject(req);
+    } catch (err) {
+      log('error', 'openProject', req.modPath ?? req.modName ?? '', err);
+      throw err;
+    }
   });
   ipcMain.handle(IPC.chooseSavePath, async (e, defaultPath: string) => {
     const win = windowOf(e);
@@ -185,8 +200,10 @@ function registerIpc(): void {
   ipcMain.handle(IPC.readTranslation, (_e, game: GameInstallInfo) => readTranslationBytes(game));
   ipcMain.handle(IPC.getSettings, () => settings);
   ipcMain.handle(IPC.setSettings, (_e, patch: Partial<Settings>) => {
+    const langChanged = patch.lang !== undefined && patch.lang !== settings.lang;
     settings = { ...settings, ...patch };
     writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
+    if (langChanged) buildMenu(settings.lang);
     return settings;
   });
   ipcMain.on(IPC.setDirty, (e, dirty: boolean, title: string) => {
@@ -194,8 +211,15 @@ function registerIpc(): void {
     if (!win) return;
     if (dirty) dirtyWindows.set(win.id, title);
     else dirtyWindows.delete(win.id);
-    win.setTitle(`${dirty ? '● ' : ''}${title} — Kenshi Mod Editor`);
+    win.setTitle(windowTitle(title, dirty));
   });
+}
+
+/** Заголовок окна: мод и версия программы (`● ` — есть несохранённые изменения). */
+function windowTitle(title = '', dirty = false): string {
+  const base = `${APP_TITLE} ${app.getVersion()}`;
+  if (!title || title === APP_TITLE) return base;
+  return `${dirty ? '● ' : ''}${title} — ${base}`;
 }
 
 function createWindow(): void {
@@ -204,7 +228,7 @@ function createWindow(): void {
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    title: 'Kenshi Mod Editor',
+    title: windowTitle(),
     backgroundColor: '#1e1f22',
     show: false,
     webPreferences: {
@@ -213,6 +237,11 @@ function createWindow(): void {
       sandbox: true,
       nodeIntegration: false,
     },
+  });
+  watchWindow(win.webContents);
+  // Заголовок задаёт main (с версией), а не <title> страницы.
+  win.on('page-title-updated', (e) => {
+    e.preventDefault();
   });
   win.once('ready-to-show', () => {
     win.show();
@@ -238,6 +267,7 @@ function createWindow(): void {
 }
 
 void app.whenReady().then(() => {
+  buildMenu(settings.lang);
   registerIpc();
   createWindow();
   void startLive();
