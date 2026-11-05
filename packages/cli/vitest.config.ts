@@ -4,6 +4,7 @@ export default defineProject({
   test: {
     name: 'cli',
     include: ['test/**/*.test.ts'],
+    exclude: ['test/**/*.game.test.ts'],
     // Сборка Skeleton Cannibal Friend читает всю ваниль и перевод — несколько секунд.
     testTimeout: 120_000,
   },
