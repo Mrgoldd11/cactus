@@ -4,7 +4,7 @@
  * (один в `mods/`, другой в «мастерской»), свой `mods.cfg`. Настоящий `mods.cfg` и папки
  * игры не трогаются: приложению передаётся KENSHI_DIR / KENSHI_WORKSHOP_DIR.
  */
-import { copyFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
@@ -106,6 +106,8 @@ async function launch(game: FakeGame): Promise<{ app: ElectronApplication; page:
   env['KEDIT_LIVE_FILE'] = join(userData, 'live.json');
   env['KENSHI_DIR'] = game.kenshi;
   env['KENSHI_WORKSHOP_DIR'] = game.workshop;
+  // Папка игры временная: проверка «игра закрыта» перед записью mods.cfg не нужна.
+  env['KEDIT_SKIP_GAME_CHECK'] = '1';
   const app = await electron.launch({ args: ['.'], cwd: appDir, env });
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
@@ -119,6 +121,26 @@ async function closeApp(app: ElectronApplication): Promise<void> {
     })
     .catch(() => undefined);
   await app.close();
+}
+
+/** Подменить окно подтверждения в main: нажать кнопку `response`, запомнить вызовы. */
+async function stubMessageBox(app: ElectronApplication, response: number): Promise<void> {
+  await app.evaluate(({ dialog }, r) => {
+    const g = globalThis as unknown as { boxCalls: number; boxDetail?: string };
+    g.boxCalls = 0;
+    dialog.showMessageBox = (...args: unknown[]) => {
+      g.boxCalls++;
+      g.boxDetail = (args.at(-1) as { detail?: string }).detail;
+      return Promise.resolve({ response: r, checkboxChecked: false });
+    };
+  }, response);
+}
+
+async function messageBox(app: ElectronApplication): Promise<{ calls: number; detail?: string }> {
+  return app.evaluate(() => {
+    const g = globalThis as unknown as { boxCalls: number; boxDetail?: string };
+    return { calls: g.boxCalls, ...(g.boxDetail !== undefined ? { detail: g.boxDetail } : {}) };
+  });
 }
 
 async function openPanel(page: Page, id: string): Promise<void> {
@@ -173,8 +195,45 @@ test('моды слоями: панель «Моды», два мода под �
     await expect(page.getByTestId('conflicts-table').locator('tr[data-field="floats:weight mult"]')).toHaveCount(0);
     await page.screenshot({ path: join(shots, '29-conflicts.png') });
 
-    // mods.cfg не менялся.
+    // mods.cfg пока не менялся.
     expect(readFileSync(game.cfg, 'utf-8')).toBe('Sharp Katana.mod\r\nKatana Rebalance.mod\r\n');
+
+    // Порядок загрузки: перетащить Katana Rebalance выше Sharp Katana (черновик).
+    await page.locator('.dv-tab', { hasText: 'Моды' }).click();
+    await expect(page.getByTestId('order-Katana Rebalance.mod')).toContainText('2');
+    await page.getByTestId('mod-row-Katana Rebalance.mod').dragTo(page.getByTestId('mod-row-Sharp Katana.mod'));
+    await expect(page.getByTestId('order-Katana Rebalance.mod')).toContainText('1');
+    await expect(page.getByTestId('order-Sharp Katana.mod')).toContainText('2');
+    await expect(page.getByTestId('mods-order-changed')).toContainText('модов 2');
+    await page.screenshot({ path: join(shots, '30-load-order.png') });
+
+    // «Отмена» в окне подтверждения — файл не трогается.
+    await stubMessageBox(app, 1);
+    await page.getByTestId('mods-order-save').click();
+    await expect.poll(async () => (await messageBox(app)).calls).toBe(1);
+    expect(readFileSync(game.cfg, 'utf-8')).toBe('Sharp Katana.mod\r\nKatana Rebalance.mod\r\n');
+    await expect(page.getByTestId('mods-order-save')).toBeEnabled();
+
+    // «Записать»: mods.cfg с CRLF, копия рядом, слои пересобраны — теперь побеждает Sharp Katana.
+    await stubMessageBox(app, 0);
+    await page.getByTestId('mods-order-save').click();
+    await expect(page.getByTestId('mods-order-msg')).toContainText('mods.cfg записан', { timeout: 60_000 });
+    const box = await messageBox(app);
+    expect(box.detail).toContain('mods.cfg');
+    expect(box.detail).toContain('Katana Rebalance.mod: место 2 → 1');
+    expect(readFileSync(game.cfg, 'utf-8')).toBe('Katana Rebalance.mod\r\nSharp Katana.mod\r\n');
+    const backups = readdirSync(dirname(game.cfg)).filter((f) => f.startsWith('mods.cfg.bak-'));
+    expect(backups).toHaveLength(1);
+    expect(readFileSync(join(dirname(game.cfg), backups[0]!), 'utf-8')).toBe('Sharp Katana.mod\r\nKatana Rebalance.mod\r\n');
+    await expect(page.getByTestId('mods-order-changed')).toHaveCount(0);
+
+    await page.locator('.dv-tab', { hasText: 'Конфликты' }).click();
+    const row2 = page.getByTestId('conflicts-table').locator(`tr[data-sid="${KATANA}"][data-field="floats:${CUT}"]`);
+    await expect(row2.getByTestId('conflict-winner')).toHaveText('Sharp Katana.mod', { timeout: 60_000 });
+    await page.locator('.dv-tab', { hasText: 'Инспектор' }).click();
+    await selectRecord(page, 'katana', KATANA);
+    await page.getByTestId('field-filter').fill('cut damage');
+    await expect(page.getByTestId(`field-${CUT}`)).toHaveValue('1.5');
   } finally {
     await closeApp(app);
     rmSync(dirname(dirname(dirname(game.kenshi))), { recursive: true, force: true });

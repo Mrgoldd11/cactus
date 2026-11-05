@@ -79,6 +79,11 @@ export interface SaveRequest {
   bytes: Uint8Array;
 }
 
+/** Запись `mods.cfg`: `stale` — файл изменился на диске, пока окно показывало старый порядок. */
+export type ModOrderResult =
+  | { ok: true; path: string; changed: boolean; backup?: string }
+  | { ok: false; cancelled: boolean; error?: string; stale?: boolean };
+
 export type SaveResult = { ok: true; path: string } | { ok: false; cancelled: boolean; error?: string };
 
 export type Lang = 'en' | 'ru';
@@ -134,6 +139,13 @@ export interface KeditApi {
   /** Диалог выбора папки игры; null — отменено или в папке нет игры. */
   chooseGameDir(): Promise<GameInstallInfo | { error: string } | null>;
   listMods(game: GameInstallInfo): Promise<ModEntry[]>;
+  /** Порядок `data/mods.cfg` как есть. */
+  readModOrder(game: GameInstallInfo): Promise<string[]>;
+  /**
+   * Записать новый порядок `mods.cfg` — только после подтверждения в диалоге main; копия рядом,
+   * игра и лаунчер должны быть закрыты. `expected` — порядок, от которого шли правки.
+   */
+  writeModOrder(game: GameInstallInfo, names: string[], expected: string[]): Promise<ModOrderResult>;
   /** Диалог выбора файла .mod. */
   chooseModFile(game: GameInstallInfo): Promise<string | null>;
   openProject(req: ProjectRequest): Promise<ProjectBundle>;
@@ -162,6 +174,8 @@ export const IPC = {
   detectGames: 'kedit:detect-games',
   chooseGameDir: 'kedit:choose-game-dir',
   listMods: 'kedit:list-mods',
+  readModOrder: 'kedit:read-mod-order',
+  writeModOrder: 'kedit:write-mod-order',
   chooseModFile: 'kedit:choose-mod-file',
   openProject: 'kedit:open-project',
   chooseSavePath: 'kedit:choose-save-path',

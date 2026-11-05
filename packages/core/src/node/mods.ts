@@ -176,10 +176,11 @@ export interface WriteModsCfgResult {
 /**
  * Записать порядок загрузки. Конец строки — как в прежнем файле (нет файла — CRLF).
  * Перед записью — копия `mods.cfg.bak-ГГГГММДДччммсс`. Если игра запущена — ошибка
- * (проверку можно выключить для тестов: `checkGame: false`).
+ * (проверку можно выключить для тестов: `checkGame: false` или `KEDIT_SKIP_GAME_CHECK=1`).
  */
 export function writeModsCfg(paths: GamePaths, names: readonly string[], options: { checkGame?: boolean; now?: Date } = {}): WriteModsCfgResult {
-  if (options.checkGame !== false) {
+  // KEDIT_SKIP_GAME_CHECK=1 — только для тестов на временной копии папки игры.
+  if (options.checkGame ?? process.env['KEDIT_SKIP_GAME_CHECK'] !== '1') {
     const running = runningGameProcesses();
     if (running.length > 0) throw new Error(`Закройте игру и лаунчер (${running.join(', ')}): иначе они перезапишут mods.cfg`);
   }

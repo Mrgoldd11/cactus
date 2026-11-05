@@ -47,7 +47,7 @@ import {
 import { loadModLayers, loadTranslation, loadWorld, readDataFileSync, readModsCfg } from '@kenshi-editor/core/node';
 import { basename } from 'node:path';
 import { runBuild } from './build.ts';
-import { modsList } from './mods.ts';
+import { modsChange, modsList } from './mods.ts';
 import { UsageError, Workspace } from './workspace.ts';
 
 export interface Io {
@@ -85,6 +85,9 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
   schema [ТИП]            типы записей / поля типа с описаниями из fcs.def  --enum ИМЯ
   build <скрипт.ts|план.json> --out <файл.mod> [--name Имя.mod] [--mod исходный] [-- аргументы]
   mods [list]             установленные моды: порядок mods.cfg, откуда (mods/мастерская)  --full  --json
+  mods move <мод>         переставить в mods.cfg:  --top (раньше всех) | --bottom (побеждает) | --after X | --before X
+  mods enable|disable <мод>  включить (в конец или --top/--after X…) / выключить
+      без --force только показывает, что изменится; --force — записать mods.cfg (копия рядом, игра закрыта)
   touched <id|имя>        какие моды из mods.cfg меняют запись и что именно  --all  все установленные
   conflicts               моды, которые меняют одно поле по-разному, и кто победит (поздний в mods.cfg)
       --mod <путь|имя.mod>  только конфликты этого мода;  --all  все установленные, не только mods.cfg
@@ -125,6 +128,10 @@ const OPTIONS = {
   name: { type: 'string' },
   force: { type: 'boolean' },
   all: { type: 'boolean' },
+  top: { type: 'boolean' },
+  bottom: { type: 'boolean' },
+  after: { type: 'string' },
+  before: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } as const;
 
@@ -439,7 +446,17 @@ const COMMANDS: Record<string, Handler> = {
   mods(c) {
     const sub = c.args[0] ?? 'list';
     if (sub === 'list') return modsList(c.ws, c.io, { json: c.values.json ?? false, full: c.values.full ?? false });
-    throw new UsageError(`mods ${sub}? (list)`);
+    if (sub === 'move' || sub === 'enable' || sub === 'disable') {
+      const v = c.values;
+      return modsChange(c.ws, c.io, sub, c.args[1], {
+        ...(v.top !== undefined ? { top: v.top } : {}),
+        ...(v.bottom !== undefined ? { bottom: v.bottom } : {}),
+        ...(v.after !== undefined ? { after: v.after } : {}),
+        ...(v.before !== undefined ? { before: v.before } : {}),
+        force: v.force ?? false,
+      });
+    }
+    throw new UsageError(`mods ${sub}? (list, move, enable, disable)`);
   },
 
   async build(c) {

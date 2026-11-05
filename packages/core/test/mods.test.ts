@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFil
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { emptyRecord, encodeText, FileType, itemTypeId, joinModList, formatModsCfg, parseModsCfg, placeMod, setModEnabled, type DataFile } from '../src/index.ts';
+import { applyModsCfgChange, describeOrderChange, emptyRecord, encodeText, FileType, itemTypeId, joinModList, formatModsCfg, parseModsCfg, placeMod, setModEnabled, type DataFile } from '../src/index.ts';
 import { listInstalledMods, planModLoad, readModSummary, workshopIdOf, writeDataFileSync, writeModsCfg, type GamePaths } from '../src/node/index.ts';
 
 const ITEM = itemTypeId('ITEM')!;
@@ -60,6 +60,22 @@ describe('порядок загрузки (mods.cfg) без диска', () => {
     expect(setModEnabled(l, 'B.mod', false)).toEqual(['A.mod', 'C.mod']);
     expect(setModEnabled(l, 'D.mod', true)).toEqual([...l, 'D.mod']);
     expect(setModEnabled(l, 'b.mod', true)).toEqual(l);
+  });
+
+  it('изменения mods.cfg: move только для включённых, enable/disable, описание «было → стало»', () => {
+    const l = ['A.mod', 'B.mod', 'C.mod'];
+    expect(applyModsCfgChange(l, { op: 'move', name: 'C.mod', place: { top: true } })).toEqual(['C.mod', 'A.mod', 'B.mod']);
+    expect(() => applyModsCfgChange(l, { op: 'move', name: 'D.mod', place: { top: true } })).toThrow(/включите/);
+    expect(applyModsCfgChange(l, { op: 'enable', name: 'D.mod' })).toEqual([...l, 'D.mod']);
+    expect(applyModsCfgChange(l, { op: 'enable', name: 'D.mod', place: { after: 'A.mod' } })).toEqual(['A.mod', 'D.mod', 'B.mod', 'C.mod']);
+    expect(applyModsCfgChange(l, { op: 'enable', name: 'b.mod' })).toEqual(l);
+    expect(applyModsCfgChange(l, { op: 'disable', name: 'b.mod' })).toEqual(['A.mod', 'C.mod']);
+    expect(describeOrderChange(l, ['C.mod', 'A.mod', 'D.mod'])).toEqual([
+      '  C.mod: место 3 → 1',
+      '  A.mod: место 1 → 2',
+      '+ D.mod: включён, место 3',
+      '- B.mod: выключен',
+    ]);
   });
 });
 

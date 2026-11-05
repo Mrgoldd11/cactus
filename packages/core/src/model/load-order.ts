@@ -65,3 +65,39 @@ export function setModEnabled(names: readonly string[], name: string, enabled: b
   if (!enabled) return removeMod(names, name);
   return modIndex(names, name) >= 0 ? [...names] : placeMod(names, name, place);
 }
+
+/** Изменение порядка загрузки: переставить, включить (поставить в список), выключить. */
+export type ModsCfgChange =
+  | { op: 'move'; name: string; place: ModPlace }
+  | { op: 'enable'; name: string; place?: ModPlace }
+  | { op: 'disable'; name: string };
+
+/** Новый список после изменения. Переставить можно только мод из списка. */
+export function applyModsCfgChange(names: readonly string[], change: ModsCfgChange): string[] {
+  switch (change.op) {
+    case 'move':
+      if (modIndex(names, change.name) < 0) throw new Error(`Мода нет в порядке загрузки: ${change.name} (сначала включите его)`);
+      return placeMod(names, change.name, change.place);
+    case 'enable':
+      return modIndex(names, change.name) >= 0 && change.place === undefined ? [...names] : placeMod(names, change.name, change.place ?? { bottom: true });
+    case 'disable':
+      return removeMod(names, change.name);
+  }
+}
+
+/** Строки «было → стало» для показа: место каждого мода, у которого оно поменялось. */
+export function describeOrderChange(before: readonly string[], after: readonly string[]): string[] {
+  const out: string[] = [];
+  const low = (a: readonly string[]): string[] => a.map((n) => n.toLowerCase());
+  const b = low(before);
+  const a = low(after);
+  after.forEach((n, i) => {
+    const was = b.indexOf(n.toLowerCase());
+    if (was < 0) out.push(`+ ${n}: включён, место ${i + 1}`);
+    else if (was !== i) out.push(`  ${n}: место ${was + 1} → ${i + 1}`);
+  });
+  before.forEach((n) => {
+    if (!a.includes(n.toLowerCase())) out.push(`- ${n}: выключен`);
+  });
+  return out;
+}

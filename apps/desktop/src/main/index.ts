@@ -12,9 +12,9 @@
  * Меню окна — `menu.ts`, журнал ошибок в файл — `log.ts`.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
-import type { LiveRequestBody } from '@kenshi-editor/core';
+import { describeOrderChange, type LiveRequestBody } from '@kenshi-editor/core';
 import { startLiveServer, type LiveServer } from '@kenshi-editor/core/node';
 import { initLog, log, watchWindow } from './log.ts';
 import { APP_TITLE, buildMenu } from './menu.ts';
@@ -23,6 +23,7 @@ import {
   type GameInstallInfo,
   type LiveReply,
   type LiveStatus,
+  type ModOrderResult,
   type ProjectRequest,
   type SaveRequest,
   type SaveResult,
@@ -38,9 +39,11 @@ import {
   modInstallPath,
   needsConfirmation,
   readIconDataUrl,
+  readModOrder,
   readTranslationBytes,
   saveDialogDefaultPath,
   writeMod,
+  writeModOrder,
 } from './service.ts';
 
 // Отдельная папка данных (e2e запускает приложение с чистыми настройками).
@@ -101,6 +104,35 @@ async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<Sav
     return { ok: true, path: req.path };
   } catch (err) {
     log('error', 'saveMod', req.path, err);
+    return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Новый порядок `mods.cfg`: это файл игры — всегда с подтверждением, игра должна быть закрыта. */
+async function saveModOrder(e: IpcMainInvokeEvent, game: GameInstallInfo, names: string[], expected: string[]): Promise<ModOrderResult> {
+  const known = [...knownGames, ...(currentGame ? [currentGame] : [])].some((g) => resolve(g.kenshi).toLowerCase() === resolve(game.kenshi).toLowerCase());
+  if (!known) return { ok: false, cancelled: false, error: 'unknown game folder' };
+  const changes = describeOrderChange(expected, names);
+  if (changes.length === 0) return { ok: true, path: join(game.kenshi, 'data', 'mods.cfg'), changed: false };
+  const ru = settings.lang === 'ru';
+  const options = {
+    type: 'warning' as const,
+    buttons: ru ? ['Записать', 'Отмена'] : ['Write', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    title: ru ? 'Порядок загрузки модов' : 'Mod load order',
+    message: ru
+      ? 'Записать новый порядок в файл игры mods.cfg? Игра и лаунчер должны быть закрыты; рядом останется копия прежнего файла.'
+      : 'Write the new order into the game file mods.cfg? The game and launcher must be closed; a copy of the old file is kept next to it.',
+    detail: [join(game.kenshi, 'data', 'mods.cfg'), '', ...changes.slice(0, 30), ...(changes.length > 30 ? [`… +${changes.length - 30}`] : [])].join('\n'),
+  };
+  const win = windowOf(e);
+  const r = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+  if (r.response !== 0) return { ok: false, cancelled: true };
+  try {
+    return writeModOrder(game, names, expected);
+  } catch (err) {
+    log('error', 'writeModOrder', game.kenshi, err);
     return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
@@ -173,6 +205,8 @@ function registerIpc(): void {
     return g;
   });
   ipcMain.handle(IPC.listMods, (_e, game: GameInstallInfo) => listMods(game));
+  ipcMain.handle(IPC.readModOrder, (_e, game: GameInstallInfo) => readModOrder(game));
+  ipcMain.handle(IPC.writeModOrder, saveModOrder);
   ipcMain.handle(IPC.chooseModFile, async (e, game: GameInstallInfo) => {
     const win = windowOf(e);
     const opts = { properties: ['openFile' as const], defaultPath: join(game.kenshi, 'mods'), filters: [{ name: 'Kenshi mod', extensions: ['mod'] }] };

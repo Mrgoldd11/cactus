@@ -3,7 +3,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished } from 'vitest';
 import { decodeText } from '@kenshi-editor/core';
 import { readDataFileSync, writeDataFileSync } from '@kenshi-editor/core/node';
 import { main } from '../src/main.ts';
@@ -273,5 +273,36 @@ describe('kedit mods', () => {
     expect((await run('conflicts', '--all')).out).toContain('победит Rich.mod');
     const j = JSON.parse((await run('touched', 'A', '--all', '--json')).out) as { touches: { layer: string }[] };
     expect(j.touches.map((x) => x.layer)).toEqual(['My.mod', 'Rich.mod']);
+  });
+
+  it('move/enable/disable: без --force только показ, с --force — запись с копией, CRLF', async () => {
+    mkdirSync(join(fx.game, 'mods', 'Rich'), { recursive: true });
+    writeDataFileSync(join(fx.game, 'mods', 'Rich', 'Rich.mod'), dataFile([]));
+    const cfg = join(fx.game, 'data', 'mods.cfg');
+    writeFileSync(cfg, `My.mod${EOL}Rich.mod${EOL}`);
+    // Запись mods.cfg проверяет, не запущена ли игра; в тесте — временная папка, проверка не нужна.
+    process.env['KEDIT_SKIP_GAME_CHECK'] = '1';
+    onTestFinished(() => {
+      delete process.env['KEDIT_SKIP_GAME_CHECK'];
+    });
+    const dry = await run('mods', 'move', 'Rich', '--top');
+    expect(dry.code, dry.err).toBe(0);
+    expect(dry.out).toContain('  Rich.mod: место 2 → 1');
+    expect(dry.out).toContain('добавьте --force');
+    expect(readFileSync(cfg, 'utf-8')).toBe(`My.mod${EOL}Rich.mod${EOL}`);
+    const w = await run('mods', 'move', 'Rich.mod', '--top', '--force');
+    expect(w.code, w.err).toBe(0);
+    expect(w.out).toMatch(/записан, копия: .*mods\.cfg\.bak-\d{14}/);
+    expect(readFileSync(cfg, 'utf-8')).toBe(`Rich.mod${EOL}My.mod${EOL}`);
+    expect((await run('mods', 'disable', 'My', '--force')).code).toBe(0);
+    expect(readFileSync(cfg, 'utf-8')).toBe(`Rich.mod${EOL}`);
+    expect((await run('mods', 'enable', 'My', '--top', '--force')).code).toBe(0);
+    expect(readFileSync(cfg, 'utf-8')).toBe(`My.mod${EOL}Rich.mod${EOL}`);
+    expect((await run('mods', 'move', 'My', '--after', 'Rich')).out).toContain('  My.mod: место 1 → 2');
+    expect((await run('mods', 'move', 'Nope', '--top')).code).toBe(2);
+    expect((await run('mods', 'enable', 'Nope')).code).toBe(2);
+    expect((await run('mods', 'move', 'My')).code).toBe(2);
+    expect((await run('mods', 'move', 'My', '--top', '--bottom')).code).toBe(2);
+    expect((await run('mods', 'enable', 'My')).out).toContain('без изменений');
   });
 });

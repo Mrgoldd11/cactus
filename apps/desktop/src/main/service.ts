@@ -13,15 +13,18 @@ import {
   listInstalledMods,
   listWorldFiles,
   manualInstall,
+  modsCfgPath,
   planModLoad,
   readIfUnknown,
   readModSummary,
+  readModsCfgText,
   SCHEMA_FILES,
   translationFilePath,
   vanillaFilePaths,
   worldDirs,
+  writeModsCfg,
 } from '@kenshi-editor/core/node';
-import type { GameInstallInfo, ModEntry, NamedBytes, ProjectBundle, ProjectRequest, WorldFileBytes, WorldRequest } from '../shared/api.ts';
+import type { GameInstallInfo, ModEntry, ModOrderResult, NamedBytes, ProjectBundle, ProjectRequest, WorldFileBytes, WorldRequest } from '../shared/api.ts';
 
 export function detectGames(cwd?: string): GameInstallInfo[] {
   return detectGameInstalls(cwd).map((g) => ({ kenshi: g.kenshi, workshop: g.workshop, source: g.source }));
@@ -44,6 +47,24 @@ export function describeMod(path: string, source: ModEntry['source'], extra: Par
   if (h.recordCount !== undefined) entry.recordCount = h.recordCount;
   if (h.error !== undefined) entry.error = h.error;
   return entry;
+}
+
+/** Порядок загрузки как есть в `mods.cfg` (вместе со строками, для которых нет файла). */
+export function readModOrder(game: GameInstallInfo): string[] {
+  return readModsCfgText(game).names;
+}
+
+/**
+ * Записать порядок загрузки (подтверждение спрашивает `index.ts`). `expected` — порядок,
+ * который видело окно: если файл с тех пор поменяли (лаунчер, другая программа) — не писать.
+ */
+export function writeModOrder(game: GameInstallInfo, names: readonly string[], expected: readonly string[]): ModOrderResult {
+  const now = readModOrder(game);
+  if (now.join('\n').toLowerCase() !== expected.join('\n').toLowerCase()) {
+    return { ok: false, cancelled: false, error: `${modsCfgPath(game)} changed on disk; refresh the list`, stale: true };
+  }
+  const r = writeModsCfg(game, names);
+  return { ok: true, path: r.path, changed: r.changed, ...(r.backup !== undefined ? { backup: r.backup } : {}) };
 }
 
 /** Моды из `mods/` и мастерской с заголовками; порядок `mods.cfg` — в `loadIndex`. */

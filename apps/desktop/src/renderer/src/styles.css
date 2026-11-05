@@ -2018,3 +2018,31 @@ button.small.active {
   font-size: 11px;
   color: var(--muted);
 }
+
+/* Панель «Моды»: порядок загрузки (перетаскивание строк, ▲▼). */
+.mod-order {
+  white-space: nowrap;
+}
+.mod-order button.icon {
+  padding: 0 3px;
+  font-size: 9px;
+  line-height: 14px;
+  min-width: 0;
+}
+.mod-order .drag-handle {
+  cursor: grab;
+  opacity: 0.5;
+  margin-right: 2px;
+}
+.mod-order-num {
+  display: inline-block;
+  min-width: 2.2em;
+  text-align: right;
+}
+.mod-order.changed,
+.mods-panel-bar .changed {
+  color: var(--changed);
+}
+tr[draggable='true'] {
+  cursor: grab;
+}

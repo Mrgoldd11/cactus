@@ -3,9 +3,13 @@
  * и какие из них лежат слоями под редактируемым модом («контекст»). Список строится по
  * заголовкам (начало файлов) при открытии панели; сами моды читаются, только когда их
  * включают в контекст — через кэш разобранных файлов, как ваниль.
+ *
+ * Порядок загрузки: строки включённых модов можно перетаскивать (или ▲▼), галочка «В игре»
+ * включает/выключает мод. Это черновик; «Записать mods.cfg» отправляет его в main, который
+ * спрашивает подтверждение (это файл игры), проверяет, что игра закрыта, и оставляет копию.
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { isVanillaLayer } from '@kenshi-editor/core';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { applyModsCfgChange, describeOrderChange, isVanillaLayer, modIndex, placeMod, type ModPlace } from '@kenshi-editor/core';
 import type { GameInstallInfo, ModEntry } from '../../../../shared/api.ts';
 import { useT, type Strings } from '../../i18n.ts';
 import { useProjectVersion } from '../../hooks.ts';
@@ -68,11 +72,54 @@ export function sourceLabel(t: Strings, m: ModEntry): string {
 
 type Filter = 'all' | 'enabled' | 'context';
 
+type OrderMsg = { text: string; error?: boolean };
+
+/** Порядок `mods.cfg`: записанный (`saved`) и черновик правок (`order`). */
+function useModOrder(game: GameInstallInfo): {
+  saved: string[] | undefined;
+  order: string[] | undefined;
+  setOrder: (o: string[]) => void;
+  markSaved: (o: string[]) => void;
+  reread: () => void;
+} {
+  const [saved, setSaved] = useState<string[]>();
+  const [order, setOrder] = useState<string[]>();
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    window.kedit.readModOrder(game).then(
+      (o) => {
+        if (!alive) return;
+        setSaved(o);
+        setOrder(o);
+      },
+      () => undefined,
+    );
+    return () => {
+      alive = false;
+    };
+  }, [game, tick]);
+  return {
+    saved,
+    order,
+    setOrder,
+    markSaved: (o) => {
+      setSaved(o);
+      setOrder(o);
+    },
+    reread: () => { setTick((n) => n + 1); },
+  };
+}
+
 function ModsPanel(): ReactNode {
   const t = useT();
   const { project, reload } = useWorkbench();
   useProjectVersion(project);
-  const { mods, error, refresh } = useInstalledMods(project.bundle.game);
+  const game = project.bundle.game;
+  const { mods, error, refresh } = useInstalledMods(game);
+  const { saved, order, setOrder, markSaved, reread } = useModOrder(game);
+  const [orderMsg, setOrderMsg] = useState<OrderMsg>();
+  const dragged = useRef<string | undefined>(undefined);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [busy, setBusy] = useState(false);
@@ -93,9 +140,49 @@ function ModsPanel(): ReactNode {
       if (filter === 'context' && !pickedSet.has(m.fileName.toLowerCase()) && roleOf(project, m.fileName) !== 'dep') return false;
       return q === '' || `${m.fileName}\n${m.author ?? ''}\n${m.workshopId ?? ''}`.toLowerCase().includes(q);
     });
-    const rank = (m: ModEntry): number => (m.loadIndex !== undefined ? m.loadIndex : 100_000);
+    // Места — по черновику порядка (до записи он может отличаться от mods.cfg).
+    const rank = (m: ModEntry): number => {
+      const i = order && !m.shadowedBy ? modIndex(order, m.fileName) : -1;
+      return i >= 0 ? i : 100_000;
+    };
     return list.sort((a, b) => rank(a) - rank(b) || a.fileName.localeCompare(b.fileName));
-  }, [mods, query, filter, pickedSet, project]);
+  }, [mods, query, filter, pickedSet, project, order]);
+  const orderChanges = saved && order ? describeOrderChange(saved, order).length : 0;
+
+  const placeIn = (name: string, place: ModPlace): void => {
+    if (order) setOrder(placeMod(order, name, place));
+  };
+  const setInGame = (name: string, on: boolean): void => {
+    if (order) setOrder(applyModsCfgChange(order, on ? { op: 'enable', name } : { op: 'disable', name }));
+  };
+  const onDrop = (e: DragEvent, target: string): void => {
+    e.preventDefault();
+    const from = dragged.current;
+    dragged.current = undefined;
+    if (!order || from === undefined || from.toLowerCase() === target.toLowerCase()) return;
+    placeIn(from, modIndex(order, from) < modIndex(order, target) ? { after: target } : { before: target });
+  };
+  const saveOrder = async (): Promise<void> => {
+    if (!order || !saved) return;
+    setBusy(true);
+    setOrderMsg(undefined);
+    try {
+      const r = await window.kedit.writeModOrder(game, order, saved);
+      if (r.ok) {
+        markSaved(order);
+        setOrderMsg({ text: t.modsOrderSaved(r.backup ?? '—') });
+        refresh();
+        // Зависимости и моды контекста стоят по mods.cfg: пересобрать слои в новом порядке.
+        if (project.bundle.dependencies.length > 1) await reload({ contextMods: project.contextMods });
+      } else if (r.stale === true) {
+        setOrderMsg({ text: t.modsOrderStale, error: true });
+        reread();
+        refresh();
+      } else if (!r.cancelled) setOrderMsg({ text: t.modsOrderError(r.error ?? '?'), error: true });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const toggle = (name: string, on: boolean): void => {
     setPicked((p) => (on ? [...p, name] : p.filter((n) => n.toLowerCase() !== name.toLowerCase())));
@@ -134,13 +221,39 @@ function ModsPanel(): ReactNode {
         <button className="small primary" onClick={apply} disabled={!changed || busy} data-testid="mods-apply">
           {busy ? t.loading : t.modsApply}
         </button>
-        <button className="small" onClick={refresh} title={t.modsRefresh} disabled={busy}>
+        <button
+          className="small"
+          onClick={() => {
+            refresh();
+            reread();
+          }}
+          title={t.modsRefresh}
+          disabled={busy}
+        >
           ⟳
         </button>
       </div>
       <div className="muted mods-panel-note">
         {t.modsLayers(depCount, current.length)} {t.modsContextNote}
       </div>
+      {orderChanges > 0 && (
+        <div className="mods-panel-bar" data-testid="mods-order-bar">
+          <span className="changed" data-testid="mods-order-changed">
+            {t.modsOrderChanged(orderChanges)}
+          </span>
+          <button className="small primary" onClick={() => void saveOrder()} disabled={busy} title={t.modsOrderSaveTip} data-testid="mods-order-save">
+            {t.modsOrderSave}
+          </button>
+          <button className="small" onClick={() => { if (saved) setOrder(saved); }} disabled={busy} data-testid="mods-order-reset">
+            {t.modsOrderReset}
+          </button>
+        </div>
+      )}
+      {orderMsg && (
+        <div className={orderMsg.error ? 'error' : 'muted'} data-testid="mods-order-msg">
+          {orderMsg.text}
+        </div>
+      )}
       {error !== undefined && <div className="error">{error}</div>}
       {mods === undefined && error === undefined ? (
         <div className="muted">{t.loading}</div>
@@ -150,6 +263,7 @@ function ModsPanel(): ReactNode {
             <thead>
               <tr>
                 <th title={t.colInContextTip}>{t.colInContext}</th>
+                <th title={t.colInGameTip}>{t.colInGame}</th>
                 <th className="num" title={t.colLoadOrderTip}>
                   {t.colLoadOrder}
                 </th>
@@ -164,8 +278,28 @@ function ModsPanel(): ReactNode {
                 const role = roleOf(project, m.fileName);
                 const fixed = role === 'self' || role === 'dep';
                 const on = fixed || pickedSet.has(m.fileName.toLowerCase());
+                const at = order && !m.shadowedBy ? modIndex(order, m.fileName) : -1;
+                const inGame = at >= 0;
+                const wasAt = saved ? modIndex(saved, m.fileName) : -1;
+                const canOrder = !m.shadowedBy && !busy && order !== undefined;
+                const last = (order?.length ?? 0) - 1;
                 return (
-                  <tr key={m.path} className={m.shadowedBy ? 'muted' : undefined} title={m.shadowedBy ? `${t.modsShadowed}: ${m.shadowedBy}` : (m.error ?? m.path)}>
+                  <tr
+                    key={m.path}
+                    className={m.shadowedBy ? 'muted' : undefined}
+                    title={m.shadowedBy ? `${t.modsShadowed}: ${m.shadowedBy}` : (m.error ?? m.path)}
+                    draggable={canOrder && inGame}
+                    onDragStart={(e) => {
+                      dragged.current = m.fileName;
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', m.fileName);
+                    }}
+                    onDragOver={(e) => {
+                      if (canOrder && inGame && dragged.current !== undefined) e.preventDefault();
+                    }}
+                    onDrop={(e) => { onDrop(e, m.fileName); }}
+                    data-testid={`mod-row-${m.fileName}`}
+                  >
                     <td>
                       <input
                         type="checkbox"
@@ -177,7 +311,30 @@ function ModsPanel(): ReactNode {
                       {role === 'self' && <span className="tag">{t.modsRoleSelf}</span>}
                       {role === 'dep' && <span className="tag">{t.modsRoleDep}</span>}
                     </td>
-                    <td className="num">{m.loadIndex !== undefined ? m.loadIndex + 1 : ''}</td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={inGame}
+                        disabled={!canOrder || m.error !== undefined}
+                        onChange={(e) => { setInGame(m.fileName, e.target.checked); }}
+                        title={t.colInGameTip}
+                        data-testid={`cfg-${m.fileName}`}
+                      />
+                    </td>
+                    <td className={`num mod-order${inGame && at !== wasAt ? ' changed' : ''}`} title={inGame ? t.modsOrderDragTip : undefined} data-testid={`order-${m.fileName}`}>
+                      {inGame && (
+                        <>
+                          <span className="drag-handle">⠿</span>
+                          <button className="icon" disabled={!canOrder || at === 0} onClick={() => { placeIn(m.fileName, { index: at - 1 }); }} title={t.modsOrderUp} data-testid={`order-up-${m.fileName}`}>
+                            ▲
+                          </button>
+                          <button className="icon" disabled={!canOrder || at === last} onClick={() => { placeIn(m.fileName, { index: at + 1 }); }} title={t.modsOrderDown} data-testid={`order-down-${m.fileName}`}>
+                            ▼
+                          </button>
+                          <span className="mod-order-num">{at + 1}</span>
+                        </>
+                      )}
+                    </td>
                     <td>
                       {m.fileName}
                       {m.error !== undefined && <span className="error"> ⚠</span>}
