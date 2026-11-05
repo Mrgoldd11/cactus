@@ -59,6 +59,7 @@ import {
 import { useLang, useT } from '../i18n.ts';
 import type { Project } from '../project.ts';
 import { tryEdit } from '../hooks.ts';
+import { isTypingIn, shortcut } from '../keys.ts';
 import { layoutDialogue, NODE_WIDTH, type Placed } from '../dialogue-layout.ts';
 
 interface Props {
@@ -155,10 +156,6 @@ function hiddenBy(graph: DialogueGraph, collapsed: ReadonlySet<string>): { hidde
     count.set(c, n);
   }
   return { hidden, count };
-}
-
-function isTypingIn(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
 }
 
 function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, onShowLine, isLineOpen }: Props): ReactNode {
@@ -612,8 +609,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
 
   const onKeyDown = (e: ReactKeyboardEvent): void => {
     if (isTypingIn(e.target)) return;
-    const mod = e.ctrlKey || e.metaKey;
-    const key = e.key.toLowerCase();
+    const sc = shortcut(e);
     let done = true;
     if (e.key === 'Escape') {
       if (ask) setAsk(undefined);
@@ -627,9 +623,9 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     else if (ask) done = false;
     else if (e.key === 'Delete' || e.key === 'Backspace') removeSelection([...selNodes], [...selEdges]);
     else if (e.key === 'F2' && selNodes.size === 1) startEdit([...selNodes][0]!);
-    else if (mod && key === 'd' && selNodes.size > 0) duplicate([...selNodes]);
-    else if (mod && key === 'c' && selNodes.size > 0) copy([...selNodes]);
-    else if (mod && key === 'v' && clipboard.length > 0) paste(pasteTarget());
+    else if (sc === 'ctrl+d' && selNodes.size > 0) duplicate([...selNodes]);
+    else if (sc === 'ctrl+c' && selNodes.size > 0) copy([...selNodes]);
+    else if (sc === 'ctrl+v' && clipboard.length > 0) paste(pasteTarget());
     else done = false;
     if (done) {
       e.preventDefault();

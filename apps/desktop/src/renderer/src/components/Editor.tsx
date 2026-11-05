@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import type { DockviewApi } from 'dockview-react';
 import type { Lang, WorkspaceSettings } from '../../../shared/api.ts';
 import { useT } from '../i18n.ts';
+import { isTypingIn, shortcut } from '../keys.ts';
 import { useProjectVersion, tryEdit } from '../hooks.ts';
 import { MOD_CHANGES_ID, reloadWithDependencies, type Project } from '../project.ts';
 import { LangSwitch } from '../App.tsx';
@@ -32,10 +33,6 @@ interface Props {
 }
 
 type ModalKind = 'deps' | 'info' | 'validate' | 'new';
-
-function isTyping(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
-}
 
 function blurActive(): void {
   if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -152,24 +149,23 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
 
   const keyHandler = useRef<(e: KeyboardEvent) => void>(() => undefined);
   keyHandler.current = (e: KeyboardEvent): void => {
-    const mod = e.ctrlKey || e.metaKey;
-    const key = e.key.toLowerCase();
-    if (mod && key === 's') {
+    const sc = shortcut(e);
+    if (sc === 'ctrl+s' || sc === 'ctrl+shift+s') {
       e.preventDefault();
       void save(e.shiftKey);
-    } else if (mod && key === 'f') {
+    } else if (sc === 'ctrl+f') {
       e.preventDefault();
       if (!searchRef.current) open('records');
       requestAnimationFrame(() => {
         searchRef.current?.focus();
         searchRef.current?.select();
       });
-    } else if (e.altKey && e.key === 'ArrowLeft') back();
-    else if (e.altKey && e.key === 'ArrowRight') forward();
-    else if (mod && !isTyping(e.target) && ((key === 'z' && e.shiftKey) || key === 'y')) {
+    } else if (sc === 'alt+arrowleft') back();
+    else if (sc === 'alt+arrowright') forward();
+    else if (!isTypingIn(e.target) && (sc === 'ctrl+shift+z' || sc === 'ctrl+y')) {
       e.preventDefault();
       redo();
-    } else if (mod && !isTyping(e.target) && key === 'z') {
+    } else if (!isTypingIn(e.target) && sc === 'ctrl+z') {
       e.preventDefault();
       undo();
     }

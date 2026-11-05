@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { _electron as electron, expect, test, type CDPSession, type ElectronApplication, type Page } from '@playwright/test';
 import { decodeText, itemTypeName, readDataFile, type GameRecord } from '@kenshi-editor/core';
 import { Session } from '@kenshi-editor/mcp';
 
@@ -925,6 +925,102 @@ test('история правок: кружочки ↶ ↷ со списком 
     await panel.click({ position: { x: 5, y: 5 } });
     await page.keyboard.press('Control+y');
     await expect(input).toHaveValue('1.1');
+  } finally {
+    await closeApp(app);
+  }
+});
+
+/** Буквы русской раскладки на месте латинских (ЙЦУКЕН): что приходит в `e.key`. */
+const RU: Record<string, string> = { z: 'я', y: 'н', d: 'в', s: 'ы', c: 'с', v: 'м', f: 'а' };
+
+/**
+ * Нажать Ctrl(+Shift)+буква так, как это делает Windows на русской раскладке: `key` — русская
+ * буква, `code` и код клавиши — латинские. Через CDP событие идёт по настоящему пути ввода
+ * (страница → меню окна), поэтому заодно видно, что меню не срабатывает второй раз.
+ */
+async function pressRu(cdp: CDPSession, letter: string, shift = false): Promise<void> {
+  const key = shift ? RU[letter]!.toUpperCase() : RU[letter]!;
+  const code = `Key${letter.toUpperCase()}`;
+  const vk = letter.toUpperCase().charCodeAt(0);
+  const modifiers = 2 | (shift ? 8 : 0);
+  await cdp.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', modifiers, key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', modifiers, key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+}
+
+test('клавиши на русской раскладке: Ctrl+Z/Y/Shift+Z/D/S по физической клавише, в поле ввода — правка поля', async () => {
+  const { app, page } = await launch();
+  try {
+    await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1600, 1000); });
+    const cdp = await page.context().newCDPSession(page);
+    await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('open-vanilla').click();
+    await waitEditor(page);
+    await page.getByTestId('window-menu').click();
+    await page.getByTestId('window-preset-dialogue').click();
+    await page.getByTestId('search').fill('61857-Dialogue.mod');
+    await page.getByTestId('record-list').locator('[data-sid="61857-Dialogue.mod"]').click();
+    const graph = page.getByTestId('dialogue-graph');
+    const stats = graph.getByTestId('dg-stats');
+    await expect(stats).toContainText('узлов 5', { timeout: 60_000 });
+    const node = (sid: string) => graph.locator(`[data-testid="dg-node"][data-id="${sid}"]`);
+    const menu = graph.getByTestId('dg-menu');
+    const edit = graph.getByTestId('dg-edit');
+
+    // Две правки текста: «Раз», затем «Два».
+    await node('61861-Dialogue.mod').locator('.dg-text').first().click({ button: 'right' });
+    await menu.getByTestId('dg-menu-add-answer').click();
+    await expect(edit).toBeFocused();
+    const answer = (await graph.locator('.dg-node.dg-editing').getAttribute('data-id'))!;
+    await page.keyboard.type('Раз');
+    await page.keyboard.press('Enter');
+    await node(answer).locator('.dg-text').first().click();
+    await page.keyboard.press('F2');
+    await edit.fill('Два');
+    await edit.press('Enter');
+    await expect(node(answer)).toContainText('Два');
+
+    // Ctrl+Я — ровно одна отмена (не две: меню окна не срабатывает следом), Ctrl+Н — повтор.
+    await pressRu(cdp, 'z');
+    await expect(node(answer)).toContainText('Раз');
+    await page.waitForTimeout(200);
+    await expect(node(answer)).toContainText('Раз');
+    await pressRu(cdp, 'y');
+    await expect(node(answer)).toContainText('Два');
+    await pressRu(cdp, 'z');
+    await expect(node(answer)).toContainText('Раз');
+    await pressRu(cdp, 'z', true); // Ctrl+Shift+Я — тоже повтор
+    await expect(node(answer)).toContainText('Два');
+
+    // Ctrl+В — копия выделенной реплики; Ctrl+Я убирает её.
+    await node(answer).locator('.dg-text').first().click();
+    await pressRu(cdp, 'd');
+    await expect(stats).toContainText('узлов 7');
+    await pressRu(cdp, 'z');
+    await expect(stats).toContainText('узлов 6');
+
+    // В поле ввода Ctrl+Я отменяет набор в поле, а не правку мода.
+    const search = page.getByTestId('search');
+    await search.fill('');
+    await search.click();
+    await page.keyboard.type('abc');
+    await pressRu(cdp, 'z');
+    await expect(search).not.toHaveValue('abc');
+    await expect(stats).toContainText('узлов 6');
+    await expect(node(answer)).toContainText('Два');
+
+    // Ctrl+Ы — сохранить.
+    const dir = mkdtempSync(join(tmpdir(), 'kedit-ru-keys-'));
+    const out = join(dir, 'RuKeys.mod');
+    try {
+      await stubSaveDialog(app, out);
+      await node(answer).locator('.dg-text').first().click();
+      await pressRu(cdp, 's');
+      await expect(page.getByTestId('status-msg')).toContainText('Сохранено');
+      const a = recordsOf(out).find((r) => r.stringId === answer)!;
+      expect(decodeText(a.strings.get('text0')!)).toBe('Два');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   } finally {
     await closeApp(app);
   }
