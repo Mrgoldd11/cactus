@@ -268,3 +268,63 @@ test('графы: исследования, крафт, состав город�
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('перепись NPC: группы с весом, фильтры, пакет диалогов выбранным, отмена, проигрыватель, сохранение', async () => {
+  const { app, page } = await launch();
+  const dir = mkdtempSync(join(tmpdir(), 'kedit-special-'));
+  const PACKAGE = '5463-gamedata.base';
+  try {
+    await newMod(page, 'KeditE2E Census');
+    await openPanel(page, 'census');
+    const panel = page.getByTestId('census-panel');
+    await expect(page.getByTestId('census-table')).toBeVisible({ timeout: 30_000 });
+    const all = Number(await page.getByTestId('census-summary').getAttribute('data-rows'));
+    expect(all).toBeGreaterThan(300);
+
+    // Группы по фракциям отсортированы по весу; Объединённые города — среди них.
+    const weights = await panel.locator('[data-testid="census-group"][data-weight]').evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-weight'))));
+    expect(weights.length).toBeGreaterThan(20);
+    expect([...weights].sort((a, b) => b - a)).toEqual(weights);
+    await panel.locator(`[data-testid="census-group"][data-key="${UNITED_CITIES}"]`).click();
+    const inFaction = Number(await page.getByTestId('census-summary').getAttribute('data-rows'));
+    expect(inFaction).toBeGreaterThan(10);
+    expect(inFaction).toBeLessThan(all);
+
+    // Шаблоны без пакета диалогов.
+    await page.getByTestId('census-filter').selectOption('nopkg');
+    const rows = panel.getByTestId('census-row');
+    await expect(rows.first()).toHaveAttribute('data-packages', '0');
+    const sids = [await rows.nth(0).getAttribute('data-sid'), await rows.nth(1).getAttribute('data-sid')] as string[];
+    await rows.nth(0).getByTestId('census-pick').check();
+    await rows.nth(1).getByTestId('census-pick').check();
+    await expect(page.getByTestId('census-selected')).toContainText('2');
+    await page.screenshot({ path: join(shots, '37-census.png') });
+
+    await page.getByTestId('census-package').selectOption(PACKAGE);
+    await page.getByTestId('census-give').click();
+    await expect(page.getByTestId('save')).toHaveClass(/primary/);
+    await page.getByTestId('census-filter').selectOption('inmod');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toHaveAttribute('data-status', 'changed');
+    await expect(rows.first()).toHaveAttribute('data-packages', '1');
+
+    await page.getByTestId('undo').click();
+    await expect(rows).toHaveCount(0);
+    await page.getByTestId('redo').click();
+    await expect(rows).toHaveCount(2);
+
+    // Переход в проигрыватель разговора.
+    await rows.first().getByTestId('census-player').click();
+    await expect(page.locator('[data-testid="player"]').first()).toBeVisible();
+
+    const recs = await saveAndValidate(app, page, join(dir, 'Census.mod'));
+    expect(recs.map((r) => r.stringId).sort()).toEqual([...sids].sort());
+    for (const r of recs) {
+      expect([...r.refs.keys()]).toEqual(['dialogue package']);
+      expect(r.refs.get('dialogue package')!.map((x) => x.target)).toEqual([PACKAGE]);
+    }
+  } finally {
+    await closeApp(app);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

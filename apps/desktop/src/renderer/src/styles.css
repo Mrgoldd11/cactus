@@ -2357,3 +2357,61 @@ input.invalid {
 .gr-value {
   width: 64px;
 }
+
+/* Панель «Перепись NPC». */
+.census-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 6px;
+}
+.census-groups {
+  display: flex;
+  flex-direction: column;
+  width: 240px;
+  flex-shrink: 0;
+  overflow: auto;
+  border-right: 1px solid var(--border);
+  padding-right: 4px;
+}
+.census-group {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+.census-group span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.census-group span.muted {
+  white-space: nowrap;
+  font-size: 11px;
+}
+.census-group.active {
+  background: var(--sel);
+}
+.census-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+}
+.census-flags .tag.changed {
+  color: var(--changed);
+}
+.census-actions {
+  white-space: nowrap;
+}
+.census-actions button {
+  padding: 0 6px;
+}
+.census-table td {
+  white-space: nowrap;
+}

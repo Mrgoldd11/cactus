@@ -2,7 +2,7 @@
  * Специальные редакторы (этап 5) на ванили установленной игры. Без игры тесты пропускаются.
  */
 import { describe, expect, it } from 'vitest';
-import { applyBulk, compareTable, craftingStations, factionMatrix, parseFieldFilter, previewBulk, researchGraph, squadComposition, townComposition, type Layer, type ModContext } from '../src/index.ts';
+import { applyBulk, censusNoPackage, compareTable, craftingStations, npcCensus, factionMatrix, parseFieldFilter, previewBulk, researchGraph, squadComposition, townComposition, type Layer, type ModContext } from '../src/index.ts';
 import { hasGame, loadModContext, loadVanillaLayers, resolveGamePaths } from '../src/node/index.ts';
 
 const paths = resolveGamePaths();
@@ -72,5 +72,17 @@ describe.skipIf(!game)('специальные редакторы на вани�
     const cannibals = squadComposition(ctx(), '2609-gamedata.base')!;
     expect(cannibals.members.some((m) => m.field === 'leader')).toBe(true);
     expect(cannibals.members.some((m) => m.field === 'squad' && m.max > m.min)).toBe(true);
+  });
+
+  it('перепись NPC: сотни персонажей, Bark и Объединённые города в группах, вес по городам', () => {
+    const c = npcCensus(ctx());
+    expect(c.chars.length).toBeGreaterThan(500);
+    expect(c.chars.some((x) => x.unique)).toBe(true);
+    expect(c.chars.some(censusNoPackage)).toBe(true);
+    const uc = c.byFaction.find((g) => g.key === 'defaultEmpireFactionSID')!;
+    expect(uc.chars.length).toBeGreaterThan(10);
+    const bark = c.byTown.find((g) => g.key === '1076-gamedata.base')!;
+    expect(bark.chars.length).toBeGreaterThan(5);
+    expect(c.byFaction.map((g) => g.weight)).toEqual([...c.byFaction.map((g) => g.weight)].sort((a, b) => b - a));
   });
 });

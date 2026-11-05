@@ -20,3 +20,4 @@ export * from './factions.ts';
 export * from './compare.ts';
 export * from './bulk.ts';
 export * from './graphs.ts';
+export * from './census.ts';
