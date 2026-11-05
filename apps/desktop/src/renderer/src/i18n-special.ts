@@ -2,6 +2,44 @@
  * Строки специальных редакторов (этап 5): матрица отношений, таблицы сравнения, массовые
  * правки, графы, перепись NPC. Вливаются в общий словарь `i18n.ts`.
  */
+/** Подписи значений ссылки в панели «Графы» по категории ссылки. */
+const GR_VALUES_EN: Readonly<Record<string, string[]>> = {
+  squad: ['min', 'max'],
+  squad2: ['min', 'max'],
+  housemates: ['min', 'max'],
+  animals: ['min', 'max', 'age'],
+  animals2: ['min', 'max', 'age'],
+  leader: ['count'],
+  'choosefrom list': ['chance'],
+  vendors: ['% of items'],
+  residents: ['count', 'priority'],
+  'bar squads': ['count', 'chance %'],
+  ingredients: ['amount ×100'],
+  consumes: ['stock', 'rate ×100'],
+  'item crafts': ['stock'],
+  produces: ['stock'],
+  requirements: ['repetition'],
+  cost: ['amount'],
+};
+const GR_VALUES_RU: Readonly<Record<string, string[]>> = {
+  squad: ['мин', 'макс'],
+  squad2: ['мин', 'макс'],
+  housemates: ['мин', 'макс'],
+  animals: ['мин', 'макс', 'возраст'],
+  animals2: ['мин', 'макс', 'возраст'],
+  leader: ['сколько'],
+  'choosefrom list': ['шанс'],
+  vendors: ['% товаров'],
+  residents: ['сколько', 'приоритет'],
+  'bar squads': ['сколько', 'шанс %'],
+  ingredients: ['количество ×100'],
+  consumes: ['запас', 'расход ×100'],
+  'item crafts': ['запас'],
+  produces: ['запас'],
+  requirements: ['повтор'],
+  cost: ['количество'],
+};
+
 export const specialEn = {
   // матрица отношений фракций
   panel_factions: 'Faction relations',
@@ -166,24 +204,7 @@ export const specialEn = {
   cePackage: 'Dialogue package…',
   ceGive: (n: number) => `Give package to selected (${n})`,
   ceGiven: (n: number) => `Package given to ${n}`,
-  grValues: {
-    squad: ['min', 'max'],
-    squad2: ['min', 'max'],
-    housemates: ['min', 'max'],
-    animals: ['min', 'max', 'age'],
-    animals2: ['min', 'max', 'age'],
-    leader: ['count'],
-    'choosefrom list': ['chance'],
-    vendors: ['% of items'],
-    residents: ['count', 'priority'],
-    'bar squads': ['count', 'chance %'],
-    ingredients: ['amount ×100'],
-    consumes: ['stock', 'rate ×100'],
-    'item crafts': ['stock'],
-    produces: ['stock'],
-    requirements: ['repetition'],
-    cost: ['amount'],
-  } as Record<string, string[]>,
+  grValues: (category: string): string[] | undefined => GR_VALUES_EN[category],
 };
 
 export type SpecialStrings = typeof specialEn;
@@ -348,22 +369,5 @@ export const specialRu: SpecialStrings = {
   cePackage: 'Пакет диалогов…',
   ceGive: (n: number) => `Дать пакет выбранным (${n})`,
   ceGiven: (n: number) => `Пакет дан: ${n}`,
-  grValues: {
-    squad: ['мин', 'макс'],
-    squad2: ['мин', 'макс'],
-    housemates: ['мин', 'макс'],
-    animals: ['мин', 'макс', 'возраст'],
-    animals2: ['мин', 'макс', 'возраст'],
-    leader: ['сколько'],
-    'choosefrom list': ['шанс'],
-    vendors: ['% товаров'],
-    residents: ['сколько', 'приоритет'],
-    'bar squads': ['сколько', 'шанс %'],
-    ingredients: ['количество ×100'],
-    consumes: ['запас', 'расход ×100'],
-    'item crafts': ['запас'],
-    produces: ['запас'],
-    requirements: ['повтор'],
-    cost: ['количество'],
-  },
+  grValues: (category: string): string[] | undefined => GR_VALUES_RU[category],
 };

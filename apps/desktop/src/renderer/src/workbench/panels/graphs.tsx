@@ -196,7 +196,7 @@ function LinkEditor({ l, title, onApply }: { l: GraphLink; title: string; onAppl
   const t = useT();
   const n = Math.max(1, Math.min(3, l.arity));
   const [vals, setVals] = useState(() => l.values.slice(0, n).map(String));
-  const names = t.grValues[l.category] ?? [];
+  const names = t.grValues(l.category) ?? [];
   const parsed = vals.map((v) => Number(v.trim()));
   const ok = parsed.every((v) => Number.isInteger(v)) && vals.every((v) => v.trim() !== '');
   return (
