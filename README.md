@@ -309,6 +309,26 @@ const schema = loadGameSchema(resolveGamePaths());
 console.log(schema.types.get('WEAPON')?.fields.get('blunt damage multiplier')?.description);
 ```
 
+### Ядро в своих скриптах: пакет `@kedit/core`
+
+Внутри рабочей области ядро — `@kenshi-editor/core` (исходники TypeScript). Для скриптов
+вне неё (свой мод в другой папке) есть пакет `@kedit/core` — тот же код, собранный в
+JavaScript с типами, без зависимостей:
+
+```sh
+pnpm core:package                       # → out/kedit-core/  (--tgz — ещё и архив для npm)
+cd D:/мой-мод && npm install D:/Kenshiproject/editor/out/kedit-core
+```
+
+```ts
+import { ModContext, encodeText } from '@kedit/core';
+import { loadModContext, resolveGamePaths } from '@kedit/core/node';
+```
+
+Скрипт запускается как обычно (`node build.ts`, Node ≥ 22.18). Старый относительный импорт
+`../../editor/packages/core/src/index.ts` тоже работает. Пакет помечен `private` — в npm
+он не публикуется.
+
 ## Устройство `packages/core`
 
 - `src/format/` — бинарный формат: `read.ts`, `write.ts`, модель в `types.ts`, номера типов

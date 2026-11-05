@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "build": "pnpm -r build",
     "report": "pnpm --filter @kenshi-editor/core report",
+    "core:package": "pnpm --filter @kenshi-editor/core package",
     "desktop": "pnpm --filter @kenshi-editor/desktop dev",
     "desktop:start": "node apps/desktop/scripts/launch.ts",
     "desktop:e2e": "pnpm --filter @kenshi-editor/desktop e2e",
