@@ -935,6 +935,210 @@ tr.fs-removed td:first-child {
   stroke: var(--changed);
 }
 
+.dg-canvas .react-flow__edge.dg-edge-sel path {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+.dg-tools {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.dg-search {
+  width: 220px;
+}
+.dg-issue.dg-sev-error,
+.dg-warn.dg-sev-error {
+  color: var(--error);
+}
+.dg-issue.dg-sev-warning,
+.dg-warn.dg-sev-warning {
+  color: var(--changed);
+}
+.dg-issue.dg-sev-info,
+.dg-warn.dg-sev-info {
+  color: var(--muted);
+}
+.dg-node.dg-warnnode {
+  border-color: var(--changed);
+}
+.dg-node.dg-st-new {
+  box-shadow: inset 0 0 0 1px var(--new);
+}
+.dg-node.dg-st-changed {
+  box-shadow: inset 0 0 0 1px var(--changed);
+}
+.dg-node.dg-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.dg-node.dg-matched {
+  background: #3a3520;
+}
+.dg-toggle {
+  min-width: 14px;
+  text-decoration: none;
+}
+.dg-removed {
+  color: var(--deleted);
+}
+.dg-end,
+.dg-hidden {
+  font-style: italic;
+}
+
+/* Статус записи мода и инспектор реплики */
+.st-badge {
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--bg);
+  background: var(--muted);
+}
+.st-badge.st-new {
+  background: var(--new);
+}
+.st-badge.st-changed {
+  background: var(--changed);
+}
+.st-badge.st-deleted {
+  background: var(--deleted);
+}
+.warn {
+  color: var(--changed);
+}
+.danger {
+  color: var(--error);
+}
+button.danger {
+  border-color: var(--error);
+}
+button.small.active {
+  background: var(--sel);
+  border-color: var(--accent);
+}
+.spacer {
+  flex: 1;
+}
+.line-inspector {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ln-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ln-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ln-note {
+  margin: 0;
+}
+.ln-confirm {
+  border: 1px solid var(--changed);
+  border-radius: 4px;
+  padding: 6px 8px;
+  background: var(--bg2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ln-section {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ln-section-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 600;
+}
+.ln-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ln-text-input {
+  width: 100%;
+  min-height: 48px;
+  resize: vertical;
+  font: inherit;
+}
+.ln-ru {
+  color: var(--muted);
+  padding-left: 4px;
+  border-left: 2px solid var(--border);
+}
+.ln-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px 10px;
+}
+.ln-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ln-num {
+  width: 90px;
+}
+.ln-select {
+  max-width: 100%;
+  min-width: 0;
+}
+.ln-action {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.ln-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ln-next {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.ln-next > button.link {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+}
+.ln-next-btns {
+  display: flex;
+  gap: 2px;
+}
+.ln-removed {
+  color: var(--deleted);
+}
+.ln-add {
+  flex-wrap: wrap;
+}
+.ln-ingame {
+  opacity: 0.85;
+  border-left: 2px solid var(--border);
+  padding-left: 6px;
+}
+
 /* Живая связь с ИИ */
 .panes.with-ai {
   grid-template-columns: 240px minmax(300px, 1fr) minmax(420px, 1.2fr) 340px;

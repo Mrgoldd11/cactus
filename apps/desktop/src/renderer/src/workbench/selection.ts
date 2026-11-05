@@ -9,7 +9,7 @@ import { useSyncExternalStore } from 'react';
 export type Selection =
   | { kind: 'record'; sid: string }
   /** Реплика диалога; `dialog` — в каком диалоге её выбрали (граф, плеер). */
-  | { kind: 'line'; sid: string; dialog?: string }
+  | { kind: 'line'; sid: string; dialog?: string; parent?: string }
   /** Объект сцены (этап 7: 3D-вид). `sid` — запись, которую объект показывает, если есть. */
   | { kind: 'scene'; id: string; sid?: string };
 

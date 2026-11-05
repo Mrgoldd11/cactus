@@ -178,7 +178,9 @@ export function diffRecord(lower: GameRecord, desired: GameRecord, previous?: Ga
     const entries = diffRefs(lower.refs.get(cat) ?? [], desired.refs.get(cat) ?? []);
     if (entries.length === 0) continue;
     const prev = previous?.refs.get(cat);
-    out.refs.set(cat, prev && sameRefSet(prev, entries) ? prev.map((r) => ({ ...r })) : entries);
+    // Прежний порядок записи мода сохраняется, пока пользователь не переставил добавленные ссылки.
+    const keep = prev !== undefined && sameRefSet(prev, entries) && sameAddedOrder(prev, entries, lower.refs.get(cat) ?? []);
+    out.refs.set(cat, keep ? prev.map((r) => ({ ...r })) : entries);
     changed = true;
   }
   for (const k of lower.instances.keys()) {
@@ -221,6 +223,14 @@ function diffRefs(lower: readonly Reference[], desired: readonly Reference[]): R
   }
   for (const w of want.values()) if (!lowerTargets.has(w.target)) out.push({ ...w });
   return out;
+}
+
+/** Ссылки, добавленные модом (их нет в нижних слоях), идут в одном порядке. */
+function sameAddedOrder(a: readonly Reference[], b: readonly Reference[], lower: readonly Reference[]): boolean {
+  const low = new Set(lower.map((r) => r.target));
+  const x = a.filter((r) => !isRemovedRef(r) && !low.has(r.target)).map((r) => r.target);
+  const y = b.filter((r) => !isRemovedRef(r) && !low.has(r.target)).map((r) => r.target);
+  return x.every((t, i) => t === y[i]);
 }
 
 function sameRefSet(a: readonly Reference[], b: readonly Reference[]): boolean {
