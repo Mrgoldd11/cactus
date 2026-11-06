@@ -7,6 +7,7 @@ import {
   buildCategoryTree,
   decodeText,
   indexTranslation,
+  INTERIORS,
   itemTypeName,
   matchesLayoutFilters,
   MergeLedger,
@@ -137,11 +138,14 @@ export class Project {
   private typeCache: { version: number; map: Map<string, string[]> } | undefined;
   private worldFilesPromise: Promise<WorldFile[]> | undefined;
   private editsPromise: Promise<WorldEdits> | undefined;
+  private interiorsPromise: Promise<WorldEdits> | undefined;
   private edits: WorldEdits | undefined;
   /** Мир по текущим правкам: пересобирается, когда правки мира меняются. */
   private worldCache: { version: number; index: Promise<WorldIndex> } | undefined;
   /** Номер правки мира (растёт при каждой правке, отмене, сохранении). */
   worldVersion = 0;
+  /** Номер правки интерьеров (мир от них не пересобирается). */
+  interiorVersion = 0;
   private translationPromise: Promise<TranslationIndex | undefined> | undefined;
   private readonly icons = new Map<string, Promise<string | null>>();
 
@@ -274,22 +278,40 @@ export class Project {
 
   /** Файлы уровня ванили, зависимостей и мода (читаются один раз, десятки мегабайт). */
   private worldFiles(): Promise<WorldFile[]> {
-    this.worldFilesPromise ??= (async () => {
-      const modPaths = [...this.bundle.dependencies.map((d) => d.path), ...(this.path !== undefined ? [this.path] : [])];
-      const req = { game: this.bundle.game, modPaths };
-      let files = await window.kedit.loadWorld({ ...req, known: parsedFiles.keys() });
-      if (files.some((f) => f.bytes.length === 0 && !parsedFiles.has(f.key))) files = await window.kedit.loadWorld(req);
-      return files.map((f) => ({ layer: f.layer, path: f.path, file: parsedFiles.take(f.key, f.bytes) }));
-    })();
+    this.worldFilesPromise ??= this.readWorld(false);
     return this.worldFilesPromise;
+  }
+
+  private async readWorld(interiors: boolean): Promise<WorldFile[]> {
+    const modPaths = [...this.bundle.dependencies.map((d) => d.path), ...(this.path !== undefined ? [this.path] : [])];
+    const req = { game: this.bundle.game, modPaths, interiors };
+    let files = await window.kedit.loadWorld({ ...req, known: parsedFiles.keys() });
+    if (files.some((f) => f.bytes.length === 0 && !parsedFiles.has(f.key))) files = await window.kedit.loadWorld(req);
+    return files.map((f) => ({ layer: f.layer, path: f.path, file: parsedFiles.take(f.key, f.bytes) }));
+  }
+
+  /** Правки мира с дочитанными интерьерами (`interiors.level` ванили, зависимостей и мода). */
+  interiorEdits(): Promise<WorldEdits> {
+    this.interiorsPromise ??= this.worldEdits()
+      .then(async (edits) => {
+        if (!edits.isLoaded(INTERIORS)) edits.addFiles(await this.readWorld(true));
+        return edits;
+      })
+      .catch((e: unknown) => {
+        this.interiorsPromise = undefined;
+        throw e;
+      });
+    return this.interiorsPromise;
   }
 
   /** Правки мира мода (сдвиг, поворот, новые и удалённые объекты): своя история отмены. */
   worldEdits(): Promise<WorldEdits> {
     this.editsPromise ??= this.worldFiles().then((files) => {
       const edits = new WorldEdits(files, this.modLayer);
-      edits.onChange(() => {
-        this.worldVersion++;
+      edits.onChange((changed) => {
+        // Правки только интерьеров мир (WorldIndex) не меняют.
+        if (changed.length > 0 && changed.every((c) => c.path.toLowerCase() === INTERIORS)) this.interiorVersion++;
+        else this.worldVersion++;
         this.bump();
       });
       this.edits = edits;

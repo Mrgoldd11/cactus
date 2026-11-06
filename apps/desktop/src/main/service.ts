@@ -264,7 +264,9 @@ export function readMergeSourceBytes(path: string): MergeSourceResult {
 /** Файлы уровня ванили и модов, сырыми байтами (разбирает окно). */
 export function loadWorldBytes(req: WorldRequest): WorldFileBytes[] {
   const known = new Set(req.known ?? []);
-  return listWorldFiles(worldDirs(req.game, req.modPaths)).map((f) => {
+  // С `interiors` — только `interiors.level` (дочитываются по запросу панели «Внутри»).
+  const only = req.interiors === true;
+  return listWorldFiles(worldDirs(req.game, req.modPaths), { interiors: only }).filter((f) => (f.path.toLowerCase() === 'interiors.level') === only).map((f) => {
     const { key, bytes } = readIfUnknown(f.full, known);
     return { layer: f.layer, path: f.path, key, bytes: bytes ?? new Uint8Array() };
   });

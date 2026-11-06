@@ -166,6 +166,8 @@ export interface WorldRequest {
   modPaths: string[];
   /** Ключи файлов, уже разобранных в окне. */
   known?: string[];
+  /** Только интерьеры (`interiors.level`): они большие, их читают по запросу панели «Внутри». */
+  interiors?: boolean;
 }
 
 /** Живая связь с ИИ (MCP): сервер в main, запросы выполняет окно. */

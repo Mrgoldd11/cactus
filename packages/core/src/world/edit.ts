@@ -61,6 +61,19 @@ export interface PlaceOptions {
   key?: string;
   /** Тип записи-владельца, если её ещё нет (по умолчанию INSTANCE_COLLECTION). */
   holderType?: string;
+  /**
+   * Записи состояний нового экземпляра (мебель, точки предметов в интерьерах). `newId` даёт
+   * свободный id `<n>-<мод>-INGAME` и двигает `lastId`; строковые id записей пишутся в
+   * состояния экземпляра по порядку.
+   */
+  states?: (key: string, newId: () => string) => GameRecord[];
+}
+
+/** Файлы уровня, которые читаются только по запросу (`addFiles`): интерьеры. */
+export const LAZY_LEVEL_FILES: readonly string[] = ['interiors.level'];
+
+function isLazy(path: string): boolean {
+  return LAZY_LEVEL_FILES.includes(path.toLowerCase());
 }
 
 /** Что поменялось: записи файлов уровня (владельцы экземпляров и состояния). */
@@ -105,13 +118,36 @@ export class WorldEdits {
   private readonly listeners = new Set<Listener>();
   /** Пути, которые менялись с последнего сохранения (даже если правку отменили). */
   private readonly touched = new Set<string>();
+  /** Ленивые файлы, которые ещё не прочитаны: править их нельзя (мод затёр бы свой файл). */
+  private readonly unread = new Set<string>(LAZY_LEVEL_FILES);
 
   constructor(files: readonly WorldFile[], modLayer: string) {
     this.modLayer = modLayer;
     this.modBase = modBaseName(modLayer);
+    this.add(files);
+  }
+
+  /**
+   * Дочитать ленивые файлы (`interiors.level` ванили, зависимостей и мода). `paths` — какие
+   * файлы теперь прочитаны полностью, даже если ни в одном слое их нет.
+   */
+  addFiles(files: readonly WorldFile[], paths: readonly string[] = LAZY_LEVEL_FILES): void {
+    for (const p of [...paths, ...files.map((f) => f.path)]) if (!this.unread.has(p.toLowerCase())) throw new Error(`Файл ${p} уже прочитан`);
+    this.add(files);
+    for (const p of paths) this.unread.delete(p.toLowerCase());
+  }
+
+  /** Файл прочитан (не ленивый или уже дочитан). */
+  isLoaded(path: string): boolean {
+    return !this.unread.has(path.toLowerCase());
+  }
+
+  private add(files: readonly WorldFile[]): void {
     for (const wf of files) {
       const k = wf.path.toLowerCase();
-      if (wf.layer === modLayer) {
+      this.unread.delete(k);
+      this.lowerCache.delete(k);
+      if (wf.layer === this.modLayer) {
         const records = new Map<string, GameRecord>();
         for (const r of wf.file.records) records.set(r.stringId, r);
         this.mod.set(k, { path: wf.path, original: wf.file, records, lastId: wf.file.lastId });
@@ -158,6 +194,7 @@ export class WorldEdits {
 
   private modFile(path: string): ModLevelFile {
     const k = path.toLowerCase();
+    if (this.unread.has(k)) throw new Error(`${path} ещё не прочитан: сначала addFiles`);
     let f = this.mod.get(k);
     if (!f) {
       const lowerPath = this.lowerFiles.get(k)?.[0]?.path ?? path;
@@ -248,6 +285,12 @@ export class WorldEdits {
   private holderRecord(path: string, holder: string, type: string): () => GameRecord {
     return () => {
       const lo = this.lower(path).get(holder);
+      // Раскладки интерьеров моды пишут с полями (`associated building`, `is exterior`).
+      if (lo && isLazy(path)) {
+        const c = cloneRecord(lo);
+        c.instances.clear();
+        return c;
+      }
       return emptyRecord(lo?.type ?? itemTypeId(type) ?? 0, holder, lo?.name ?? encodeText(holder.replace(/-.*$/, '')));
     };
   }
@@ -317,17 +360,28 @@ export class WorldEdits {
     } else if (taken(key)) throw new Error(`Ключ ${key} уже занят`);
     checkZone(path, position);
     const k = key;
+    const newId = (): string => {
+      let id: string;
+      do id = `${++n}-${this.modBase}-INGAME`;
+      while (this.record(path, id) !== undefined || taken(id));
+      return id;
+    };
+    const states = options.states?.(k, newId) ?? [];
     this.transaction(label, () => {
       this.change(
         path,
         holder,
         (rec) => {
-          rec.instances.set(k, { target, position: [...position], rotation: [...rotation], states: [] });
-          // `lastId` растёт вместе с ключом; отмена вернёт и его.
+          rec.instances.set(k, { target, position: [...position], rotation: [...rotation], states: states.map((s) => encodeText(s.stringId)) });
+          // `lastId` растёт вместе с ключом и id состояний; отмена вернёт и его.
           f.lastId = Math.max(f.lastId, n);
         },
         this.holderRecord(path, holder, options.holderType ?? 'INSTANCE_COLLECTION'),
       );
+      for (const st of states) {
+        if (this.record(path, st.stringId)) throw new Error(`Запись ${st.stringId} уже есть в ${path}`);
+        this.change(path, st.stringId, () => undefined, () => st);
+      }
     });
     return k;
   }
@@ -336,12 +390,36 @@ export class WorldEdits {
   remove(path: string, holder: string, key: string, label = 'Удаление объекта'): void {
     if (!this.instance(path, holder, key)) throw new Error(`Нет объекта ${key} в ${holder} (${path})`);
     const lo = this.lower(path).get(holder)?.instances.get(key);
+    const cur = this.instance(path, holder, key)!;
     this.transaction(label, () => {
       if (lo) this.setInstance(path, holder, key, removedInstance());
       else {
         this.change(path, holder, (rec) => rec.instances.delete(key), this.holderRecord(path, holder, 'INSTANCE_COLLECTION'));
         this.dropEmpty(path, holder);
+        // Состояния своего нового объекта больше никому не нужны.
+        for (const s of cur.states) this.erase(path, decodeText(s));
       }
+    });
+  }
+
+  /** Стереть запись, которая есть только в моде. */
+  private erase(path: string, sid: string): void {
+    const f = this.modFile(path);
+    const before = f.records.get(sid);
+    if (!before || this.lower(path).has(sid)) return;
+    this.commit({ path: f.path, sid, before, after: undefined, lastIdBefore: f.lastId, lastIdAfter: f.lastId });
+  }
+
+  /**
+   * Поправить запись файла уровня (состояние объекта). Запись нижних слоёв мод кладёт полной
+   * копией, как моды мастерской; вернулась к исходной — правка уходит.
+   */
+  editState(path: string, sid: string, edit: (rec: GameRecord) => void, label = `Правка ${sid}`): void {
+    const cur = this.record(path, sid);
+    if (!cur) throw new Error(`Нет записи ${sid} в ${path}`);
+    this.transaction(label, () => {
+      this.change(path, sid, edit, () => cloneRecord(cur));
+      this.dropEmpty(path, sid);
     });
   }
 
@@ -445,11 +523,16 @@ export class WorldEdits {
     this.emit();
   }
 
-  /** Все файлы мира с текущими правками мода — для нового `WorldIndex`. */
-  files(): WorldFile[] {
+  /**
+   * Файлы мира с текущими правками мода — для нового `WorldIndex`. Интерьеры (`interiors.level`)
+   * — только с `interiors: true`.
+   */
+  files(options: { interiors?: boolean } = {}): WorldFile[] {
+    const keep = (path: string): boolean => options.interiors === true || !isLazy(path);
     const out: WorldFile[] = [];
-    for (const list of this.lowerFiles.values()) out.push(...list);
+    for (const list of this.lowerFiles.values()) out.push(...list.filter((wf) => keep(wf.path)));
     for (const f of this.mod.values()) {
+      if (!keep(f.path)) continue;
       const file = this.buildFile(f.path);
       if (file) out.push({ layer: this.modLayer, path: f.path, file });
     }

@@ -16,6 +16,7 @@ import type { Lang } from '../../../../shared/api.ts';
 import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
 import { InsideCard } from '../../components/InsideCard.tsx';
+import { interiorRequest } from './interior.tsx';
 import { DEFAULT_EDIT, DEFAULT_SETTINGS, WorldView, type EditSettings, type QualityLevel, type WorldSettings, type WorldStatsView } from '../../three/world/view.ts';
 import type { WorldObject } from '../../three/world/objects.ts';
 
@@ -74,6 +75,8 @@ const en = {
   stepRemove: 'Remove',
   edited: 'changed in the mod — saved to leveldata with the mod',
   noBridge: 'Show in game: start Kenshi with the Kenshi Bridge plugin and load a save',
+  inside: 'Inside…',
+  insideTip: 'Open the interior of this building: furniture, chests, beds — move, add, remove',
   editHelp: 'G — move, R — rotate, drag the arrows / ring, Del — remove, Ctrl+Z / Ctrl+Y — undo / redo of world edits',
 };
 type WorldStrings = typeof en;
@@ -132,6 +135,8 @@ const ru: WorldStrings = {
   stepRemove: 'Удаление',
   edited: 'изменено в моде — запишется в leveldata при сохранении мода',
   noBridge: 'Показать в игре: запустите Kenshi с плагином Kenshi Bridge и загрузите сохранение',
+  inside: 'Внутри…',
+  insideTip: 'Открыть интерьер этого здания: мебель, сундуки, кровати — сдвинуть, добавить, удалить',
   editHelp: 'G — сдвиг, R — поворот, тяните стрелки / кольцо, Del — удалить, Ctrl+Z / Ctrl+Y — отмена / повтор правок мира',
 };
 const WORLD_STRINGS: Record<Lang, WorldStrings> = { en, ru };
@@ -182,7 +187,7 @@ function SidLink({ sid, go, empty }: { sid: string | undefined; go: (sid: string
 }
 
 function ObjectCard({ o, s, onFocus, onRemove, edited }: { o: WorldObject; s: WorldStrings; onFocus: () => void; onRemove: (() => void) | undefined; edited: boolean }): ReactNode {
-  const { project, go } = useWorkbench();
+  const { project, go, open } = useWorkbench();
   const link = useGameLink();
   const b: BuildingPlacement | undefined = o.b;
   const rows: [string, ReactNode][] = [
@@ -201,6 +206,19 @@ function ObjectCard({ o, s, onFocus, onRemove, edited }: { o: WorldObject; s: Wo
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
         <b style={{ flex: 1 }}>{s.object}</b>
         <button onClick={onFocus}>{s.focus}</button>
+        {b && (
+          <button
+            data-testid="world-inside"
+            title={s.insideTip}
+            onClick={() => {
+              interiorRequest.set({ building: o.p.target, ...(b.interior ? { layout: b.interior } : {}) });
+              go(o.p.target);
+              open('interior');
+            }}
+          >
+            ⌂ {s.inside}
+          </button>
+        )}
         {onRemove && (
           <button data-testid="world-remove" onClick={onRemove}>
             {s.remove}
