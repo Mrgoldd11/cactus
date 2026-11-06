@@ -6,7 +6,14 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mc
 import { z } from 'zod';
 import {
   applyBulk,
+  applyMerge,
   applyOps,
+  formatMergePlan,
+  formatMergeResult,
+  planMerge,
+  rejectMerge,
+  selectMergeChanges,
+  unrejectMerge,
   formatBulkPreview,
   previewBulk,
   buildDialogueTree,
@@ -527,6 +534,67 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   );
 
   const stepTo = {
+  server.registerTool(
+    'merge',
+    {
+      title: 'Слияние модов',
+      description: [
+        'Слияние: что другой мод (source — имя установленного мода или путь к .mod/.base) меняет относительно открытого мода: новые, изменённые (с полями «было → станет») и удалённые записи; конфликты — когда поле меняли и вы, и источник.',
+        'По умолчанию только предпросмотр. apply: true — слить выбранное одной правкой (одна отмена), выбор: ids / types / kinds / all. recursive — вместе с записями, на которые ссылаются (целый диалог); fix_refs — добавить и новые записи, на которые ссылаются принятые.',
+        'conflicts: mine (по умолчанию, остаются ваши значения) | source; resolutions — по записям и полям (ключ из предпросмотра, например ints:value; для удаления — record).',
+        'reject / unreject — отклонить и не показывать при следующих слияниях (show_rejected: показать их). Слияние данных уровня (leveldata, *.zone) не поддержано: levels: true только сообщает о них.',
+        'Нельзя слить мод, открытый как зависимость. Мод и файл решений <мод>.kedit-merge.json пишет save (в папку игры — с force). Подключён редактор: только предпросмотр, слить — панелью «Слияние» в окне.',
+      ].join('\n'),
+      inputSchema: {
+        source: z.string().describe('Мод-источник: имя установленного мода или путь к файлу'),
+        ids: z.array(z.string()).optional().describe('Какие записи слить (id из предпросмотра)'),
+        types: z.array(z.string()).optional().describe('Слить записи этих типов (имя или номер)'),
+        kinds: z.array(z.enum(['new', 'changed', 'deleted'])).optional().describe('Слить записи этого вида изменения'),
+        all: z.boolean().optional().describe('Слить всё из списка'),
+        recursive: z.boolean().optional(),
+        fix_refs: z.boolean().optional(),
+        conflicts: z.enum(['mine', 'source']).optional(),
+        resolutions: z.record(z.string(), z.record(z.string(), z.enum(['mine', 'source']))).optional().describe('id записи → ключ поля → mine | source'),
+        reject: z.array(z.string()).optional(),
+        unreject: z.array(z.string()).optional(),
+        show_rejected: z.boolean().optional(),
+        levels: z.boolean().optional().describe('Показать данные уровня источника (они не сливаются)'),
+        apply: z.boolean().optional().describe('true — слить; без него только предпросмотр'),
+        limit: limit(50),
+      },
+      annotations: { ...EDIT, title: 'Слияние модов' },
+    },
+    (a) =>
+      run(() => {
+        const ctx = session.ctx();
+        const ledger = session.mergeLedger();
+        const { source, levelData } = session.mergeSource(a.source, a.levels ?? false);
+        const options = { showRejected: a.show_rejected ?? false, ...(levelData ? { levelData } : {}) };
+        const lines: string[] = [];
+        if (a.reject?.length || a.unreject?.length) {
+          if (session.editor) throw new SessionError('Подключены к редактору: решения слияния принимаются в панели «Слияние»');
+          const done = a.reject?.length ? rejectMerge(ctx, source, ledger, a.reject, options) : [];
+          if (a.unreject?.length) unrejectMerge(ledger, source, a.unreject);
+          lines.push(`отклонено ${done.length}, возвращено ${a.unreject?.length ?? 0} (запишутся вместе с модом: save)`);
+        }
+        const plan = planMerge(ctx, source, ledger, options);
+        lines.push(...formatMergePlan(plan, a.limit === 0 ? Infinity : (a.limit ?? 50)));
+        if (!a.apply) return [...lines, 'предпросмотр: ничего не изменено (apply: true с ids / types / kinds / all — слить)'];
+        if (session.editor) throw new SessionError('Подключены к редактору: слияние применяется в панели «Слияние» окна (здесь доступен предпросмотр)');
+        const accept = selectMergeChanges(plan, compact({ ids: a.ids, types: a.types, kinds: a.kinds, all: a.all }));
+        if (accept.length === 0) throw new SessionError('Что сливать? Укажите ids, types, kinds или all: true');
+        const result = applyMerge(
+          ctx,
+          source,
+          ledger,
+          compact({ accept, recursive: a.recursive, fixReferences: a.fix_refs, levelData: a.levels, conflicts: a.conflicts, resolutions: a.resolutions }),
+          options,
+        );
+        const cs = ctx.history().undo.at(-1);
+        return [...formatMergeResult(result), cs && result.changesetId !== undefined ? `применено: ${title(ctx, cs)}` : 'менять нечего', 'сохранение — отдельно (save)'];
+      }),
+  );
+
     to: z.number().int().min(0).optional().describe('Номер шага #N из history: отменить/повторить всё до него включительно (undo to: 0 — мод как при открытии)'),
   };
   const step = (dir: 'undo' | 'redo', to: number | undefined): Promise<ToolResult> =>
@@ -642,6 +710,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         const lines = [`${r.path}: ${statusSummary(ctx)}`];
         if (errors.length) lines.push(`ошибок проверки: ${errors.length} (validate)`);
         return lines;
+        if (r.mergeStore) lines.push(`решения слияния: ${r.mergeStore}`);
       }),
   );
 

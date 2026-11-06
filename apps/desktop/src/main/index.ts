@@ -49,6 +49,7 @@ import {
   readGameAsset,
   readIconDataUrl,
   readTerrainTile,
+  readMergeSourceBytes,
   readModOrder,
   readTranslationBytes,
   saveDialogDefaultPath,
@@ -170,7 +171,7 @@ async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<Sav
     if (r.response !== 0) return { ok: false, cancelled: true };
   }
   try {
-    writeMod(req.path, req.bytes);
+    writeMod(req.path, req.bytes, req.mergeStore);
     settings.recent = [req.path, ...settings.recent.filter((p) => p !== req.path)].slice(0, 10);
     writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
     const game = games().find((g) => needsConfirmation(g, req.path)) ?? currentGame;
@@ -344,6 +345,7 @@ function registerIpc(): void {
     return r.canceled ? null : (r.filePath || null);
   });
   ipcMain.handle(IPC.saveMod, saveMod);
+  ipcMain.handle(IPC.readMergeSource, (_e, path: string) => readMergeSourceBytes(path));
   ipcMain.handle(IPC.copyModForEditing, copyModForEditing);
   ipcMain.handle(IPC.loadWorld, (_e, req: WorldRequest) => loadWorldBytes(req));
   ipcMain.handle(IPC.readIcon, (_e, game: GameInstallInfo, iconPath: string) => readIconDataUrl(game, iconPath));

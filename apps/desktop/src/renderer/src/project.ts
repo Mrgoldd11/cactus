@@ -9,12 +9,15 @@ import {
   indexTranslation,
   itemTypeName,
   matchesLayoutFilters,
+  MergeLedger,
   ModContext,
   ParsedFileCache,
   OTHER_TYPES_ID,
   parseGameSchema,
+  parseMergeStore,
   parsePo,
   readDataFile,
+  serializeMergeStore,
   withInferredFields,
   WorldIndex,
   writeDataFile,
@@ -120,6 +123,10 @@ export class Project {
   /** Откуда файл мода: мастерская (сохранять нельзя — только копия) или копия чужого мода. */
   provenance: ModProvenance | undefined;
   version = 0;
+  /** Решения слияния (отклонённые записи, с чем и когда слито); пишутся в файл рядом с модом. */
+  ledger: MergeLedger;
+  /** Файл слияния рядом с модом не прочитался (повреждён): решения начаты заново. */
+  ledgerError: string | undefined;
   /** Изменения перенесены из прежнего контекста (смена зависимостей) и ещё не сохранены. */
   private carriedDirty: boolean;
   private readonly index = new Map<string, IndexEntry>();
@@ -130,7 +137,7 @@ export class Project {
   private translationPromise: Promise<TranslationIndex | undefined> | undefined;
   private readonly icons = new Map<string, Promise<string | null>>();
 
-  constructor(bundle: ProjectBundle, options: { mod?: DataFile; path?: string; carriedDirty?: boolean; provenance?: ModProvenance | undefined } = {}) {
+  constructor(bundle: ProjectBundle, options: { mod?: DataFile; path?: string; carriedDirty?: boolean; provenance?: ModProvenance | undefined; ledger?: MergeLedger } = {}) {
     this.bundle = bundle;
     const vanilla: Layer[] = bundle.vanilla.map((f) => ({ name: f.name, file: layerFile(f) }));
     const deps: Layer[] = bundle.dependencies.map((f) => ({ name: f.name, file: layerFile(f) }));
@@ -146,6 +153,14 @@ export class Project {
     this.path = options.path ?? bundle.mod?.path;
     this.provenance = 'provenance' in options ? options.provenance : bundle.provenance;
     this.carriedDirty = options.carriedDirty ?? false;
+    this.ledger = options.ledger ?? new MergeLedger();
+    if (!options.ledger && bundle.mergeStore !== undefined) {
+      try {
+        this.ledger = new MergeLedger(parseMergeStore(bundle.mergeStore));
+      } catch (e) {
+        this.ledgerError = e instanceof Error ? e.message : String(e);
+      }
+    }
     for (const sid of this.ctx.allStringIds()) this.reindex(sid);
     this.ids = [...this.index.keys()];
     this.tree = buildCategoryTree(schema, new Set([...this.index.values()].map((e) => e.type)));
@@ -221,7 +236,7 @@ export class Project {
   }
 
   get dirty(): boolean {
-    return this.carriedDirty || this.ctx.dirty;
+    return this.carriedDirty || this.ctx.dirty || this.ledger.hasChanges(this.ctx);
   }
 
   get title(): string {
@@ -284,8 +299,10 @@ export class Project {
       path = chosen;
     }
     const file = this.ctx.buildModFile();
-    const result = await window.kedit.saveMod({ path, bytes: writeDataFile(file) });
+    const mergeStore = this.ledger.hasChanges(this.ctx) ? serializeMergeStore(this.ledger.store(this.ctx)) : undefined;
+    const result = await window.kedit.saveMod({ path, bytes: writeDataFile(file), ...(mergeStore !== undefined ? { mergeStore } : {}) });
     if (result.ok) {
+      if (mergeStore !== undefined) this.ledger.commit(this.ctx);
       this.ctx.markSaved();
       this.path = result.path;
       this.provenance = result.provenance;
@@ -330,7 +347,7 @@ export async function reloadProject(p: Project, change: { dependencies?: string[
   if ([...bundle.vanilla, ...bundle.dependencies].some((f) => f.key !== undefined && f.bytes.length === 0 && !parsedFiles.has(f.key))) {
     bundle = await window.kedit.openProject(req);
   }
-  return new Project(bundle, { mod, ...(p.path !== undefined ? { path: p.path } : {}), carriedDirty: wasDirty || p.ctx.dirty, provenance: p.provenance });
+  return new Project(bundle, { mod, ...(p.path !== undefined ? { path: p.path } : {}), carriedDirty: wasDirty || p.ctx.dirty, provenance: p.provenance, ledger: p.ledger.carry(p.ctx) });
 }
 
 /** Новый контекст с другими зависимостями (моды контекста остаются). */

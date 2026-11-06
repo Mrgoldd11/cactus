@@ -48,6 +48,7 @@ import { loadModLayers, loadTranslation, loadWorld, readDataFileSync, readModsCf
 import { basename } from 'node:path';
 import { runBuild } from './build.ts';
 import { runBulk } from './bulk.ts';
+import { runMerge, splitList } from './merge.ts';
 import { modsChange, modsCopy, modsList } from './mods.ts';
 import { runStrings } from './strings.ts';
 import { UsageError, Workspace } from './workspace.ts';
@@ -88,6 +89,12 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
   bulk <ТИП> [текст]      массовая правка записей типа (текст — подстрока имени или id), условия --field, --mod-only
       --set|--mul|--add ПОЛЕ=ЗНАЧ  или  --replace ПОЛЕ --find ТЕКСТ --with ТЕКСТ [--regex] [--case] (ПОЛЕ name — имя записи)
       по умолчанию только предпросмотр «было → станет»; --apply — записать в --out или в --mod (одна правка)
+  merge <источник>        слияние: что мод-источник (имя или путь) меняет относительно --mod; новые / изменённые / удалённые, конфликты
+      по умолчанию только предпросмотр; --apply + выбор --only id,id | --type ТИП,… | --kind new,changed,deleted | --all — слить одной правкой
+      --recursive  вместе с записями, на которые ссылаются;  --fix-refs  добавить и новые записи, на которые ссылаются принятые
+      --conflicts source|mine  кого брать в конфликтах (по умолчанию mine — ваши значения);  --levels  данные уровня (определяются, не сливаются)
+      --reject id,id  отклонить и не показывать снова;  --unreject id,id  вернуть;  --show-rejected  показать отклонённые
+      пишет в --out или в --mod, рядом файл решений <мод>.kedit-merge.json; в мастерскую не пишет, в папку игры — с --force
   build <скрипт.ts|план.json> --out <файл.mod> [--name Имя.mod] [--mod исходный] [-- аргументы]
   mods [list]             установленные моды: порядок mods.cfg, откуда (mods/мастерская)  --full  --json
   mods move <мод>         переставить в mods.cfg:  --top (раньше всех) | --bottom (побеждает) | --after X | --before X
@@ -154,6 +161,15 @@ const OPTIONS = {
   regex: { type: 'boolean' },
   case: { type: 'boolean' },
   apply: { type: 'boolean' },
+  only: { type: 'string' },
+  kind: { type: 'string' },
+  recursive: { type: 'boolean' },
+  'fix-refs': { type: 'boolean' },
+  conflicts: { type: 'string' },
+  reject: { type: 'string' },
+  unreject: { type: 'string' },
+  'show-rejected': { type: 'boolean' },
+  levels: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 } as const;
 
@@ -523,6 +539,39 @@ const COMMANDS: Record<string, Handler> = {
         ...(v.mod !== undefined ? { mod: v.mod } : {}),
         ...(v.out !== undefined ? { out: v.out } : {}),
         force: v.force ?? false,
+      },
+      limit === 0 ? Infinity : limit,
+      (l) => {
+        c.io.out(l);
+      },
+    );
+  },
+
+  merge(c) {
+    const v = c.values;
+    if (v.mod === undefined) throw new UsageError('merge: нужен --mod <ваш мод> (в него сливаем)');
+    const limit = int(v.limit, 'limit', 50);
+    return runMerge(
+      c.ws,
+      c.ctx(),
+      {
+        source: c.arg(0, '<источник>'),
+        mod: v.mod,
+        only: splitList(v.only),
+        types: splitList(v.type),
+        kinds: splitList(v.kind),
+        all: v.all ?? false,
+        recursive: v.recursive ?? false,
+        fixRefs: v['fix-refs'] ?? false,
+        ...(v.conflicts !== undefined ? { conflicts: v.conflicts } : {}),
+        reject: splitList(v.reject),
+        unreject: splitList(v.unreject),
+        showRejected: v['show-rejected'] ?? false,
+        levels: v.levels ?? false,
+        apply: v.apply ?? false,
+        ...(v.out !== undefined ? { out: v.out } : {}),
+        force: v.force ?? false,
+        json: v.json ?? false,
       },
       limit === 0 ? Infinity : limit,
       (l) => {

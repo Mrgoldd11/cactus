@@ -2415,3 +2415,125 @@ input.invalid {
 .census-table td {
   white-space: nowrap;
 }
+
+/* Массовые правки: галочки строк, сортируемые колонки */
+.bulk-table th.bulk-sort { cursor: pointer; user-select: none; }
+.bulk-table th.bulk-sort:hover { text-decoration: underline; }
+.bulk-table .bulk-check { width: 28px; text-align: center; }
+.bulk-table tr.bulk-off td { opacity: 0.45; }
+.bulk-table tr.bulk-off .bulk-after { text-decoration: line-through; }
+.bulk-sample .bulk-table { width: auto; min-width: 360px; }
+
+/* Слияние модов */
+.mg-panel .table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.mg-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg2);
+  z-index: 1;
+}
+.mg-states {
+  white-space: nowrap;
+}
+.mg-state {
+  min-width: 22px;
+  padding: 0 4px;
+  opacity: 0.55;
+}
+.mg-state.active {
+  opacity: 1;
+  font-weight: 700;
+}
+.mg-state-accept.active {
+  color: var(--new);
+  border-color: var(--new);
+}
+.mg-state-reject.active {
+  color: var(--deleted);
+  border-color: var(--deleted);
+}
+.mg-kind {
+  font-weight: 700;
+  text-align: center;
+}
+.mg-kind-new {
+  color: var(--new);
+}
+.mg-kind-changed {
+  color: var(--changed);
+}
+.mg-kind-deleted {
+  color: var(--deleted);
+}
+.mg-row.mg-accepted {
+  background: rgba(111, 207, 111, 0.1);
+}
+.mg-row.mg-rejected {
+  opacity: 0.55;
+}
+.mg-row.mg-conflict {
+  box-shadow: inset 3px 0 0 var(--changed);
+  background: rgba(229, 192, 123, 0.08);
+}
+.mg-row.mg-focus {
+  outline: 1px solid var(--accent);
+}
+.mg-badge {
+  color: var(--changed);
+  cursor: help;
+}
+.mg-detail-row > td {
+  background: var(--bg2);
+  padding: 4px 8px 8px 30px;
+}
+.mg-detail-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.mg-reason,
+.mg-warn {
+  color: var(--changed);
+  font-size: 12px;
+  margin: 2px 0;
+}
+.mg-fields td {
+  vertical-align: top;
+}
+.mg-field-conflict td {
+  background: rgba(229, 192, 123, 0.14);
+}
+.mg-field-label {
+  white-space: nowrap;
+}
+.mg-before {
+  color: var(--deleted);
+  word-break: break-word;
+}
+.mg-after {
+  color: var(--new);
+  word-break: break-word;
+}
+.mg-arrow {
+  color: var(--muted);
+}
+.mg-pick label {
+  margin-right: 10px;
+  white-space: nowrap;
+}
+.mg-footer {
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mg-result {
+  border: 1px solid var(--border);
+  padding: 4px 6px;
+}

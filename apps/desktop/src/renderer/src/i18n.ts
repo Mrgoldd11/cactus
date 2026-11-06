@@ -4,6 +4,7 @@
  */
 import { createContext, useContext } from 'react';
 import type { Lang } from '../../shared/api.ts';
+import { mergeEn, mergeRu } from './i18n-merge.ts';
 import { specialEn, specialRu } from './i18n-special.ts';
 
 const en = {
@@ -595,6 +596,7 @@ const en = {
   ...specialEn,
 };
 
+  ...mergeEn,
 export type Strings = typeof en;
 
 const ru: Strings = {
@@ -1179,6 +1181,7 @@ const ru: Strings = {
 
 export const STRINGS: Record<Lang, Strings> = { en, ru };
 
+  ...mergeRu,
 export const LangContext = createContext<{ lang: Lang; t: Strings }>({ lang: 'ru', t: ru });
 
 export function useT(): Strings {

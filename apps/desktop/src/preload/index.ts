@@ -10,6 +10,7 @@ const api: KeditApi = {
   readModOrder: (game) => ipcRenderer.invoke(IPC.readModOrder, game),
   writeModOrder: (game, names, expected) => ipcRenderer.invoke(IPC.writeModOrder, game, names, expected),
   copyModForEditing: (game, path) => ipcRenderer.invoke(IPC.copyModForEditing, game, path),
+  readMergeSource: (path) => ipcRenderer.invoke(IPC.readMergeSource, path),
   chooseModFile: (game) => ipcRenderer.invoke(IPC.chooseModFile, game),
   openProject: (req) => ipcRenderer.invoke(IPC.openProject, req),
   chooseSavePath: (defaultPath) => ipcRenderer.invoke(IPC.chooseSavePath, defaultPath),

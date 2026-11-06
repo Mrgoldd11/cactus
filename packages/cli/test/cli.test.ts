@@ -387,3 +387,61 @@ describe('kedit bulk', () => {
     expect([...f.records[0]!.floats]).toEqual([['weight', 2.5]]);
   });
 });
+
+describe('kedit merge', () => {
+  const source = (): void => {
+    mkdirSync(join(fx.game, 'mods', 'Other'), { recursive: true });
+    const y = rec(4, 'Y', 'Shield', (r) => r.floats.set('weight', 3));
+    y.changeFlags = 0x80000001;
+    const a = rec(CHAR, 'A', 'Bandit', (r) => r.ints.set('money', 50));
+    a.changeFlags = 0x80000001;
+    const hat = rec(4, '7-Other.mod', 'Cap', (r) => r.floats.set('weight', 0.2));
+    hat.changeFlags = 0x80000002;
+    writeDataFileSync(join(fx.game, 'mods', 'Other', 'Other.mod'), dataFile([y, a, hat], [], 7));
+  };
+
+  it('предпросмотр по умолчанию: новые, изменённые, конфликт; ничего не записывается', async () => {
+    source();
+    const r = await run('merge', 'Other', '--mod', 'My');
+    expect(r.code, r.err).toBe(0);
+    expect(r.out).toContain('новых 1, изменённых 2, удалённых 0, конфликтов 1');
+    expect(r.out).toContain('КОНФЛИКТ (both)');
+    expect(r.out).toContain('Y «Shield»');
+    expect(r.out).toContain('ничего не записано');
+    const j = JSON.parse((await run('merge', 'Other', '--mod', 'My', '--json')).out) as { counts: { conflicts: number } };
+    expect(j.counts.conflicts).toBe(1);
+  });
+
+  it('--apply: нужен выбор и место записи; в --out пишется мод и файл решений, validate чист', async () => {
+    source();
+    const noChoice = await run('merge', 'Other', '--mod', 'My', '--apply', '--out', join(mkdtempSync(join(tmpdir(), 'kedit-merge-')), 'x.mod'));
+    expect(noChoice.code).toBe(2);
+    expect(noChoice.err).toContain('что сливать');
+    // В папку игры (сам --mod) — только с --force.
+    expect((await run('merge', 'Other', '--mod', 'My', '--apply', '--all')).code).toBe(2);
+    // Мод нельзя слить в самого себя / в зависимость.
+    expect((await run('merge', 'My', '--mod', 'My')).code).toBe(2);
+
+    const out = join(mkdtempSync(join(tmpdir(), 'kedit-merge-')), 'Merged.mod');
+    const ok = await run('merge', 'Other', '--mod', 'My', '--apply', '--all', '--conflicts', 'source', '--out', out);
+    expect(ok.code, ok.err + ok.out).toBe(0);
+    expect(ok.out).toContain('слито 3');
+    const f = readDataFileSync(out);
+    const money = f.records.find((x) => x.stringId === 'A')!.ints.get('money');
+    expect(money).toBe(50);
+    expect(f.records.some((x) => x.stringId === '7-Other.mod')).toBe(true);
+    expect(existsSync(join(out, '..', 'Merged.kedit-merge.json'))).toBe(true);
+    const v = await run('validate', '--mod', out);
+    expect(v.code, v.out).toBe(0);
+  });
+
+  it('--reject скрывает запись, --show-rejected возвращает, --unreject снимает отметку', async () => {
+    source();
+    const dir = mkdtempSync(join(tmpdir(), 'kedit-merge-'));
+    const out = join(dir, 'R.mod');
+    const rej = await run('merge', 'Other', '--mod', 'My', '--reject', 'Y', '--out', out);
+    expect(rej.code, rej.err).toBe(0);
+    expect(rej.out).toContain('отклонено 1');
+    expect(rej.out).not.toContain('Y «Shield»');
+  });
+});

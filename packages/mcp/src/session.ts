@@ -6,9 +6,13 @@ import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { LiveClient } from './live-client.ts';
 import { readFileSync, statSync } from 'node:fs';
-import { base64ToBytes, type DataFile, ModContext, readDataFile, type GameSchema, type Layer, type LiveSnapshot, type LiveState, type PoFile, type ProposeResult, type TranslationIndex, type AiChangeset, type EditOp, type WorldIndex } from '@kenshi-editor/core';
+import { base64ToBytes, type DataFile, MergeLedger, type MergeSource, type LevelDataInfo, ModContext, readDataFile, type GameSchema, type Layer, type LiveSnapshot, type LiveState, type PoFile, type ProposeResult, type TranslationIndex, type AiChangeset, type EditOp, type WorldIndex } from '@kenshi-editor/core';
 import {
+  detectLevelData,
   gamedataPoPath,
+  loadMergeLedger,
+  readMergeSource,
+  saveMergeLedger,
   hasGame,
   loadGamedataPo,
   isInGameFolders,
@@ -56,6 +60,8 @@ export class Session {
   private current?: OpenResult;
   private worldCache?: { key: string; world: WorldIndex };
   private live?: { client: LiveClient; state: LiveState; synced?: { session: number; version: number } };
+  /** Решения слияния открытого мода (читаются из файла-спутника при первом обращении). */
+  private ledgerCache?: { owner: OpenResult; ledger: MergeLedger };
   private readonly depCache = new Map<string, Layer>();
   /** Разобранные моды игрока для конфликтов: путь → размер/время и файл. */
   private readonly modFileCache = new Map<string, { stamp: string; file: DataFile }>();
@@ -153,8 +159,24 @@ export class Session {
     return { ...r, ...(opened !== undefined ? { opened } : {}) };
   }
 
+  /** Решения слияния открытого мода; записываются в файл-спутник вместе с сохранением мода. */
+  mergeLedger(): MergeLedger {
+    this.ctx();
+    const cur = this.current!;
+    if (this.ledgerCache?.owner !== cur) this.ledgerCache = { owner: cur, ledger: loadMergeLedger(cur.path) };
+    return this.ledgerCache.ledger;
+  }
+
+  /** Мод-источник слияния по имени установленного мода или пути. */
+  mergeSource(spec: string, levels: boolean): { source: MergeSource; path: string; levelData?: LevelDataInfo } {
+    const path = resolveModPath(this.paths, spec, this.cwd);
+    if (!path) throw new SessionError(`Мод-источник не найден: ${spec}`);
+    const levelData = levels ? detectLevelData(path) : undefined;
+    return { source: readMergeSource(path), path, ...(levelData ? { levelData } : {}) };
+  }
+
   /** Записать мод. Без пути — туда, откуда открыт. В папку игры — только с `force`. */
-  save(path: string | undefined, force: boolean): { path: string; records: number } {
+  save(path: string | undefined, force: boolean): { path: string; records: number; mergeStore?: string } {
     if (this.live) throw new SessionError('Подключены к редактору: сохраняет пользователь в окне (Ctrl+S)');
     const cur = this.current;
     if (!cur) throw new SessionError('Мод не открыт: сначала open_mod');
@@ -168,7 +190,9 @@ export class Session {
     }
     const file = saveModContext(cur.ctx, target);
     cur.path ??= target;
-    return { path: target, records: file.records.length };
+    // Слияние: «слито» и «отклонено» становятся постоянными, файл-спутник рядом с модом.
+    const mergeStore = this.ledgerCache?.owner === cur ? saveMergeLedger(cur.ctx, this.ledgerCache.ledger, target) : undefined;
+    return { path: target, records: file.records.length, ...(mergeStore !== undefined ? { mergeStore } : {}) };
   }
 
   // ------------------------------------------------------------ живая связь с редактором

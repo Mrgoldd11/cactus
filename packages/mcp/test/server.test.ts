@@ -38,7 +38,7 @@ describe('kenshi-mcp: чтение', () => {
   it('список инструментов и ресурсов', async () => {
     const tools = (await client.listTools()).tools.map((t) => t.name);
     expect(tools).toEqual(
-      expect.arrayContaining(['open_mod', 'find', 'show', 'tree', 'refs', 'where', 'inspect', 'talk', 'diff', 'validate', 'edit', 'undo', 'redo', 'history', 'play', 'save', 'schema', 'touched', 'conflicts']),
+      expect.arrayContaining(['open_mod', 'find', 'show', 'tree', 'refs', 'where', 'inspect', 'talk', 'diff', 'validate', 'edit', 'undo', 'redo', 'history', 'play', 'save', 'schema', 'touched', 'conflicts', 'merge']),
     );
     const res = await client.listResources();
     expect(res.resources.map((r) => r.uri)).toEqual(expect.arrayContaining(['kenshi://schema/types', 'kenshi://schema/type/CHARACTER']));
@@ -171,6 +171,42 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect(ok.text).toContain('применено: #1');
     expect((await call('undo')).text).toContain('отменено:');
     expect((await call('find', { text: 'sabre' })).text).toBe('ничего не найдено');
+  });
+
+  it('merge: предпросмотр, слияние одной правкой, undo, save пишет мод и файл решений', async () => {
+    mkdirSync(join(fx.game, 'mods', 'Other'), { recursive: true });
+    const y = rec(4, 'Y', 'Shield', (r) => r.floats.set('weight', 3));
+    y.changeFlags = 0x80000001;
+    const a = rec(CHAR, 'A', 'Bandit', (r) => r.ints.set('money', 50));
+    a.changeFlags = 0x80000001;
+    writeDataFileSync(join(fx.game, 'mods', 'Other', 'Other.mod'), dataFile([y, a], [], 0));
+    await call('open_mod', { mod: 'My' });
+    const pre = await call('merge', { source: 'Other' });
+    expect(pre.isError, pre.text).toBe(false);
+    expect(pre.text).toContain('изменённых 2, удалённых 0, конфликтов 1');
+    expect(pre.text).toContain('предпросмотр: ничего не изменено');
+    expect((await call('history')).text).not.toContain('#1');
+    // Без выбора слить нельзя; сам себя и неизвестный источник — понятная ошибка.
+    expect((await call('merge', { source: 'Other', apply: true })).isError).toBe(true);
+    expect((await call('merge', { source: 'My' })).text).toContain('сам в себя');
+    expect((await call('merge', { source: 'Нет-такого' })).isError).toBe(true);
+
+    const ok = await call('merge', { source: 'Other', apply: true, all: true, conflicts: 'source' });
+    expect(ok.isError, ok.text).toBe(false);
+    expect(ok.text).toContain('слито 2');
+    expect(ok.text).toContain('применено: #1');
+    expect((await call('show', { id: 'A' })).text).toContain('int money = 50');
+    expect((await call('merge', { source: 'Other' })).text).toContain('уже слито 2');
+    expect((await call('undo')).text).toContain('отменено:');
+    expect((await call('merge', { source: 'Other' })).text).toContain('изменённых 2');
+    await call('merge', { source: 'Other', apply: true, ids: ['Y'] });
+
+    const out = join(fx.game, 'merged', 'My2.mod');
+    const saved = await call('save', { path: out, force: true });
+    expect(saved.isError, saved.text).toBe(false);
+    expect(saved.text).toContain('решения слияния');
+    expect(existsSync(join(fx.game, 'merged', 'My2.kedit-merge.json'))).toBe(true);
+    expect(readDataFileSync(out).records.map((r) => r.stringId)).toContain('Y');
   });
 
   it('новый мод: save требует путь; force пишет в mods/', async () => {

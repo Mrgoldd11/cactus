@@ -2,7 +2,7 @@
  * Файловая часть главного процесса без Electron: поиск игры, список модов, чтение всего,
  * что нужно окну для контекста, запись мода. Подтверждения и диалоги — в `index.ts`.
  */
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { VANILLA_FILES } from '@kenshi-editor/core';
 import {
@@ -17,6 +17,8 @@ import {
   listInstalledMods,
   listWorldFiles,
   manualInstall,
+  detectLevelData,
+  mergeStorePath,
   modsCfgPath,
   originChanged,
   planModCopy,
@@ -33,7 +35,7 @@ import {
   writeModsCfg,
   type ModCopyPlan,
 } from '@kenshi-editor/core/node';
-import type { GameInstallInfo, ModEntry, ModOrderResult, ModProvenance, NamedBytes, ProjectBundle, ProjectRequest, WorldFileBytes, WorldRequest } from '../shared/api.ts';
+import type { GameInstallInfo, MergeSourceResult, ModEntry, ModOrderResult, ModProvenance, NamedBytes, ProjectBundle, ProjectRequest, WorldFileBytes, WorldRequest } from '../shared/api.ts';
 
 export function detectGames(cwd?: string): GameInstallInfo[] {
   return detectGameInstalls(cwd).map((g) => ({ kenshi: g.kenshi, workshop: g.workshop, source: g.source }));
@@ -141,6 +143,8 @@ export function loadProject(req: ProjectRequest): ProjectBundle {
     bundle.mod = readNamed(plan.modName, plan.modPath);
     const provenance = provenanceOf(game, plan.modPath);
     if (provenance) bundle.provenance = provenance;
+    const mergeStore = readOptional(mergeStorePath(plan.modPath));
+    if (mergeStore !== undefined) bundle.mergeStore = mergeStore;
   }
   if (po !== undefined) bundle.po = po;
   return bundle;
@@ -216,9 +220,30 @@ export function modInstallPath(games: readonly GameInstallInfo[], path: string):
   return path;
 }
 
-export function writeMod(path: string, bytes: Uint8Array): void {
+export function writeMod(path: string, bytes: Uint8Array, mergeStore?: string): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, bytes);
+  if (mergeStore !== undefined) writeMergeStoreText(path, mergeStore);
+}
+
+/** Файл решений слияния рядом с модом (сначала во временный файл, потом на место). */
+function writeMergeStoreText(modPath: string, text: string): void {
+  const p = mergeStorePath(modPath);
+  const tmp = `${p}.tmp`;
+  writeFileSync(tmp, text, 'utf8');
+  renameSync(tmp, p);
+}
+
+/** Мод-источник слияния: только `.mod` / `.base`, только чтение; рядом — данные уровня (если есть). */
+export function readMergeSourceBytes(path: string): MergeSourceResult {
+  if (!/\.(mod|base)$/i.test(path)) return { ok: false, error: 'not a .mod / .base file' };
+  try {
+    const bytes = readFileSync(path);
+    const levelData = detectLevelData(path);
+    return { ok: true, name: basename(path), path, bytes, ...(levelData ? { levelData } : {}) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 /** Файлы уровня ванили и модов, сырыми байтами (разбирает окно). */

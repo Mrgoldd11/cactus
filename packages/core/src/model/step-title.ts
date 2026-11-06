@@ -261,6 +261,8 @@ class Describer {
       const en = what!.replace(/^замена /, 'replace ');
       return { ru: `Массовая правка ${field}: ${what} (записей: ${n})`, en: `Bulk edit ${field}: ${en} (records: ${n})` };
     }
+    const merge = /^слияние: (.*) \((\d+) записей\)$/s.exec(label);
+    if (merge) return { ru: `Слияние с «${merge[1]!}»: записей ${merge[2]!}`, en: `Merge from «${merge[1]!}»: ${merge[2]!} records` };
     const created = /^создать «(.*)»$/s.exec(label);
     if (created) {
       const d = this.added()[0];

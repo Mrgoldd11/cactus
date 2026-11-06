@@ -97,12 +97,27 @@ export interface ProjectBundle {
   suggestedPath: string;
   /** Откуда открытый мод (мастерская, копия). */
   provenance?: ModProvenance;
+  /** Файл слияния `<имя>.kedit-merge.json` рядом с модом (текст), если он есть. */
+  mergeStore?: string;
 }
 
 export interface SaveRequest {
   path: string;
   bytes: Uint8Array;
+  /** Решения слияния: main пишет их рядом с модом в `<имя>.kedit-merge.json` (не в .mod). */
+  mergeStore?: string;
 }
+
+/** Мод-источник слияния: байты файла и данные уровня рядом с ним. */
+export interface MergeSourceBytes {
+  name: string;
+  path: string;
+  bytes: Uint8Array;
+  /** Файлы `leveldata/*.zone|*.level` рядом с источником (слияние их не трогает, только сообщает). */
+  levelData?: { dir: string; files: string[] };
+}
+
+export type MergeSourceResult = ({ ok: true } & MergeSourceBytes) | { ok: false; error: string };
 
 /** Запись `mods.cfg`: `stale` — файл изменился на диске, пока окно показывало старый порядок. */
 export type ModOrderResult =
@@ -198,6 +213,8 @@ export interface KeditApi {
   chooseSavePath(defaultPath: string): Promise<string | null>;
   /** Записать мод. В папку игры — только после подтверждения в диалоге main; в мастерскую — никогда. */
   saveMod(req: SaveRequest): Promise<SaveResult>;
+  /** Прочитать мод-источник слияния (.mod / .base по пути): байты и данные уровня рядом. Только чтение. */
+  readMergeSource(path: string): Promise<MergeSourceResult>;
   /** Скопировать чужой мод в `mods/<имя>/<имя>.mod` для правки (main спросит подтверждение). */
   copyModForEditing(game: GameInstallInfo, path: string): Promise<CopyModResult>;
   /** Байты файлов уровня (города, здания, зоны) ванили и модов — для «Где в игре». */
@@ -253,6 +270,7 @@ export const IPC = {
   chooseSavePath: 'kedit:choose-save-path',
   saveMod: 'kedit:save-mod',
   copyModForEditing: 'kedit:copy-mod-for-editing',
+  readMergeSource: 'kedit:read-merge-source',
   loadWorld: 'kedit:load-world',
   readIcon: 'kedit:read-icon',
   readGameAsset: 'kedit:read-game-asset',

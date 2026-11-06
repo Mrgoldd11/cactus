@@ -647,6 +647,24 @@ export class ModContext {
     });
   }
 
+  /**
+   * Поставить итоговое значение записи целиком (слияние модов): в мод попадёт разница с нижними
+   * слоями. Записи может не быть — тогда она создаётся. Служебные поля (`lead`, `id`, флаги)
+   * берутся от прежней записи мода, а у новой — обнуляются: их выставит сохранение.
+   */
+  putRecord(stringId: string, desired: GameRecord, label = `правка ${stringId}`): void {
+    const draft = cloneRecord(desired);
+    draft.stringId = stringId;
+    if (!this.deltas.has(stringId)) {
+      draft.lead = 0;
+      draft.id = 0;
+      draft.changeFlags = 0;
+    }
+    this.transaction(label, () => {
+      this.putResolved(stringId, draft);
+    });
+  }
+
   /** Создать запись. Без `stringId` id выдаётся автоматически. Возвращает id. */
   createRecord(type: number, name: string, options: { stringId?: string } = {}): string {
     return this.transaction(`создать «${name}»`, () => {

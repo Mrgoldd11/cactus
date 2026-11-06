@@ -21,3 +21,4 @@ export function writeDataFileSync(path: string, file: DataFile, options?: WriteO
 export * from './live-server.ts';
 export * from './mods.ts';
 export * from './game-bridge.ts';
+export * from './merge-store.ts';
