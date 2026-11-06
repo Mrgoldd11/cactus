@@ -6,6 +6,8 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { VANILLA_FILES } from '@kenshi-editor/core';
 import {
+  Heightmap,
+  heightmapPath,
   detectGameInstalls,
   gamedataPoPath,
   copyModForEditing,
@@ -268,6 +270,21 @@ export function readGameAsset(game: GameInstallInfo, relPath: string): Uint8Arra
     }
   }
   return null;
+}
+
+const heightmaps = new Map<string, Promise<Heightmap | null>>();
+
+/** Тайл рельефа из `data/newland/land/fullmap.tif` (файл открыт один раз, читается кусками). */
+export async function readTerrainTile(game: GameInstallInfo, level: number, tx: number, ty: number): Promise<Uint16Array | null> {
+  const path = heightmapPath(game.kenshi);
+  let hm = heightmaps.get(path);
+  if (!hm) {
+    hm = existsSync(path) ? Heightmap.open(path) : Promise.resolve(null);
+    hm.catch(() => heightmaps.delete(path));
+    heightmaps.set(path, hm);
+  }
+  const map = await hm;
+  return map ? map.readTile(level, tx, ty) : null;
 }
 
 /** Перевод текстов записей (реплик) игры; null — файла нет. */

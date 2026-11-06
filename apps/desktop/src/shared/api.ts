@@ -208,6 +208,11 @@ export interface KeditApi {
    * или мастерской; иначе null.
    */
   readGameAsset(game: GameInstallInfo, relPath: string): Promise<Uint8Array | null>;
+  /**
+   * Тайл рельефа (квадродерево карты высот `fullmap.tif`): 129×129 значений карты высот.
+   * null — нет карты высот в папке игры.
+   */
+  readTerrainTile(game: GameInstallInfo, level: number, tx: number, ty: number): Promise<Uint16Array | null>;
   /** Диалог «Сохранить» и запись картинки PNG (иконка). В папку игры и мастерской не пишет — `game-folder`. */
   savePngFile(defaultName: string, png: Uint8Array): Promise<SaveTextResult>;
   /** Иконка предмета (поле `icon`, путь относительно папки игры) как data URL; null — нет файла. */
@@ -251,6 +256,7 @@ export const IPC = {
   loadWorld: 'kedit:load-world',
   readIcon: 'kedit:read-icon',
   readGameAsset: 'kedit:read-game-asset',
+  readTerrainTile: 'kedit:read-terrain-tile',
   savePngFile: 'kedit:save-png-file',
   readTranslation: 'kedit:read-translation',
   saveTextFile: 'kedit:save-text-file',

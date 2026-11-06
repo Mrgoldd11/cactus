@@ -36,6 +36,8 @@ export interface ModelPiece {
   field: string;
   /** Внутренняя часть здания (`interior`), не наружная. */
   interior?: boolean;
+  /** Порог прозрачности текстуры 0..255 (листва, растения): пиксели прозрачнее — не рисуются. */
+  alphaTest?: number;
 }
 
 export interface RecordModel {
@@ -188,6 +190,30 @@ const MESH_FIELDS: Record<string, readonly string[]> = {
   ITEM: ['mesh', 'ground mesh'],
 };
 
+/** FOLIAGE_MESH: модель с текстурой из самой записи и, у деревьев, листва отдельной моделью. */
+function foliagePieces(rec: GameRecord, sid: string, out: RecordModel): void {
+  const mesh = file(rec, 'mesh');
+  // Тип материала FOLIAGE (4) — текстура с вырезами по альфе.
+  const cutout = rec.ints.get('material type') === 4;
+  if (mesh !== undefined && /\.mesh$/i.test(mesh)) {
+    const piece: ModelPiece = { mesh, source: sid, field: 'mesh' };
+    const tex = file(rec, 'texture map');
+    if (tex) piece.texture = tex;
+    const tx = rec.floats.get('tile X') ?? 1;
+    const ty = rec.floats.get('tile Y') ?? 1;
+    if (tx !== 1 || ty !== 1) piece.tile = [tx, ty];
+    if (cutout) piece.alphaTest = rec.ints.get('alpha threshold') ?? 128;
+    out.pieces.push(piece);
+  } else if (mesh) out.notes.push(`${mesh} — не .mesh, не показываем`);
+  const leaves = file(rec, 'leaves mesh');
+  if (isMesh(leaves)) {
+    const piece: ModelPiece = { mesh: leaves, source: sid, field: 'leaves mesh', alphaTest: rec.ints.get('leaves alpha threshold') ?? 80 };
+    const tex = file(rec, 'leaves texture');
+    if (tex) piece.texture = tex;
+    out.pieces.push(piece);
+  }
+}
+
 /**
  * Модель записи. `interior: true` — для здания внутренние части вместо наружных.
  * Пустой `pieces` — у записи нет модели (или она в `.phs`).
@@ -206,6 +232,10 @@ export function modelOfRecord(ctx: ModContext, sid: string, options: { interior?
   }
   if (type === 'BUILDING_PART') {
     partPieces(ctx, sid, materialOf(ctx, commonTownMaterial(ctx)), out, false, new Set());
+    return out;
+  }
+  if (type === 'FOLIAGE_MESH') {
+    foliagePieces(rec, sid, out);
     return out;
   }
   const fields = MESH_FIELDS[type] ?? [...rec.files.keys()];

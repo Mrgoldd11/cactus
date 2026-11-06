@@ -17,6 +17,7 @@ const api: KeditApi = {
   loadWorld: (req) => ipcRenderer.invoke(IPC.loadWorld, req),
   readIcon: (game, iconPath) => ipcRenderer.invoke(IPC.readIcon, game, iconPath),
   readGameAsset: (game, relPath) => ipcRenderer.invoke(IPC.readGameAsset, game, relPath),
+  readTerrainTile: (game, level, tx, ty) => ipcRenderer.invoke(IPC.readTerrainTile, game, level, tx, ty),
   savePngFile: (defaultName, png) => ipcRenderer.invoke(IPC.savePngFile, defaultName, png),
   readTranslation: (game) => ipcRenderer.invoke(IPC.readTranslation, game),
   saveTextFile: (defaultName, kind, text) => ipcRenderer.invoke(IPC.saveTextFile, defaultName, kind, text),

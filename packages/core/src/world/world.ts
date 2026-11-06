@@ -60,6 +60,11 @@ export interface BuildingPlacement extends Placement {
   interior?: string;
   exterior?: string;
   faction?: string;
+  /**
+   * Высота здания в мире (`world Y pos` состояния). y экземпляра у зданий — высота НАД ЗЕМЛЁЙ:
+   * у ≈ 76 % зданий `world Y pos` = рельеф + y (остальные стоят на чём-то — на платформах, ярусах).
+   */
+  worldY?: number;
   /** Город (TOWN), к которому привязано здание, если нашёлся. */
   town?: string;
 }
@@ -113,6 +118,7 @@ export class WorldIndex {
   private readonly townsById = new Map<string, TownPlacement[]>();
   private readonly buildingsBySquad = new Map<string, BuildingPlacement[]>();
   private readonly townsByZone = new Map<string, TownPlacement[]>();
+  private readonly buildingList: BuildingPlacement[] = [];
   private placementCount = 0;
   private buildingCount = 0;
 
@@ -201,6 +207,8 @@ export class WorldIndex {
               const v = str(state, key);
               if (v !== undefined) b[field] = v;
             }
+            const wy = state.floats.get('world Y pos');
+            if (wy !== undefined) b.worldY = wy;
             buildings.push({ b, townHandle: handleKey(state, 'town') });
           }
         }
@@ -213,6 +221,7 @@ export class WorldIndex {
       const town = (townHandle ? townByHandle.get(townHandle) : undefined) ?? this.townNear(b)?.target;
       if (town) b.town = town;
       this.buildingCount++;
+      this.buildingList.push(b);
       for (const squad of new Set([b.squadTemplate, b.residentsTemplate]))
         if (squad) push(this.buildingsBySquad, squad, b);
     }
@@ -221,6 +230,21 @@ export class WorldIndex {
   /** Все экземпляры, размещающие запись `target` (здания, предметы, города…). */
   instancesOf(target: string): readonly Placement[] {
     return this.byTarget.get(target) ?? [];
+  }
+
+  /** Все экземпляры мира (кроме пустых — так поздний слой убирает экземпляр). */
+  *placements(): Iterable<Placement> {
+    for (const [target, list] of this.byTarget) if (target !== '') yield* list;
+  }
+
+  /** Все здания с состоянием (GAMESTATE_BUILDING) — с именем, фракцией, отрядами, городом. */
+  buildings(): readonly BuildingPlacement[] {
+    return this.buildingList;
+  }
+
+  /** Все размещённые города (список городов `leveldata.level`). */
+  allTowns(): TownPlacement[] {
+    return [...this.townsById.values()].flat();
   }
 
   /** Где стоит город (TOWN): по списку городов `leveldata.level`. */

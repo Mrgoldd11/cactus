@@ -5,7 +5,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { decodeDds, gamePath, hasModel, modelOfRecord, parseOgreMesh, triangleIndices } from '../src/index.ts';
+import { decodeDds, gamePath, hasModel, itemTypeName, modelOfRecord, parseOgreMesh, triangleIndices } from '../src/index.ts';
 import { hasGame, loadModContext, resolveGamePaths } from '../src/node/index.ts';
 
 const paths = resolveGamePaths();
@@ -92,5 +92,14 @@ describe.skipIf(!game)('модели на файлах игры', () => {
       expect(() => parseOgreMesh(read(p.mesh))).not.toThrow();
     }
     expect(model.pieces.some((p) => p.texture !== undefined)).toBe(true);
+  });
+
+  it('растительность: модель, своя текстура, срез по альфе, листва', () => {
+    const list = [...ctx.records()].filter((r) => itemTypeName(r.type) === 'FOLIAGE_MESH' && hasModel(ctx, r.stringId));
+    expect(list.length).toBeGreaterThan(20);
+    const models = list.map((r) => modelOfRecord(ctx, r.stringId));
+    for (const m of models) expect(m.pieces[0]?.mesh).toMatch(/\.mesh$/i);
+    expect(models.some((m) => m.pieces.some((p) => p.texture !== undefined && p.alphaTest !== undefined))).toBe(true);
+    expect(models.some((m) => m.pieces.some((p) => p.field === 'leaves mesh'))).toBe(true);
   });
 });

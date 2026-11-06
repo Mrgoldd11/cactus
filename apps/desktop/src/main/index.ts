@@ -48,6 +48,7 @@ import {
   provenanceOf,
   readGameAsset,
   readIconDataUrl,
+  readTerrainTile,
   readModOrder,
   readTranslationBytes,
   saveDialogDefaultPath,
@@ -347,6 +348,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.loadWorld, (_e, req: WorldRequest) => loadWorldBytes(req));
   ipcMain.handle(IPC.readIcon, (_e, game: GameInstallInfo, iconPath: string) => readIconDataUrl(game, iconPath));
   ipcMain.handle(IPC.readGameAsset, (_e, game: GameInstallInfo, relPath: string) => readGameAsset(game, relPath));
+  ipcMain.handle(IPC.readTerrainTile, (_e, game: GameInstallInfo, level: number, tx: number, ty: number) => readTerrainTile(game, level, tx, ty));
   ipcMain.handle(IPC.savePngFile, savePngFile);
   ipcMain.handle(IPC.readTranslation, (_e, game: GameInstallInfo) => readTranslationBytes(game));
   ipcMain.handle(IPC.saveTextFile, saveTextFile);

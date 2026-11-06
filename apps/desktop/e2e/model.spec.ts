@@ -31,9 +31,10 @@ test('панель «Модель»: катана и дом из файлов и
     await page.getByTestId('open-vanilla').click();
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
 
-    // Раскладка «Сцена»: «Модель» — вкладка в центре.
+    // Раскладка «Сцена»: «Модель» — вкладка в центре рядом с «Миром».
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-scene').click();
+    await page.locator('.dv-tab', { hasText: '◈ Модель' }).click();
     const view = page.getByTestId('model-view');
     await expect(view).toBeVisible();
     await expect(view).toHaveAttribute('data-state', 'empty');

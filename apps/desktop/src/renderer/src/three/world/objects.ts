@@ -1,0 +1,467 @@
+/**
+ * Здания и прочие объекты мира (`0-buildinglist` в зонах).
+ *  - Сетка по зонам (64×64): кадр перебирает только зоны в пределах дальности.
+ *  - Вдали — коробки-маркеры (одна InstancedMesh на всё), вблизи — настоящие модели:
+ *    модель записи (`modelOfRecord`) грузится один раз, её части рисуются InstancedMesh-ами
+ *    на все экземпляры этой записи.
+ *  - Отсев по пирамиде видимости и лимиты: число моделей рядом, число загруженных моделей
+ *    (лишние выгружаются), число маркеров.
+ *  - Выбор: луч против коробок объектов (без треугольников — быстро и на тысячах объектов).
+ *  - Растительность (`foliage.ts`) рисуется теми же моделями-экземплярами, но не выбирается.
+ * Разбор `.mesh` и `.dds` — в фоновом потоке (`WorkerPool`).
+ */
+import * as THREE from 'three';
+import { modelOfRecord, ZONE_COUNT, ZONE_SIZE, type BuildingPlacement, type ModContext, type Placement, type WorldIndex } from '@kenshi-editor/core';
+import type { GameInstallInfo } from '../../../../shared/api.ts';
+import type { SubmeshArrays, WorkerPool } from './protocol.ts';
+
+export interface ObjectsQuality {
+  /** Дальность маркеров. */
+  markerDist: number;
+  /** Дальность настоящих моделей. */
+  modelDist: number;
+  /** Сколько экземпляров рисовать моделями (ближайшие). */
+  maxModels: number;
+  /** Сколько разных моделей держать в памяти. */
+  maxProtos: number;
+  /** Сколько маркеров рисовать. */
+  maxMarkers: number;
+}
+
+export interface WorldObject {
+  index: number;
+  p: Placement;
+  /** Состояние здания, если есть. */
+  b?: BuildingPlacement;
+  pos: THREE.Vector3;
+  quat: THREE.Quaternion;
+}
+
+interface Part {
+  geo: THREE.BufferGeometry;
+  mat: THREE.Material;
+  offset: THREE.Matrix4;
+  mesh?: THREE.InstancedMesh;
+}
+
+interface Proto {
+  state: 'loading' | 'ready' | 'none';
+  parts: Part[];
+  box: THREE.Box3;
+  radius: number;
+  used: number;
+  meshPaths: string[];
+  texPaths: string[];
+}
+
+const DEFAULT_BOX = new THREE.Box3(new THREE.Vector3(-40, 0, -40), new THREE.Vector3(40, 80, 40));
+const COLOR_BUILDING = new THREE.Color(0xd9b26f);
+const COLOR_OTHER = new THREE.Color(0x8f9aa6);
+const GREY = 0xb8b2a6;
+/** Камни без своей текстуры (в игре на них ложится текстура земли). */
+const STONE = 0x8a7c6c;
+/** Растительность меньше этой доли расстояния до камеры не рисуется. */
+const FOLIAGE_MIN_SIZE = 0.015;
+
+function zoneKey(x: number, y: number): number {
+  return y * ZONE_COUNT + x;
+}
+
+export class WorldObjects {
+  readonly group = new THREE.Group();
+  readonly list: WorldObject[] = [];
+  private readonly grid = new Map<number, number[]>();
+  private readonly protos = new Map<string, Proto>();
+  private readonly meshCache = new Map<string, Promise<SubmeshArrays[] | null>>();
+  private readonly texCache = new Map<string, Promise<THREE.Texture | null>>();
+  private markers: THREE.InstancedMesh;
+  private markerIds: number[] = [];
+  /** Объекты, нарисованные в последнем обновлении (для выбора). */
+  private visible: number[] = [];
+  private readonly protoInstances = new Map<string, number[]>();
+  /** Растительность: модель → матрицы (задаёт `setFoliage`). */
+  private foliage = new Map<string, THREE.Matrix4[]>();
+  drawnFoliage = 0;
+  private loading = 0;
+  private tick = 0;
+  quality: ObjectsQuality;
+  drawnModels = 0;
+  drawnMarkers = 0;
+  /** Записей, у которых модели нет или она не прочиталась (рисуются коробкой). */
+  failed = 0;
+  onChange: () => void = () => undefined;
+  private readonly game: GameInstallInfo;
+  private readonly pool: WorkerPool;
+  private readonly ctx: ModContext;
+
+  constructor(game: GameInstallInfo, pool: WorkerPool, ctx: ModContext, world: WorldIndex, quality: ObjectsQuality) {
+    this.game = game;
+    this.pool = pool;
+    this.ctx = ctx;
+    this.quality = quality;
+    this.group.name = 'objects';
+    const byKey = new Map<string, BuildingPlacement>();
+    for (const b of world.buildings()) byKey.set(`${b.file}|${b.holder}|${b.key}`, b);
+    for (const p of world.placements()) {
+      if (!p.zone || !p.holder.endsWith('buildinglist')) continue;
+      const index = this.list.length;
+      const b = byKey.get(`${p.file}|${p.holder}|${p.key}`);
+      const [w, x, y, z] = p.rotation;
+      // y экземпляра — над землёй; высота в мире — `world Y pos` состояния здания.
+      const o: WorldObject = { index, p, pos: new THREE.Vector3(p.position[0], b?.worldY ?? p.position[1], p.position[2]), quat: new THREE.Quaternion(x, y, z, w).normalize() };
+      if (b) o.b = b;
+      this.list.push(o);
+      const zx = Math.floor(p.position[0] / ZONE_SIZE) + ZONE_COUNT / 2;
+      const zy = Math.floor(p.position[2] / ZONE_SIZE) + ZONE_COUNT / 2;
+      const k = zoneKey(zx, zy);
+      const cell = this.grid.get(k);
+      if (cell) cell.push(index);
+      else this.grid.set(k, [index]);
+    }
+    const box = new THREE.BoxGeometry(1, 1, 1);
+    this.markers = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.max(1, quality.maxMarkers));
+    this.markers.count = 0;
+    this.markers.frustumCulled = false;
+    this.markers.name = 'markers';
+    this.group.add(this.markers);
+  }
+
+  /** Растительность вокруг камеры (рисуется при следующем `update`). */
+  setFoliage(m: Map<string, THREE.Matrix4[]>): void {
+    this.foliage = m;
+  }
+
+  boxOf(o: WorldObject): THREE.Box3 {
+    const proto = this.protos.get(o.p.target);
+    return proto && proto.state === 'ready' ? proto.box : DEFAULT_BOX;
+  }
+
+  /** Матрица объекта в мире. */
+  matrixOf(o: WorldObject, out = new THREE.Matrix4()): THREE.Matrix4 {
+    return out.compose(o.pos, o.quat, new THREE.Vector3(1, 1, 1));
+  }
+
+  private proto(target: string): Proto {
+    let p = this.protos.get(target);
+    if (p) return p;
+    p = { state: 'loading', parts: [], box: DEFAULT_BOX.clone(), radius: 60, used: this.tick, meshPaths: [], texPaths: [] };
+    this.protos.set(target, p);
+    const proto = p;
+    this.loading++;
+    void this.loadProto(target, proto)
+      .catch((e: unknown) => {
+        proto.state = 'none';
+        console.warn('world: model', target, e);
+      })
+      .finally(() => {
+        if (proto.state === 'none') this.failed++;
+        this.loading--;
+        this.onChange();
+      });
+    return p;
+  }
+
+  private mesh(path: string): Promise<SubmeshArrays[] | null> {
+    const k = path.toLowerCase();
+    let m = this.meshCache.get(k);
+    if (!m) {
+      m = window.kedit.readGameAsset(this.game, path).then(async (bytes) => (bytes ? (await this.pool.run<'mesh'>({ type: 'mesh', bytes }, [bytes.buffer])).submeshes : null));
+      m.catch(() => this.meshCache.delete(k));
+      this.meshCache.set(k, m);
+    }
+    return m;
+  }
+
+  private texture(path: string): Promise<THREE.Texture | null> {
+    const k = path.toLowerCase();
+    let t = this.texCache.get(k);
+    if (!t) {
+      t = window.kedit.readGameAsset(this.game, path).then(async (bytes) => {
+        if (!bytes) return null;
+        const r = await this.pool.run<'dds'>({ type: 'dds', bytes, maxSize: 512 }, [bytes.buffer]);
+        const tex = new THREE.DataTexture(r.rgba, r.width, r.height, THREE.RGBAFormat);
+        tex.flipY = false;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.generateMipmaps = true;
+        tex.anisotropy = 4;
+        tex.needsUpdate = true;
+        return tex;
+      });
+      t.catch(() => this.texCache.delete(k));
+      this.texCache.set(k, t);
+    }
+    return t;
+  }
+
+  private async loadProto(target: string, proto: Proto): Promise<void> {
+    const model = modelOfRecord(this.ctx, target, { interior: false });
+    if (model.pieces.length === 0) {
+      proto.state = 'none';
+      return;
+    }
+    const box = new THREE.Box3();
+    for (const piece of model.pieces) {
+      const [subs, tex] = await Promise.all([this.mesh(piece.mesh).catch(() => null), piece.texture ? this.texture(piece.texture).catch(() => null) : Promise.resolve(null)]);
+      if (!subs) continue;
+      proto.meshPaths.push(piece.mesh.toLowerCase());
+      if (piece.texture) proto.texPaths.push(piece.texture.toLowerCase());
+      let map = tex;
+      const alphaTest = piece.alphaTest !== undefined && map ? Math.max(0.05, piece.alphaTest / 255) : 0;
+      if (map && piece.tile) {
+        map = map.clone();
+        map.repeat.set(piece.tile[0], piece.tile[1]);
+        map.needsUpdate = true;
+      }
+      const offset = new THREE.Matrix4();
+      if (piece.offset) offset.makeTranslation(piece.offset[0], piece.offset[1], piece.offset[2]);
+      for (const s of subs) {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(s.positions, 3));
+        if (s.uvs) geo.setAttribute('uv', new THREE.BufferAttribute(s.uvs, 2));
+        if (s.colors) geo.setAttribute('color', new THREE.BufferAttribute(s.colors, 4));
+        geo.setIndex(new THREE.BufferAttribute(s.index, 1));
+        if (s.normals) geo.setAttribute('normal', new THREE.BufferAttribute(s.normals, 3));
+        else geo.computeVertexNormals();
+        geo.computeBoundingBox();
+        box.union(geo.boundingBox!.clone().applyMatrix4(offset));
+        const colors = !map && s.colors !== undefined;
+        const mat = new THREE.MeshLambertMaterial({ color: map || colors ? 0xffffff : model.type === 'FOLIAGE_MESH' ? STONE : GREY, map, vertexColors: colors, side: THREE.DoubleSide, alphaTest });
+        proto.parts.push({ geo, mat, offset });
+      }
+    }
+    if (proto.parts.length === 0) {
+      proto.state = 'none';
+      return;
+    }
+    proto.box = box;
+    proto.radius = box.getBoundingSphere(new THREE.Sphere()).radius + box.getCenter(new THREE.Vector3()).length();
+    proto.state = 'ready';
+  }
+
+  get busy(): number {
+    return this.loading;
+  }
+
+  get protoCount(): number {
+    return [...this.protos.values()].filter((p) => p.state === 'ready').length;
+  }
+
+  /** Пересобрать, что рисуется: дёшево, вызывать при движении камеры (не чаще ~6 раз в секунду). */
+  update(camera: THREE.Camera): void {
+    this.tick++;
+    const q = this.quality;
+    const cam = camera.position;
+    const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    const sphere = new THREE.Sphere();
+    const z0x = Math.max(0, Math.floor((cam.x - q.markerDist) / ZONE_SIZE) + ZONE_COUNT / 2);
+    const z1x = Math.min(ZONE_COUNT - 1, Math.floor((cam.x + q.markerDist) / ZONE_SIZE) + ZONE_COUNT / 2);
+    const z0y = Math.max(0, Math.floor((cam.z - q.markerDist) / ZONE_SIZE) + ZONE_COUNT / 2);
+    const z1y = Math.min(ZONE_COUNT - 1, Math.floor((cam.z + q.markerDist) / ZONE_SIZE) + ZONE_COUNT / 2);
+    const near: { i: number; d: number }[] = [];
+    for (let zy = z0y; zy <= z1y; zy++)
+      for (let zx = z0x; zx <= z1x; zx++)
+        for (const i of this.grid.get(zoneKey(zx, zy)) ?? []) {
+          const o = this.list[i]!;
+          const d = o.pos.distanceTo(cam);
+          if (d > q.markerDist) continue;
+          const proto = this.protos.get(o.p.target);
+          sphere.set(o.pos, proto?.state === 'ready' ? proto.radius : 120);
+          if (!frustum.intersectsSphere(sphere)) continue;
+          near.push({ i, d });
+        }
+    near.sort((a, b) => a.d - b.d);
+
+    // Ближайшие — моделями (если модель есть и загружена), остальные — маркерами.
+    const perProto = new Map<string, number[]>();
+    const markers: number[] = [];
+    let models = 0;
+    const want: string[] = [];
+    for (const { i, d } of near) {
+      const o = this.list[i]!;
+      if (d < q.modelDist && models < q.maxModels) {
+        const proto = this.protos.get(o.p.target) ?? (want.length < 8 && this.loading < 8 ? (want.push(o.p.target), this.proto(o.p.target)) : undefined);
+        if (proto) proto.used = this.tick;
+        if (proto?.state === 'ready') {
+          const l = perProto.get(o.p.target);
+          if (l) l.push(i);
+          else perProto.set(o.p.target, [i]);
+          models++;
+          continue;
+        }
+      }
+      if (markers.length < q.maxMarkers) markers.push(i);
+    }
+
+    // Растительность: модели грузятся тем же порядком, экземпляры — отсев по пирамиде.
+    const foliage = new Map<string, THREE.Matrix4[]>();
+    let drawnFoliage = 0;
+    const at = new THREE.Vector3();
+    for (const [target, list] of this.foliage) {
+      const proto = this.protos.get(target) ?? (want.length < 8 && this.loading < 8 ? (want.push(target), this.proto(target)) : undefined);
+      if (!proto) continue;
+      proto.used = this.tick;
+      if (proto.state !== 'ready') continue;
+      const shown: THREE.Matrix4[] = [];
+      for (const mat of list) {
+        at.setFromMatrixPosition(mat);
+        sphere.set(at, proto.radius * mat.getMaxScaleOnAxis());
+        // Мелкое вдали не рисуем: на экране оно меньше пары точек, а треугольников много.
+        if (sphere.radius < at.distanceTo(cam) * FOLIAGE_MIN_SIZE) continue;
+        if (frustum.intersectsSphere(sphere)) shown.push(mat);
+      }
+      if (shown.length) foliage.set(target, shown);
+      drawnFoliage += shown.length;
+    }
+    this.drawnFoliage = drawnFoliage;
+
+    // Маркеры.
+    if (this.markers.instanceMatrix.count < markers.length) this.resizeMarkers(markers.length);
+    const m = new THREE.Matrix4();
+    const local = new THREE.Matrix4();
+    const size = new THREE.Vector3();
+    const centre = new THREE.Vector3();
+    markers.forEach((i, k) => {
+      const o = this.list[i]!;
+      const box = this.boxOf(o);
+      box.getSize(size);
+      box.getCenter(centre);
+      local.compose(centre, new THREE.Quaternion(), size.max(new THREE.Vector3(10, 10, 10)));
+      this.markers.setMatrixAt(k, this.matrixOf(o, m).multiply(local));
+      this.markers.setColorAt(k, o.b ? COLOR_BUILDING : COLOR_OTHER);
+    });
+    this.markers.count = markers.length;
+    this.markers.instanceMatrix.needsUpdate = true;
+    if (this.markers.instanceColor) this.markers.instanceColor.needsUpdate = true;
+    this.markerIds = markers;
+
+    // Модели.
+    for (const [target, proto] of this.protos) {
+      const ids = perProto.get(target) ?? [];
+      const extra = foliage.get(target) ?? [];
+      const total = ids.length + extra.length;
+      for (const part of proto.parts) {
+        if (total === 0) {
+          if (part.mesh) part.mesh.visible = false;
+          continue;
+        }
+        if (!part.mesh || part.mesh.instanceMatrix.count < total) {
+          if (part.mesh) {
+            this.group.remove(part.mesh);
+            part.mesh.dispose();
+          }
+          const cap = 2 ** Math.ceil(Math.log2(Math.max(4, total)));
+          part.mesh = new THREE.InstancedMesh(part.geo, part.mat, cap);
+          part.mesh.frustumCulled = false;
+          this.group.add(part.mesh);
+        }
+        ids.forEach((i, k) => part.mesh!.setMatrixAt(k, this.matrixOf(this.list[i]!, m).multiply(part.offset)));
+        extra.forEach((f, k) => part.mesh!.setMatrixAt(ids.length + k, m.multiplyMatrices(f, part.offset)));
+        part.mesh.count = total;
+        part.mesh.visible = true;
+        part.mesh.instanceMatrix.needsUpdate = true;
+      }
+    }
+    this.protoInstances.clear();
+    for (const [k, v] of perProto) this.protoInstances.set(k, v);
+    this.visible = [...markers, ...[...perProto.values()].flat()];
+    this.drawnModels = models;
+    this.drawnMarkers = markers.length;
+    this.trimProtos();
+  }
+
+  private resizeMarkers(n: number): void {
+    const cap = 2 ** Math.ceil(Math.log2(n));
+    const old = this.markers;
+    const next = new THREE.InstancedMesh(old.geometry, old.material, cap);
+    next.frustumCulled = false;
+    next.name = 'markers';
+    this.group.remove(old);
+    old.dispose();
+    this.group.add(next);
+    this.markers = next;
+  }
+
+  /** Выгрузить давно не нужные модели сверх лимита (и их файлы из кэша). */
+  private trimProtos(): void {
+    const ready = [...this.protos.entries()].filter(([, p]) => p.state !== 'loading');
+    if (ready.length <= this.quality.maxProtos) return;
+    ready.sort((a, b) => a[1].used - b[1].used);
+    for (const [target, p] of ready.slice(0, ready.length - this.quality.maxProtos)) {
+      if (p.used === this.tick) continue;
+      for (const part of p.parts) {
+        if (part.mesh) {
+          this.group.remove(part.mesh);
+          part.mesh.dispose();
+        }
+        part.geo.dispose();
+        part.mat.dispose();
+      }
+      this.protos.delete(target);
+    }
+    const meshes = new Set<string>();
+    const texs = new Set<string>();
+    for (const p of this.protos.values()) {
+      for (const m of p.meshPaths) meshes.add(m);
+      for (const t of p.texPaths) texs.add(t);
+    }
+    for (const k of [...this.meshCache.keys()]) if (!meshes.has(k)) this.meshCache.delete(k);
+    for (const [k, t] of [...this.texCache]) {
+      if (texs.has(k)) continue;
+      this.texCache.delete(k);
+      void t.then((tex) => tex?.dispose());
+    }
+  }
+
+  /** Объект под лучом (ближайший по коробке) среди нарисованных. */
+  pick(ray: THREE.Ray): WorldObject | undefined {
+    let best: WorldObject | undefined;
+    let bestD = Infinity;
+    const sphere = new THREE.Sphere();
+    const inv = new THREE.Matrix4();
+    const local = new THREE.Ray();
+    const hit = new THREE.Vector3();
+    for (const i of this.visible) {
+      const o = this.list[i]!;
+      const box = this.boxOf(o);
+      const proto = this.protos.get(o.p.target);
+      sphere.set(o.pos, proto?.state === 'ready' ? proto.radius : 120);
+      if (!ray.intersectsSphere(sphere)) continue;
+      this.matrixOf(o, inv).invert();
+      local.copy(ray).applyMatrix4(inv);
+      if (!local.intersectBox(box, hit)) continue;
+      const d = hit.length() === 0 ? 0 : local.origin.distanceTo(hit);
+      if (d < bestD) {
+        bestD = d;
+        best = o;
+      }
+    }
+    return best;
+  }
+
+  /** Объект по ключу экземпляра (файл + владелец + ключ). */
+  find(file: string, holder: string, key: string): WorldObject | undefined {
+    return this.list.find((o) => o.p.file === file && o.p.holder === holder && o.p.key === key);
+  }
+
+  get markerCount(): number {
+    return this.markerIds.length;
+  }
+
+  dispose(): void {
+    for (const p of this.protos.values())
+      for (const part of p.parts) {
+        part.mesh?.dispose();
+        part.geo.dispose();
+        part.mat.dispose();
+      }
+    this.protos.clear();
+    for (const t of this.texCache.values()) void t.then((tex) => tex?.dispose());
+    this.texCache.clear();
+    this.meshCache.clear();
+    this.markers.geometry.dispose();
+    (this.markers.material as THREE.Material).dispose();
+    this.markers.dispose();
+  }
+}

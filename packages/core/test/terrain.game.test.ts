@@ -46,28 +46,28 @@ describe.skipIf(!game)('рельеф на файлах игры', () => {
     }
   });
 
-  it('высота рельефа совпадает с y зданий (≥ 10 % точно, медиана в пределах 30)', async () => {
+  it('y здания — высота над рельефом: `world Y pos` = рельеф + y у большинства', async () => {
     const { world } = loadWorld(paths);
-    const pts: { x: number; z: number; y: number }[] = [];
+    const pts: { x: number; z: number; y: number; wy: number }[] = [];
     for (const file of world.files()) {
       if (!file.startsWith('zone.')) continue;
       const rec = world.record(file, '0-buildinglist');
       if (!rec) continue;
       for (const inst of rec.instances.values()) {
-        if (!inst.target || pts.length >= 600) continue;
-        // Здания (есть состояние с «world Y pos»). Высота экземпляра — его y; само поле
-        // «world Y pos» с рельефом часто не совпадает.
-        if (!inst.states.some((s) => world.record(file, decodeText(s))?.floats.has('world Y pos'))) continue;
-        pts.push({ x: inst.position[0], z: inst.position[2], y: inst.position[1] });
+        if (!inst.target || pts.length >= 20000) continue;
+        // Здания (есть состояние с «world Y pos»).
+        const wy = inst.states.map((s) => world.record(file, decodeText(s))?.floats.get('world Y pos')).find((v) => v !== undefined);
+        if (wy === undefined) continue;
+        pts.push({ x: inst.position[0], z: inst.position[2], y: inst.position[1], wy });
       }
     }
     expect(pts.length).toBeGreaterThan(300);
     const hm = await Heightmap.open(map);
     try {
       const hs = await hm.heightsAt(pts);
-      const err = hs.map((h, i) => Math.abs(h - pts[i]!.y)).sort((a, b) => a - b);
-      expect(err[err.length >> 1]).toBeLessThan(30);
-      expect(err.filter((e) => e < 3).length / err.length).toBeGreaterThan(0.1);
+      const err = hs.map((h, i) => Math.abs(h + pts[i]!.y - pts[i]!.wy)).sort((a, b) => a - b);
+      expect(err[err.length >> 1]).toBeLessThan(3);
+      expect(err.filter((e) => e < 3).length / err.length).toBeGreaterThan(0.5);
       // То же через тайл: билинейная выборка из самого подробного уровня.
       const p = pts[0]!;
       const n = 2 ** 7;
