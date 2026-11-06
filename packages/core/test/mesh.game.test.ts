@@ -101,5 +101,12 @@ describe.skipIf(!game)('модели на файлах игры', () => {
     for (const m of models) expect(m.pieces[0]?.mesh).toMatch(/\.mesh$/i);
     expect(models.some((m) => m.pieces.some((p) => p.texture !== undefined && p.alphaTest !== undefined))).toBe(true);
     expect(models.some((m) => m.pieces.some((p) => p.field === 'leaves mesh'))).toBe(true);
+    // Маска вырезов — альфа карты нормалей, а не диффузной текстуры (шейдер игры).
+    const cut = models.flatMap((m) => m.pieces).filter((p) => p.alphaTest !== undefined);
+    for (const p of cut) expect(p.alphaMap).toMatch(/\.dds$/i);
+    // Камни с типом материала TERRAIN красятся землёй: своей текстуры нет.
+    const terrain = models.flatMap((m) => m.pieces).filter((p) => p.terrain);
+    expect(terrain.length).toBeGreaterThan(20);
+    for (const p of terrain) expect(p.texture).toBeUndefined();
   });
 });

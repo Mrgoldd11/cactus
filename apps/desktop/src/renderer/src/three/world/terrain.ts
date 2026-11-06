@@ -514,6 +514,11 @@ export class TerrainLod {
     return undefined;
   }
 
+  /** Карта цвета всей земли (обзор 1024²; u — X, v — Z мира от −WORLD_HALF до +WORLD_HALF). */
+  get colourMap(): THREE.Texture {
+    return this.overviewTex;
+  }
+
   get tileCount(): number {
     return this.tiles.size;
   }

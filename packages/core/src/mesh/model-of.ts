@@ -36,8 +36,18 @@ export interface ModelPiece {
   field: string;
   /** Внутренняя часть здания (`interior`), не наружная. */
   interior?: boolean;
-  /** Порог прозрачности текстуры 0..255 (листва, растения): пиксели прозрачнее — не рисуются. */
+  /** Порог прозрачности 0..255 (листва, растения): пиксели с альфой `alphaMap` ниже — не рисуются. */
   alphaTest?: number;
+  /**
+   * Текстура, чья альфа — маска прозрачности. В Kenshi это карта нормалей, не диффузная
+   * текстура: шейдер игры режет по `normalTex.a` (`objects.hlsl`), альфа диффузной — блеск.
+   */
+  alphaMap?: string;
+  /**
+   * Тип материала TERRAIN: своей текстуры нет, на модель ложится текстура земли биома
+   * (камни, скалы).
+   */
+  terrain?: boolean;
 }
 
 export interface RecordModel {
@@ -190,26 +200,47 @@ const MESH_FIELDS: Record<string, readonly string[]> = {
   ITEM: ['mesh', 'ground mesh'],
 };
 
-/** FOLIAGE_MESH: модель с текстурой из самой записи и, у деревьев, листва отдельной моделью. */
+/** MapFeatureMode (fcs.def): TERRAIN — текстура земли биома, FOLIAGE — вырезы по альфе. */
+const MODE_TERRAIN = 2;
+const MODE_FOLIAGE = 4;
+
+/**
+ * FOLIAGE_MESH: модель с текстурой из самой записи и, у деревьев, листва отдельной моделью.
+ * Маска вырезов — альфа карты нормалей (у листвы — `leaves normal`, без неё — `normal map`);
+ * без карты нормалей игра берёт плоскую (`flat.dds`, альфа 1) — вырезов нет.
+ */
 function foliagePieces(rec: GameRecord, sid: string, out: RecordModel): void {
   const mesh = file(rec, 'mesh');
-  // Тип материала FOLIAGE (4) — текстура с вырезами по альфе.
-  const cutout = rec.ints.get('material type') === 4;
+  const mode = rec.ints.get('material type') ?? 0;
+  const normal = file(rec, 'normal map');
   if (mesh !== undefined && /\.mesh$/i.test(mesh)) {
     const piece: ModelPiece = { mesh, source: sid, field: 'mesh' };
-    const tex = file(rec, 'texture map');
-    if (tex) piece.texture = tex;
-    const tx = rec.floats.get('tile X') ?? 1;
-    const ty = rec.floats.get('tile Y') ?? 1;
-    if (tx !== 1 || ty !== 1) piece.tile = [tx, ty];
-    if (cutout) piece.alphaTest = rec.ints.get('alpha threshold') ?? 128;
+    if (mode === MODE_TERRAIN) piece.terrain = true;
+    else {
+      const tex = file(rec, 'texture map');
+      if (tex) piece.texture = tex;
+      if (normal) piece.normalMap = normal;
+      const tx = rec.floats.get('tile X') ?? 1;
+      const ty = rec.floats.get('tile Y') ?? 1;
+      if (tx !== 1 || ty !== 1) piece.tile = [tx, ty];
+      if (mode === MODE_FOLIAGE && normal) {
+        piece.alphaMap = normal;
+        piece.alphaTest = rec.ints.get('alpha threshold') ?? 128;
+      }
+    }
     out.pieces.push(piece);
   } else if (mesh) out.notes.push(`${mesh} — не .mesh, не показываем`);
   const leaves = file(rec, 'leaves mesh');
   if (isMesh(leaves)) {
-    const piece: ModelPiece = { mesh: leaves, source: sid, field: 'leaves mesh', alphaTest: rec.ints.get('leaves alpha threshold') ?? 80 };
+    const piece: ModelPiece = { mesh: leaves, source: sid, field: 'leaves mesh' };
     const tex = file(rec, 'leaves texture');
     if (tex) piece.texture = tex;
+    const mask = file(rec, 'leaves normal') ?? normal;
+    if (mask) {
+      piece.normalMap = mask;
+      piece.alphaMap = mask;
+      piece.alphaTest = rec.ints.get('leaves alpha threshold') ?? 80;
+    }
     out.pieces.push(piece);
   }
 }

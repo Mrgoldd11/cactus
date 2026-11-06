@@ -7,7 +7,7 @@
  * Рендер и загрузка — `three/world/*`; здесь только интерфейс.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import { formatPosition, searchRecords, zoneOfPoint, type BuildingPlacement, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
+import { formatPosition, newBuildingStates, searchRecords, zoneOfPoint, type BuildingPlacement, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
 import { STRINGS, useLang } from '../../i18n.ts';
 import { isTypingIn, shortcut } from '../../keys.ts';
 import { ShowInGame } from '../../components/GameLink.tsx';
@@ -16,7 +16,7 @@ import type { Lang } from '../../../../shared/api.ts';
 import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
 import { InsideCard } from '../../components/InsideCard.tsx';
-import { interiorRequest } from './interior.tsx';
+import { interiorRequest, NumberField } from './interior.tsx';
 import { DEFAULT_EDIT, DEFAULT_SETTINGS, WorldView, type EditSettings, type QualityLevel, type WorldSettings, type WorldStatsView } from '../../three/world/view.ts';
 import type { WorldObject } from '../../three/world/objects.ts';
 
@@ -60,7 +60,9 @@ const en = {
   angle: 'Angle',
   off: 'off',
   ground: 'to ground',
-  groundTip: 'While moving, the object keeps its height above the ground',
+  groundTip: 'While moving along the ground (red/blue arrows) the object keeps its height above the ground; the green arrow raises and lowers it',
+  height: 'Above ground',
+  heightTip: 'Height above the ground (the green gizmo arrow does the same)',
   undo: 'Undo',
   redo: 'Redo',
   nothing: 'nothing',
@@ -120,7 +122,9 @@ const ru: WorldStrings = {
   angle: 'Угол',
   off: 'нет',
   ground: 'к земле',
-  groundTip: 'При сдвиге объект держит свою высоту над землёй',
+  groundTip: 'При сдвиге по земле (красная/синяя стрелки) объект держит высоту над землёй; зелёная стрелка поднимает и опускает',
+  height: 'Над землёй',
+  heightTip: 'Высота над землёй (то же делает зелёная стрелка гизмо)',
   undo: 'Отменить',
   redo: 'Повторить',
   nothing: 'нечего',
@@ -186,7 +190,7 @@ function SidLink({ sid, go, empty }: { sid: string | undefined; go: (sid: string
   );
 }
 
-function ObjectCard({ o, s, onFocus, onRemove, edited }: { o: WorldObject; s: WorldStrings; onFocus: () => void; onRemove: (() => void) | undefined; edited: boolean }): ReactNode {
+function ObjectCard({ o, s, onFocus, onRemove, onHeight, edited }: { o: WorldObject; s: WorldStrings; onFocus: () => void; onRemove: (() => void) | undefined; onHeight: ((y: number) => void) | undefined; edited: boolean }): ReactNode {
   const { project, go, open } = useWorkbench();
   const link = useGameLink();
   const b: BuildingPlacement | undefined = o.b;
@@ -194,6 +198,7 @@ function ObjectCard({ o, s, onFocus, onRemove, edited }: { o: WorldObject; s: Wo
     [s.record, <SidLink sid={o.p.target} go={go} empty={s.empty} />],
     [s.name, b?.name ?? <span className="muted">{s.empty}</span>],
     [s.where, <span className="mono" data-testid="world-card-pos">{formatPosition([o.pos.x, o.pos.y, o.pos.z], o.p.zone)}</span>],
+    ...(onHeight ? [[s.height, <span title={s.heightTip}><NumberField testId="world-height" value={Math.round(o.p.position[1] * 10) / 10} onCommit={onHeight} /></span>] as [string, ReactNode]] : []),
     [s.town, <SidLink sid={b?.town} go={go} empty={s.empty} />],
     [s.faction, <SidLink sid={b?.faction} go={go} empty={s.empty} />],
     [s.squad, <SidLink sid={b?.squadTemplate} go={go} empty={s.empty} />],
@@ -390,6 +395,19 @@ function WorldPanel(): ReactNode {
     }
   };
 
+  /** Точная высота над землёй из карточки: тот же шаг «Сдвиг», что у гизмо. */
+  const setHeight = (o: WorldObject, y: number): void => {
+    if (!edits) return;
+    const [x, y0, z] = o.p.position;
+    const q = o.quat;
+    try {
+      edits.move(o.p.file, o.p.holder, o.p.key, [x, y, z], [q.w, q.x, q.y, q.z], o.b ? { worldY: o.pos.y + (y - y0) } : {}, `${s.stepMove}: ${recordName(project, lang, o.p.target)}`);
+      setMessage(undefined);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const placeRecord = (sid: string): void => {
     const v = view.current;
     if (!v || !edits) return;
@@ -402,7 +420,9 @@ function WorldPanel(): ReactNode {
     const path = `zone.${z.x}.${z.y}.zone`;
     const holder = edits.holders(path).find((h) => h.endsWith('buildinglist')) ?? '0-buildinglist';
     try {
-      const key = edits.place(path, holder, sid, [at.x, 0, at.z], [1, 0, 0, 0], {}, `${s.stepPlace}: ${recordName(project, lang, sid)}`);
+      // Здание ставим готовым: без состояния игра делает из него стройплощадку «на продажу».
+      const states = newBuildingStates(project.ctx.get(sid), at.y);
+      const key = edits.place(path, holder, sid, [at.x, 0, at.z], [1, 0, 0, 0], states ? { states } : {}, `${s.stepPlace}: ${recordName(project, lang, sid)}`);
       setPlacing(undefined);
       setMessage(undefined);
       const o = v.objects.find(path, holder, key);
@@ -598,6 +618,7 @@ function WorldPanel(): ReactNode {
               s={s}
               onFocus={() => view.current?.focus(selected)}
               onRemove={edits ? () => { removeObject(selected); } : undefined}
+              onHeight={edits ? (y) => { setHeight(selected, y); } : undefined}
               edited={edits?.modRecords(selected.p.file).some((r) => r.stringId === selected.p.holder && r.instances.has(selected.p.key)) ?? false}
             />
           </div>

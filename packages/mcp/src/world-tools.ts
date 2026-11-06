@@ -6,7 +6,7 @@
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { zoneOfPoint, type BuildingPlacement, type ModContext, type Placement, type Vec4, type WorldEdits } from '@kenshi-editor/core';
+import { newBuildingStates, zoneOfPoint, type BuildingPlacement, type ModContext, type Placement, type Vec4, type WorldEdits } from '@kenshi-editor/core';
 import { registerInteriorTools } from './interior-tools.ts';
 import { SessionError, type Session } from './session.ts';
 
@@ -141,7 +141,7 @@ export function registerWorldTools(server: McpServer, session: Session, { run, r
       description: [
         'Поставить в мир экземпляр записи (здание, стену, ящик, мебель…) в точку (x, z); y — высота над землёй (по умолчанию 0), angle — поворот вокруг вертикали в градусах.',
         'Пишется в файл зоны мода (leveldata/zone.X.Y.zone) при save; отмена — world_undo.',
-        'Новый объект ставится без состояния здания (GAMESTATE_BUILDING): жителей, фракцию, интерьер игра назначает сама — как именно, в игре не проверено.',
+        'Здание ставится готовым (состояние GAMESTATE_BUILDING: is complete, материалы из записи) — без него игра делает стройплощадку «на продажу». Фракции, жителей и раскладки интерьера нет: интерьер игра выбирает сама.',
       ].join('\n'),
       inputSchema: {
         target: z.string().describe('Что поставить: id или имя записи (англ. или рус.)'),
@@ -153,7 +153,7 @@ export function registerWorldTools(server: McpServer, session: Session, { run, r
       annotations: { ...EDIT, title: 'Поставить объект в мир' },
     },
     (a) =>
-      run(() => {
+      run(async () => {
         const ctx = session.ctx();
         const edits = session.worldEdits();
         const target = resolveId(ctx, a.target, ['BUILDING']);
@@ -161,8 +161,13 @@ export function registerWorldTools(server: McpServer, session: Session, { run, r
         const path = `zone.${zone.x}.${zone.y}.zone`;
         const holder = edits.holders(path).find((h) => h.endsWith('buildinglist')) ?? '0-buildinglist';
         const rotation = turn([1, 0, 0, 0], a.angle ?? 0);
-        const key = edits.place(path, holder, target, [a.x, a.y ?? 0, a.z], rotation, {}, `Новый объект: ${nameOf(ctx, target)}`);
-        return [`Поставлен ${objectHandle({ file: path, holder, key })} — ${nameOf(ctx, target)} (${target})`, ...pending(edits)];
+        const notes: string[] = [];
+        // Высота в мире для состояния здания: земля по карте высот игры + y.
+        const g = await session.groundAt([{ x: a.x, z: a.z }]);
+        const states = newBuildingStates(ctx.get(target), (g?.[0] ?? 0) + (a.y ?? 0));
+        if (states && !g) notes.push('карты высот нет: world Y pos = y (игра может поставить здание не на ту высоту)');
+        const key = edits.place(path, holder, target, [a.x, a.y ?? 0, a.z], rotation, states ? { states } : {}, `Новый объект: ${nameOf(ctx, target)}`);
+        return [`Поставлен ${objectHandle({ file: path, holder, key })} — ${nameOf(ctx, target)} (${target})`, ...notes, ...pending(edits)];
       }),
   );
 

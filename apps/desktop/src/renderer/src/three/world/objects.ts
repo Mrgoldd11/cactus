@@ -11,7 +11,7 @@
  * Разбор `.mesh` и `.dds` — в фоновом потоке (`WorkerPool`).
  */
 import * as THREE from 'three';
-import { decodeText, itemTypeName, modelOfRecord, zoneOfPath, ZONE_COUNT, ZONE_SIZE, type BuildingPlacement, type Instance, type ModContext, type Placement, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
+import { decodeText, itemTypeName, modelOfRecord, zoneOfPath, WORLD_HALF, ZONE_COUNT, ZONE_SIZE, type BuildingPlacement, type Instance, type ModContext, type Placement, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
 import type { GameInstallInfo } from '../../../../shared/api.ts';
 import type { SubmeshArrays, WorkerPool } from './protocol.ts';
 
@@ -71,6 +71,18 @@ const STONE = 0x8a7c6c;
 /** Растительность меньше этой доли расстояния до камеры не рисуется. */
 const FOLIAGE_MIN_SIZE = 0.015;
 
+function dataTexture(rgba: Uint8Array, width: number, height: number): THREE.DataTexture {
+  const tex = new THREE.DataTexture(rgba, width, height, THREE.RGBAFormat);
+  tex.flipY = false;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 function zoneKey(x: number, y: number): number {
   return y * ZONE_COUNT + x;
 }
@@ -82,6 +94,8 @@ export class WorldObjects {
   private readonly byKey = new Map<string, WorldObject>();
   /** Высота земли (у объектов без состояния здания y экземпляра — над землёй). */
   groundAt: (x: number, z: number) => number | undefined = () => undefined;
+  /** Карта цвета всей земли (X/Z мира → 0..1): ею красятся камни с типом материала TERRAIN. */
+  groundMap: THREE.Texture | null = null;
   private readonly protos = new Map<string, Proto>();
   private readonly meshCache = new Map<string, Promise<SubmeshArrays[] | null>>();
   private readonly texCache = new Map<string, Promise<THREE.Texture | null>>();
@@ -275,23 +289,66 @@ export class WorldObjects {
     const k = path.toLowerCase();
     let t = this.texCache.get(k);
     if (!t) {
-      t = window.kedit.readGameAsset(this.game, path).then(async (bytes) => {
+      t = (async () => {
+        let bytes = await window.kedit.readGameAsset(this.game, path);
+        // `…_HI.dds` бывает без файла (текстуры высокого качества не у всех) — тогда обычная.
+        if (!bytes && /_HI\.dds$/i.test(path)) bytes = await window.kedit.readGameAsset(this.game, path.replace(/_HI(\.dds)$/i, '$1'));
         if (!bytes) return null;
         const r = await this.pool.run<'dds'>({ type: 'dds', bytes, maxSize: 512 }, [bytes.buffer]);
-        const tex = new THREE.DataTexture(r.rgba, r.width, r.height, THREE.RGBAFormat);
-        tex.flipY = false;
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-        tex.minFilter = THREE.LinearMipmapLinearFilter;
-        tex.generateMipmaps = true;
-        tex.anisotropy = 4;
-        tex.needsUpdate = true;
-        return tex;
+        return dataTexture(r.rgba, r.width, r.height);
+      })();
+      t.catch(() => this.texCache.delete(k));
+      this.texCache.set(k, t);
+    }
+    return t;
+  }
+
+  /** Диффузная текстура с альфой из `mask` (маска вырезов листвы — альфа карты нормалей). */
+  private maskedTexture(diffuse: string, mask: string): Promise<THREE.Texture | null> {
+    const k = `${diffuse}|${mask}`.toLowerCase();
+    let t = this.texCache.get(k);
+    if (!t) {
+      t = Promise.all([this.texture(diffuse), this.texture(mask).catch(() => null)]).then(([d, m]) => {
+        if (!d || !m) return d;
+        const di = d.image as { data: Uint8Array; width: number; height: number };
+        const mi = m.image as { data: Uint8Array; width: number; height: number };
+        const rgba = new Uint8Array(di.data);
+        for (let y = 0; y < di.height; y++) {
+          const my = Math.min(mi.height - 1, Math.floor((y * mi.height) / di.height));
+          for (let x = 0; x < di.width; x++) {
+            const mx = Math.min(mi.width - 1, Math.floor((x * mi.width) / di.width));
+            rgba[(y * di.width + x) * 4 + 3] = mi.data[(my * mi.width + mx) * 4 + 3]!;
+          }
+        }
+        return dataTexture(rgba, di.width, di.height);
       });
       t.catch(() => this.texCache.delete(k));
       this.texCache.set(k, t);
     }
     return t;
+  }
+
+  /** Материал камней с типом TERRAIN: цвет земли под ними (карта цвета рельефа по X/Z мира). */
+  private terrainMaterial(): THREE.Material {
+    const map = this.groundMap;
+    const mat = new THREE.MeshLambertMaterial({ color: map ? 0xffffff : STONE, map, side: THREE.DoubleSide });
+    if (!map) return mat;
+    mat.customProgramCacheKey = () => 'kedit-terrain-mapped';
+    mat.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <worldpos_vertex>',
+        [
+          '#include <worldpos_vertex>',
+          '#ifdef USE_INSTANCING',
+          'vec4 kWorld = modelMatrix * instanceMatrix * vec4( transformed, 1.0 );',
+          '#else',
+          'vec4 kWorld = modelMatrix * vec4( transformed, 1.0 );',
+          '#endif',
+          `vMapUv = ( kWorld.xz + ${WORLD_HALF.toFixed(1)} ) / ${(2 * WORLD_HALF).toFixed(1)};`,
+        ].join('\n'),
+      );
+    };
+    return mat;
   }
 
   private async loadProto(target: string, proto: Proto): Promise<void> {
@@ -302,11 +359,13 @@ export class WorldObjects {
     }
     const box = new THREE.Box3();
     for (const piece of model.pieces) {
-      const [subs, tex] = await Promise.all([this.mesh(piece.mesh).catch(() => null), piece.texture ? this.texture(piece.texture).catch(() => null) : Promise.resolve(null)]);
+      const tex = !piece.texture ? Promise.resolve(null) : piece.alphaMap ? this.maskedTexture(piece.texture, piece.alphaMap) : this.texture(piece.texture);
+      const [subs, loaded] = await Promise.all([this.mesh(piece.mesh).catch(() => null), tex.catch(() => null)]);
       if (!subs) continue;
       proto.meshPaths.push(piece.mesh.toLowerCase());
       if (piece.texture) proto.texPaths.push(piece.texture.toLowerCase());
-      let map = tex;
+      if (piece.texture && piece.alphaMap) proto.texPaths.push(piece.alphaMap.toLowerCase(), `${piece.texture}|${piece.alphaMap}`.toLowerCase());
+      let map = loaded;
       const alphaTest = piece.alphaTest !== undefined && map ? Math.max(0.05, piece.alphaTest / 255) : 0;
       if (map && piece.tile) {
         map = map.clone();
@@ -325,6 +384,10 @@ export class WorldObjects {
         else geo.computeVertexNormals();
         geo.computeBoundingBox();
         box.union(geo.boundingBox!.clone().applyMatrix4(offset));
+        if (piece.terrain) {
+          proto.parts.push({ geo, mat: this.terrainMaterial(), offset });
+          continue;
+        }
         const colors = !map && s.colors !== undefined;
         const mat = new THREE.MeshLambertMaterial({ color: map || colors ? 0xffffff : model.type === 'FOLIAGE_MESH' ? STONE : GREY, map, vertexColors: colors, side: THREE.DoubleSide, alphaTest });
         proto.parts.push({ geo, mat, offset });

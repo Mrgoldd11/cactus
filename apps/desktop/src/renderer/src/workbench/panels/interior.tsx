@@ -180,7 +180,7 @@ function flags(l: InteriorLayout, s: InteriorStrings): string {
 }
 
 /** Поле числа: правка по Enter или при уходе с поля. */
-function NumberField({ value, onCommit, testId, width = 64 }: { value: number; onCommit: (v: number) => void; testId: string; width?: number }): ReactNode {
+export function NumberField({ value, onCommit, testId, width = 64 }: { value: number; onCommit: (v: number) => void; testId: string; width?: number }): ReactNode {
   const [text, setText] = useState(String(value));
   useEffect(() => { setText(String(value)); }, [value]);
   const commit = (): void => {

@@ -181,6 +181,7 @@ export class WorldView {
     this.scene.add(this.terrain.group);
     this.objects = new WorldObjects(game, this.pool, ctx, world, q.objects);
     this.objects.groundAt = (x, z) => this.terrain.heightAt(x, z);
+    this.objects.groundMap = this.terrain.colourMap;
     this.objects.onChange = () => { this.invalidate(true); };
     this.scene.add(this.objects.group);
 
@@ -374,11 +375,12 @@ export class WorldView {
     g.setMode(e.mode === 'move' ? 'translate' : 'rotate');
     g.setTranslationSnap(e.grid > 0 ? e.grid : null);
     g.setRotationSnap(e.angle > 0 ? THREE.MathUtils.degToRad(e.angle) : null);
-    // Поворот — только вокруг вертикали (как в игре); к земле — высота следует за рельефом.
+    // Поворот — только вокруг вертикали (как в игре). Зелёная стрелка (Y) — вверх-вниз всегда;
+    // «к земле» действует на сдвиг по земле (X/Z): высота над землёй сохраняется.
     const rotate = e.mode === 'rotate';
     g.showX = !rotate;
     g.showZ = !rotate;
-    g.showY = rotate || !e.ground;
+    g.showY = true;
     this.invalidate();
   }
 
@@ -397,7 +399,8 @@ export class WorldView {
     const o = this.selected;
     const start = this.dragStart;
     if (!o || !start) return;
-    if (this.edit.mode === 'move' && this.edit.ground && start.above !== undefined) {
+    const vertical = this.gizmo.axis?.includes('Y') === true;
+    if (this.edit.mode === 'move' && this.edit.ground && !vertical && start.above !== undefined) {
       const g = this.terrain.heightAt(this.pivot.position.x, this.pivot.position.z);
       if (g !== undefined) this.pivot.position.y = g + start.above;
     }
