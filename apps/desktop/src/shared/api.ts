@@ -111,6 +111,9 @@ export interface SaveRequest {
    * `leveldata` рядом с модом — только имя файла, без папок.
    */
   world?: { path: string; bytes: Uint8Array }[];
+  /** Имя мода и прежний путь — чтобы после сохранения убрать автосохранения этого мода. */
+  modName?: string;
+  previousPath?: string;
 }
 
 /** Мод-источник слияния: байты файла и данные уровня рядом с ним. */
@@ -129,7 +132,9 @@ export type ModOrderResult =
   | { ok: true; path: string; changed: boolean; backup?: string }
   | { ok: false; cancelled: boolean; error?: string; stale?: boolean };
 
-export type SaveResult = { ok: true; path: string; provenance?: ModProvenance } | { ok: false; cancelled: boolean; error?: string; workshop?: boolean };
+export type SaveResult =
+  | { ok: true; path: string; provenance?: ModProvenance; backupError?: string }
+  | { ok: false; cancelled: boolean; error?: string; workshop?: boolean };
 
 export type Lang = 'en' | 'ru';
 
@@ -141,7 +146,42 @@ export interface Settings {
   recent: string[];
   /** Раскладка рабочего пространства (панели и их места). */
   workspace?: WorkspaceSettings;
+  /** Автосохранение раз в столько минут (0 — выключено; по умолчанию 5). */
+  autosaveMinutes: number;
+  /** Сколько прежних версий мода хранить при сохранении (0 — не хранить; по умолчанию 5). */
+  backupCount: number;
 }
+
+/** Мод для автосохранения и копий: файл на диске или новый мод по имени. */
+export interface ModRef {
+  path?: string | undefined;
+  modName: string;
+}
+
+/** Автосохранение новее мода: предложить восстановить. */
+export interface RecoveryInfo {
+  /** Когда записано автосохранение (мс). */
+  savedAt: number;
+  size: number;
+  /** Файл мода на диске есть; его время и размер. */
+  modExists: boolean;
+  modTime?: number;
+  modSize?: number;
+}
+
+export type AutosaveResult = { ok: true; savedAt: number; size: number } | { ok: false; error: string };
+
+/** Версия мода из резервных копий. */
+export interface BackupItem {
+  /** `autosave` или имя файла копии. */
+  id: string;
+  kind: 'backup' | 'autosave' | 'restore-point';
+  /** Мс с 1970: когда создана копия (для `backup` — когда её заменили новой версией). */
+  time: number;
+  size: number;
+}
+
+export type ExportBackupResult = { ok: true; path: string } | { ok: false; cancelled: true } | { ok: false; cancelled: false; error: string };
 
 export interface WorkspaceSettings {
   /** Снимок раскладки dockview (`toJSON`). */
@@ -252,6 +292,26 @@ export interface KeditApi {
   readTranslation(game: GameInstallInfo): Promise<Uint8Array | null>;
   getSettings(): Promise<Settings>;
   setSettings(patch: Partial<Settings>): Promise<Settings>;
+  /**
+   * Записать автосохранение мода в папку данных приложения (не в мод, не в игру, не в мастерскую).
+   * Окно зовёт только когда есть несохранённые правки.
+   */
+  autosave(ref: ModRef, bytes: Uint8Array): Promise<AutosaveResult>;
+  /** Убрать автосохранение (правок больше нет или от них отказались). */
+  autosaveClear(ref: ModRef): Promise<void>;
+  /** Есть ли автосохранение новее мода (или мода на диске нет): предложить восстановить. */
+  findRecovery(ref: ModRef): Promise<RecoveryInfo | null>;
+  /** Байты автосохранения для восстановления. */
+  readAutosave(ref: ModRef): Promise<Uint8Array | null>;
+  /** «Открыть как есть»: автосохранение уходит в список резервных копий мода. */
+  keepAutosave(ref: ModRef): Promise<void>;
+  /** Автосохранение и резервные копии мода, новые сверху. */
+  listBackups(ref: ModRef): Promise<BackupItem[]>;
+  readBackup(ref: ModRef, id: string): Promise<Uint8Array | null>;
+  /** Точка возврата: текущее состояние уходит в копии перед восстановлением старой версии. */
+  addRestorePoint(ref: ModRef, bytes: Uint8Array): Promise<void>;
+  /** Диалог «Сохранить» и запись копии как отдельного файла (в игре — с подтверждением, в мастерской — никогда). */
+  exportBackup(ref: ModRef, id: string): Promise<ExportBackupResult>;
   /** Есть ли несохранённые изменения (main спросит при закрытии окна). */
   setDirty(dirty: boolean, title: string): void;
   /** Обработчик запросов ИИ к открытому проекту (один на окно; новый заменяет прежний). */
@@ -289,6 +349,15 @@ export const IPC = {
   getSettings: 'kedit:get-settings',
   setSettings: 'kedit:set-settings',
   setDirty: 'kedit:set-dirty',
+  autosave: 'kedit:autosave',
+  autosaveClear: 'kedit:autosave-clear',
+  findRecovery: 'kedit:find-recovery',
+  readAutosave: 'kedit:read-autosave',
+  keepAutosave: 'kedit:keep-autosave',
+  listBackups: 'kedit:list-backups',
+  readBackup: 'kedit:read-backup',
+  addRestorePoint: 'kedit:add-restore-point',
+  exportBackup: 'kedit:export-backup',
   liveRequest: 'kedit:live-request',
   liveResponse: 'kedit:live-response',
   liveStatus: 'kedit:live-status',

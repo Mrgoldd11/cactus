@@ -19,6 +19,7 @@ import {
   parsePo,
   readDataFile,
   serializeMergeStore,
+  splitModList,
   withInferredFields,
   WorldEdits,
   WorldIndex,
@@ -32,7 +33,7 @@ import {
   type TranslationIndex,
   type WorldFile,
 } from '@kenshi-editor/core';
-import type { CopyModResult, GameInstallInfo, KeditApi, ModProvenance, NamedBytes, ProjectBundle, ProjectRequest, SaveResult } from '../../shared/api.ts';
+import type { CopyModResult, GameInstallInfo, KeditApi, ModProvenance, ModRef, NamedBytes, ProjectBundle, ProjectRequest, SaveResult } from '../../shared/api.ts';
 
 export interface IndexEntry {
   sid: string;
@@ -255,6 +256,16 @@ export class Project {
     return this.ctx.modName;
   }
 
+  /** Как мод называется для автосохранений и резервных копий: файл или имя нового мода. */
+  get ref(): ModRef {
+    return { path: this.path, modName: this.path !== undefined ? (this.path.split(/[\\/]/).pop() ?? this.ctx.modName) : this.ctx.modName };
+  }
+
+  /** Текущее состояние мода в байтах .mod (для автосохранения и точки возврата). */
+  currentBytes(): Uint8Array {
+    return writeDataFile(this.ctx.buildModFile());
+  }
+
   /** Моды контекста: лежат слоями под модом, но не записаны в его заголовке. */
   get contextMods(): string[] {
     return this.bundle.contextMods ?? [];
@@ -366,7 +377,14 @@ export class Project {
       const f = edits?.buildFile(p);
       return f ? [{ path: p, bytes: writeDataFile(f) }] : [];
     });
-    const result = await window.kedit.saveMod({ path, bytes: writeDataFile(file), ...(mergeStore !== undefined ? { mergeStore } : {}), ...(world.length ? { world } : {}) });
+    const result = await window.kedit.saveMod({
+      path,
+      bytes: writeDataFile(file),
+      ...(mergeStore !== undefined ? { mergeStore } : {}),
+      ...(world.length ? { world } : {}),
+      modName: this.ctx.modName,
+      ...(this.path !== undefined ? { previousPath: this.path } : {}),
+    });
     if (result.ok) {
       edits?.markSaved();
       if (mergeStore !== undefined) this.ledger.commit(this.ctx);
@@ -415,6 +433,48 @@ export async function reloadProject(p: Project, change: { dependencies?: string[
     bundle = await window.kedit.openProject(req);
   }
   return new Project(bundle, { mod, ...(p.path !== undefined ? { path: p.path } : {}), carriedDirty: wasDirty || p.ctx.dirty, provenance: p.provenance, ledger: p.ledger.carry(p.ctx) });
+}
+
+/** Зависимости мода из его заголовка (в том числе ссылки) — по ним собирается контекст. */
+function headerDependencies(mod: DataFile): string[] {
+  const h = mod.header;
+  return h ? [...splitModList(h.dependencies), ...splitModList(h.references)] : [];
+}
+
+/**
+ * Открыть мод с содержимым из автосохранения: файл на диске (если есть) определяет путь и
+ * происхождение, а правки и зависимости берутся из байт копии. Мод помечается изменённым.
+ */
+export async function openRecovered(req: ProjectRequest, bytes: Uint8Array): Promise<Project> {
+  const mod = readDataFile(bytes);
+  const deps = headerDependencies(mod);
+  const full: ProjectRequest = { ...req, dependencies: deps };
+  let bundle = await window.kedit.openProject({ ...full, known: parsedFiles.keys() });
+  if ([...bundle.vanilla, ...bundle.dependencies].some((f) => f.key !== undefined && f.bytes.length === 0 && !parsedFiles.has(f.key))) {
+    bundle = await window.kedit.openProject(full);
+  }
+  return new Project(bundle, { mod, carriedDirty: true });
+}
+
+/**
+ * Восстановить старую версию мода как новую правку: текущее состояние сначала уходит в копии
+ * (точка возврата), потом окно получает проект с содержимым версии. История отмены начинается заново.
+ */
+export async function restoreProject(p: Project, bytes: Uint8Array): Promise<Project> {
+  await window.kedit.addRestorePoint(p.ref, p.currentBytes());
+  const mod = readDataFile(bytes);
+  const contextMods = p.contextMods;
+  const req: ProjectRequest = {
+    game: p.bundle.game,
+    modName: p.ctx.modName,
+    dependencies: headerDependencies(mod),
+    ...(contextMods.length ? { contextMods } : {}),
+  };
+  let bundle = await window.kedit.openProject({ ...req, known: parsedFiles.keys() });
+  if ([...bundle.vanilla, ...bundle.dependencies].some((f) => f.key !== undefined && f.bytes.length === 0 && !parsedFiles.has(f.key))) {
+    bundle = await window.kedit.openProject(req);
+  }
+  return new Project(bundle, { mod, ...(p.path !== undefined ? { path: p.path } : {}), carriedDirty: true, provenance: p.provenance, ledger: p.ledger.carry(p.ctx) });
 }
 
 /** Новый контекст с другими зависимостями (моды контекста остаются). */

@@ -2,21 +2,24 @@
  * Корень окна: язык и настройки, поиск игры, стартовый экран или открытый проект.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { GameInstallInfo, Lang, ProjectRequest, Settings } from '../../shared/api.ts';
+import type { GameInstallInfo, Lang, ModRef, ProjectRequest, RecoveryInfo, Settings } from '../../shared/api.ts';
 import { LangContext, STRINGS } from './i18n.ts';
-import { openProject, prefetchVanilla, type Project } from './project.ts';
+import { openProject, openRecovered, prefetchVanilla, type Project } from './project.ts';
 import { setLiveProject } from './live.ts';
 import { StartScreen } from './components/StartScreen.tsx';
 import { Editor } from './components/Editor.tsx';
+import { RecoveryModal, SettingsModal, type RecoveryChoice } from './components/BackupModals.tsx';
 
 export function App(): ReactNode {
-  const [settings, setSettings] = useState<Settings>({ lang: 'ru', recent: [] });
+  const [settings, setSettings] = useState<Settings>({ lang: 'ru', recent: [], autosaveMinutes: 5, backupCount: 5 });
   const [games, setGames] = useState<GameInstallInfo[] | undefined>();
   const [game, setGame] = useState<GameInstallInfo | undefined>();
   const [folderError, setFolderError] = useState<string | undefined>();
   const [project, setProject] = useState<Project | undefined>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [recovery, setRecovery] = useState<{ req: ProjectRequest; ref: ModRef; info: RecoveryInfo } | undefined>();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -67,12 +70,13 @@ export function App(): ReactNode {
     });
   };
 
-  const open = (req: ProjectRequest): void => {
+  /** Открыть проект; `recovered` — байты автосохранения, из которых восстановить правки. */
+  const load = (req: ProjectRequest, recovered?: Uint8Array): void => {
     setLoading(true);
     setError(undefined);
     void (async () => {
       try {
-        const p = await openProject(req);
+        const p = recovered ? await openRecovered(req, recovered) : await openProject(req);
         setProject(p);
         p.bump();
       } catch (e) {
@@ -80,6 +84,48 @@ export function App(): ReactNode {
       } finally {
         setLoading(false);
       }
+    })();
+  };
+
+  /** Перед открытием мода: нет ли автосохранения новее файла (после сбоя) — предложить восстановить. */
+  const open = (req: ProjectRequest): void => {
+    const ref: ModRef =
+      req.modPath !== undefined
+        ? { path: req.modPath, modName: req.modPath.split(/[\\/]/).pop() ?? req.modPath }
+        : { modName: req.modName ?? 'untitled.mod' };
+    setLoading(true);
+    void window.kedit.findRecovery(ref).then(
+      (info) => {
+        if (info === null) load(req);
+        else {
+          setLoading(false);
+          setRecovery({ req, ref, info });
+        }
+      },
+      () => {
+        load(req);
+      },
+    );
+  };
+
+  const chooseRecovery = (choice: RecoveryChoice): void => {
+    const r = recovery;
+    if (!r) return;
+    setRecovery(undefined);
+    void (async () => {
+      try {
+        if (choice === 'restore') {
+          const bytes = await window.kedit.readAutosave(r.ref);
+          if (bytes !== null) {
+            load(r.req, bytes);
+            return;
+          }
+        } else if (choice === 'as-is') await window.kedit.keepAutosave(r.ref);
+        else await window.kedit.autosaveClear(r.ref);
+      } catch {
+        // Копия недоступна — открываем мод как есть.
+      }
+      load(r.req);
     })();
   };
 
@@ -95,18 +141,33 @@ export function App(): ReactNode {
         project={project}
         onReplace={setProject}
         onClose={() => {
-          if (project.dirty && !window.confirm(lang.t.unsavedChanges)) return;
+          if (project.dirty) {
+            if (!window.confirm(lang.t.unsavedChanges)) return;
+            // Отказ от правок: автосохранение уходит в резервные копии, а не пропадает.
+            void window.kedit.keepAutosave(project.ref).catch(() => undefined);
+          }
           window.kedit.setDirty(false, 'Kenshi Mod Editor');
           setProject(undefined);
         }}
         lang={settings.lang}
         onLang={setLang}
+        settings={settings}
+        onSettings={updateSettings}
       />
     );
   } else {
     body = (
       <>
         <div className="start-lang">
+          <button
+            data-testid="settings-btn"
+            title={lang.t.settings}
+            onClick={() => {
+              setSettingsOpen(true);
+            }}
+          >
+            ⚙
+          </button>
           <LangSwitch lang={settings.lang} onLang={setLang} />
         </div>
         <StartScreen
@@ -122,7 +183,21 @@ export function App(): ReactNode {
       </>
     );
   }
-  return <LangContext.Provider value={lang}>{body}</LangContext.Provider>;
+  return (
+    <LangContext.Provider value={lang}>
+      {body}
+      {recovery && <RecoveryModal name={recovery.ref.modName} info={recovery.info} onChoose={chooseRecovery} />}
+      {settingsOpen && !project && (
+        <SettingsModal
+          settings={settings}
+          onChange={updateSettings}
+          onClose={() => {
+            setSettingsOpen(false);
+          }}
+        />
+      )}
+    </LangContext.Provider>
+  );
 }
 
 export function LangSwitch({ lang, onLang }: { lang: Lang; onLang: (l: Lang) => void }): ReactNode {

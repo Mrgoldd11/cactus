@@ -25,6 +25,15 @@ const api: KeditApi = {
   openTextFile: () => ipcRenderer.invoke(IPC.openTextFile),
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   setSettings: (patch) => ipcRenderer.invoke(IPC.setSettings, patch),
+  autosave: (ref, bytes) => ipcRenderer.invoke(IPC.autosave, ref, bytes),
+  autosaveClear: (ref) => ipcRenderer.invoke(IPC.autosaveClear, ref),
+  findRecovery: (ref) => ipcRenderer.invoke(IPC.findRecovery, ref),
+  readAutosave: (ref) => ipcRenderer.invoke(IPC.readAutosave, ref),
+  keepAutosave: (ref) => ipcRenderer.invoke(IPC.keepAutosave, ref),
+  listBackups: (ref) => ipcRenderer.invoke(IPC.listBackups, ref),
+  readBackup: (ref, id) => ipcRenderer.invoke(IPC.readBackup, ref, id),
+  addRestorePoint: (ref, bytes) => ipcRenderer.invoke(IPC.addRestorePoint, ref, bytes),
+  exportBackup: (ref, id) => ipcRenderer.invoke(IPC.exportBackup, ref, id),
   setDirty: (dirty, title) => {
     ipcRenderer.send(IPC.setDirty, dirty, title);
   },

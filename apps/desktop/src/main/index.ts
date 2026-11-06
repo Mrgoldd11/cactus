@@ -12,10 +12,26 @@
  * Меню окна — `menu.ts`, журнал ошибок в файл — `log.ts`, мост к игре (плагин Kenshi Bridge) — `game.ts`.
  */
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { describeOrderChange, type LiveRequestBody } from '@kenshi-editor/core';
-import { startLiveServer, type LiveServer } from '@kenshi-editor/core/node';
+import {
+  addBackup,
+  clearAutosave,
+  DEFAULT_AUTOSAVE_MINUTES,
+  DEFAULT_BACKUP_COUNT,
+  findRecovery,
+  keepAutosaveAsBackup,
+  listBackups,
+  MAX_BACKUP_COUNT,
+  readAutosave,
+  readBackup,
+  startLiveServer,
+  writeAutosave,
+  writeFileAtomic,
+  type LiveServer,
+  type ModRef,
+} from '@kenshi-editor/core/node';
 import { initLog, log, watchWindow } from './log.ts';
 import { startGameLink, stopGameLink } from './game.ts';
 import { APP_TITLE, buildMenu } from './menu.ts';
@@ -23,7 +39,11 @@ import {
   IPC,
   type GameInstallInfo,
   type LiveReply,
+  type AutosaveResult,
+  type BackupItem,
+  type ExportBackupResult,
   type LiveStatus,
+  type RecoveryInfo,
   type CopyModResult,
   type ModOrderResult,
   type ProjectRequest,
@@ -61,11 +81,18 @@ import {
 if (process.env['KEDIT_USER_DATA']) app.setPath('userData', process.env['KEDIT_USER_DATA']);
 
 const settingsPath = (): string => join(app.getPath('userData'), 'settings.json');
-const DEFAULT_SETTINGS: Settings = { lang: 'ru', recent: [] };
+const DEFAULT_SETTINGS: Settings = { lang: 'ru', recent: [], autosaveMinutes: DEFAULT_AUTOSAVE_MINUTES, backupCount: DEFAULT_BACKUP_COUNT };
+
+/** Настройки автосохранения и копий приводятся к допустимым значениям (файл могли править руками). */
+function sanitizeSettings(s: Settings): Settings {
+  const minutes = Number.isFinite(s.autosaveMinutes) && s.autosaveMinutes >= 0 ? Math.min(s.autosaveMinutes, 1440) : DEFAULT_AUTOSAVE_MINUTES;
+  const count = Number.isFinite(s.backupCount) && s.backupCount >= 0 ? Math.min(Math.floor(s.backupCount), MAX_BACKUP_COUNT) : DEFAULT_BACKUP_COUNT;
+  return { ...s, autosaveMinutes: minutes, backupCount: count };
+}
 
 function loadSettings(): Settings {
   try {
-    if (existsSync(settingsPath())) return { ...DEFAULT_SETTINGS, ...(JSON.parse(readFileSync(settingsPath(), 'utf8')) as Partial<Settings>) };
+    if (existsSync(settingsPath())) return sanitizeSettings({ ...DEFAULT_SETTINGS, ...(JSON.parse(readFileSync(settingsPath(), 'utf8')) as Partial<Settings>) });
   } catch {
     // Испорченный файл настроек — начинаем с умолчаний.
   }
@@ -171,12 +198,25 @@ async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<Sav
     if (r.response !== 0) return { ok: false, cancelled: true };
   }
   try {
-    writeMod(req.path, req.bytes, req.mergeStore, req.world);
+    const saved = writeMod(req.path, req.bytes, req.mergeStore, req.world ?? [], { dataDir, keep: settings.backupCount });
+    // Правки сохранены в сам мод — автосохранения этого мода больше не нужны.
+    const done: ModRef[] = [{ path: req.path, modName: basename(req.path) }];
+    if (request.path !== req.path) done.push({ path: request.path, modName: basename(request.path) });
+    if (req.previousPath !== undefined) done.push({ path: req.previousPath, modName: basename(req.previousPath) });
+    if (req.modName !== undefined) done.push({ modName: req.modName });
+    for (const ref of done) {
+      try {
+        clearAutosave(dataDir, ref);
+      } catch (err) {
+        log('error', 'clearAutosave', ref.path ?? ref.modName, err);
+      }
+    }
+    if (win) autosaveRefs.delete(win.id);
     settings.recent = [req.path, ...settings.recent.filter((p) => p !== req.path)].slice(0, 10);
     writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
     const game = games().find((g) => needsConfirmation(g, req.path)) ?? currentGame;
     const provenance = game ? provenanceOf(game, req.path) : undefined;
-    return { ok: true, path: req.path, ...(provenance ? { provenance } : {}) };
+    return { ok: true, path: req.path, ...(provenance ? { provenance } : {}), ...(saved.backupError !== undefined ? { backupError: saved.backupError } : {}) };
   } catch (err) {
     log('error', 'saveMod', req.path, err);
     return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
@@ -295,7 +335,96 @@ async function startLive(): Promise<void> {
   pushLiveStatus();
 }
 
+const dataDir = app.getPath('userData');
+/** Последнее автосохранение окна (чтобы отложить его в копии, если пользователь отказался от правок). */
+const autosaveRefs = new Map<number, ModRef>();
+
+/** Папки, в которые автосохранения и копии писать нельзя: игра и мастерская. */
+function forbiddenDirs(): string[] {
+  return games().flatMap((g) => [g.kenshi, g.workshop]);
+}
+
+function autosaveNow(e: IpcMainInvokeEvent, ref: ModRef, bytes: Uint8Array): AutosaveResult {
+  try {
+    const r = writeAutosave(dataDir, ref, bytes, { forbidden: forbiddenDirs() });
+    const win = windowOf(e);
+    if (win) autosaveRefs.set(win.id, ref);
+    return { ok: true, savedAt: r.savedAt, size: r.size };
+  } catch (err) {
+    log('error', 'autosave', ref.path ?? ref.modName, err);
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+function recoveryOf(ref: ModRef): RecoveryInfo | null {
+  try {
+    return findRecovery(dataDir, ref) ?? null;
+  } catch (err) {
+    log('error', 'findRecovery', ref.path ?? ref.modName, err);
+    return null;
+  }
+}
+
+/** Копия мода из резервных как отдельный файл (диалог «Сохранить»). */
+async function exportBackup(e: IpcMainInvokeEvent, ref: ModRef, id: string): Promise<ExportBackupResult> {
+  let bytes: Uint8Array | undefined;
+  try {
+    bytes = readBackup(dataDir, ref, id);
+  } catch (err) {
+    return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  if (!bytes) return { ok: false, cancelled: false, error: 'no such backup' };
+  const win = windowOf(e);
+  const name = basename(ref.path ?? ref.modName).replace(/\.mod$/i, '');
+  const opts = { defaultPath: join(app.getPath('documents'), `${name} (copy).mod`), filters: [{ name: 'Kenshi mod', extensions: ['mod'] }] };
+  const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+  if (r.canceled || !r.filePath) return { ok: false, cancelled: true };
+  const path = r.filePath;
+  if (!path.toLowerCase().endsWith('.mod')) return { ok: false, cancelled: false, error: 'not a .mod path' };
+  if (isWorkshopPath(games(), path)) return { ok: false, cancelled: false, error: 'game-folder' };
+  if (isGamePath(path)) {
+    const ru = settings.lang === 'ru';
+    const options = {
+      type: 'warning' as const,
+      buttons: ru ? ['Записать', 'Отмена'] : ['Write', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      title: ru ? 'Запись в папку игры' : 'Writing to the game folder',
+      message: ru ? 'Файл будет записан в папку игры:' : 'The file will be written into the game folder:',
+      detail: path,
+    };
+    const c = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+    if (c.response !== 0) return { ok: false, cancelled: true };
+  }
+  try {
+    writeFileAtomic(path, bytes);
+    return { ok: true, path };
+  } catch (err) {
+    log('error', 'exportBackup', path, err);
+    return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 function registerIpc(): void {
+  ipcMain.handle(IPC.autosave, autosaveNow);
+  ipcMain.handle(IPC.autosaveClear, (e, ref: ModRef) => {
+    clearAutosave(dataDir, ref);
+    const win = windowOf(e);
+    if (win) autosaveRefs.delete(win.id);
+  });
+  ipcMain.handle(IPC.findRecovery, (_e, ref: ModRef) => recoveryOf(ref));
+  ipcMain.handle(IPC.readAutosave, (_e, ref: ModRef) => readAutosave(dataDir, ref) ?? null);
+  ipcMain.handle(IPC.keepAutosave, (e, ref: ModRef) => {
+    keepAutosaveAsBackup(dataDir, ref, settings.backupCount);
+    const win = windowOf(e);
+    if (win) autosaveRefs.delete(win.id);
+  });
+  ipcMain.handle(IPC.listBackups, (_e, ref: ModRef): BackupItem[] => listBackups(dataDir, ref));
+  ipcMain.handle(IPC.readBackup, (_e, ref: ModRef, id: string) => readBackup(dataDir, ref, id) ?? null);
+  ipcMain.handle(IPC.addRestorePoint, (_e, ref: ModRef, bytes: Uint8Array) => {
+    addBackup(dataDir, ref, bytes, 'restore-point', settings.backupCount);
+  });
+  ipcMain.handle(IPC.exportBackup, exportBackup);
   ipcMain.on(IPC.liveResponse, (_e, msg: { rid: number; reply: LiveReply }) => {
     const w = liveWaits.get(msg.rid);
     if (!w) return;
@@ -358,7 +487,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.getSettings, () => settings);
   ipcMain.handle(IPC.setSettings, (_e, patch: Partial<Settings>) => {
     const langChanged = patch.lang !== undefined && patch.lang !== settings.lang;
-    settings = { ...settings, ...patch };
+    settings = sanitizeSettings({ ...settings, ...patch });
     writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
     if (langChanged) buildMenu(settings.lang);
     return settings;
@@ -416,7 +545,19 @@ function createWindow(): void {
       message: ru ? `В «${title}» есть несохранённые изменения.` : `“${title}” has unsaved changes.`,
     });
     if (choice !== 0) e.preventDefault();
-    else dirtyWindows.delete(win.id);
+    else {
+      dirtyWindows.delete(win.id);
+      // Отказ от правок: автосохранение не удаляем, а откладываем в копии (напоминать при открытии не будет).
+      const ref = autosaveRefs.get(win.id);
+      autosaveRefs.delete(win.id);
+      if (ref) {
+        try {
+          keepAutosaveAsBackup(dataDir, ref, settings.backupCount);
+        } catch (err) {
+          log('error', 'keepAutosave', ref.path ?? ref.modName, err);
+        }
+      }
+    }
   });
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
   if (devUrl) void win.loadURL(devUrl);

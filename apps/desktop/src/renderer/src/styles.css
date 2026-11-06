@@ -221,6 +221,9 @@ textarea {
   width: 220px;
 }
 .start-lang {
+  display: flex;
+  gap: 6px;
+  align-items: center;
   position: fixed;
   top: 12px;
   right: 16px;
@@ -2668,4 +2671,57 @@ input.invalid {
 .mg-result {
   border: 1px solid var(--border);
   padding: 4px 6px;
+}
+
+/* Автосохранение, настройки и резервные копии */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+.settings-row input {
+  width: 80px;
+}
+.settings-hint {
+  margin: 2px 0 8px;
+  font-size: 12px;
+}
+.recovery-table {
+  border-collapse: collapse;
+  margin-top: 6px;
+}
+.recovery-table th {
+  text-align: left;
+  font-weight: normal;
+  color: var(--muted);
+  padding: 2px 16px 2px 0;
+}
+.recovery-table td {
+  padding: 2px 16px 2px 0;
+  white-space: nowrap;
+}
+.backup-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow: auto;
+}
+.backup-list label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+.backup-list label.active {
+  background: var(--selected, rgba(120, 160, 255, 0.18));
+}
+.backup-time {
+  min-width: 150px;
+}
+.backup-size {
+  margin-left: auto;
 }

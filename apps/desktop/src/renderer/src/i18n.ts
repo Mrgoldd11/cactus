@@ -4,6 +4,7 @@
  */
 import { createContext, useContext } from 'react';
 import type { Lang } from '../../shared/api.ts';
+import { backupEn, backupRu } from './i18n-backup.ts';
 import { mergeEn, mergeRu } from './i18n-merge.ts';
 import { specialEn, specialRu } from './i18n-special.ts';
 
@@ -597,6 +598,7 @@ const en = {
   lnInGameTitle: 'As in game (without this mod)',
   ...specialEn,
   ...mergeEn,
+  ...backupEn,
 };
 
 export type Strings = typeof en;
@@ -1182,6 +1184,7 @@ const ru: Strings = {
   lnInGameTitle: 'Как в игре (без этого мода)',
   ...specialRu,
   ...mergeRu,
+  ...backupRu,
 };
 
 export const STRINGS: Record<Lang, Strings> = { en, ru };

@@ -4,12 +4,13 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { DockviewApi } from 'dockview-react';
-import type { Lang, WorkspaceSettings } from '../../../shared/api.ts';
+import type { Lang, Settings, WorkspaceSettings } from '../../../shared/api.ts';
 import { useT } from '../i18n.ts';
 import { isTypingIn, shortcut } from '../keys.ts';
 import { useProjectVersion, tryEdit } from '../hooks.ts';
-import { MOD_CHANGES_ID, reloadProject, reloadWithDependencies, type Project } from '../project.ts';
+import { MOD_CHANGES_ID, reloadProject, reloadWithDependencies, restoreProject, type Project } from '../project.ts';
 import { LangSwitch } from '../App.tsx';
+import { BackupsModal, SettingsModal, formatClock, formatTime } from './BackupModals.tsx';
 import { DependenciesModal, ModInfoModal, NewRecordModal, ValidationModal } from './Modals.tsx';
 import { useAiChangesets, useLiveStatus } from '../live.ts';
 import { SelectionService, useSelectionVersion } from '../workbench/selection.ts';
@@ -31,15 +32,17 @@ interface Props {
   onClose: () => void;
   lang: Lang;
   onLang: (l: Lang) => void;
+  settings: Settings;
+  onSettings: (patch: Partial<Settings>) => void;
 }
 
-type ModalKind = 'deps' | 'info' | 'validate' | 'new';
+type ModalKind = 'deps' | 'info' | 'validate' | 'new' | 'backups' | 'settings';
 
 function blurActive(): void {
   if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 }
 
-export function Editor({ project, onReplace, onClose, lang, onLang }: Props): ReactNode {
+export function Editor({ project, onReplace, onClose, lang, onLang, settings, onSettings }: Props): ReactNode {
   const t = useT();
   const version = useProjectVersion(project);
   const ctx = project.ctx;
@@ -65,6 +68,41 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
       setWorkspace(s.workspace);
     });
   }, []);
+
+  // Автосохранение: по таймеру, только если есть несохранённые правки и они изменились с прошлого раза.
+  const autosavedVersion = useRef(-1);
+  const autosaveWritten = useRef(false);
+  const autosaveMinutes = settings.autosaveMinutes;
+  useEffect(() => {
+    autosavedVersion.current = -1;
+    autosaveWritten.current = false;
+    if (!(autosaveMinutes > 0)) return;
+    const id = setInterval(() => {
+      if (!project.dirty) {
+        // Правки откатили до сохранённого: автосохранение больше не нужно.
+        if (autosaveWritten.current) {
+          autosaveWritten.current = false;
+          void window.kedit.autosaveClear(project.ref);
+        }
+        return;
+      }
+      if (project.version === autosavedVersion.current) return;
+      const version = project.version;
+      void window.kedit.autosave(project.ref, project.currentBytes()).then((r) => {
+        if (r.ok) {
+          autosavedVersion.current = version;
+          autosaveWritten.current = true;
+          const time = formatClock(r.savedAt, lang);
+          setStatus({ text: (s) => s.autosavedAt(time), kind: 'info' });
+        } else {
+          setStatus({ text: (s) => s.autosaveFailed(r.error), kind: 'error' });
+        }
+      });
+    }, autosaveMinutes * 60_000);
+    return () => {
+      clearInterval(id);
+    };
+  }, [project, autosaveMinutes, lang]);
 
   const go = useCallback(
     (sid: string) => {
@@ -148,8 +186,12 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
   const save = async (saveAs: boolean): Promise<void> => {
     blurActive();
     const r = await project.save(saveAs);
-    if (r.ok) setStatus({ text: (s) => `${s.saved}: ${r.path}`, kind: 'info' });
-    else if (r.cancelled) setStatus({ text: (s) => s.saveCancelled, kind: 'info' });
+    if (r.ok) {
+      autosaveWritten.current = false;
+      const warn = r.backupError;
+      if (warn !== undefined) setStatus({ text: (s) => s.backupWarn(warn), kind: 'error' });
+      else setStatus({ text: (s) => `${s.saved}: ${r.path}`, kind: 'info' });
+    } else if (r.cancelled) setStatus({ text: (s) => s.saveCancelled, kind: 'info' });
     else if (r.workshop === true) setStatus({ text: (s) => s.saveWorkshop, kind: 'error' });
     else setStatus({ text: (s) => `${s.saveFailed}: ${r.error ?? ''}`, kind: 'error' });
   };
@@ -158,6 +200,21 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
     const r = await project.copyForEditing();
     if (r.ok) setStatus({ text: (s) => `${s.copiedForEditing}: ${r.path}`, kind: 'info' });
     else if (!r.cancelled) setStatus({ text: (s) => `${s.copyFailed}: ${r.error ?? ''}`, kind: 'error' });
+  };
+  const restoreBackup = (bytes: Uint8Array, time: number): void => {
+    setModal(undefined);
+    restoreProject(project, bytes).then(
+      (p) => {
+        onReplace(p);
+        p.bump();
+        const when = formatTime(time, lang);
+        setStatus({ text: (s) => s.backupRestored(when), kind: 'info' });
+      },
+      (e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        setStatus({ text: () => msg, kind: 'error' });
+      },
+    );
   };
   const prov = project.provenance;
 
@@ -257,6 +314,15 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
         >
           {t.validation}
         </button>
+        <button
+          data-testid="backups-btn"
+          title={t.backupsTip}
+          onClick={() => {
+            setModal('backups');
+          }}
+        >
+          {t.backups}
+        </button>
         <span className="sep" />
         <WindowMenu api={apiRef.current} preset={preset} onPreset={choosePreset} onOpen={open} />
         <span className="grow" />
@@ -274,6 +340,15 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
           {project.dirty && <span className="dirty-dot">● </span>}
           {project.title}
         </span>
+        <button
+          data-testid="settings-btn"
+          title={t.settings}
+          onClick={() => {
+            setModal('settings');
+          }}
+        >
+          ⚙
+        </button>
         <LangSwitch lang={lang} onLang={onLang} />
       </div>
       {prov?.inWorkshop === true && (
@@ -347,6 +422,29 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
             setModal(undefined);
             go(sid);
           }}
+          onClose={() => {
+            setModal(undefined);
+          }}
+        />
+      )}
+      {modal === 'backups' && (
+        <BackupsModal
+          project={project}
+          onRestore={(bytes, item) => {
+            restoreBackup(bytes, item.time);
+          }}
+          onStatus={(text, kind) => {
+            setStatus({ text: () => text, kind });
+          }}
+          onClose={() => {
+            setModal(undefined);
+          }}
+        />
+      )}
+      {modal === 'settings' && (
+        <SettingsModal
+          settings={settings}
+          onChange={onSettings}
           onClose={() => {
             setModal(undefined);
           }}

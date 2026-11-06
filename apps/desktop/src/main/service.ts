@@ -26,6 +26,7 @@ import {
   readModOrigin,
   readIfUnknown,
   readModSummary,
+  safeSaveMod,
   readModsCfgText,
   SCHEMA_FILES,
   translationFilePath,
@@ -34,6 +35,7 @@ import {
   worldDirs,
   writeModsCfg,
   type ModCopyPlan,
+  type SafeSaveResult,
 } from '@kenshi-editor/core/node';
 import type { GameInstallInfo, MergeSourceResult, ModEntry, ModOrderResult, ModProvenance, NamedBytes, ProjectBundle, ProjectRequest, WorldFileBytes, WorldRequest } from '../shared/api.ts';
 
@@ -220,12 +222,22 @@ export function modInstallPath(games: readonly GameInstallInfo[], path: string):
   return path;
 }
 
-export function writeMod(path: string, bytes: Uint8Array, mergeStore?: string, world: readonly { path: string; bytes: Uint8Array }[] = []): void {
+/**
+ * Записать мод безопасно (`safeSaveMod`: временный файл → проверка → копия прежней версии в
+ * папку данных → замена), потом файл слияния и файлы уровня.
+ */
+export function writeMod(
+  path: string,
+  bytes: Uint8Array,
+  mergeStore: string | undefined,
+  world: readonly { path: string; bytes: Uint8Array }[],
+  backups: { dataDir: string; keep: number },
+): SafeSaveResult {
   for (const f of world) if (!isLevelFileName(f.path)) throw new Error(`bad level file name: ${f.path}`);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, bytes);
+  const saved = safeSaveMod(path, bytes, backups);
   if (mergeStore !== undefined) writeMergeStoreText(path, mergeStore);
-  if (world.length === 0) return;
+  if (world.length === 0) return saved;
   const dir = join(dirname(path), 'leveldata');
   mkdirSync(dir, { recursive: true });
   for (const f of world) {
@@ -234,6 +246,7 @@ export function writeMod(path: string, bytes: Uint8Array, mergeStore?: string, w
     writeFileSync(`${target}.tmp`, f.bytes);
     renameSync(`${target}.tmp`, target);
   }
+  return saved;
 }
 
 /** Имя файла уровня без папок: `zone.42.22.zone`, `leveldata.level`, `interiors.level`. */
