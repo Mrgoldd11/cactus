@@ -19,6 +19,7 @@ import {
   readDataFile,
   serializeMergeStore,
   withInferredFields,
+  WorldEdits,
   WorldIndex,
   writeDataFile,
   type CategoryNode,
@@ -28,6 +29,7 @@ import {
   type Layer,
   type RecordStatus,
   type TranslationIndex,
+  type WorldFile,
 } from '@kenshi-editor/core';
 import type { CopyModResult, GameInstallInfo, KeditApi, ModProvenance, NamedBytes, ProjectBundle, ProjectRequest, SaveResult } from '../../shared/api.ts';
 
@@ -133,7 +135,13 @@ export class Project {
   private ids: string[] = [];
   private readonly listeners = new Set<() => void>();
   private typeCache: { version: number; map: Map<string, string[]> } | undefined;
-  private worldPromise: Promise<WorldIndex> | undefined;
+  private worldFilesPromise: Promise<WorldFile[]> | undefined;
+  private editsPromise: Promise<WorldEdits> | undefined;
+  private edits: WorldEdits | undefined;
+  /** Мир по текущим правкам: пересобирается, когда правки мира меняются. */
+  private worldCache: { version: number; index: Promise<WorldIndex> } | undefined;
+  /** Номер правки мира (растёт при каждой правке, отмене, сохранении). */
+  worldVersion = 0;
   private translationPromise: Promise<TranslationIndex | undefined> | undefined;
   private readonly icons = new Map<string, Promise<string | null>>();
 
@@ -236,7 +244,7 @@ export class Project {
   }
 
   get dirty(): boolean {
-    return this.carriedDirty || this.ctx.dirty || this.ledger.hasChanges(this.ctx);
+    return this.carriedDirty || this.ctx.dirty || this.ledger.hasChanges(this.ctx) || this.edits?.isDirty() === true;
   }
 
   get title(): string {
@@ -259,19 +267,48 @@ export class Project {
     for (const fn of this.listeners) fn();
   }
 
-  /**
-   * Мир (города, здания, зоны) ванили, зависимостей и мода — для «Где в игре». Читается при
-   * первом запросе (десятки мегабайт), затем из кеша.
-   */
-  world(): Promise<WorldIndex> {
-    this.worldPromise ??= (async () => {
+  /** Имя слоя мода в мире: имя файла .mod (папка `leveldata` рядом с ним). */
+  get modLayer(): string {
+    return this.path !== undefined ? (this.path.split(/[\\/]/).pop() ?? this.path) : (/\.mod$/i.test(this.ctx.modName) ? this.ctx.modName : `${this.ctx.modName}.mod`);
+  }
+
+  /** Файлы уровня ванили, зависимостей и мода (читаются один раз, десятки мегабайт). */
+  private worldFiles(): Promise<WorldFile[]> {
+    this.worldFilesPromise ??= (async () => {
       const modPaths = [...this.bundle.dependencies.map((d) => d.path), ...(this.path !== undefined ? [this.path] : [])];
       const req = { game: this.bundle.game, modPaths };
       let files = await window.kedit.loadWorld({ ...req, known: parsedFiles.keys() });
       if (files.some((f) => f.bytes.length === 0 && !parsedFiles.has(f.key))) files = await window.kedit.loadWorld(req);
-      return new WorldIndex(files.map((f) => ({ layer: f.layer, path: f.path, file: parsedFiles.take(f.key, f.bytes) })));
+      return files.map((f) => ({ layer: f.layer, path: f.path, file: parsedFiles.take(f.key, f.bytes) }));
     })();
-    return this.worldPromise;
+    return this.worldFilesPromise;
+  }
+
+  /** Правки мира мода (сдвиг, поворот, новые и удалённые объекты): своя история отмены. */
+  worldEdits(): Promise<WorldEdits> {
+    this.editsPromise ??= this.worldFiles().then((files) => {
+      const edits = new WorldEdits(files, this.modLayer);
+      edits.onChange(() => {
+        this.worldVersion++;
+        this.bump();
+      });
+      this.edits = edits;
+      return edits;
+    });
+    return this.editsPromise;
+  }
+
+  /**
+   * Мир (города, здания, зоны) ванили, зависимостей и мода — для «Где в игре» и панели «Мир».
+   * С правками мира мода, если они были.
+   */
+  world(): Promise<WorldIndex> {
+    if (this.worldCache?.version !== this.worldVersion) {
+      const edits = this.edits;
+      const index = edits ? Promise.resolve(new WorldIndex(edits.files())) : this.worldFiles().then((files) => new WorldIndex(files));
+      this.worldCache = { version: this.worldVersion, index };
+    }
+    return this.worldCache.index;
   }
 
   /** Перевод реплик игры (`ru_RU.translation`), читается один раз; undefined — нет файла. */
@@ -300,8 +337,16 @@ export class Project {
     }
     const file = this.ctx.buildModFile();
     const mergeStore = this.ledger.hasChanges(this.ctx) ? serializeMergeStore(this.ledger.store(this.ctx)) : undefined;
-    const result = await window.kedit.saveMod({ path, bytes: writeDataFile(file), ...(mergeStore !== undefined ? { mergeStore } : {}) });
+    // Файлы уровня: изменённые; при сохранении в другое место — все файлы мода.
+    const edits = this.edits;
+    const worldPaths = edits ? (path === this.path ? edits.dirtyFiles() : edits.modFiles()) : [];
+    const world = worldPaths.flatMap((p) => {
+      const f = edits?.buildFile(p);
+      return f ? [{ path: p, bytes: writeDataFile(f) }] : [];
+    });
+    const result = await window.kedit.saveMod({ path, bytes: writeDataFile(file), ...(mergeStore !== undefined ? { mergeStore } : {}), ...(world.length ? { world } : {}) });
     if (result.ok) {
+      edits?.markSaved();
       if (mergeStore !== undefined) this.ledger.commit(this.ctx);
       this.ctx.markSaved();
       this.path = result.path;

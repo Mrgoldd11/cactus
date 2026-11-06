@@ -220,10 +220,25 @@ export function modInstallPath(games: readonly GameInstallInfo[], path: string):
   return path;
 }
 
-export function writeMod(path: string, bytes: Uint8Array, mergeStore?: string): void {
+export function writeMod(path: string, bytes: Uint8Array, mergeStore?: string, world: readonly { path: string; bytes: Uint8Array }[] = []): void {
+  for (const f of world) if (!isLevelFileName(f.path)) throw new Error(`bad level file name: ${f.path}`);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, bytes);
   if (mergeStore !== undefined) writeMergeStoreText(path, mergeStore);
+  if (world.length === 0) return;
+  const dir = join(dirname(path), 'leveldata');
+  mkdirSync(dir, { recursive: true });
+  for (const f of world) {
+    // Сначала во временный файл, потом на место: игра не увидит половину файла.
+    const target = join(dir, f.path);
+    writeFileSync(`${target}.tmp`, f.bytes);
+    renameSync(`${target}.tmp`, target);
+  }
+}
+
+/** Имя файла уровня без папок: `zone.42.22.zone`, `leveldata.level`, `interiors.level`. */
+export function isLevelFileName(name: string): boolean {
+  return /^(zone\.-?\d+\.-?\d+\.zone|leveldata\.level|interiors\.level)$/i.test(name);
 }
 
 /** Файл решений слияния рядом с модом (сначала во временный файл, потом на место). */

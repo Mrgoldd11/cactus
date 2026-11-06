@@ -2,10 +2,11 @@
  * E2E: панель «Мир» — рельеф всей карты, полёт к городу, движение WASD, замеры скорости,
  * клик по зданию — подсветка и карточка, растительность вблизи. Снимки — `out/screenshots/53-*`…`57-*`.
  */
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { _electron as electron, expect, test, type Page } from '@playwright/test';
+import { readDataFile } from '@kenshi-editor/core';
 
 const appDir = resolve(import.meta.dirname, '..');
 const out = join(resolve(appDir, '../..'), 'out');
@@ -83,6 +84,64 @@ test('панель «Мир»: рельеф, полёт, клик по здан�
     await expect(card).toBeVisible();
     await expect(card.getByTestId('inside-card')).toBeVisible();
     await page.screenshot({ path: join(shots, '55-world-card.png') });
+
+    // Правка мира: сдвиг гизмо по стрелке X, отмена и повтор (Ctrl+Z / Ctrl+Y), G / R, удаление.
+    await expect(page.getByTestId('world-edit-bar')).toBeVisible();
+    await page.getByTestId('world-mode-move').click();
+    await page.getByTestId('world-grid').selectOption('0');
+    const gizmoAttr = async (): Promise<string> => (await page.getByTestId('world-stats').getAttribute('data-gizmo')) ?? '';
+    await expect.poll(gizmoAttr, { timeout: 5000 }).not.toBe('');
+    const [cx, cy, ax, ay] = (await gizmoAttr()).split(',').map(Number) as [number, number, number, number];
+    const len = Math.hypot(ax - cx, ay - cy) || 1;
+    const posText = page.getByTestId('world-card-pos');
+    const before = await posText.textContent();
+    await page.mouse.move(box.x + ax, box.y + ay);
+    await page.mouse.move(box.x + ax + 1, box.y + ay);
+    await page.mouse.down();
+    await page.mouse.move(box.x + ax + ((ax - cx) / len) * 120, box.y + ay + ((ay - cy) / len) * 120, { steps: 12 });
+    await page.mouse.up();
+    const lastStep = page.getByTestId('world-last-step');
+    await expect(lastStep).toContainText('Сдвиг');
+    const after = await posText.textContent();
+    expect(after).not.toBe(before);
+    await expect(page.getByTestId('world-card-edited')).toBeVisible();
+    await page.screenshot({ path: join(shots, '58-world-move.png') });
+    await canvas.focus();
+    await page.keyboard.press('Control+z');
+    await expect(posText).toHaveText(before!);
+    await expect(lastStep).toHaveText('');
+    await page.keyboard.press('Control+y');
+    await expect(posText).toHaveText(after!);
+    // Сохранение пишет файл зоны в leveldata рядом с модом — без потерь, с новой позицией.
+    const saveDir = mkdtempSync(join(tmpdir(), 'kedit-world-save-'));
+    const modPath = join(saveDir, 'e2e-world.mod');
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = () => Promise.resolve({ canceled: false, filePath: p });
+    }, modPath);
+    await page.getByTestId('save').click();
+    await expect(page.getByTestId('save')).not.toHaveClass(/primary/, { timeout: 30_000 });
+    const zones = readdirSync(join(saveDir, 'leveldata')).filter((n) => n.endsWith('.zone'));
+    expect(zones).toHaveLength(1);
+    const holderId = (await card.getAttribute('data-holder'))!;
+    const instKey = (await card.getAttribute('data-key'))!;
+    const zone = readDataFile(readFileSync(join(saveDir, 'leveldata', zones[0]!)));
+    const holder = zone.records.find((r) => r.stringId === holderId)!;
+    const inst = holder.instances.get(instKey)!;
+    expect(Math.abs(inst.position[0] - Number(after!.trim().split(/\s+/)[0]))).toBeLessThan(1);
+    await canvas.focus();
+    await page.keyboard.press('KeyR');
+    await expect(page.getByTestId('world-mode-rotate')).toHaveAttribute('aria-pressed', 'true');
+    await page.screenshot({ path: join(shots, '59-world-rotate.png') });
+    await page.keyboard.press('KeyG');
+    await expect(page.getByTestId('world-mode-move')).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Delete');
+    await expect(card).toBeHidden();
+    await expect(lastStep).toContainText('Удаление');
+    await page.getByTestId('world-undo').click();
+    await expect(lastStep).toContainText('Сдвиг');
+    await page.getByTestId('world-undo').click();
+    await expect(lastStep).toHaveText('');
+    await expect(page.getByTestId('world-undo')).toBeDisabled();
 
     // Esc снимает выбор.
     await canvas.focus();

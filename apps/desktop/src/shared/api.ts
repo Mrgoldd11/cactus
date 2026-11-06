@@ -106,6 +106,11 @@ export interface SaveRequest {
   bytes: Uint8Array;
   /** Решения слияния: main пишет их рядом с модом в `<имя>.kedit-merge.json` (не в .mod). */
   mergeStore?: string;
+  /**
+   * Файлы уровня мода (`zone.X.Y.zone`, `leveldata.level`, `interiors.level`): main пишет их в
+   * `leveldata` рядом с модом — только имя файла, без папок.
+   */
+  world?: { path: string; bytes: Uint8Array }[];
 }
 
 /** Мод-источник слияния: байты файла и данные уровня рядом с ним. */

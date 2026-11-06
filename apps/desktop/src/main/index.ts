@@ -165,13 +165,13 @@ async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<Sav
       cancelId: 1,
       title: ru ? 'Запись в папку игры' : 'Writing to the game folder',
       message: ru ? 'Файл будет записан в папку игры или мастерской:' : 'The file will be written into the game or workshop folder:',
-      detail: req.path,
+      detail: req.world?.length ? [req.path, ...req.world.map((f) => `leveldata/${f.path}`)].join('\n') : req.path,
     };
     const r = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
     if (r.response !== 0) return { ok: false, cancelled: true };
   }
   try {
-    writeMod(req.path, req.bytes, req.mergeStore);
+    writeMod(req.path, req.bytes, req.mergeStore, req.world);
     settings.recent = [req.path, ...settings.recent.filter((p) => p !== req.path)].slice(0, 10);
     writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
     const game = games().find((g) => needsConfirmation(g, req.path)) ?? currentGame;

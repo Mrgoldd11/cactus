@@ -11,7 +11,7 @@
  * Разбор `.mesh` и `.dds` — в фоновом потоке (`WorkerPool`).
  */
 import * as THREE from 'three';
-import { modelOfRecord, ZONE_COUNT, ZONE_SIZE, type BuildingPlacement, type ModContext, type Placement, type WorldIndex } from '@kenshi-editor/core';
+import { decodeText, itemTypeName, modelOfRecord, zoneOfPath, ZONE_COUNT, ZONE_SIZE, type BuildingPlacement, type Instance, type ModContext, type Placement, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
 import type { GameInstallInfo } from '../../../../shared/api.ts';
 import type { SubmeshArrays, WorkerPool } from './protocol.ts';
 
@@ -35,6 +35,14 @@ export interface WorldObject {
   b?: BuildingPlacement;
   pos: THREE.Vector3;
   quat: THREE.Quaternion;
+  /** Убран правкой мода: не рисуется и не выбирается. */
+  gone?: boolean;
+  /** Нет состояния здания: высота в мире = земля + y экземпляра, ждём рельеф. */
+  needsGround?: boolean;
+}
+
+function objectKey(file: string, holder: string, key: string): string {
+  return `${file.toLowerCase()}|${holder}|${key}`;
 }
 
 interface Part {
@@ -71,6 +79,9 @@ export class WorldObjects {
   readonly group = new THREE.Group();
   readonly list: WorldObject[] = [];
   private readonly grid = new Map<number, number[]>();
+  private readonly byKey = new Map<string, WorldObject>();
+  /** Высота земли (у объектов без состояния здания y экземпляра — над землёй). */
+  groundAt: (x: number, z: number) => number | undefined = () => undefined;
   private readonly protos = new Map<string, Proto>();
   private readonly meshCache = new Map<string, Promise<SubmeshArrays[] | null>>();
   private readonly texCache = new Map<string, Promise<THREE.Texture | null>>();
@@ -104,19 +115,7 @@ export class WorldObjects {
     for (const b of world.buildings()) byKey.set(`${b.file}|${b.holder}|${b.key}`, b);
     for (const p of world.placements()) {
       if (!p.zone || !p.holder.endsWith('buildinglist')) continue;
-      const index = this.list.length;
-      const b = byKey.get(`${p.file}|${p.holder}|${p.key}`);
-      const [w, x, y, z] = p.rotation;
-      // y экземпляра — над землёй; высота в мире — `world Y pos` состояния здания.
-      const o: WorldObject = { index, p, pos: new THREE.Vector3(p.position[0], b?.worldY ?? p.position[1], p.position[2]), quat: new THREE.Quaternion(x, y, z, w).normalize() };
-      if (b) o.b = b;
-      this.list.push(o);
-      const zx = Math.floor(p.position[0] / ZONE_SIZE) + ZONE_COUNT / 2;
-      const zy = Math.floor(p.position[2] / ZONE_SIZE) + ZONE_COUNT / 2;
-      const k = zoneKey(zx, zy);
-      const cell = this.grid.get(k);
-      if (cell) cell.push(index);
-      else this.grid.set(k, [index]);
+      this.add(p, byKey.get(`${p.file}|${p.holder}|${p.key}`));
     }
     const box = new THREE.BoxGeometry(1, 1, 1);
     this.markers = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.max(1, quality.maxMarkers));
@@ -124,6 +123,106 @@ export class WorldObjects {
     this.markers.frustumCulled = false;
     this.markers.name = 'markers';
     this.group.add(this.markers);
+  }
+
+  /** Добавить объект (из мира или новый — правкой мода). */
+  private add(p: Placement, b: BuildingPlacement | undefined): WorldObject {
+    const index = this.list.length;
+    const [w, x, y, z] = p.rotation;
+    // y экземпляра — над землёй; высота в мире — `world Y pos` состояния здания,
+    // без него — земля + y (узнаём, когда рельеф загрузится).
+    const o: WorldObject = { index, p, pos: new THREE.Vector3(p.position[0], b?.worldY ?? p.position[1], p.position[2]), quat: new THREE.Quaternion(x, y, z, w).normalize() };
+    if (b) o.b = b;
+    else this.lift(o);
+    this.list.push(o);
+    this.byKey.set(objectKey(p.file, p.holder, p.key), o);
+    const zx = Math.floor(p.position[0] / ZONE_SIZE) + ZONE_COUNT / 2;
+    const zy = Math.floor(p.position[2] / ZONE_SIZE) + ZONE_COUNT / 2;
+    const k = zoneKey(zx, zy);
+    const cell = this.grid.get(k);
+    if (cell) cell.push(index);
+    else this.grid.set(k, [index]);
+    return o;
+  }
+
+  /**
+   * Подтянуть правки мира мода (свои, отмена, повтор, правки ИИ): что сдвинуто, повёрнуто,
+   * добавлено, убрано. Возвращает затронутые объекты.
+   */
+  sync(edits: WorldEdits, changes: readonly WorldChange[]): WorldObject[] {
+    const touched = new Set<WorldObject>();
+    const states = new Map<string, Set<string>>();
+    for (const { path, sid } of changes) {
+      const zone = zoneOfPath(path);
+      if (!zone) continue;
+      const rec = edits.record(path, sid);
+      if (!sid.endsWith('buildinglist') || (rec && itemTypeName(rec.type) !== 'INSTANCE_COLLECTION')) {
+        const set = states.get(path.toLowerCase()) ?? new Set<string>();
+        set.add(sid);
+        states.set(path.toLowerCase(), set);
+        continue;
+      }
+      const keys = new Set<string>();
+      for (const [key, inst] of rec?.instances ?? []) {
+        keys.add(key);
+        const o = this.byKey.get(objectKey(path, sid, key));
+        if (inst.target === '') {
+          if (o && !o.gone) {
+            o.gone = true;
+            touched.add(o);
+          }
+          continue;
+        }
+        if (o && !o.gone && sameInstance(o.p, inst)) continue;
+        touched.add(this.apply(edits, path, sid, key, inst, o, zone));
+      }
+      // Объекты, которых в записи больше нет (отменили «поставить», удалили свой).
+      const prefix = objectKey(path, sid, '');
+      for (const [k, o] of this.byKey)
+        if (k.startsWith(prefix) && !keys.has(o.p.key) && !o.gone) {
+          o.gone = true;
+          touched.add(o);
+        }
+    }
+    // Высота зданий — из их состояний (`world Y pos`).
+    for (const [path, sids] of states)
+      for (const o of this.list) {
+        if (o.gone || !o.b || o.p.file.toLowerCase() !== path || !o.p.states.some((st) => sids.has(st))) continue;
+        const wy = worldYOf(edits, o.p.file, o.p.states);
+        if (wy !== undefined && wy !== o.pos.y) {
+          o.b = { ...o.b, worldY: wy };
+          o.pos.y = wy;
+          touched.add(o);
+        }
+      }
+    return [...touched];
+  }
+
+  private apply(edits: WorldEdits, path: string, holder: string, key: string, inst: Instance, o: WorldObject | undefined, zone: { x: number; y: number }): WorldObject {
+    const states = inst.states.map((st) => decodeText(st)).filter((st) => st !== '');
+    const p: Placement = { key, target: inst.target, position: [...inst.position], rotation: [...inst.rotation], states, holder, holderType: 'INSTANCE_COLLECTION', file: o?.p.file ?? path, layer: edits.modLayer, zone };
+    const wy = worldYOf(edits, path, states);
+    if (!o) return this.add(p, wy !== undefined ? { ...p, worldY: wy } : undefined);
+    o.p = p;
+    o.gone = false;
+    if (wy !== undefined) o.b = { ...(o.b ?? {}), ...p, worldY: wy };
+    else delete o.b;
+    const [w, x, y, z] = p.rotation;
+    o.quat.set(x, y, z, w).normalize();
+    o.pos.set(p.position[0], o.b?.worldY ?? p.position[1], p.position[2]);
+    if (!o.b) this.lift(o);
+    else delete o.needsGround;
+    return o;
+  }
+
+  /** Объект без состояния здания — на высоту земли + y экземпляра (если рельеф уже есть). */
+  private lift(o: WorldObject): void {
+    const g = this.groundAt(o.p.position[0], o.p.position[2]);
+    if (g === undefined) o.needsGround = true;
+    else {
+      o.pos.y = g + o.p.position[1];
+      delete o.needsGround;
+    }
   }
 
   /** Растительность вокруг камеры (рисуется при следующем `update`). */
@@ -264,6 +363,8 @@ export class WorldObjects {
       for (let zx = z0x; zx <= z1x; zx++)
         for (const i of this.grid.get(zoneKey(zx, zy)) ?? []) {
           const o = this.list[i]!;
+          if (o.gone) continue;
+          if (o.needsGround) this.lift(o);
           const d = o.pos.distanceTo(cam);
           if (d > q.markerDist) continue;
           const proto = this.protos.get(o.p.target);
@@ -442,7 +543,8 @@ export class WorldObjects {
 
   /** Объект по ключу экземпляра (файл + владелец + ключ). */
   find(file: string, holder: string, key: string): WorldObject | undefined {
-    return this.list.find((o) => o.p.file === file && o.p.holder === holder && o.p.key === key);
+    const o = this.byKey.get(objectKey(file, holder, key));
+    return o && !o.gone ? o : undefined;
   }
 
   get markerCount(): number {
@@ -464,4 +566,16 @@ export class WorldObjects {
     (this.markers.material as THREE.Material).dispose();
     this.markers.dispose();
   }
+}
+
+function sameInstance(p: Placement, inst: Instance): boolean {
+  return p.target === inst.target && p.position.every((v, i) => v === inst.position[i]) && p.rotation.every((v, i) => v === inst.rotation[i]);
+}
+
+function worldYOf(edits: WorldEdits, path: string, states: readonly string[]): number | undefined {
+  for (const st of states) {
+    const wy = edits.record(path, st)?.floats.get('world Y pos');
+    if (wy !== undefined) return wy;
+  }
+  return undefined;
 }

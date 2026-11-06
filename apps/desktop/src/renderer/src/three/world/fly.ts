@@ -26,6 +26,8 @@ export class FlyControls {
   onChange: () => void = () => undefined;
   /** Множитель скорости (настройка окна). */
   speed = 1;
+  /** Указатель занят другим (гизмо под мышью) — не осматриваемся. */
+  blocked: () => boolean = () => false;
   private readonly off: (() => void)[] = [];
 
   constructor(camera: THREE.PerspectiveCamera, dom: HTMLElement) {
@@ -37,6 +39,7 @@ export class FlyControls {
     };
     on(dom, 'contextmenu', (e) => { e.preventDefault(); });
     on(dom, 'pointerdown', (e) => {
+      if (e.button === 0 && this.blocked()) return;
       this.drag = { button: e.button, x: e.clientX, y: e.clientY, moved: false };
       this.flight = undefined;
       dom.focus();

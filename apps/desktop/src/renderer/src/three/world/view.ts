@@ -4,7 +4,8 @@
  * Тяжёлое — в фоновых потоках (`WorkerPool`), здесь только сборка объектов three.js.
  */
 import * as THREE from 'three';
-import { type ModContext, type WorldIndex } from '@kenshi-editor/core';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { type ModContext, type Vec3, type Vec4, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
 import type { GameInstallInfo } from '../../../../shared/api.ts';
 import { WorkerPool } from './protocol.ts';
 import { TerrainLod, type TerrainQuality } from './terrain.ts';
@@ -12,6 +13,7 @@ import { readBiomes } from './biomes.ts';
 import { FoliageScatter, type FoliageQuality } from './foliage.ts';
 import { WorldObjects, type ObjectsQuality, type WorldObject } from './objects.ts';
 import { FlyControls } from './fly.ts';
+import { letterOf } from '../../keys.ts';
 
 export type QualityLevel = 'low' | 'medium' | 'high';
 
@@ -63,6 +65,28 @@ export interface WorldStatsView {
   overview: number;
   /** Где камера (для e2e и «Показать в игре»). */
   camera: { x: number; y: number; z: number };
+  /** Гизмо на экране (пиксели холста): центр и точка на стрелке X — для e2e. */
+  gizmo: string;
+}
+
+/** Правка объектов гизмо: режим, шаг сетки (0 — без), шаг поворота в градусах (0 — без), к земле. */
+export interface EditSettings {
+  mode: 'move' | 'rotate';
+  grid: number;
+  angle: number;
+  ground: boolean;
+}
+
+export const DEFAULT_EDIT: EditSettings = { mode: 'move', grid: 0, angle: 15, ground: true };
+
+/** Куда поставить экземпляр после перетаскивания. */
+export interface EditCommit {
+  /** Позиция экземпляра (y — как в файле: над землёй). */
+  position: Vec3;
+  /** Кватернион в порядке файла (w, x, y, z). */
+  rotation: Vec4;
+  /** Высота в мире для состояния здания (`world Y pos`). */
+  worldY?: number;
 }
 
 function qualityOf(s: WorldSettings): { terrain: TerrainQuality; objects: ObjectsQuality; foliage: FoliageQuality; pixelRatio: number } {
@@ -106,6 +130,20 @@ export class WorldView {
   settings: WorldSettings;
   /** Вызывается после выбора кликом (или снятия выбора). */
   onSelect: (o: WorldObject | undefined) => void = () => undefined;
+  /** Гизмо отпустили: записать правку. false — правка не прошла, объект вернётся на место. */
+  onCommit: (o: WorldObject, c: EditCommit) => boolean = () => false;
+  /** Клавиша Delete на выбранном объекте. */
+  onRemove: (o: WorldObject) => void = () => undefined;
+  /** Сменился режим гизмо (клавиши G / R). */
+  onEditChange: (e: EditSettings) => void = () => undefined;
+  /** Можно ли править (открыт мод). */
+  editable = false;
+  edit: EditSettings = { ...DEFAULT_EDIT };
+  readonly gizmo: TransformControls;
+  private readonly pivot = new THREE.Object3D();
+  private dragStart: { pos: THREE.Vector3; quat: THREE.Quaternion; above: number | undefined } | undefined;
+  /** Последний pointerdown пришёлся на гизмо — щелчок после него не выбирает. */
+  private gizmoDown = false;
 
   constructor(host: HTMLElement, game: GameInstallInfo, ctx: ModContext, world: WorldIndex, settings: WorldSettings, lang: 'en' | 'ru' = 'ru') {
     this.host = host;
@@ -142,6 +180,7 @@ export class WorldView {
     this.terrain.onChange = () => { this.invalidate(this.foliage.incomplete); };
     this.scene.add(this.terrain.group);
     this.objects = new WorldObjects(game, this.pool, ctx, world, q.objects);
+    this.objects.groundAt = (x, z) => this.terrain.heightAt(x, z);
     this.objects.onChange = () => { this.invalidate(true); };
     this.scene.add(this.objects.group);
 
@@ -167,6 +206,29 @@ export class WorldView {
     this.fly = new FlyControls(this.camera, this.renderer.domElement);
     this.fly.groundAt = (x, z) => this.terrain.heightAt(x, z);
     this.fly.onChange = () => { this.invalidate(true); };
+
+    // Гизмо: стрелки сдвига / кольцо поворота на выбранном объекте.
+    this.pivot.name = 'pivot';
+    this.scene.add(this.pivot);
+    this.gizmo = new TransformControls(this.camera, this.renderer.domElement);
+    this.gizmo.setSpace('world');
+    this.gizmo.size = 1.1;
+    const helper = this.gizmo.getHelper();
+    helper.name = 'gizmo';
+    this.scene.add(helper);
+    this.fly.blocked = () => this.gizmoOn() && this.gizmo.axis !== null;
+    this.gizmo.addEventListener('change', () => { this.invalidate(); });
+    this.gizmo.addEventListener('mouseDown', () => { this.gizmoDown = true; });
+    this.gizmo.addEventListener('dragging-changed', (e) => {
+      const o = this.selected;
+      if (!o) return;
+      if (e.value) {
+        const g = this.terrain.heightAt(o.pos.x, o.pos.z);
+        this.dragStart = { pos: o.pos.clone(), quat: o.quat.clone(), above: g === undefined ? undefined : o.pos.y - g };
+      } else this.commitDrag(o);
+    });
+    this.gizmo.addEventListener('objectChange', () => { this.onGizmoMove(); });
+    this.applyEdit();
     // Начало — над серединой карты, весь мир в кадре.
     this.fly.set(new THREE.Vector3(0, 200000, 160000), new THREE.Vector3(0, 0, 0));
 
@@ -230,6 +292,10 @@ export class WorldView {
   };
 
   private readonly onClick = (e: MouseEvent): void => {
+    if (this.gizmoDown) {
+      this.gizmoDown = false;
+      return;
+    }
     if (this.fly.dragged || e.button !== 0) return;
     this.select(this.objects.pick(this.ray(e)));
   };
@@ -277,11 +343,116 @@ export class WorldView {
 
   private readonly onKey = (e: KeyboardEvent): void => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.code === 'KeyF' && this.selected) {
+    const letter = letterOf(e);
+    if (letter === 'f' && this.selected) {
       this.focus(this.selected);
+      e.preventDefault();
+    } else if ((letter === 'g' || letter === 'r') && this.editable) {
+      this.setEdit({ ...this.edit, mode: letter === 'g' ? 'move' : 'rotate' });
+      this.onEditChange(this.edit);
+      e.preventDefault();
+    } else if (e.key === 'Delete' && this.selected && this.editable && !this.gizmo.dragging) {
+      this.onRemove(this.selected);
       e.preventDefault();
     } else if (e.key === 'Escape') this.select(undefined);
   };
+
+  /** Сменить настройки гизмо (режим, сетка, угол, к земле). */
+  setEdit(e: EditSettings): void {
+    this.edit = e;
+    this.applyEdit();
+  }
+
+  setEditable(on: boolean): void {
+    this.editable = on;
+    this.attachGizmo();
+  }
+
+  private applyEdit(): void {
+    const e = this.edit;
+    const g = this.gizmo;
+    g.setMode(e.mode === 'move' ? 'translate' : 'rotate');
+    g.setTranslationSnap(e.grid > 0 ? e.grid : null);
+    g.setRotationSnap(e.angle > 0 ? THREE.MathUtils.degToRad(e.angle) : null);
+    // Поворот — только вокруг вертикали (как в игре); к земле — высота следует за рельефом.
+    const rotate = e.mode === 'rotate';
+    g.showX = !rotate;
+    g.showZ = !rotate;
+    g.showY = rotate || !e.ground;
+    this.invalidate();
+  }
+
+  private attachGizmo(): void {
+    const o = this.selected;
+    if (o && this.editable) {
+      this.pivot.position.copy(o.pos);
+      this.pivot.quaternion.copy(o.quat);
+      this.pivot.updateMatrixWorld();
+      if (this.gizmo.object !== this.pivot) this.gizmo.attach(this.pivot);
+    } else if (this.gizmoOn()) this.gizmo.detach();
+    this.invalidate();
+  }
+
+  private onGizmoMove(): void {
+    const o = this.selected;
+    const start = this.dragStart;
+    if (!o || !start) return;
+    if (this.edit.mode === 'move' && this.edit.ground && start.above !== undefined) {
+      const g = this.terrain.heightAt(this.pivot.position.x, this.pivot.position.z);
+      if (g !== undefined) this.pivot.position.y = g + start.above;
+    }
+    o.pos.copy(this.pivot.position);
+    o.quat.copy(this.pivot.quaternion);
+    this.place(this.selectBox, o);
+    this.objects.update(this.camera);
+  }
+
+  private commitDrag(o: WorldObject): void {
+    const start = this.dragStart;
+    this.dragStart = undefined;
+    if (!start) return;
+    if (o.pos.equals(start.pos) && o.quat.equals(start.quat)) return;
+    const c = this.commitOf(o, start.pos);
+    if (!this.onCommit(o, c)) {
+      o.pos.copy(start.pos);
+      o.quat.copy(start.quat);
+      this.attachGizmo();
+      this.place(this.selectBox, o);
+      this.invalidate(true);
+    }
+  }
+
+  /** Что записать в файл для объекта, стоящего сейчас в `o.pos`/`o.quat` (раньше — в `from`). */
+  commitOf(o: WorldObject, from: THREE.Vector3): EditCommit {
+    // y экземпляра — над землёй: старая высота + подъём − подъём земли.
+    const g0 = this.terrain.heightAt(from.x, from.z);
+    const g1 = this.terrain.heightAt(o.pos.x, o.pos.z);
+    const y = o.p.position[1] + (o.pos.y - from.y) - (g0 !== undefined && g1 !== undefined ? g1 - g0 : 0);
+    const q = o.quat;
+    const c: EditCommit = { position: [o.pos.x, y, o.pos.z], rotation: [q.w, q.x, q.y, q.z] };
+    if (o.b) c.worldY = o.pos.y;
+    return c;
+  }
+
+  /** Подтянуть правки мира мода (свои, отмена/повтор, правки ИИ). */
+  sync(edits: WorldEdits, changes: readonly WorldChange[]): void {
+    const touched = this.objects.sync(edits, changes);
+    if (this.selected?.gone) this.select(undefined);
+    else if (this.selected && touched.includes(this.selected) && !this.gizmo.dragging) {
+      this.attachGizmo();
+      this.place(this.selectBox, this.selected);
+    }
+    if (this.hovered?.gone) this.setHover(undefined);
+    this.objects.update(this.camera);
+    this.invalidate(true);
+  }
+
+  /** Точка земли в середине экрана (куда ставить новый объект). */
+  centreGround(): THREE.Vector3 | undefined {
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+    return this.groundHit(rc.ray);
+  }
 
   private setHover(o: WorldObject | undefined): void {
     if (o === this.hovered) return;
@@ -292,6 +463,7 @@ export class WorldView {
 
   select(o: WorldObject | undefined): void {
     this.selected = o;
+    this.attachGizmo();
     this.place(this.selectBox, o);
     this.place(this.hoverBox, this.hovered && this.hovered !== o ? this.hovered : undefined);
     this.onSelect(o);
@@ -429,7 +601,30 @@ export class WorldView {
       foliageDrawn: this.objects.drawnFoliage,
       overview: Math.round(this.terrain.overviewProgress * 100),
       camera: this.cameraState(),
+      gizmo: this.gizmoProbe(),
     };
+  }
+
+  /** Гизмо прикреплено к объекту (в типах three `object` всегда есть, на деле — нет). */
+  private gizmoOn(): boolean {
+    return (this.gizmo.object as THREE.Object3D | undefined) !== undefined;
+  }
+
+  /** Центр гизмо и точка на стрелке X в пикселях холста ('' — гизмо нет). */
+  private gizmoProbe(): string {
+    if (!this.gizmoOn()) return '';
+    const cam = this.camera;
+    const c = this.pivot.position.clone();
+    // Размер гизмо — как в TransformControls: от расстояния до камеры и угла обзора.
+    const factor = c.distanceTo(cam.position) * Math.min((1.9 * Math.tan((Math.PI * cam.fov) / 360)) / cam.zoom, 7);
+    const ax = c.clone().add(new THREE.Vector3(0.45 * factor * this.gizmo.size / 4, 0, 0));
+    const w = this.host.clientWidth;
+    const h = this.host.clientHeight;
+    const px = (v: THREE.Vector3): string => {
+      v.project(cam);
+      return `${Math.round(((v.x + 1) / 2) * w)},${Math.round(((1 - v.y) / 2) * h)}`;
+    };
+    return `${px(c)},${px(ax)}`;
   }
 
   /** Камера: позиция и куда смотрит (для «Показать в игре» и e2e). */
@@ -447,6 +642,8 @@ export class WorldView {
     el.removeEventListener('click', this.onClick);
     el.removeEventListener('dblclick', this.onDouble);
     el.removeEventListener('keydown', this.onKey);
+    this.gizmo.detach();
+    this.gizmo.dispose();
     this.fly.dispose();
     this.terrain.dispose();
     this.objects.dispose();
