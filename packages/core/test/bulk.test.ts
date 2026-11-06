@@ -5,6 +5,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyBulk,
+  bulkFieldValue,
+  restrictBulk,
+  matchesFilter,
   describeChangeset,
   emptyRecord,
   encodeText,
@@ -101,5 +104,97 @@ describe('массовые правки', () => {
     expect(skip.skipped[0]!.reason).toMatch(/не число/);
     const bad = previewBulk(ctx, { type: 'WEAPON' }, { kind: 'set', field: 'value', value: '1.5' });
     expect(bad.skipped).toHaveLength(3);
+  });
+
+  it('галочки: restrictBulk оставляет выбранные записи, подпись и операции согласованы', () => {
+    const ctx = make();
+    const p = previewBulk(ctx, { type: 'WEAPON' }, { kind: 'mul', field: 'value', value: '2' });
+    const r = restrictBulk(p, (sid) => sid !== 'c');
+    expect(r.changes.map((c) => c.sid)).toEqual(['k', 's']);
+    expect(r.ops).toHaveLength(2);
+    expect(r.label).toContain('(2 записей)');
+    applyBulk(ctx, r);
+    expect(ctx.get('c')!.ints.get('value')).toBe(10);
+    expect(ctx.get('k')!.ints.get('value')).toBe(200);
+  });
+
+  it('значение поля записи для колонок', () => {
+    const ctx = make();
+    expect(bulkFieldValue(ctx, ctx.get('k')!, 'value')).toBe('100');
+    expect(bulkFieldValue(ctx, ctx.get('k')!, 'name')).toBe('Katana');
+    expect(bulkFieldValue(ctx, ctx.get('k')!, 'nope')).toBeUndefined();
+  });
+
+  it('фильтры как в FCS: содержит, не содержит, regex', () => {
+    const ctx = make();
+    const ids = (f: string): string[] => previewBulk(ctx, { type: 'WEAPON', fields: [parseFieldFilter(f)] }, { kind: 'set', field: 'value', value: '1' }).changes.map((c) => c.sid);
+    expect(ids('description:sharp')).toEqual(['k', 's']);
+    expect(ids('description!:sharp')).toEqual(['c']);
+    expect(ids('description?^A .*sabre$')).toEqual(['s']);
+    expect(() => parseFieldFilter('description?(')).toThrow(/регулярное/);
+    expect(parseFieldFilter('value?')).toEqual({ key: 'value', op: 'exists' });
+    expect(parseFieldFilter('value~5').op).toBe('~');
+  });
+});
+
+describe('массовые правки ссылок и условия по ссылкам', () => {
+  const VENDOR = itemTypeId('VENDOR_LIST')!;
+  function vendor(sid: string, items: [string, number][]): GameRecord {
+    const r = emptyRecord(VENDOR, sid, encodeText(sid));
+    r.refs.set('items', items.map(([target, v0]) => ({ target, v0, v1: 0, v2: 0 })));
+    return r;
+  }
+  function makeVendors(): ModContext {
+    return new ModContext({
+      layers: [{ name: 'gamedata.base', file: file([weapon('k', 'Katana', 100, 1), weapon('s', 'Sabre', 80, 0.9), vendor('v1', [['k', 5]]), vendor('v2', [['k', 1], ['s', 2]]), vendor('v3', [])]) }],
+      modName: 'Refs.mod',
+    });
+  }
+
+  it('условия по ссылкам: число в списке, значение v0, Ref', () => {
+    const ctx = makeVendors();
+    const has = (sid: string, f: string): boolean => matchesFilter(ctx, ctx.get(sid)!, parseFieldFilter(f));
+    expect(has('v2', 'items>1')).toBe(true);
+    expect(has('v1', 'items>1')).toBe(false);
+    expect(has('v1', 'items.v0=5')).toBe(true);
+    expect(has('v2', 'items.v0>=3')).toBe(false);
+    expect(has('v2', 'items.v0>=1')).toBe(true);
+    expect(has('k', 'Ref>=2')).toBe(true);
+    expect(has('s', 'Ref>=2')).toBe(false);
+    expect(has('v1', 'items=Katana')).toBe(true);
+  });
+
+  it('refAdd: добавляет ссылку тем, у кого её нет; одна отмена; повтор — без изменений', () => {
+    const ctx = makeVendors();
+    const p = previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: 'Sabre', values: [7, 0, 0] });
+    expect(p.matched).toBe(3);
+    expect(p.changes.map((c) => c.sid)).toEqual(['v1', 'v2', 'v3']);
+    expect(p.changes[0]!.before).toBe('');
+    expect(p.changes[1]!.before).toContain('Sabre (2, 0, 0)');
+    applyBulk(ctx, p);
+    expect(ctx.get('v1')!.refs.get('items')!.map((r) => [r.target, r.v0])).toEqual([['k', 5], ['s', 7]]);
+    expect(ctx.get('v2')!.refs.get('items')!.find((r) => r.target === 's')!.v0).toBe(7);
+    expect(ctx.history().undo).toHaveLength(1);
+    expect(previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: 'Sabre', values: [7, 0, 0] }).changes).toHaveLength(0);
+  });
+
+  it('refAdd без значений не трогает существующую ссылку; refRemove убирает', () => {
+    const ctx = makeVendors();
+    const add = previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: 'k' });
+    expect(add.changes.map((c) => c.sid)).toEqual(['v3']);
+    const rem = previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refRemove', field: 'items', value: 'Katana' });
+    expect(rem.changes.map((c) => c.sid)).toEqual(['v1', 'v2']);
+    applyBulk(ctx, rem);
+    expect(ctx.get('v1')!.refs.get('items')).toEqual([]);
+    expect(ctx.get('v2')!.refs.get('items')!.map((r) => r.target)).toEqual(['s']);
+  });
+
+  it('ссылки: ошибки — нет цели, нет списка', () => {
+    const ctx = makeVendors();
+    expect(() => previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: 'Nothing here' })).toThrow(/не найдена/);
+    expect(() => previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: '' })).toThrow(/на какую запись/);
+    const p = previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'nope', value: 'k' });
+    expect(p.changes).toHaveLength(0);
+    expect(p.skipped).toHaveLength(3);
   });
 });

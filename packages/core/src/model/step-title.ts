@@ -258,7 +258,7 @@ class Describer {
     const bulk = /^массово: (\S+) (.*) \((\d+) записей\)$/s.exec(label);
     if (bulk) {
       const [, field, what, n] = bulk;
-      const en = what!.replace(/^замена /, 'replace ');
+      const en = what!.replace(/^замена /, 'replace ').replace(/^\+ ссылка /, 'add reference ').replace(/^− ссылка /, 'remove reference ');
       return { ru: `Массовая правка ${field}: ${what} (записей: ${n})`, en: `Bulk edit ${field}: ${en} (records: ${n})` };
     }
     const merge = /^слияние: (.*) \((\d+) записей\)$/s.exec(label);

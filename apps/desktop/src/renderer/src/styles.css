@@ -464,6 +464,12 @@ textarea {
   font-weight: 600;
   border-bottom: 1px solid var(--border);
 }
+/* В узкой колонке «Строковый id» не переносится на вторую строку (она вылезала на первую запись). */
+.list-header > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .vlist {
   overflow: auto;
   position: relative;
@@ -2005,6 +2011,10 @@ button.small.active {
 .mods-panel-note {
   font-size: 12px;
 }
+.help-mark {
+  cursor: help;
+  opacity: 0.7;
+}
 .conflict-winner {
   font-weight: 600;
 }
@@ -2060,20 +2070,41 @@ tr[draggable='true'] {
   align-items: center;
   margin-left: auto;
 }
+/* Фиксированная раскладка: тексты (оригинал и перевод) получают всё свободное место поровну,
+   а «Запись», «Поле» и «Статус» — узкие. Так длинный текст не сжимается в узкий столбец. */
+.tr-table {
+  table-layout: fixed;
+}
 .tr-table td {
   vertical-align: top;
 }
+.tr-col-record {
+  width: 16%;
+}
+.tr-col-field {
+  width: 56px;
+}
+.tr-col-original,
+.tr-col-translation {
+  width: 38%;
+}
+.tr-col-status {
+  width: 78px;
+}
+.tr-table td:first-child {
+  overflow-wrap: anywhere;
+}
 .tr-original {
   white-space: pre-wrap;
-  max-width: 40ch;
-}
-.tr-translation {
-  min-width: 30ch;
-  width: 40%;
+  overflow-wrap: anywhere;
 }
 .tr-translation textarea {
+  box-sizing: border-box;
   width: 100%;
   min-height: 2.2em;
+  max-height: 20em;
+  /* высота растёт вместе с текстом (Chromium 123+) */
+  field-sizing: content;
   resize: vertical;
 }
 .tr-status {
@@ -2110,6 +2141,95 @@ tr[draggable='true'] {
 }
 .fac-edit input[type='number'] {
   width: 70px;
+}
+/* «?» со справкой по таблице: открывается при наведении или фокусе */
+.fac-help {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+}
+.fac-help-btn {
+  width: 18px;
+  height: 18px;
+  min-width: 0;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 16px;
+  cursor: help;
+}
+.fac-help-pop {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  width: 560px;
+  max-width: 80vw;
+  margin-top: 4px;
+  padding: 8px 10px;
+  background: var(--bg2);
+  color: var(--fg, inherit);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+}
+.fac-help:hover .fac-help-pop,
+.fac-help:focus-within .fac-help-pop {
+  display: block;
+}
+.fac-help-pop table {
+  border-collapse: collapse;
+  margin-top: 6px;
+  width: 100%;
+}
+.fac-help-pop th,
+.fac-help-pop td {
+  border: 1px solid var(--border);
+  padding: 3px 6px;
+  text-align: left;
+  vertical-align: top;
+  font-weight: normal;
+}
+.fac-help-pop th {
+  color: var(--muted);
+}
+.fac-help-pop td:first-child {
+  width: 38%;
+}
+.fac-combo {
+  position: relative;
+  display: inline-block;
+}
+.fac-combo > input {
+  width: 190px;
+}
+.fac-combo-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 100%;
+  width: max-content;
+  max-width: 340px;
+  margin: 2px 0 0;
+  padding: 2px 0;
+  list-style: none;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  max-height: 260px;
+  overflow: auto;
+  z-index: 10;
+}
+.fac-combo-list li {
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fac-combo-list li.cur {
+  background: var(--sel);
 }
 .fac-wrap {
   overflow: auto;
@@ -2268,6 +2388,18 @@ input.invalid {
 .bulk-table .bulk-before { color: var(--deleted); text-decoration: line-through; opacity: 0.8; }
 .bulk-table .bulk-after { color: var(--new); }
 .bulk-skipped { padding: 4px 8px; }
+.bulk-need { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.bulk-need > :first-child:not(.muted) { color: var(--fg, inherit); font-size: 14px; }
+.bulk-help-examples { margin: 8px 0 0; padding-left: 18px; }
+.bulk-filter-help .fac-help-pop { left: auto; right: 0; }
+.bulk-fields-title { margin-top: 8px; }
+.bulk-fields-list { display: flex; flex-wrap: wrap; gap: 2px 10px; max-height: 160px; overflow: auto; margin-top: 4px; }
+.bulk-sample { text-align: left; }
+.bulk-examples { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 4px 8px; font-size: 12px; }
+.bulk-values-group { margin-top: 4px; }
+.bulk-sentence { padding: 4px 8px; font-size: 13px; border-left: 3px solid #4a90d9; margin: 4px 8px; }
+.bulk-cond select, .bulk-cond input { min-width: 8em; }
+.bulk-sample ul { margin: 4px 0; padding-left: 18px; columns: 3; }
 .bulk-skipped ul { margin: 4px 0; padding-left: 18px; }
 
 /* Панель «Графы» (исследования, крафт, состав отрядов и городов). */

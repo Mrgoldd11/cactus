@@ -314,7 +314,9 @@ const en = {
   modsLayers: (deps: number, ctx: number): string => `Under the mod: ${deps} dependencies, ${ctx} more mods.`,
   modsContextNote: 'Extra mods load in mods.cfg order and are not written into the mod. Edits are saved relative to them.',
   colInContext: 'Load',
-  colInContextTip: 'Lay this mod under the edited one',
+  colInContextHelp: 'What is this?',
+  colInContextTip:
+    'Show this mod inside the editor together with yours.\n\nWhy: if your mod edits or builds on what another mod added (its dialogues, items, factions), tick that mod here. The editor then sees its records, so you can find them, link to them and change them.\n\nExample: you are writing an add-on for "Vanilla Talk". Tick "Vanilla Talk" and its dialogues appear in the records list.\n\nThis is not "In game" (that is mods.cfg) and not a dependency: nothing is copied into your mod. For the game to require that mod, add it under "Dependencies".',
   colLoadOrderTip: 'Place in mods.cfg: lower loads later and wins',
   colDeps: 'Depends on',
   colInGame: 'In game',
@@ -594,9 +596,9 @@ const en = {
   lnNoParents: 'No package uses this dialogue.',
   lnInGameTitle: 'As in game (without this mod)',
   ...specialEn,
+  ...mergeEn,
 };
 
-  ...mergeEn,
 export type Strings = typeof en;
 
 const ru: Strings = {
@@ -897,7 +899,9 @@ const ru: Strings = {
   modsLayers: (deps: number, ctx: number): string => `Под модом: зависимостей ${deps}, других модов ${ctx}.`,
   modsContextNote: 'Другие моды грузятся по порядку mods.cfg и в мод не записываются. Правки сохраняются относительно них.',
   colInContext: 'Грузить',
-  colInContextTip: 'Положить этот мод под редактируемый',
+  colInContextHelp: 'Что это?',
+  colInContextTip:
+    'Показать этот мод в редакторе вместе с вашим.\n\nЗачем: если ваш мод правит или дополняет то, что добавил другой мод (его диалоги, предметы, фракции), отметьте тот мод здесь. Редактор увидит его записи — их можно найти, сослаться на них и изменить.\n\nПример: вы делаете аддон к «Vanilla Talk». Отметьте «Vanilla Talk» — его диалоги появятся в списке записей.\n\nЭто не «В игре» (то про mods.cfg) и не зависимость: в ваш мод ничего не копируется. Чтобы игра требовала тот мод, добавьте его в «Зависимости».',
   colLoadOrderTip: 'Место в mods.cfg: ниже — грузится позже и побеждает',
   colDeps: 'Зависит от',
   colInGame: 'В игре',
@@ -1177,11 +1181,11 @@ const ru: Strings = {
   lnNoParents: 'Этот диалог не входит ни в один пакет.',
   lnInGameTitle: 'Как в игре (без этого мода)',
   ...specialRu,
+  ...mergeRu,
 };
 
 export const STRINGS: Record<Lang, Strings> = { en, ru };
 
-  ...mergeRu,
 export const LangContext = createContext<{ lang: Lang; t: Strings }>({ lang: 'ru', t: ru });
 
 export function useT(): Strings {

@@ -10,9 +10,8 @@
  *   «Kenshi Mod Editor» (папка данных: `%APPDATA%\Kenshi Mod Editor`);
  * - `resources/mcp/kenshi-mcp.mjs` — MCP-сервер одним файлом (ядро, SDK и zod внутри).
  *   Запускается тем же exe с `ELECTRON_RUN_AS_NODE=1`: отдельный Node не нужен;
- * - `_ИНСТРУКЦИЯ.txt` (из `beta/README_RU.txt`; «_» — чтобы в проводнике она стояла первой среди
- *   файлов), README_EN.txt, LICENSE.txt и папка `screenshots/` с картинками к инструкции
- *   (снимает `scripts/beta-shots.ts`).
+ * - `_ИНСТРУКЦИЯ.txt` — короткая инструкция для друзей (из `beta/README_RU.txt`; «_» — чтобы в
+ *   проводнике она стояла первой среди файлов) и LICENSE.txt.
  *
  * Игровых файлов, модов, кэшей и исходников в архиве нет. Перед упаковкой текстовые файлы
  * проверяются на личные пути и имя пользователя — найдено что-то — сборка останавливается.
@@ -114,15 +113,10 @@ cpSync(mcpFile, join(stage, 'resources', 'mcp', 'kenshi-mcp.mjs'));
 rmSync(mcpOut, { recursive: true, force: true });
 
 const crlf = (s: string): string => s.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
-const DOCS: Readonly<Record<string, string>> = { 'README_RU.txt': '_ИНСТРУКЦИЯ.txt', 'README_EN.txt': 'README_EN.txt', 'LICENSE.txt': 'LICENSE.txt' };
+const DOCS: Readonly<Record<string, string>> = { 'README_RU.txt': '_ИНСТРУКЦИЯ.txt', 'LICENSE.txt': 'LICENSE.txt' };
 for (const [from, to] of Object.entries(DOCS)) {
   writeFileSync(join(stage, to), crlf(readFileSync(join(app, 'beta', from), 'utf8').replaceAll('{VERSION}', VERSION)));
 }
-const shots = join(app, 'beta', 'screenshots');
-const SHOTS = ['1-start.png', '2-katana-where.png', '3-dialogues.png'];
-for (const f of SHOTS) if (!existsSync(join(shots, f))) fail(`нет картинки для инструкции ${f}: node apps/desktop/scripts/beta-shots.ts`);
-mkdirSync(join(stage, 'screenshots'));
-for (const f of SHOTS) cpSync(join(shots, f), join(stage, 'screenshots', f));
 
 step('Проверка: нет личных данных и игровых файлов');
 {

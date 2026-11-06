@@ -223,7 +223,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
       inputSchema: {
         text: z.string().optional().describe('Подстрока имени или id'),
         type: z.union([z.string(), z.number()]).optional().describe('Тип: имя (DIALOGUE) или номер'),
-        fields: z.array(z.string()).optional().describe('Условия: ключ=знач, ключ~подстрока, != < > <= >=, ключ? — поле есть'),
+        fields: z.array(z.string()).optional().describe('Условия: ключ=знач, ключ~подстрока (или ключ:подстрока), ключ!:подстрока — не содержит, ключ?регэксп, != < > <= >=, ключ? — поле есть; для ссылок: список>5, список.v0=4, Ref>0'),
         status: z.array(z.enum(['base', 'new', 'changed', 'deleted'])).optional(),
         anywhere: z.string().optional().describe('Подстрока где угодно в записи'),
         exact: z.boolean().optional().describe('Только точное совпадение имени'),
@@ -494,19 +494,20 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
     {
       title: 'Массовая правка',
       description: [
-        'Записи одного типа по условиям → одна операция над полем: set (задать), mul (умножить), add (прибавить), replace (заменить текст; field "name" — имя записи).',
+        'Записи одного типа по условиям → одна операция над полем: set (задать), mul (умножить), add (прибавить), replace (заменить текст; field "name" — имя записи), refAdd / refRemove (добавить или убрать ссылку: field — список ссылок, например items; value — id или имя цели; values — v0..v2).',
         'По умолчанию только предпросмотр «было → станет», ничего не меняет. apply: true — применить одной правкой (одна отмена);',
         'если подключён редактор — отправляет набор изменений в окно, пользователь принимает или откатывает. Сохранение — отдельно (save).',
       ].join('\n'),
       inputSchema: {
         type: z.union([z.string(), z.number()]).describe('Тип записей: имя (WEAPON) или номер'),
         text: z.string().optional().describe('Подстрока имени (англ. или рус.) или id'),
-        fields: z.array(z.string()).optional().describe('Условия: ключ=знач, ключ~подстрока, != < > <= >=, ключ? — поле есть'),
+        fields: z.array(z.string()).optional().describe('Условия: ключ=знач, ключ~подстрока (или ключ:подстрока), ключ!:подстрока — не содержит, ключ?регэксп, != < > <= >=, ключ? — поле есть; для ссылок: список>5, список.v0=4, Ref>0'),
         mod_only: z.boolean().optional().describe('Только записи, которые уже есть в моде'),
-        op: z.enum(['set', 'mul', 'add', 'replace']),
+        op: z.enum(['set', 'mul', 'add', 'replace', 'refAdd', 'refRemove']),
         field: z.string().describe('Ключ поля (для replace можно name)'),
         value: z.string().describe('set — значение (enum — имя или число); mul/add — число; replace — на что заменить'),
         find: z.string().optional().describe('replace: что искать'),
+        values: z.array(z.number()).optional().describe('refAdd: значения ссылки v0, v1, v2'),
         regex: z.boolean().optional().describe('replace: find — регулярное выражение ($1 — группы)'),
         case_sensitive: z.boolean().optional(),
         apply: z.boolean().optional().describe('true — применить; без него только предпросмотр'),
@@ -520,7 +521,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         const p = previewBulk(
           ctx,
           compact({ type: a.type, text: a.text === '' ? undefined : a.text, fields: a.fields?.map(parseFieldFilter), modOnly: a.mod_only }),
-          compact({ kind: a.op, field: a.field, value: a.value, find: a.find, regex: a.regex, caseSensitive: a.case_sensitive }),
+          compact({ kind: a.op, field: a.field, value: a.value, find: a.find, regex: a.regex, caseSensitive: a.case_sensitive, values: a.values }),
         );
         const lines = formatBulkPreview(p, a.limit === 0 ? Infinity : (a.limit ?? 50));
         if (!a.apply) return [...lines, 'предпросмотр: ничего не изменено (apply: true — применить)'];
@@ -535,7 +536,6 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
       }),
   );
 
-  const stepTo = {
   server.registerTool(
     'merge',
     {
@@ -597,6 +597,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
       }),
   );
 
+  const stepTo = {
     to: z.number().int().min(0).optional().describe('Номер шага #N из history: отменить/повторить всё до него включительно (undo to: 0 — мод как при открытии)'),
   };
   const step = (dir: 'undo' | 'redo', to: number | undefined): Promise<ToolResult> =>
@@ -711,9 +712,9 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         const errors = validateMod(ctx).filter((i) => i.severity === 'error');
         const lines = [`${r.path}: ${statusSummary(ctx)}`];
         if (errors.length) lines.push(`ошибок проверки: ${errors.length} (validate)`);
-        return lines;
         if (r.mergeStore) lines.push(`решения слияния: ${r.mergeStore}`);
         if (r.world) lines.push(`файлы уровня: ${r.world.map((f) => `leveldata/${f}`).join(', ')}`);
+        return lines;
       }),
   );
 

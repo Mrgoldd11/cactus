@@ -4,7 +4,8 @@
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { OTHER_TYPES_ID, type CategoryNode } from '@kenshi-editor/core';
-import { useT } from '../i18n.ts';
+import { CATEGORY_RU } from '../categoryNames.ts';
+import { useLang, useT } from '../i18n.ts';
 import { MOD_CHANGES_ID, type Project } from '../project.ts';
 
 interface Props {
@@ -17,6 +18,7 @@ interface Props {
 
 export function CategoryTree({ project, version, selected, onSelect, modCount }: Props): ReactNode {
   const t = useT();
+  const lang = useLang();
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   const counts = useMemo(() => {
     const m = new Map<string, number>();
@@ -40,7 +42,7 @@ export function CategoryTree({ project, version, selected, onSelect, modCount }:
   const label = (n: CategoryNode): string => {
     if (n.id === OTHER_TYPES_ID) return t.otherTypes;
     if (n.type === undefined) return t.everything;
-    return n.label;
+    return lang === 'ru' ? (CATEGORY_RU[n.label] ?? n.label) : n.label;
   };
 
   const renderNode = (n: CategoryNode, depth: number): ReactNode => {

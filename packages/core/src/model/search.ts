@@ -9,7 +9,8 @@ import type { ModContext, RecordStatus } from './context.ts';
 import { SCALAR_DICTS, scalarMap } from './record-ops.ts';
 import { formatScalar } from './present.ts';
 
-export type FilterOp = '=' | '!=' | '~' | '<' | '>' | '<=' | '>=' | 'exists';
+/** `~` и `:` — «содержит», `!:` — «не содержит», `regex` — регулярное выражение (`поле?шаблон`). */
+export type FilterOp = '=' | '!=' | '~' | '!~' | 'regex' | '<' | '>' | '<=' | '>=' | 'exists';
 
 /** Условие на поле: ключ любого словаря или категория ссылок (тогда значение — id или имя цели). */
 export interface FieldFilter {
@@ -41,13 +42,37 @@ export interface SearchHit {
   status: RecordStatus;
 }
 
-/** `key=value`, `key!=value`, `key~text`, `key>=3`, `key?` (поле есть). */
+/**
+ * `key=value`, `key!=value`, `key~text` (или `key:text`), `key!:text` (не содержит), `key?шаблон`
+ * (регулярное выражение, без учёта регистра), `key>=3`, `key?` (поле есть). Как в поиске FCS.
+ */
 export function parseFieldFilter(text: string): FieldFilter {
   const exists = /^(.+)\?$/.exec(text);
   if (exists) return { key: exists[1]!.trim(), op: 'exists' };
-  const m = /^(.+?)(!=|<=|>=|=|~|<|>)(.*)$/.exec(text);
+  const m = /^(.+?)(!=|!:|!~|<=|>=|=|~|:|\?|<|>)(.*)$/.exec(text);
   if (!m) throw new Error(`Не понял условие «${text}»: нужно ключ=значение, ключ~текст, ключ>число или ключ?`);
-  return { key: m[1]!.trim(), op: m[2] as FilterOp, value: m[3]!.trim() };
+  const raw = m[2]!;
+  const op: FilterOp = raw === ':' ? '~' : raw === '!:' ? '!~' : raw === '?' ? 'regex' : (raw as FilterOp);
+  const value = m[3]!.trim();
+  if (op === 'regex') regexOf(value);
+  return { key: m[1]!.trim(), op, value };
+}
+
+const regexCache = new Map<string, RegExp>();
+
+/** Регулярное выражение условия `поле?шаблон`; неверный шаблон — понятная ошибка. */
+function regexOf(pattern: string): RegExp {
+  let re = regexCache.get(pattern);
+  if (!re) {
+    try {
+      re = new RegExp(pattern, 'i');
+    } catch (e) {
+      throw new Error(`Неверное регулярное выражение «${pattern}»: ${(e as Error).message}`, { cause: e });
+    }
+    if (regexCache.size > 200) regexCache.clear();
+    regexCache.set(pattern, re);
+  }
+  return re;
 }
 
 export function resolveTypeFilter(type: string | number): number {
@@ -69,6 +94,10 @@ function compare(actual: string, op: FilterOp, expected: string): boolean {
       return numeric ? a !== e : actual !== expected;
     case '~':
       return actual.toLowerCase().includes(expected.toLowerCase());
+    case '!~':
+      return !actual.toLowerCase().includes(expected.toLowerCase());
+    case 'regex':
+      return regexOf(expected).test(actual);
     case '<':
       return numeric && a < e;
     case '>':
@@ -96,11 +125,35 @@ function fieldValues(ctx: ModContext, rec: GameRecord, key: string): string[] | 
   return undefined;
 }
 
+const NUMERIC_OPS: readonly FilterOp[] = ['<', '>', '<=', '>='];
+const REF_VALUE = /^(.+)\.v([012])$/;
+
+/**
+ * Условия по ссылкам, как в FCS: `список>5` — сколько ссылок в списке, `список.v0=4` — значение
+ * ссылки (хотя бы одной), `Ref>0` — сколько записей ссылаются на эту. undefined — не такое условие.
+ */
+function matchRefs(ctx: ModContext, rec: GameRecord, f: FieldFilter): boolean | undefined {
+  if (f.key === 'Ref') return compare(String(ctx.referencesTo(rec.stringId).length), f.op === 'exists' ? '>=' : f.op, f.op === 'exists' ? '0' : (f.value ?? ''));
+  const v = REF_VALUE.exec(f.key);
+  if (v) {
+    const list = rec.refs.get(v[1]!);
+    if (!list) return f.op === '!=' || f.op === '!~' ? true : undefined;
+    const pick = Number(v[2]);
+    const nums = list.map((r) => String([r.v0, r.v1, r.v2][pick]));
+    if (f.op === 'exists') return list.length > 0;
+    return f.op === '!=' || f.op === '!~' ? nums.every((n) => compare(n, f.op, f.value ?? '')) : nums.some((n) => compare(n, f.op, f.value ?? ''));
+  }
+  if (NUMERIC_OPS.includes(f.op) && rec.refs.has(f.key)) return compare(String(rec.refs.get(f.key)!.length), f.op, f.value ?? '');
+  return undefined;
+}
+
 export function matchesFilter(ctx: ModContext, rec: GameRecord, f: FieldFilter): boolean {
+  const special = matchRefs(ctx, rec, f);
+  if (special !== undefined) return special;
   const values = fieldValues(ctx, rec, f.key);
   if (f.op === 'exists') return values !== undefined && (!rec.refs.has(f.key) || values.length > 0);
-  if (values === undefined) return f.op === '!=';
-  if (f.op === '!=') return values.every((v) => compare(v, '!=', f.value ?? ''));
+  if (values === undefined) return f.op === '!=' || f.op === '!~';
+  if (f.op === '!=' || f.op === '!~') return values.every((v) => compare(v, f.op, f.value ?? ''));
   return values.some((v) => compare(v, f.op, f.value ?? ''));
 }
 

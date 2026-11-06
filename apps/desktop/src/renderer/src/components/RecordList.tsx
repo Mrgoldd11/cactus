@@ -32,6 +32,8 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
   const ctx = project.ctx;
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  // Полоса прокрутки списка сужает его строки; шапка получает такой же отступ справа, иначе заголовки съезжают.
+  const [gutter, setGutter] = useState(0);
 
   const items = useMemo(() => {
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -140,11 +142,11 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
           {t.records}: {items.length}
         </span>
       </div>
-      <div className="list-header list-grid">
-        <span>{t.colName}</span>
-        <span>{t.colRu}</span>
-        <span>{t.colId}</span>
-        <span>{t.colType}</span>
+      <div className="list-header list-grid" style={{ paddingRight: 8 + gutter }}>
+        <span title={t.colName}>{t.colName}</span>
+        <span title={t.colRu}>{t.colRu}</span>
+        <span title={t.colId}>{t.colId}</span>
+        <span title={t.colType}>{t.colType}</span>
       </div>
       <VirtualList
         items={items}
@@ -152,6 +154,7 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
         scrollToIndex={selIndex}
         testId="record-list"
         className="record-list"
+        onGutter={setGutter}
         renderRow={(e) => {
           const st = ctx.status(e.sid) ?? 'base';
           return (

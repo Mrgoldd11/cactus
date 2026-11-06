@@ -12,23 +12,31 @@ interface Props<T> {
   scrollToIndex?: number;
   className?: string;
   testId?: string;
+  /** Ширина полосы прокрутки (0 — её нет): шапка над списком добавляет её справа, чтобы колонки совпадали. */
+  onGutter?: (width: number) => void;
 }
 
 const OVERSCAN = 8;
 
-export function VirtualList<T>({ items, rowHeight, renderRow, scrollToIndex, className, testId }: Props<T>): ReactNode {
+export function VirtualList<T>({ items, rowHeight, renderRow, scrollToIndex, className, testId, onGutter }: Props<T>): ReactNode {
   const ref = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(400);
+  const gutterRef = useRef(onGutter);
+  gutterRef.current = onGutter;
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
+    const measure = (): void => {
       setHeight(el.clientHeight);
-    });
+      gutterRef.current?.(el.offsetWidth - el.clientWidth);
+    };
+    // Полоса появляется и исчезает вместе с числом строк: следим и за самим списком, и за его содержимым.
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setHeight(el.clientHeight);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    measure();
     return () => {
       ro.disconnect();
     };

@@ -263,7 +263,10 @@ function ModsPanel(): ReactNode {
           <table className="table" data-testid="mods-panel-table">
             <thead>
               <tr>
-                <th title={t.colInContextTip}>{t.colInContext}</th>
+                <th title={t.colInContextTip}>
+                  {t.colInContext}{' '}
+                  <span className="help-mark" aria-label={t.colInContextHelp}>ⓘ</span>
+                </th>
                 <th title={t.colInGameTip}>{t.colInGame}</th>
                 <th className="num" title={t.colLoadOrderTip}>
                   {t.colLoadOrder}

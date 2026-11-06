@@ -289,6 +289,13 @@ function TranslatePanel(): ReactNode {
       ) : (
         <div className="table-wrap">
           <table className="table tr-table" data-testid="tr-table">
+            <colgroup>
+              <col className="tr-col-record" />
+              <col className="tr-col-field" />
+              <col className="tr-col-original" />
+              <col className="tr-col-translation" />
+              <col className="tr-col-status" />
+            </colgroup>
             <thead>
               <tr>
                 <th>{t.colRecord}</th>

@@ -114,13 +114,22 @@ export function factionMatrix(ctx: ModContext, options: { ids?: Iterable<string>
   const touches = new Map<string, RelationTouch[]>();
   const rowLayers = new Map<string, Set<string>>();
   const allLayers: string[] = [];
+  // Бегущее значение отношения по слоям: мод, который ставит то же, что уже было до него
+  // (например, вернули исходное значение), ничего не меняет — его не показываем как «тронул».
+  const running = new Map<string, number | undefined>();
+  const defaultOf = (sid: string): number => byId.get(sid)?.defaultRelation ?? 0;
   for (const layer of contextLayers(ctx)) {
-    if (isVanillaLayer(layer.name)) continue;
+    const vanilla = isVanillaLayer(layer.name);
     let any = false;
     for (const rec of layer.file.records) {
       if (rec.type !== type || isRemovalMarker(rec)) continue;
       for (const r of rec.refs.get(RELATIONS) ?? []) {
         const key = `${rec.stringId}\n${r.target}`;
+        const next = isRemovedRef(r) ? undefined : relationValue(r);
+        const before = running.get(key);
+        running.set(key, next);
+        if (vanilla) continue;
+        if ((next ?? defaultOf(rec.stringId)) === (before ?? defaultOf(rec.stringId))) continue;
         let list = touches.get(key);
         if (!list) touches.set(key, (list = []));
         list.push(isRemovedRef(r) ? { layer: layer.name } : { layer: layer.name, value: relationValue(r) });

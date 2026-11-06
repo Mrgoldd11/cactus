@@ -80,6 +80,19 @@ describe('матрица отношений', () => {
     expect(m.layersOf('uc')).toEqual([]);
   });
 
+  it('вернули исходное значение — отношение не считается тронутым, шаги в истории остаются', () => {
+    const ctx = ctxOf();
+    setFactionRelation(ctx, 'hn', 'dc', 5, { both: true });
+    expect(factionMatrix(ctx).cell('hn', 'dc').touches).toEqual([{ layer: 'My.mod', value: 5 }]);
+    setFactionRelation(ctx, 'hn', 'dc', 0, { both: true });
+    const m = factionMatrix(ctx);
+    // hn → dc в ваниле 0 — вернули, не тронуто. dc → hn было −100 (default relation dc), стало 0 — это правда правка.
+    expect(m.cell('hn', 'dc')).toMatchObject({ value: 0, touches: [] });
+    expect(m.cell('dc', 'hn').touches).toEqual([{ layer: 'My.mod', value: 0 }]);
+    expect(ctx.history().undo).toHaveLength(2);
+    expect(m.layersOf('hn')).toEqual([]);
+  });
+
   it('правка: одна отмена, обе стороны, сброс; в мод — только разница; понятное название шага', () => {
     const ctx = ctxOf();
     setFactionRelation(ctx, 'hn', 'uc', 20, { both: true });

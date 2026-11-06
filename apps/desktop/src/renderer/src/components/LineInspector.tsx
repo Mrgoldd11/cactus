@@ -77,6 +77,12 @@ const LINE_FIELDS: readonly { key: string; dict: 'ints' | 'floats'; en?: string 
 const usageCache = new WeakMap<ModContext, DialogEnumUsage>();
 
 /** Какие условия и действия есть в данных (ваниль + зависимости) — считается один раз. */
+/** Подпись поля по ключу строки перевода (ключи собираются из имени поля). */
+function lnText(t: Strings, key: string): string {
+  const v = (t as unknown as Record<string, unknown>)[key];
+  return typeof v === 'string' ? v : key;
+}
+
 function enumUsage(ctx: ModContext): DialogEnumUsage {
   let u = usageCache.get(ctx);
   if (!u) usageCache.set(ctx, (u = dialogEnumUsage(ctx)));
@@ -439,8 +445,8 @@ function ChooseFields({ ctx, sid, rec, lower, t, edit }: Part & { lower: GameRec
           const def = f.en ? getEnum(ctx.schema, f.en) : undefined;
           const commit = (n: number): void => { edit(() => { ctx.setField(sid, f.dict, f.key, n); }); };
           return (
-            <div key={f.key} className="ln-field" title={String(t[`lnField_${f.key.replace(/ /g, '_')}` as keyof Strings])}>
-              <label className="small">{String(t[`lnFieldName_${f.key.replace(/ /g, '_')}` as keyof Strings])}</label>
+            <div key={f.key} className="ln-field" title={lnText(t, `lnField_${f.key.replace(/ /g, '_')}`)}>
+              <label className="small">{lnText(t, `lnFieldName_${f.key.replace(/ /g, '_')}`)}</label>
               {def ? <EnumSelect def={def} value={v} onChange={commit} testId={`ln-f-${f.key}`} /> : <NumberInput value={v} onCommit={commit} int={f.dict === 'ints'} testId={`ln-f-${f.key}`} />}
               {changed && (
                 <button className="link small" title={`${t.lnInGame}: ${String(lo)}`} onClick={() => { edit(() => { ctx.resetField(sid, f.dict, f.key); }); }}>

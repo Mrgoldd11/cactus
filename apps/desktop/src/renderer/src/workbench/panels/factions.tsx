@@ -1,7 +1,8 @@
 /**
  * Панель «Отношения фракций»: таблица «фракция × фракция» с цветом (враги / нейтралы /
- * союзники). Строка — кто относится, столбец — к кому. Клик по ячейке — правка значения одной
- * отменой (можно сразу в обе стороны), точка — значение меняет мод (какой — во всплывающей
+ * союзники). Строка — кто относится, столбец — к кому. Пару выбирают кликом по ячейке или вводом
+ * названий в два поля с быстрым списком; правка значения — одной отменой (можно сразу в обе
+ * стороны), точка — значение меняет мод (какой — во всплывающей
  * подсказке), фильтр по имени и по моду. Считается по слоям в памяти, без диска.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -32,6 +33,129 @@ function cellTip(t: Strings, from: string, to: string, c: RelationCell, back: nu
   return lines.join('\n');
 }
 
+/** Сколько подсказок показывать в выпадающем списке. */
+const COMBO_ROWS = 12;
+
+interface ComboProps {
+  value: string | undefined;
+  factions: readonly FactionInfo[];
+  label: (f: FactionInfo) => string;
+  /** Второе имя (английское при русском интерфейсе и наоборот) — пояснение в подсказках. */
+  alt: (f: FactionInfo) => string | undefined;
+  placeholder: string;
+  title: string;
+  testId: string;
+  onChange: (sid: string) => void;
+}
+
+/**
+ * Поле фракции с быстрым списком: печатаете часть названия (англ., рус. или id) — внизу
+ * появляются подходящие, ↑↓ и Enter или клик выбирают. Пока поле не в фокусе, показывает
+ * выбранную фракцию.
+ */
+function FactionCombo({ value, factions, label, alt, placeholder, title, testId, onChange }: ComboProps): ReactNode {
+  const [text, setText] = useState('');
+  const [typing, setTyping] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [cur, setCur] = useState(0);
+  const sel = value !== undefined ? factions.find((f) => f.sid === value) : undefined;
+
+  const matches = useMemo(() => {
+    const q = (typing ? text : '').trim().toLowerCase();
+    const terms = q.split(/\s+/).filter(Boolean);
+    const out: FactionInfo[] = [];
+    for (const f of factions) {
+      const hay = `${f.name}\n${f.ru ?? ''}\n${f.sid}`.toLowerCase();
+      if (terms.every((x) => hay.includes(x))) out.push(f);
+    }
+    // Названия, начинающиеся с введённого, — выше тех, где оно в середине.
+    const rank = (f: FactionInfo): number => (q !== '' && (label(f).toLowerCase().startsWith(q) || f.name.toLowerCase().startsWith(q)) ? 0 : 1);
+    return out.sort((a, b) => rank(a) - rank(b)).slice(0, COMBO_ROWS);
+  }, [factions, text, typing, label]);
+
+  const finish = (): void => {
+    setTyping(false);
+    setOpen(false);
+  };
+  const choose = (f: FactionInfo | undefined): void => {
+    if (f) onChange(f.sid);
+    finish();
+  };
+
+  return (
+    <span className="fac-combo">
+      <input
+        type="text"
+        placeholder={placeholder}
+        title={title}
+        value={typing ? text : sel ? label(sel) : ''}
+        data-testid={testId}
+        autoComplete="off"
+        onFocus={(e) => {
+          e.currentTarget.select();
+          setCur(0);
+          setOpen(true);
+        }}
+        onChange={(e) => {
+          setText(e.target.value);
+          setTyping(true);
+          setCur(0);
+          setOpen(true);
+        }}
+        onBlur={() => {
+          // Набрали название целиком и ушли из поля — считаем выбором, если оно одно.
+          if (typing) {
+            const exact = text.trim().toLowerCase();
+            const one = exact === '' ? [] : factions.filter((f) => label(f).toLowerCase() === exact || f.name.toLowerCase() === exact || f.sid === text.trim());
+            if (one.length === 1) onChange(one[0]!.sid);
+          }
+          finish();
+        }}
+        onKeyDown={(e) => {
+          const k = shortcut(e);
+          if (k === 'arrowdown' || k === 'arrowup') {
+            e.preventDefault();
+            setOpen(true);
+            setCur((c) => Math.max(0, Math.min(matches.length - 1, c + (k === 'arrowdown' ? 1 : -1))));
+          } else if (k === 'enter' && open && matches.length > 0) {
+            e.preventDefault();
+            choose(matches[Math.min(cur, matches.length - 1)]);
+          } else if (k === 'escape' && open) {
+            e.stopPropagation();
+            finish();
+          }
+        }}
+      />
+      {open && (
+        <ul className="fac-combo-list" role="listbox" data-testid={`${testId}-list`}>
+          {matches.length === 0 ? (
+            <li className="muted">—</li>
+          ) : (
+            matches.map((f, i) => (
+              <li
+                key={f.sid}
+                role="option"
+                aria-selected={i === cur}
+                className={i === cur ? 'cur' : ''}
+                title={f.sid}
+                // mousedown, а не click: иначе поле успеет потерять фокус и закрыть список раньше.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  choose(f);
+                }}
+                onMouseEnter={() => { setCur(i); }}
+              >
+                {label(f)}
+                {alt(f) && alt(f) !== label(f) && <span className="muted"> · {alt(f)}</span>}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </span>
+  );
+}
+
 function FactionsPanel(): ReactNode {
   const t = useT();
   const ru = useLang() === 'ru';
@@ -41,7 +165,14 @@ function FactionsPanel(): ReactNode {
   const [query, setQuery] = useState('');
   const [onlyLinked, setOnlyLinked] = useState(true);
   const [layer, setLayer] = useState('');
-  const [pick, setPick] = useState<Pick | undefined>();
+  // Пара выбирается кликом по ячейке или вводом названий в два поля; правим, когда выбраны обе.
+  const [fromSid, setFromSid] = useState<string | undefined>();
+  const [toSid, setToSid] = useState<string | undefined>();
+  const pick: Pick | undefined = fromSid !== undefined && toSid !== undefined ? { from: fromSid, to: toSid } : undefined;
+  const setPick = (p: Pick | undefined): void => {
+    setFromSid(p?.from);
+    setToSid(p?.to);
+  };
   const [value, setValue] = useState('');
   const [both, setBoth] = useState(false);
 
@@ -94,8 +225,9 @@ function FactionsPanel(): ReactNode {
     apply(n);
   };
 
-  const fromF = pick ? byId.get(pick.from) : undefined;
-  const toF = pick ? byId.get(pick.to) : undefined;
+  const fromF = fromSid !== undefined ? byId.get(fromSid) : undefined;
+  const toF = toSid !== undefined ? byId.get(toSid) : undefined;
+  const alt = (f: FactionInfo): string | undefined => (ru ? f.name : f.ru);
 
   return (
     <div className="mods-panel" data-testid="factions-panel">
@@ -119,46 +251,73 @@ function FactionsPanel(): ReactNode {
           {t.facSummary(shown.length, matrix.factions.length)}
         </span>
       </div>
-      <div className="muted mods-panel-note">{t.facNote}</div>
+      <div className="muted mods-panel-note fac-note">
+        <div className="fac-help" data-testid="fac-help">
+          <button className="fac-help-btn" aria-label={t.facHelpTip}>
+            ?
+          </button>
+          <div className="fac-help-pop" role="tooltip">
+            <strong>{t.facHelpTitle}</strong>
+            <table>
+              <thead>
+                <tr>
+                  <th>{t.facHelpHead[0]}</th>
+                  <th>{t.facHelpHead[1]}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {t.facHelpRows.map(([when, what]) => (
+                  <tr key={when}>
+                    <td>{when}</td>
+                    <td>{what}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>{' '}
+        {t.facNote}
+      </div>
       <div className="fac-edit" data-testid="fac-edit">
-        {pick && fromF && toF && picked ? (
-          <>
-            <button className="link" onClick={() => { go(fromF.sid); }} title={`${t.facOpen}: ${fromF.sid}`}>
-              {label(fromF)}
-            </button>
-            <span>→</span>
-            <button className="link" onClick={() => { go(toF.sid); }} title={`${t.facOpen}: ${toF.sid}`}>
-              {label(toF)}
-            </button>
-            <input
-              type="number"
-              min={-100}
-              max={100}
-              step={1}
-              title={t.facValue}
-              value={value}
-              onChange={(e) => { setValue(e.target.value); }}
-              onKeyDown={(e) => {
-                const k = shortcut(e);
-                if (k === 'enter') submit();
-                else if (k === 'escape') setPick(undefined);
-              }}
-              data-testid="fac-value"
-            />
-            <button className="primary" onClick={submit} data-testid="fac-set">
-              {t.facSet}
-            </button>
-            <button onClick={() => { apply(undefined); }} disabled={!picked.explicit} title={t.facResetTip} data-testid="fac-reset">
-              {t.facReset}
-            </button>
-            <label title={t.facBothTip}>
-              <input type="checkbox" checked={both} onChange={(e) => { setBoth(e.target.checked); }} data-testid="fac-both" /> {t.facBoth}
-            </label>
-            <span className={`fac-kind fac-${picked.kind}`}>{picked.explicit ? t.facExplicit : t.facDefault}</span>
-          </>
-        ) : (
-          <span className="muted">{t.facPick}</span>
+        <FactionCombo value={fromSid} factions={matrix.factions} label={label} alt={alt} placeholder={t.facWho} title={t.facWhoTip} testId="fac-from" onChange={setFromSid} />
+        {fromF && (
+          <button className="link" onClick={() => { go(fromF.sid); }} title={`${t.facOpen}: ${fromF.sid}`}>
+            ↗
+          </button>
         )}
+        <span>→</span>
+        <FactionCombo value={toSid} factions={matrix.factions} label={label} alt={alt} placeholder={t.facWhom} title={t.facWhomTip} testId="fac-to" onChange={setToSid} />
+        {toF && (
+          <button className="link" onClick={() => { go(toF.sid); }} title={`${t.facOpen}: ${toF.sid}`}>
+            ↗
+          </button>
+        )}
+        <input
+          type="number"
+          min={-100}
+          max={100}
+          step={1}
+          title={t.facValue}
+          value={value}
+          disabled={!picked}
+          onChange={(e) => { setValue(e.target.value); }}
+          onKeyDown={(e) => {
+            const k = shortcut(e);
+            if (k === 'enter') submit();
+            else if (k === 'escape') setPick(undefined);
+          }}
+          data-testid="fac-value"
+        />
+        <button className="primary" onClick={submit} disabled={!picked} data-testid="fac-set">
+          {t.facSet}
+        </button>
+        <button onClick={() => { apply(undefined); }} disabled={!picked?.explicit} title={t.facResetTip} data-testid="fac-reset">
+          {t.facReset}
+        </button>
+        <label title={t.facBothTip}>
+          <input type="checkbox" checked={both} onChange={(e) => { setBoth(e.target.checked); }} data-testid="fac-both" /> {t.facBoth}
+        </label>
+        {picked ? <span className={`fac-kind fac-${picked.kind}`}>{picked.explicit ? t.facExplicit : t.facDefault}</span> : <span className="muted">{t.facPick}</span>}
       </div>
       {visible.length === 0 ? (
         <Empty text={t.facNone} />

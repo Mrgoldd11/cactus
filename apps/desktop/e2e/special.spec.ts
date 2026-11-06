@@ -70,6 +70,10 @@ test('матрица отношений фракций: правка в обе �
   const dir = mkdtempSync(join(tmpdir(), 'kedit-special-'));
   try {
     await newMod(page, 'KeditE2E Factions');
+    // Шапка списка записей не съезжает: заголовок «id» над id первой строки (полоса прокрутки учтена).
+    const headId = await page.locator('.list-header span').nth(2).boundingBox();
+    const rowId = await page.locator('.list-row .sid').first().boundingBox();
+    expect(Math.abs(headId!.x - rowId!.x)).toBeLessThanOrEqual(1);
     await openPanel(page, 'factions');
     const panel = page.getByTestId('factions-panel');
     await expect(page.getByTestId('fac-matrix')).toBeVisible();
@@ -99,6 +103,26 @@ test('матрица отношений фракций: правка в обе �
     await expect(cell(UNITED_CITIES, HOLY_NATION)).toHaveAttribute('data-value', back!);
     await page.getByTestId('redo').click();
     await expect(cell(UNITED_CITIES, HOLY_NATION)).toHaveAttribute('data-value', '20');
+
+    // Пара — вводом названий (рус.) с быстрым списком, без клика по таблице.
+    await page.getByTestId('fac-value').press('Escape');
+    await expect(page.getByTestId('fac-set')).toBeDisabled();
+    await page.getByTestId('fac-from').fill('святая');
+    await page.getByTestId('fac-from-list').getByRole('option').first().click();
+    await expect(page.getByTestId('fac-from')).toHaveValue(/Святая Нация/);
+    await page.getByTestId('fac-to').fill('союзн');
+    await page.getByTestId('fac-to').press('Enter');
+    await expect(page.getByTestId('fac-to')).toHaveValue(/Союзные Города/);
+    await expect(page.getByTestId('fac-value')).toHaveValue('20');
+    await expect(cell(HOLY_NATION, UNITED_CITIES)).toHaveClass(/fac-sel/);
+
+    // Справка «?»: при наведении — таблица «значение → что значит».
+    await expect(panel.locator('.fac-help-pop')).toBeHidden();
+    await page.getByTestId('fac-help').getByRole('button').hover();
+    await expect(panel.locator('.fac-help-pop')).toBeVisible();
+    await expect(panel.locator('.fac-help-pop tbody tr')).toHaveCount(6);
+    await page.screenshot({ path: join(shots, '33b-factions-help.png') });
+    await page.mouse.move(0, 0);
 
     const recs = await saveAndValidate(app, page, join(dir, 'Factions.mod'));
     expect(recs.map((r) => r.stringId).sort()).toEqual([HOLY_NATION, UNITED_CITIES].sort());
@@ -169,7 +193,37 @@ test('массовые правки: предпросмотр, применен�
     await page.getByTestId('bulk-type').selectOption('WEAPON');
     await page.getByTestId('bulk-filter').fill('value>=300');
     await page.getByTestId('bulk-op').selectOption('mul');
-    await page.getByTestId('bulk-field').fill('value');
+    await page.getByTestId('bulk-field').selectOption('value');
+    // Пока значение не введено — объяснение, чего не хватает, и сколько записей подходит.
+    await expect(page.getByTestId('bulk-need-what')).toContainText('Заполните «Значение»');
+    await expect(page.getByTestId('bulk-need')).toContainText('подходит записей');
+    await expect(page.getByTestId('bulk-help')).toBeVisible();
+    // Поиск по русскому имени работает, и подходящие записи видны ещё до ввода значения.
+    await page.getByTestId('bulk-search').fill('катана');
+    await expect(page.getByTestId('bulk-sample')).toBeVisible();
+    await page.getByTestId('bulk-search').fill('');
+    // Пример одним кликом заполняет форму: катаны × 2 по cut damage multiplier.
+    await page.getByTestId('bulk-examples').getByRole('button').first().click();
+    await expect(page.getByTestId('bulk-filter')).toHaveValue('skill category=0');
+    await expect(page.getByTestId('bulk-row').first()).toBeVisible();
+    await page.screenshot({ path: join(shots, '35c-bulk-example.png') });
+    // Конструктор условия: поле из списка → сравнение → значение из списка → в фильтр.
+    await page.getByTestId('bulk-filter').fill('');
+    await page.getByTestId('bulk-cond-field').selectOption('skill category');
+    await page.getByTestId('bulk-cond-value').selectOption('0');
+    await page.getByTestId('bulk-cond-add').click();
+    await expect(page.getByTestId('bulk-filter')).toHaveValue('skill category=0');
+    await expect(page.getByTestId('bulk-sentence')).toContainText('Изменится');
+    await page.screenshot({ path: join(shots, '35d-bulk-builder.png') });
+    await page.getByTestId('bulk-filter').fill('value>=300');
+    await page.getByTestId('bulk-field').selectOption('value');
+    await page.getByTestId('bulk-value').fill('');
+    await page.getByTestId('bulk-filter-help').getByRole('button').hover();
+    await expect(page.getByTestId('bulk-filter-help').getByRole('tooltip')).toBeVisible();
+    await page.screenshot({ path: join(shots, '35b-bulk-filter-help.png') });
+    await page.getByTestId('bulk-help').getByRole('button').hover();
+    await page.screenshot({ path: join(shots, '35a-bulk-help.png') });
+    await page.getByTestId('bulk-type').hover();
     await page.getByTestId('bulk-value').fill('2');
     const katana = panel.locator(`[data-testid="bulk-row"][data-sid="${KATANA}"]`);
     await expect(katana).toHaveAttribute('data-before', '500');
@@ -194,7 +248,7 @@ test('массовые правки: предпросмотр, применен�
 
     // Неверный regex — понятная ошибка, кнопка выключена.
     await page.getByTestId('bulk-op').selectOption('replace');
-    await page.getByTestId('bulk-field').fill('name');
+    await page.getByTestId('bulk-field').selectOption('name');
     await page.getByTestId('bulk-regex').check();
     await page.getByTestId('bulk-find').fill('(');
     await expect(page.getByTestId('bulk-error')).toBeVisible();
@@ -204,6 +258,101 @@ test('массовые правки: предпросмотр, применен�
     expect(recs).toHaveLength(rows);
     const k = recs.find((r) => r.stringId === KATANA)!;
     expect([...k.ints]).toEqual([['value', 1000]]);
+  } finally {
+    await closeApp(app);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('массовые правки: галочки строк, сортировка, ссылки в списках, новые операторы', async () => {
+  const { app, page } = await launch();
+  const dir = mkdtempSync(join(tmpdir(), 'kedit-special-'));
+  const KATANA = '476-gamedata.base';
+  try {
+    await newMod(page, 'KeditE2E Bulk2');
+    await openPanel(page, 'bulk');
+    const panel = page.getByTestId('bulk-panel');
+    await page.getByTestId('bulk-type').selectOption('WEAPON');
+    await page.getByTestId('bulk-filter').fill('value>=300');
+    await page.getByTestId('bulk-field').selectOption('value');
+    // До ввода значения таблица подходящих записей уже с колонкой цены и сортировкой по клику.
+    await expect(page.getByTestId('bulk-sample')).toBeVisible();
+    await page.getByTestId('bulk-sort-value').click();
+    const first = panel.getByTestId('bulk-sample-row').first();
+    const last = panel.getByTestId('bulk-sample-row').last();
+    const num = async (loc: typeof first): Promise<number> => Number((await loc.locator('td').nth(1).innerText()).replace(/\s/g, ''));
+    expect(await num(first)).toBeLessThanOrEqual(await num(last));
+    await page.getByTestId('bulk-sort-value').click();
+    expect(await num(first)).toBeGreaterThanOrEqual(await num(last));
+    await page.screenshot({ path: join(shots, '35e-bulk-sample-columns.png') });
+
+    // Галочки: снимаем катану — она не попадёт в применение.
+    await page.getByTestId('bulk-op').selectOption('mul');
+    await page.getByTestId('bulk-value').fill('2');
+    const rows = await panel.getByTestId('bulk-row').count();
+    expect(rows).toBeGreaterThan(5);
+    await expect(page.getByTestId('bulk-chosen')).toContainText(`${rows} из ${rows}`);
+    const katanaRow = panel.locator(`[data-testid="bulk-row"][data-sid="${KATANA}"]`);
+    await katanaRow.getByTestId('bulk-pick').uncheck();
+    await expect(page.getByTestId('bulk-chosen')).toContainText(`${rows - 1} из ${rows}`);
+    await expect(page.getByTestId('bulk-apply')).toContainText(String(rows - 1));
+    await page.screenshot({ path: join(shots, '35f-bulk-unticked.png') });
+    // Сортировка по «станет»: первая строка не больше последней.
+    await page.getByTestId('bulk-sort-after').click();
+    const a1 = Number(await panel.getByTestId('bulk-row').first().getAttribute('data-after'));
+    const a2 = Number(await panel.getByTestId('bulk-row').last().getAttribute('data-after'));
+    expect(a1).toBeLessThanOrEqual(a2);
+    // Выбрать все / снять все.
+    await page.getByTestId('bulk-pick-all').click();
+    await expect(page.getByTestId('bulk-chosen')).toContainText(`0 из ${rows}`);
+    await expect(page.getByTestId('bulk-apply')).toBeDisabled();
+    await page.getByTestId('bulk-pick-all').click();
+    await expect(page.getByTestId('bulk-chosen')).toContainText(`${rows} из ${rows}`);
+    await katanaRow.getByTestId('bulk-pick').uncheck();
+    await page.getByTestId('bulk-apply').click();
+    await expect(page.getByTestId('save')).toHaveClass(/primary/);
+
+    // Ссылки: «продавать катану в каждом магазине».
+    await page.getByTestId('bulk-type').selectOption('VENDOR_LIST');
+    await page.getByTestId('bulk-filter').fill('');
+    await page.getByTestId('bulk-op').selectOption('refAdd');
+    await page.getByTestId('bulk-field').selectOption('weapons');
+    await page.getByTestId('bulk-value').fill(KATANA);
+    await expect(page.getByTestId('bulk-sentence')).toContainText('Добавлю ссылку');
+    await expect(page.getByTestId('bulk-ref-values')).toBeVisible();
+    const shops = await panel.getByTestId('bulk-row').count();
+    expect(shops).toBeGreaterThan(5);
+    await page.screenshot({ path: join(shots, '35g-bulk-refs.png') });
+    await page.getByTestId('bulk-apply').click();
+    // Повторно ничего не добавится: ссылка уже есть.
+    await expect(page.getByTestId('bulk-row')).toHaveCount(0);
+    // Убрать ссылку тем же способом: те же магазины.
+    await page.getByTestId('bulk-op').selectOption('refRemove');
+    await page.getByTestId('bulk-field').selectOption('weapons');
+    await expect(panel.getByTestId('bulk-row').first()).toBeVisible();
+    expect(await panel.getByTestId('bulk-row').count()).toBeGreaterThanOrEqual(shops);
+    await page.getByTestId('bulk-op').selectOption('refAdd');
+    await page.getByTestId('bulk-field').selectOption('weapons');
+
+    // Конструктор: Ref (входящие ссылки) и новые операторы.
+    await page.getByTestId('bulk-type').selectOption('WEAPON');
+    await page.getByTestId('bulk-cond-field').selectOption('Ref');
+    await page.getByTestId('bulk-cond-op').selectOption('>');
+    await page.getByTestId('bulk-cond-value').fill('0');
+    await page.getByTestId('bulk-cond-add').click();
+    await expect(page.getByTestId('bulk-filter')).toHaveValue('Ref>0');
+    await page.getByTestId('bulk-filter').fill('name?^kat; description!:zzzzqq');
+    await page.getByTestId('bulk-op').selectOption('set');
+    await page.getByTestId('bulk-field').selectOption('value');
+    await page.getByTestId('bulk-value').fill('1');
+    await expect(page.getByTestId('bulk-error')).toHaveCount(0);
+    await expect(page.getByTestId('bulk-summary')).toBeVisible();
+
+    const recs = await saveAndValidate(app, page, join(dir, 'Bulk2.mod'));
+    expect(recs.some((r) => r.stringId === KATANA)).toBe(false);
+    const sold = recs.filter((r) => (r.refs.get('weapons') ?? []).some((x) => x.target === KATANA));
+    expect(sold).toHaveLength(shops);
+    expect(recs).toHaveLength(rows - 1 + shops);
   } finally {
     await closeApp(app);
     rmSync(dir, { recursive: true, force: true });
