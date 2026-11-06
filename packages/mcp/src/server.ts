@@ -60,6 +60,7 @@ import {
 import { SessionError, type Session } from './session.ts';
 import { GameBridge } from '@kenshi-editor/core/node';
 import { registerGameTools } from './game-tools.ts';
+import { registerWorldTools } from './world-tools.ts';
 
 export const SERVER_NAME = 'kenshi-mod-editor';
 
@@ -186,6 +187,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         'history — шаги понятными словами; undo/redo с to — отмена или повтор до шага.',
         'Если запущена игра с плагином Kenshi Bridge — game_state (что в игре), game_trace (какой диалог выбрала игра и почему), game_command (телепорт, камера, скорость, пауза — только с согласия пользователя, confirm: true).',
         'Если открыт Kenshi Mod Editor — connect_editor: дальше всё читается из окна редактора, а edit отправляет правки в окно набором изменений; пользователь их принимает или откатывает (editor_changes — их состояние). save и undo в этом режиме делает пользователь.',
+        'Мир: list_in_area — что стоит вокруг точки или города; place / move / remove — правки мира мода (y — над землёй), своя отмена world_undo и world_history; save пишет и файлы уровня в leveldata.',
       ].join('\n'),
     },
   );
@@ -711,6 +713,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         if (errors.length) lines.push(`ошибок проверки: ${errors.length} (validate)`);
         return lines;
         if (r.mergeStore) lines.push(`решения слияния: ${r.mergeStore}`);
+        if (r.world) lines.push(`файлы уровня: ${r.world.map((f) => `leveldata/${f}`).join(', ')}`);
       }),
   );
 
@@ -882,6 +885,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   );
 
   registerGameTools(server, opts.game ?? new GameBridge());
+  registerWorldTools(server, session, { run, resolveId });
 
   return server;
 }

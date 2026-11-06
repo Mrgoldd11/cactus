@@ -2,11 +2,11 @@
  * Состояние сервера: пути к игре, ванильные слои (читаются один раз) и открытый мод.
  * Пока мод не открыт, команды работают по ванили (контекст нового пустого мода).
  */
-import { resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
+import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { LiveClient } from './live-client.ts';
 import { readFileSync, statSync } from 'node:fs';
-import { base64ToBytes, type DataFile, MergeLedger, type MergeSource, type LevelDataInfo, ModContext, readDataFile, type GameSchema, type Layer, type LiveSnapshot, type LiveState, type PoFile, type ProposeResult, type TranslationIndex, type AiChangeset, type EditOp, type WorldIndex } from '@kenshi-editor/core';
+import { base64ToBytes, type DataFile, MergeLedger, type MergeSource, type LevelDataInfo, ModContext, readDataFile, type GameSchema, type Layer, type LiveSnapshot, type LiveState, type PoFile, type ProposeResult, type TranslationIndex, type AiChangeset, type EditOp, WorldEdits, WorldIndex, writeDataFile } from '@kenshi-editor/core';
 import {
   detectLevelData,
   gamedataPoPath,
@@ -21,6 +21,10 @@ import {
   loadModContext,
   loadVanillaLayers,
   loadWorld,
+  Heightmap,
+  heightmapPath,
+  readWorldFiles,
+  worldDirs,
   loadTranslation,
   liveDiscoveryPath,
   loadModLayers,
@@ -50,6 +54,11 @@ export interface OpenResult {
   dependencyPaths: string[];
 }
 
+/** Файлы .mod, чьи `leveldata` накладываются на ваниль: зависимости, затем сам мод. */
+function worldModFiles(cur: OpenResult | undefined): string[] {
+  return [...(cur?.dependencyPaths ?? []), ...(cur?.path !== undefined ? [cur.path] : [])];
+}
+
 export class Session {
   readonly paths: GamePaths;
   readonly cwd: string;
@@ -59,6 +68,9 @@ export class Session {
   private translationCache?: TranslationIndex | null;
   private current?: OpenResult;
   private worldCache?: { key: string; world: WorldIndex };
+  /** Правки мира открытого мода (сдвиг, поворот, новые и удалённые объекты) и мир с ними. */
+  private editsCache?: { owner: OpenResult; edits: WorldEdits; version: number; index?: { version: number; world: WorldIndex } };
+  private heightmap?: Promise<Heightmap>;
   private live?: { client: LiveClient; state: LiveState; synced?: { session: number; version: number } };
   /** Решения слияния открытого мода (читаются из файла-спутника при первом обращении). */
   private ledgerCache?: { owner: OpenResult; ledger: MergeLedger };
@@ -128,10 +140,50 @@ export class Session {
    */
   world(): WorldIndex {
     const cur = this.current;
-    const modFiles = [...(cur?.dependencyPaths ?? []), ...(cur?.path !== undefined ? [cur.path] : [])];
+    const e = this.editsCache;
+    if (e && cur && e.owner === cur) {
+      if (e.index?.version !== e.version) e.index = { version: e.version, world: new WorldIndex(e.edits.files()) };
+      return e.index.world;
+    }
+    const modFiles = worldModFiles(cur);
     const key = modFiles.join('\n');
     if (this.worldCache?.key !== key) this.worldCache = { key, world: loadWorld(this.paths, { modFiles }).world };
     return this.worldCache.world;
+  }
+
+  /**
+   * Правки мира открытого мода: свои шаги отмены (не путаются с правками записей). Файлы уровня
+   * читаются при первом обращении. С подключённым редактором мир правят в его окне.
+   */
+  worldEdits(): WorldEdits {
+    if (this.live) throw new SessionError('Подключены к редактору: объекты мира двигают в окне редактора (панель «Мир»). connect_editor с disconnect: true — править файл мода напрямую');
+    this.ctx();
+    const cur = this.current!;
+    if (this.editsCache?.owner !== cur) {
+      const { files } = readWorldFiles(worldDirs(this.paths, worldModFiles(cur)));
+      const name = cur.ctx.modName;
+      const layer = cur.path !== undefined ? basename(cur.path) : /\.mod$/i.test(name) ? name : `${name}.mod`;
+      const entry: NonNullable<Session['editsCache']> = { owner: cur, edits: new WorldEdits(files, layer), version: 0 };
+      entry.edits.onChange(() => {
+        entry.version++;
+      });
+      this.editsCache = entry;
+    }
+    return this.editsCache.edits;
+  }
+
+  /** Есть ли несохранённые правки мира открытого мода. */
+  worldDirty(): boolean {
+    const e = this.editsCache;
+    return e !== undefined && e.owner === this.current && e.edits.isDirty();
+  }
+
+  /** Высота земли в точках мира (карта высот игры); undefined — карты нет. */
+  async groundAt(points: readonly { x: number; z: number }[]): Promise<number[] | undefined> {
+    const path = heightmapPath(this.paths.kenshi);
+    if (!existsSync(path)) return undefined;
+    this.heightmap ??= Heightmap.open(path);
+    return (await this.heightmap).heightsAt(points);
   }
 
   /**
@@ -176,7 +228,7 @@ export class Session {
   }
 
   /** Записать мод. Без пути — туда, откуда открыт. В папку игры — только с `force`. */
-  save(path: string | undefined, force: boolean): { path: string; records: number; mergeStore?: string } {
+  save(path: string | undefined, force: boolean): { path: string; records: number; mergeStore?: string; world?: string[] } {
     if (this.live) throw new SessionError('Подключены к редактору: сохраняет пользователь в окне (Ctrl+S)');
     const cur = this.current;
     if (!cur) throw new SessionError('Мод не открыт: сначала open_mod');
@@ -189,10 +241,35 @@ export class Session {
       throw new SessionError(`${target} — в папке игры или мастерской; запись туда только с force: true`);
     }
     const file = saveModContext(cur.ctx, target);
+    const world = this.saveWorld(cur, target);
     cur.path ??= target;
     // Слияние: «слито» и «отклонено» становятся постоянными, файл-спутник рядом с модом.
     const mergeStore = this.ledgerCache?.owner === cur ? saveMergeLedger(cur.ctx, this.ledgerCache.ledger, target) : undefined;
-    return { path: target, records: file.records.length, ...(mergeStore !== undefined ? { mergeStore } : {}) };
+    return { path: target, records: file.records.length, ...(mergeStore !== undefined ? { mergeStore } : {}), ...(world.length ? { world } : {}) };
+  }
+
+  /**
+   * Файлы уровня мода — в `leveldata` рядом с .mod: изменённые; при записи в другое место — все
+   * файлы мода. Возвращает записанные имена.
+   */
+  private saveWorld(cur: OpenResult, target: string): string[] {
+    const e = this.editsCache?.owner === cur ? this.editsCache.edits : undefined;
+    if (!e) return [];
+    const paths = cur.path !== undefined && resolve(cur.path) === resolve(target) ? e.dirtyFiles() : e.modFiles();
+    const out: string[] = [];
+    const dir = join(dirname(target), 'leveldata');
+    for (const p of paths) {
+      const f = e.buildFile(p);
+      if (!f) continue;
+      mkdirSync(dir, { recursive: true });
+      // Сначала во временный файл, потом на место: игра не увидит половину файла.
+      const full = join(dir, p);
+      writeFileSync(`${full}.tmp`, writeDataFile(f));
+      renameSync(`${full}.tmp`, full);
+      out.push(p);
+    }
+    e.markSaved();
+    return out;
   }
 
   // ------------------------------------------------------------ живая связь с редактором
