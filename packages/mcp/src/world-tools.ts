@@ -7,6 +7,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { zoneOfPoint, type BuildingPlacement, type ModContext, type Placement, type Vec4, type WorldEdits } from '@kenshi-editor/core';
+import { registerInteriorTools } from './interior-tools.ts';
 import { SessionError, type Session } from './session.ts';
 
 type Run = (fn: () => string[] | Promise<string[]>) => Promise<{ content: { type: 'text'; text: string }[]; isError?: boolean }>;
@@ -247,7 +248,7 @@ export function registerWorldTools(server: McpServer, session: Session, { run, r
     'world_history',
     {
       title: 'История правок мира',
-      description: 'Шаги правок мира мода (place / move / remove), своя история — не путается с history записей.',
+      description: 'Шаги правок мира мода (place / move / remove и интерьеры: interior_place / interior_move / interior_remove), своя история — не путается с history записей.',
       inputSchema: {},
       annotations: { ...READ, title: 'История правок мира' },
     },
@@ -287,6 +288,8 @@ export function registerWorldTools(server: McpServer, session: Session, { run, r
         return [...out, ...pending(edits)];
       }),
   );
+
+  registerInteriorTools(server, session, { run, resolveId });
 }
 
 function pending(edits: WorldEdits): string[] {

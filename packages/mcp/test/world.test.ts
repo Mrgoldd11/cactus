@@ -1,6 +1,7 @@
 /**
- * MCP: инструменты мира — list_in_area, place, move, remove, world_history, world_undo и запись
- * файлов уровня мода инструментом save. Синтетическая «папка игры» с одной зоной ванили.
+ * MCP: инструменты мира — list_in_area, place, move, remove, world_history, world_undo, интерьеры
+ * (interior, interior_place / _move / _remove) и запись файлов уровня мода инструментом save.
+ * Синтетическая «папка игры» с одной зоной и одним интерьером ванили.
  */
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -43,6 +44,21 @@ beforeEach(async () => {
       }),
     ],
   });
+  // Интерьер здания X: раскладка «Hall» с одним объектом (Y) на этаже 0.
+  writeDataFileSync(join(dir, 'interiors.level'), {
+    fileType: FileType.Data,
+    lastId: 11,
+    tail: new Uint8Array(),
+    records: [
+      rec('INSTANCE_COLLECTION', 'X-Hall', (r) => {
+        r.name = encodeText('Hall');
+        r.strings.set('associated building', encodeText('X'));
+        r.bools.set('is exterior', false);
+        r.instances.set('10-base', { target: 'Y', position: [1, 50, 2], rotation: [1, 0, 0, 0], states: [encodeText('10-base-S23')] });
+      }),
+      rec('GAMESTATE_BUILDING', '10-base-S23', (r) => r.ints.set('floornum', 0)),
+    ],
+  });
   const session = new Session({ kenshi: fx.game, workshop: defaultWorkshopDir(fx.game) }, fx.game);
   const [a, b] = InMemoryTransport.createLinkedPair();
   await createServer(session).connect(a);
@@ -70,7 +86,8 @@ describe('kenshi-mcp: мир', () => {
     const hint = (n: string): boolean | undefined => tools.find((t) => t.name === n)?.annotations?.readOnlyHint;
     expect(hint('list_in_area')).toBe(true);
     expect(hint('world_history')).toBe(true);
-    for (const n of ['place', 'move', 'remove', 'world_undo']) expect(hint(n)).toBe(false);
+    expect(hint('interior')).toBe(true);
+    for (const n of ['place', 'move', 'remove', 'world_undo', 'interior_place', 'interior_move', 'interior_remove']) expect(hint(n)).toBe(false);
   });
 
   it('list_in_area → place / move / remove → отмена → save пишет leveldata', async () => {
@@ -117,5 +134,44 @@ describe('kenshi-mcp: мир', () => {
     expect(state.floats.get('world Y pos')).toBe(503);
     expect(decodeText(state.strings.get('name')!)).toBe('Kiosk');
     expect((await call('world_history')).text).not.toContain('не сохранено');
+  });
+
+  it('interior: раскладки, объекты, переход из мира; правки в interiors.level мода', async () => {
+    const world = await call('interior', { building: `${ZONE}|0-buildinglist|1-base` });
+    expect(world.isError, world.text).toBe(false);
+    expect(world.text).toContain('«Меч» (X): раскладок 1');
+    expect(world.text).toContain('X-Hall — «Hall»: объектов 1  ← показана');
+    expect(world.text).toContain('раскладка не названа — игра выбирает её сама');
+    expect(world.text).toContain('в мире у 0 зданий по имени; ещё у 1 из 1');
+    expect(world.text).toContain('interiors.level|X-Hall|10-base — Shield (Y) · другое · x 1 y 50 z 2 · 0° · этаж 0');
+    expect((await call('interior', { building: 'Sword', layout: 'nope' })).isError).toBe(true);
+
+    await call('open_mod', { mod: 'My' });
+    const made = await call('edit', { label: 'кровать', ops: [{ op: 'create', type: 'BUILDING', name: 'Bed', as: '$b' }] });
+    const bed = /\$b = (\S+)/.exec(made.text)![1]!;
+    const placed = await call('interior_place', { target: bed, layout: 'X-Hall', x: 5, y: 51, z: 5, angle: 90 });
+    expect(placed.isError, placed.text).toBe(false);
+    expect(placed.text).toContain('мебель · x 5 y 51 z 5 · 90° · этаж 0');
+    expect(placed.text).toContain('состояние собрано заново');
+    expect((await call('interior_place', { target: 'Sword', layout: 'X-Hall', x: 0, y: 0, z: 0 })).isError).toBe(true);
+    const handle = /Поставлен (\S+)/.exec(placed.text)![1]!;
+    expect((await call('interior_move', { object: 'interiors.level|X-Hall|10-base', dy: 10, turn: 180 })).text).toContain('x 1 y 60 z 2 · 180°');
+    expect((await call('interior_remove', { object: handle })).text).toContain('Убран');
+    expect((await call('interior_remove', { object: 'zone|a|b' })).isError).toBe(true);
+    expect((await call('world_history')).text).toContain('#3 Из интерьера: Bed');
+    await call('world_undo');
+
+    const saved = await call('save', { force: true });
+    expect(saved.text).toContain('leveldata/interiors.level');
+    const file = readDataFile(readFileSync(join(fx.game, 'mods', 'My', 'leveldata', 'interiors.level')));
+    const hall = file.records.find((r) => r.stringId === 'X-Hall')!;
+    expect(hall.instances.get('10-base')!.position).toEqual([1, 60, 2]);
+    expect(decodeText(hall.strings.get('associated building')!)).toBe('X');
+    const key = handle.split('|')[2]!;
+    expect(hall.instances.get(key)!.target).toBe(bed);
+    const st = file.records.find((r) => r.stringId === `${key}-S23`)!;
+    expect(decodeText(st.strings.get('name')!)).toBe('Bed');
+    // Зона не тронута: файла зоны у мода нет.
+    expect(saved.text).not.toContain(ZONE);
   });
 });

@@ -172,6 +172,19 @@ export class Session {
     return this.editsCache.edits;
   }
 
+  /**
+   * Правки мира с дочитанными интерьерами (`interiors.level` ванили, зависимостей и мода): тот
+   * же объект и та же история отмены, что у `worldEdits`.
+   */
+  interiorEdits(): WorldEdits {
+    const edits = this.worldEdits();
+    if (!edits.isLoaded('interiors.level')) {
+      const { files } = readWorldFiles(worldDirs(this.paths, worldModFiles(this.current)), { interiors: true });
+      edits.addFiles(files.filter((f) => f.path.toLowerCase() === 'interiors.level'));
+    }
+    return edits;
+  }
+
   /** Есть ли несохранённые правки мира открытого мода. */
   worldDirty(): boolean {
     const e = this.editsCache;
