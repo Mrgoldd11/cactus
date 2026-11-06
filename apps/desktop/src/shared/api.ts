@@ -164,6 +164,21 @@ export type TextFileKind = 'csv' | 'json' | 'po';
 
 export type SaveTextResult = { ok: true; path: string } | { ok: false; cancelled: true } | { ok: false; cancelled: false; error: string };
 
+/** Связь с игрой через плагин Kenshi Bridge (RE_Kenshi). */
+export interface GameLinkStatus {
+  /** Плагин отвечает. */
+  connected: boolean;
+  /** Игра в мире (не в меню и не на загрузке). */
+  inGame: boolean;
+  version?: string;
+}
+
+export type GameReply = { ok: true; result: unknown } | { ok: false; code: string; message: string };
+
+/** Команды плагина, которые окно может отправить (через main). */
+export const GAME_COMMANDS = ['state', 'camera', 'teleport', 'speed', 'pause', 'trace', 'trace_get'] as const;
+export type GameCommand = (typeof GAME_COMMANDS)[number];
+
 export interface KeditApi {
   detectGames(): Promise<GameInstallInfo[]>;
   /** Диалог выбора папки игры; null — отменено или в папке нет игры. */
@@ -207,6 +222,11 @@ export interface KeditApi {
   getLiveStatus(): Promise<LiveStatus>;
   /** Подписка на состояние живой связи; вернёт отписку. */
   onLiveStatus(cb: (s: LiveStatus) => void): () => void;
+  getGameStatus(): Promise<GameLinkStatus>;
+  /** Подписка на связь с игрой; вернёт отписку. */
+  onGameStatus(cb: (s: GameLinkStatus) => void): () => void;
+  /** Команда плагину игры (main пропускает только `GAME_COMMANDS`). */
+  gameRequest(cmd: GameCommand, args?: object): Promise<GameReply>;
 }
 
 export const IPC = {
@@ -232,4 +252,7 @@ export const IPC = {
   liveResponse: 'kedit:live-response',
   liveStatus: 'kedit:live-status',
   getLiveStatus: 'kedit:get-live-status',
+  gameStatus: 'kedit:game-status',
+  getGameStatus: 'kedit:get-game-status',
+  gameRequest: 'kedit:game-request',
 } as const;

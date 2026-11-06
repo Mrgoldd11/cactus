@@ -1,7 +1,7 @@
 /** Мост для окна: только перечисленные вызовы `KeditApi`, без доступа к Node. */
 import { contextBridge, ipcRenderer } from 'electron';
 import type { LiveRequestBody } from '@kenshi-editor/core';
-import { IPC, type KeditApi, type LiveReply, type LiveStatus } from '../shared/api.ts';
+import { IPC, type GameLinkStatus, type KeditApi, type LiveReply, type LiveStatus } from '../shared/api.ts';
 
 const api: KeditApi = {
   detectGames: () => ipcRenderer.invoke(IPC.detectGames),
@@ -46,6 +46,17 @@ const api: KeditApi = {
       ipcRenderer.removeListener(IPC.liveStatus, listener);
     };
   },
+  getGameStatus: () => ipcRenderer.invoke(IPC.getGameStatus),
+  onGameStatus: (cb) => {
+    const listener = (_e: unknown, s: GameLinkStatus): void => {
+      cb(s);
+    };
+    ipcRenderer.on(IPC.gameStatus, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.gameStatus, listener);
+    };
+  },
+  gameRequest: (cmd, args) => ipcRenderer.invoke(IPC.gameRequest, cmd, args ?? {}),
 };
 
 contextBridge.exposeInMainWorld('kedit', api);

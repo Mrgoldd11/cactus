@@ -48,6 +48,8 @@ import {
   isVanillaLayer,
 } from '@kenshi-editor/core';
 import { SessionError, type Session } from './session.ts';
+import { GameBridge } from '@kenshi-editor/core/node';
+import { registerGameTools } from './game-tools.ts';
 
 export const SERVER_NAME = 'kenshi-mod-editor';
 
@@ -154,7 +156,7 @@ function compact<T extends object>(o: T): T {
 const READ = { readOnlyHint: true, openWorldHint: false } as const;
 const EDIT = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 
-export function createServer(session: Session): McpServer {
+export function createServer(session: Session, opts: { game?: GameBridge } = {}): McpServer {
   // Подключены к редактору — перед командой взять свежее состояние окна.
   const run = (fn: () => string[] | Promise<string[]>): Promise<ToolResult> =>
     guarded(async () => {
@@ -172,6 +174,7 @@ export function createServer(session: Session): McpServer {
         'Диалоги: tree — дерево, talk — какой диалог выберет игра у персонажа, play — разговор по шагам с ответами игрока; правки графа — операции edit addLine, insertLine, link, unlink, setText, duplicateLine, deleteLines, addCondition, addEffect.',
         'Массовые правки — bulk: сначала предпросмотр «было → станет», применяет только с apply: true.',
         'history — шаги понятными словами; undo/redo с to — отмена или повтор до шага.',
+        'Если запущена игра с плагином Kenshi Bridge — game_state (что в игре), game_trace (какой диалог выбрала игра и почему), game_command (телепорт, камера, скорость, пауза — только с согласия пользователя, confirm: true).',
         'Если открыт Kenshi Mod Editor — connect_editor: дальше всё читается из окна редактора, а edit отправляет правки в окно набором изменений; пользователь их принимает или откатывает (editor_changes — их состояние). save и undo в этом режиме делает пользователь.',
       ].join('\n'),
     },
@@ -777,6 +780,8 @@ export function createServer(session: Session): McpServer {
       return resourceText(uri, lines);
     },
   );
+
+  registerGameTools(server, opts.game ?? new GameBridge());
 
   return server;
 }

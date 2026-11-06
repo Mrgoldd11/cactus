@@ -9,7 +9,7 @@
  * во временной папке, `KEDIT_LIVE_FILE`; `KEDIT_LIVE=0` — выключить) и передаёт запросы
  * MCP окну — их выполняет `LiveHost` над открытым проектом.
  *
- * Меню окна — `menu.ts`, журнал ошибок в файл — `log.ts`.
+ * Меню окна — `menu.ts`, журнал ошибок в файл — `log.ts`, мост к игре (плагин Kenshi Bridge) — `game.ts`.
  */
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -17,6 +17,7 @@ import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'el
 import { describeOrderChange, type LiveRequestBody } from '@kenshi-editor/core';
 import { startLiveServer, type LiveServer } from '@kenshi-editor/core/node';
 import { initLog, log, watchWindow } from './log.ts';
+import { startGameLink, stopGameLink } from './game.ts';
 import { APP_TITLE, buildMenu } from './menu.ts';
 import {
   IPC,
@@ -402,6 +403,7 @@ function createWindow(): void {
 void app.whenReady().then(() => {
   buildMenu(settings.lang);
   registerIpc();
+  startGameLink();
   createWindow();
   void startLive();
   app.on('activate', () => {
@@ -413,6 +415,7 @@ app.on('will-quit', () => {
   // Файл обнаружения убирается сразу (синхронно), соединения закрываются следом.
   void liveServer?.close();
   liveServer = undefined;
+  stopGameLink();
 });
 
 app.on('window-all-closed', () => {

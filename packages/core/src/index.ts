@@ -14,3 +14,4 @@ export * from './model/index.ts';
 export * from './world/index.ts';
 export * from './live/index.ts';
 export * from './dialog/index.ts';
+export * from './game/bridge.ts';

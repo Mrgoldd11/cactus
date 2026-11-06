@@ -29,6 +29,7 @@ import { useLang, useT, type Strings } from '../i18n.ts';
 import type { Project } from '../project.ts';
 import { lineCaption, useTranslation } from './LineInspector.tsx';
 import { partsText } from './TalkTab.tsx';
+import { AsInGame } from './GameLink.tsx';
 
 interface Props {
   project: Project;
@@ -166,6 +167,13 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
           ⟲ {t.plRestart}
         </button>
       </div>
+      <AsInGame
+        sid={sid}
+        event={event}
+        editorChoice={typeof result === 'string' ? undefined : result.steps[0]?.path[0]?.node}
+        onGo={onGo}
+        name={name}
+      />
       {typeof result === 'string' ? (
         <p className="error">{result}</p>
       ) : (

@@ -17,6 +17,7 @@ import {
 } from '@kenshi-editor/core';
 import { useLang, useT } from '../i18n.ts';
 import type { Project } from '../project.ts';
+import { ShowInGame } from './GameLink.tsx';
 
 interface Props {
   project: Project;
@@ -236,6 +237,7 @@ function FactView({ fact: f, onGo }: { fact: WhereFact; onGo: (sid: string) => v
                     <td className="mono selectable">
                       {formatPosition(pos.position)}
                       {pos.zone && <span className="muted">{` (${t.whereZone} ${pos.zone.x}.${pos.zone.y})`}</span>}
+                      <ShowInGame pos={pos.position} />
                     </td>
                     <td>{p.path.length > 0 && <PathView path={p.path} onGo={onGo} />}</td>
                   </tr>

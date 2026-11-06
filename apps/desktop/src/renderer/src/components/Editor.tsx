@@ -19,6 +19,7 @@ import type { StatusMessage, Workbench as WorkbenchValue } from '../workbench/co
 import { Workbench } from '../workbench/Workbench.tsx';
 import { WindowMenu } from '../workbench/WindowMenu.tsx';
 import { UndoRedoButtons, stepOf } from './History.tsx';
+import { GameIndicator } from './GameLink.tsx';
 import { applyPreset, isPreset, openPanel, type PresetId } from '../workbench/layouts.ts';
 import type { PanelParams } from '../workbench/registry.ts';
 
@@ -314,6 +315,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang }: Props): Re
           {t.modRecords}: {modCount}
         </span>
         <span className="mono muted">{project.path ?? t.unsaved}</span>
+        <GameIndicator />
         {status && (
           <span className={`status-msg ${status.kind}`} data-testid="status-msg">
             {status.text(t)}
