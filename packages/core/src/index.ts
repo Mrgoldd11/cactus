@@ -12,6 +12,7 @@ export * from './locale/po.ts';
 export * from './locale/translation.ts';
 export * from './model/index.ts';
 export * from './world/index.ts';
+export * from './mesh/index.ts';
 export * from './live/index.ts';
 export * from './dialog/index.ts';
 export * from './game/bridge.ts';

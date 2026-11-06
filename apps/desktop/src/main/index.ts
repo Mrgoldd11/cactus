@@ -46,6 +46,7 @@ import {
   needsConfirmation,
   planCopy,
   provenanceOf,
+  readGameAsset,
   readIconDataUrl,
   readModOrder,
   readTranslationBytes,
@@ -110,6 +111,22 @@ async function saveTextFile(e: IpcMainInvokeEvent, defaultName: string, kind: Te
     return { ok: true, path };
   } catch (err) {
     log('error', 'saveTextFile', path, err);
+    return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function savePngFile(e: IpcMainInvokeEvent, defaultName: string, png: Uint8Array): Promise<SaveTextResult> {
+  const win = windowOf(e);
+  const opts = { defaultPath: join(app.getPath('documents'), defaultName), filters: [{ name: 'PNG', extensions: ['png'] }] };
+  const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+  if (r.canceled || !r.filePath) return { ok: false, cancelled: true };
+  const path = r.filePath;
+  if (isGamePath(path) || isWorkshopPath(games(), path)) return { ok: false, cancelled: false, error: 'game-folder' };
+  try {
+    writeFileSync(path, png);
+    return { ok: true, path };
+  } catch (err) {
+    log('error', 'savePngFile', path, err);
     return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
@@ -329,6 +346,8 @@ function registerIpc(): void {
   ipcMain.handle(IPC.copyModForEditing, copyModForEditing);
   ipcMain.handle(IPC.loadWorld, (_e, req: WorldRequest) => loadWorldBytes(req));
   ipcMain.handle(IPC.readIcon, (_e, game: GameInstallInfo, iconPath: string) => readIconDataUrl(game, iconPath));
+  ipcMain.handle(IPC.readGameAsset, (_e, game: GameInstallInfo, relPath: string) => readGameAsset(game, relPath));
+  ipcMain.handle(IPC.savePngFile, savePngFile);
   ipcMain.handle(IPC.readTranslation, (_e, game: GameInstallInfo) => readTranslationBytes(game));
   ipcMain.handle(IPC.saveTextFile, saveTextFile);
   ipcMain.handle(IPC.openTextFile, openTextFile);

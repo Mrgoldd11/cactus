@@ -35,6 +35,9 @@ import {
   type ModContext,
   formatWhere,
   whereInGame,
+  formatInside,
+  inspectRecord,
+  modelOfRecord,
   formatTalk,
   simulateTalk,
   describeChangeset,
@@ -330,6 +333,34 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         const res = whereInGame(ctx, id, { world: session.world() });
         const max = a.limit ?? 20;
         return formatWhere(res, { tree: a.tree ?? false, maxFacts: max === 0 ? Infinity : max }).split('\n');
+      }),
+  );
+
+  server.registerTool(
+    'inspect',
+    {
+      title: 'Что внутри',
+      description:
+        'Карточка объекта, как по клику в сцене или в панели «Модель»: что это (имя, тип, из какого мода, меняют ли его моды), что внутри и на что ссылается (части здания, интерьер, мебель, товары, отряды, диалоги… по категориям, у размещённых объектов — координаты), кто ссылается на него, и из каких файлов модели он собран. Скриптов у объектов Kenshi нет — «внутри» только данные записи. Пустое так и помечено.',
+      inputSchema: {
+        id: z.string().describe('Id или имя записи (объекта сцены, здания, части, предмета)'),
+        limit: limit(20),
+      },
+      annotations: { ...READ, title: 'Что внутри' },
+    },
+    (a) =>
+      run(() => {
+        const ctx = session.ctx();
+        const id = resolveId(ctx, a.id);
+        const max = a.limit ?? 20;
+        const lines = formatInside(inspectRecord(ctx, id, { limit: max === 0 ? Infinity : max })).split('\n');
+        const model = modelOfRecord(ctx, id);
+        if (model.pieces.length > 0) {
+          lines.push('модель:');
+          for (const p of model.pieces) lines.push(`  ${p.mesh}${p.texture ? ` + ${p.texture}` : ''}${p.source !== id ? `  (часть ${refLabel(ctx, p.source)})` : ''}`);
+        }
+        for (const n of model.notes) lines.push(`  ${n}`);
+        return lines;
       }),
   );
 

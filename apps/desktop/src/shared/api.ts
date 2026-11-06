@@ -202,6 +202,14 @@ export interface KeditApi {
   copyModForEditing(game: GameInstallInfo, path: string): Promise<CopyModResult>;
   /** Байты файлов уровня (города, здания, зоны) ванили и модов — для «Где в игре». */
   loadWorld(req: WorldRequest): Promise<WorldFileBytes[]>;
+  /**
+   * Байты файла модели или текстуры (`.mesh`, `.dds`, `.png`, `.material`) по пути из записи
+   * (`.\data\items\a.mesh`, относительно папки игры). Только чтение и только внутри папки игры
+   * или мастерской; иначе null.
+   */
+  readGameAsset(game: GameInstallInfo, relPath: string): Promise<Uint8Array | null>;
+  /** Диалог «Сохранить» и запись картинки PNG (иконка). В папку игры и мастерской не пишет — `game-folder`. */
+  savePngFile(defaultName: string, png: Uint8Array): Promise<SaveTextResult>;
   /** Иконка предмета (поле `icon`, путь относительно папки игры) как data URL; null — нет файла. */
   readIcon(game: GameInstallInfo, iconPath: string): Promise<string | null>;
   /**
@@ -242,6 +250,8 @@ export const IPC = {
   copyModForEditing: 'kedit:copy-mod-for-editing',
   loadWorld: 'kedit:load-world',
   readIcon: 'kedit:read-icon',
+  readGameAsset: 'kedit:read-game-asset',
+  savePngFile: 'kedit:save-png-file',
   readTranslation: 'kedit:read-translation',
   saveTextFile: 'kedit:save-text-file',
   openTextFile: 'kedit:open-text-file',

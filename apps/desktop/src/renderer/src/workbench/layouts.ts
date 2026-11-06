@@ -66,12 +66,13 @@ export function applyPreset(api: DockviewApi, preset: PresetId, t: Strings): voi
   } else {
     add(api, t, 'records');
     add(api, t, 'viewport', right('records'));
+    add(api, t, 'model', within('viewport'));
     add(api, t, 'components', right('viewport'));
     add(api, t, 'inspector', within('components'), { inactive: true });
     width(api, 'records', 300);
     width(api, 'components', 340);
   }
-  const first = preset === 'data' ? 'records' : preset === 'dialogue' ? 'graph' : 'viewport';
+  const first = preset === 'data' ? 'records' : preset === 'dialogue' ? 'graph' : 'model';
   api.getPanel(first)?.api.setActive();
 }
 

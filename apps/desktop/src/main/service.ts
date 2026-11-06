@@ -2,7 +2,7 @@
  * Файловая часть главного процесса без Electron: поиск игры, список модов, чтение всего,
  * что нужно окну для контекста, запись мода. Подтверждения и диалоги — в `index.ts`.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { VANILLA_FILES } from '@kenshi-editor/core';
 import {
@@ -242,6 +242,32 @@ export function readIconDataUrl(game: GameInstallInfo, iconPath: string): string
   if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return null;
   if (!existsSync(full)) return null;
   return `data:${mime};base64,${readFileSync(full).toString('base64')}`;
+}
+
+const ASSET_TYPES = new Set(['.mesh', '.dds', '.png', '.material', '.skeleton']);
+/** Больше этого — не модель и не текстура игры. */
+const MAX_ASSET = 256 * 1024 * 1024;
+
+/**
+ * Файл модели или текстуры по пути из записи (`.\data\items\a.mesh`). Пути в записях модов
+ * тоже идут от папки игры (`.\mods\<мод>\…`); не нашёлся — пробуем тот же путь от папки
+ * мастерской. Только чтение, только внутри этих двух папок.
+ */
+export function readGameAsset(game: GameInstallInfo, relPath: string): Uint8Array | null {
+  if (!ASSET_TYPES.has(extname(relPath).toLowerCase())) return null;
+  const rel = relPath.replace(/\\/g, '/').replace(/^(\.\/)+/, '');
+  for (const root of [game.kenshi, game.workshop]) {
+    if (!root) continue;
+    const full = resolve(root, rel);
+    const inside = relative(resolve(root), full);
+    if (inside === '' || inside.startsWith('..') || isAbsolute(inside)) continue;
+    try {
+      if (existsSync(full) && statSync(full).size <= MAX_ASSET) return readFileSync(full);
+    } catch {
+      // нет доступа — как нет файла
+    }
+  }
+  return null;
 }
 
 /** Перевод текстов записей (реплик) игры; null — файла нет. */

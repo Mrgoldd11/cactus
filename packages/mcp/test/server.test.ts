@@ -38,7 +38,7 @@ describe('kenshi-mcp: чтение', () => {
   it('список инструментов и ресурсов', async () => {
     const tools = (await client.listTools()).tools.map((t) => t.name);
     expect(tools).toEqual(
-      expect.arrayContaining(['open_mod', 'find', 'show', 'tree', 'refs', 'where', 'talk', 'diff', 'validate', 'edit', 'undo', 'redo', 'history', 'play', 'save', 'schema', 'touched', 'conflicts']),
+      expect.arrayContaining(['open_mod', 'find', 'show', 'tree', 'refs', 'where', 'inspect', 'talk', 'diff', 'validate', 'edit', 'undo', 'redo', 'history', 'play', 'save', 'schema', 'touched', 'conflicts']),
     );
     const res = await client.listResources();
     expect(res.resources.map((r) => r.uri)).toEqual(expect.arrayContaining(['kenshi://schema/types', 'kenshi://schema/type/CHARACTER']));
@@ -61,6 +61,11 @@ describe('kenshi-mcp: чтение', () => {
     expect((await call('refs', { id: '1-My.mod', direction: 'to' })).text).toBe('← Bandit [A] vendors  3 0 0');
     expect((await call('where', { id: '1-My.mod' })).text).toContain('путь: ← CHARACTER «Bandit» (Разбойник) [A] (vendors)');
     expect((await call('tree', { id: 'D1' })).text).toContain('↻ DIALOGUE_LINE L1');
+    const inside = (await call('inspect', { id: 'Bandit' })).text;
+    expect(inside).toContain('CHARACTER «Bandit» (Разбойник) [A]');
+    expect(inside).toContain('vendors (1):');
+    expect(inside).toContain('ITEM «Magic hat» [1-My.mod]');
+    expect((await call('inspect', { id: '1-My.mod' })).text).toContain('CHARACTER «Bandit» (Разбойник) [A]');
     expect((await call('talk', { id: 'Bandit' })).text).toContain('Разбойник (A), событие');
     expect((await call('talk', { id: 'Bandit' })).text).toContain('диалогов на это событие нет');
     expect((await call('talk', { id: 'D1' })).isError).toBe(true);
