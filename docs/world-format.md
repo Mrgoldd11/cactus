@@ -52,10 +52,12 @@
   маска — `leaves normal`, без неё редактор берёт `normal map` (у `ThinTree 01`, `Joshua Tree` в
   `leaves normal` пусто, а `normal map` — тот же атлас; в игре не проверено). Без карты нормалей
   игра берёт `flat.dds` (альфа 1) — вырезов нет.
-- `material type` 2 = TERRAIN (68 камней и скал, `Boulder*`, `MonuRock*`, `BlackRock*`): своей
-  текстуры нет, на модель ложится текстура земли биома (fcs.def: «Terrain mode uses textures from
-  the current biome», `Feature_Terrain` в `mapfeature.material`). Редактор красит их картой цвета
-  земли по X/Z мира. Текстуры `…_HI.dds`, которых нет в папке игры, редактор заменяет обычными
+- `material type` 2 = TERRAIN (158 записей; у 68 — `Boulder*`, `MonuRock*`, `BlackRock*`,
+  `Barkworm_Pillar*` — своей текстуры нет): на модель ложится текстура земли биома (fcs.def:
+  «Terrain mode uses textures from the current biome», `Feature_Terrain` в `mapfeature.material`).
+  Редактор красит такие картой цвета земли по X/Z мира с рисунком скалы
+  (`CinderRidge-Rockloop_DIF.dds` в трёх проекциях). У остальных 90 своя `texture map` — их
+  редактор рисует ею (с цветом земли они выглядели плоскими). Текстуры `…_HI.dds`, которых нет в папке игры, редактор заменяет обычными
   (`…_DIF_HI.dds` → `…_DIF.dds`).
 
 ## Объекты в зонах

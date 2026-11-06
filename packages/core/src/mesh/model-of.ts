@@ -200,7 +200,7 @@ const MESH_FIELDS: Record<string, readonly string[]> = {
   ITEM: ['mesh', 'ground mesh'],
 };
 
-/** MapFeatureMode (fcs.def): TERRAIN — текстура земли биома, FOLIAGE — вырезы по альфе. */
+/** MapFeatureMode (fcs.def): TERRAIN — текстура земли биома (если своей нет), FOLIAGE — вырезы по альфе. */
 const MODE_TERRAIN = 2;
 const MODE_FOLIAGE = 4;
 
@@ -215,9 +215,10 @@ function foliagePieces(rec: GameRecord, sid: string, out: RecordModel): void {
   const normal = file(rec, 'normal map');
   if (mesh !== undefined && /\.mesh$/i.test(mesh)) {
     const piece: ModelPiece = { mesh, source: sid, field: 'mesh' };
-    if (mode === MODE_TERRAIN) piece.terrain = true;
+    const tex = file(rec, 'texture map');
+    // TERRAIN без своей текстуры — цвет земли; со своей — как обычная модель (иначе камни плоские)
+    if (mode === MODE_TERRAIN && !tex) piece.terrain = true;
     else {
-      const tex = file(rec, 'texture map');
       if (tex) piece.texture = tex;
       if (normal) piece.normalMap = normal;
       const tx = rec.floats.get('tile X') ?? 1;

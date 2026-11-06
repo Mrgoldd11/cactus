@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { decodeText, itemTypeName, modelOfRecord, zoneOfPath, WORLD_HALF, ZONE_COUNT, ZONE_SIZE, type BuildingPlacement, type Instance, type ModContext, type Placement, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
 import type { GameInstallInfo } from '../../../../shared/api.ts';
 import type { SubmeshArrays, WorkerPool } from './protocol.ts';
+import { averageColour } from './biomes.ts';
 
 export interface ObjectsQuality {
   /** Дальность маркеров. */
@@ -68,6 +69,10 @@ const COLOR_OTHER = new THREE.Color(0x8f9aa6);
 const GREY = 0xb8b2a6;
 /** Камни без своей текстуры (в игре на них ложится текстура земли). */
 const STONE = 0x8a7c6c;
+/** Рисунок скалы на камнях без своей текстуры: самая частая «отвесная» текстура биомов. */
+const ROCK_DETAIL = 'data/newland/land/textures/CinderRidge-Rockloop_DIF.dds';
+/** Повторов рисунка скалы на единицу мира (как у отвесных склонов земли, чуть мельче). */
+const ROCK_TILE = 1 / 90;
 /** Растительность меньше этой доли расстояния до камеры не рисуется. */
 const FOLIAGE_MIN_SIZE = 0.015;
 
@@ -329,22 +334,49 @@ export class WorldObjects {
   }
 
   /** Материал камней с типом TERRAIN: цвет земли под ними (карта цвета рельефа по X/Z мира). */
-  private terrainMaterial(): THREE.Material {
+  /**
+   * Камни с типом материала TERRAIN без своей текстуры: цвет — карта земли по X/Z мира,
+   * рисунок — скальная текстура в трёх проекциях (по нормали), поделённая на её средний цвет,
+   * чтобы не менять цвет земли.
+   */
+  private terrainMaterial(rock: THREE.Texture | null): THREE.Material {
     const map = this.groundMap;
     const mat = new THREE.MeshLambertMaterial({ color: map ? 0xffffff : STONE, map, side: THREE.DoubleSide });
     if (!map) return mat;
-    mat.customProgramCacheKey = () => 'kedit-terrain-mapped';
+    const data = rock ? (rock.image as { data?: Uint8Array }).data : undefined;
+    const avg = data ? averageColour(data) : null;
+    const detail = rock !== null && avg !== null;
+    mat.customProgramCacheKey = () => (detail ? 'kedit-terrain-mapped-rock' : 'kedit-terrain-mapped');
     mat.onBeforeCompile = (shader) => {
-      shader.vertexShader = shader.vertexShader.replace(
+      const head = detail ? 'varying vec3 kRockP;\nvarying vec3 kRockN;\n' : '';
+      shader.vertexShader = head + shader.vertexShader.replace(
         '#include <worldpos_vertex>',
         [
           '#include <worldpos_vertex>',
           '#ifdef USE_INSTANCING',
-          'vec4 kWorld = modelMatrix * instanceMatrix * vec4( transformed, 1.0 );',
+          'mat4 kModel = modelMatrix * instanceMatrix;',
           '#else',
-          'vec4 kWorld = modelMatrix * vec4( transformed, 1.0 );',
+          'mat4 kModel = modelMatrix;',
           '#endif',
+          'vec4 kWorld = kModel * vec4( transformed, 1.0 );',
           `vMapUv = ( kWorld.xz + ${WORLD_HALF.toFixed(1)} ) / ${(2 * WORLD_HALF).toFixed(1)};`,
+          detail ? 'kRockP = kWorld.xyz;\nkRockN = mat3( kModel ) * objectNormal;' : '',
+        ].join('\n'),
+      );
+      if (!detail) return;
+      shader.uniforms.tRock = { value: rock };
+      shader.uniforms.rockAvg = { value: avg };
+      shader.fragmentShader = head + 'uniform sampler2D tRock;\nuniform vec3 rockAvg;\n' +shader.fragmentShader.replace(
+        '#include <map_fragment>',
+        [
+          '#include <map_fragment>',
+          '{',
+          '  vec3 kw = pow( abs( normalize( kRockN ) ), vec3( 4.0 ) );',
+          '  kw /= kw.x + kw.y + kw.z + 1e-5;',
+          `  vec3 kp = kRockP * ${ROCK_TILE.toFixed(6)};`,
+          '  vec3 kd = texture2D( tRock, kp.zy ).rgb * kw.x + texture2D( tRock, kp.xz ).rgb * kw.y + texture2D( tRock, kp.xy ).rgb * kw.z;',
+          '  diffuseColor.rgb *= clamp( kd / rockAvg, 0.25, 2.5 );',
+          '}',
         ].join('\n'),
       );
     };
@@ -362,6 +394,8 @@ export class WorldObjects {
       const tex = !piece.texture ? Promise.resolve(null) : piece.alphaMap ? this.maskedTexture(piece.texture, piece.alphaMap) : this.texture(piece.texture);
       const [subs, loaded] = await Promise.all([this.mesh(piece.mesh).catch(() => null), tex.catch(() => null)]);
       if (!subs) continue;
+      const rock = piece.terrain ? await this.texture(ROCK_DETAIL).catch(() => null) : null;
+      if (rock) proto.texPaths.push(ROCK_DETAIL.toLowerCase());
       proto.meshPaths.push(piece.mesh.toLowerCase());
       if (piece.texture) proto.texPaths.push(piece.texture.toLowerCase());
       if (piece.texture && piece.alphaMap) proto.texPaths.push(piece.alphaMap.toLowerCase(), `${piece.texture}|${piece.alphaMap}`.toLowerCase());
@@ -385,7 +419,7 @@ export class WorldObjects {
         geo.computeBoundingBox();
         box.union(geo.boundingBox!.clone().applyMatrix4(offset));
         if (piece.terrain) {
-          proto.parts.push({ geo, mat: this.terrainMaterial(), offset });
+          proto.parts.push({ geo, mat: this.terrainMaterial(rock), offset });
           continue;
         }
         const colors = !map && s.colors !== undefined;
