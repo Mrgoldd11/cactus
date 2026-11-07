@@ -48,7 +48,7 @@ Today the integration is built and tested around **Claude**. Support for other A
 - Tested mostly with Steam Kenshi 1.0.65 on one machine; GOG detection has had less testing.
 - No Steam Workshop upload yet (use the FCS for that).
 - Some FCS features are missing or weaker (cleanup/error-fixing window, configurable columns, notes, spell check, some dialogue templates, region map editor).
-- The world is mostly view-only so far.
+- World editing (placing/moving objects, building interiors) works in the editor window but has **not yet been checked in the running game**; treat it as experimental.
 - Some panels are rough; it is a one-person project.
 
 ## Compatibility
