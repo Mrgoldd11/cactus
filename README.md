@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/Mrgoldd11/Cactus/releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Cactus%20v0.1.0%20Beta-4f8cc9?style=for-the-badge" alt="Download Cactus v0.1.0 Beta"></a>
+  <a href="https://www.virustotal.com/gui/file/eee05703e485da655e3126733372ff3c86988e6a15b6c066547021f7cd6a5db7"><img src="https://img.shields.io/badge/VirusTotal-0%20%2F%2065%20detections-2ea44f?style=for-the-badge&logo=virustotal&logoColor=white" alt="VirusTotal: 0 of 65 engines flagged this file"></a>
 </p>
 
 <p align="center"><sub>Windows 10/11 x64 · free · Beta · <a href="https://github.com/Mrgoldd11/Cactus/releases/latest">Releases page</a> → <b>Assets</b> → <code>Cactus-0.1.0-beta-win-x64.zip</code></sub></p>
@@ -26,6 +27,17 @@
 4. Your Kenshi install (Steam/GOG) is found automatically; otherwise click *Choose folder…* and pick the folder with `kenshi_x64.exe`.
 
 Requirements: Windows 10/11 x64, an installed copy of Kenshi. Cactus reads your own game files; nothing from the game is bundled.
+
+### Is it safe?
+
+The release archive was scanned on [VirusTotal](https://www.virustotal.com/gui/file/eee05703e485da655e3126733372ff3c86988e6a15b6c066547021f7cd6a5db7) on 2026-11-07: **0 of 65 engines flagged it**. You can check that the file you downloaded is the same one:
+
+```
+SHA-256  eee05703e485da655e3126733372ff3c86988e6a15b6c066547021f7cd6a5db7
+         Cactus-0.1.0-beta-win-x64.zip
+```
+
+In PowerShell: `Get-FileHash .\Cactus-0.1.0-beta-win-x64.zip` — the value must match. The app is not code-signed yet (that is why Windows shows a warning), and the app has no telemetry or online features: the only connection it opens is a local one (127.0.0.1) for the AI/game integration.
 
 ## What it can do
 
