@@ -4,6 +4,12 @@
 
 # Cactus
 
+<p align="center">
+  <a href="https://github.com/Mrgoldd11/Cactus/releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Cactus%20v0.1.0%20Beta-4f8cc9?style=for-the-badge" alt="Download Cactus v0.1.0 Beta"></a>
+</p>
+
+<p align="center"><sub>Windows 10/11 x64 · free · Beta · <a href="https://github.com/Mrgoldd11/Cactus/releases/latest">Releases page</a> → <b>Assets</b> → <code>Cactus-0.1.0-beta-win-x64.zip</code></sub></p>
+
 **A free mod editor for Kenshi** — a modern alternative to the FCS with a dialogue graph, a "where in the game" reference tracer, a world view and AI assistant integration (MCP).
 
 > **v0.1.0 Beta.** Stable enough to build real mods, but young. Back up your `.mod` files and work on copies.
@@ -12,7 +18,7 @@
 
 ## Download
 
-**[Cactus v0.1.0 Beta → Releases](../../releases/latest)** — download `Cactus-0.1.0-beta-win-x64.zip`.
+**[Cactus v0.1.0 Beta → Releases](https://github.com/Mrgoldd11/Cactus/releases/latest)** — on that page open **Assets** and download `Cactus-0.1.0-beta-win-x64.zip` (about 143 MB).
 
 1. Unzip to a simple folder, e.g. `C:\Cactus` (don't run from inside the archive).
 2. Run `Cactus.exe`. Nothing to install.
@@ -58,7 +64,13 @@ Cactus speaks standard **MCP (stdio)**, so any MCP-capable AI client can connect
 Verified on **Kenshi 1.0.65 (Steam)**. Cactus reads `gamedata.base`, your mods and `mods.cfg` and writes standard `.mod` files. It does not touch saves and needs no game plugin (RE_Kenshi is not required; the Bridge above is optional). If a mod doesn't open, a value differs from the FCS, or the game rejects a mod after Cactus saved it — please open a **Compatibility issue**.
 
 ## Feedback
-Use [GitHub Issues](../../issues/new/choose): **Bug report**, **Feature request**, **Compatibility issue**. Attach the version (*Help → About*), the log (*Help → Open log folder*), steps and a screenshot.
+Use [GitHub Issues](https://github.com/Mrgoldd11/Cactus/issues/new/choose): **Bug report**, **Feature request**, **Compatibility issue**. Attach the version (*Help → About*), the log (*Help → Open log folder*), steps and a screenshot.
 
 ## License
 Cactus is **free to use but closed source** (binaries only). See [LICENSE](LICENSE). Not affiliated with or endorsed by Lo-Fi Games.
+
+---
+
+## Download
+**[⬇ Cactus v0.1.0 Beta — latest release](https://github.com/Mrgoldd11/Cactus/releases/latest)** → **Assets** → `Cactus-0.1.0-beta-win-x64.zip`. Unzip, run `Cactus.exe`. Steps are in [Download](#download) above.
+Optional live link to the game: [Kenshi Bridge](https://github.com/Mrgoldd11/Kenshi-Bridge/releases/latest).
