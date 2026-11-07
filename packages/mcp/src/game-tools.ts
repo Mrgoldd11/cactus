@@ -29,8 +29,6 @@ function describeAction(a: GameAction): string {
       return a.args.value === 0 ? 'поставить игру на паузу (скорость 0)' : `скорость времени ×${a.args.value}`;
     case 'pause':
       return a.args.on ? 'поставить игру на паузу' : 'снять паузу';
-    case 'borders':
-      return a.args.on ? `нарисовать в игре границы всех городов (радиус ×${a.args.mult ?? 1})` : 'убрать из игры линии границ городов';
   }
 }
 
@@ -58,7 +56,7 @@ export function registerGameTools(server: McpServer, game: GameBridge): void {
     {
       title: 'Города в игре',
       description:
-        'Города и заставы загруженного мира в запущенной игре: центр, радиус границы, тип. near [x, y, z] + range — только рядом с точкой. Только чтение. Увидеть границы глазами — game_command borders.',
+        'Города и заставы загруженного мира в запущенной игре: центр, радиус границы, тип. near [x, y, z] + range — только рядом с точкой. Только чтение.',
       inputSchema: {
         near: vec3.optional().describe('Точка [x, y, z], рядом с которой искать'),
         range: z.number().gt(0).optional().describe('Расстояние от near до границы города'),
@@ -80,13 +78,12 @@ export function registerGameTools(server: McpServer, game: GameBridge): void {
     {
       title: 'Команда игре',
       description:
-        'Изменить запущенную игру: teleport (выбранный персонаж в точку), camera (камера в точку), speed (0..20, 0 — пауза), pause, borders (рисует в игре границы всех городов цветными кольцами и столбами; on: false — убрать; перед загрузкой сохранения обязательно убрать). Без confirm: true только показывает, что будет сделано: сначала спросите пользователя, затем повторите с confirm: true.',
+        'Изменить запущенную игру: teleport (выбранный персонаж в точку), camera (камера в точку), speed (0..20, 0 — пауза), pause. Без confirm: true только показывает, что будет сделано: сначала спросите пользователя, затем повторите с confirm: true.',
       inputSchema: {
-        cmd: z.enum(['teleport', 'camera', 'speed', 'pause', 'borders']),
+        cmd: z.enum(['teleport', 'camera', 'speed', 'pause']),
         pos: vec3.optional().describe('Точка [x, y, z] для teleport и camera (координаты из where или game_state)'),
         value: z.number().min(0).max(20).optional().describe('Скорость для speed'),
-        on: z.boolean().optional().describe('Для pause: true — пауза, false — снять; для borders: true — нарисовать (по умолчанию), false — убрать'),
-        mult: z.number().gt(0).max(20).optional().describe('Для borders: множитель радиуса границы (по умолчанию 1)'),
+        on: z.boolean().optional().describe('Для pause: true — пауза, false — снять'),
         confirm: z.boolean().optional().describe('true — пользователь согласен, выполнить'),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false, title: 'Команда игре' },
@@ -100,8 +97,6 @@ export function registerGameTools(server: McpServer, game: GameBridge): void {
         } else if (a.cmd === 'speed') {
           if (a.value === undefined) throw new Error('speed: нужно value 0..20');
           action = { cmd: 'speed', args: { value: a.value } };
-        } else if (a.cmd === 'borders') {
-          action = { cmd: 'borders', args: { on: a.on ?? true, ...(a.mult !== undefined ? { mult: a.mult } : {}) } };
         } else {
           action = { cmd: 'pause', args: { on: a.on ?? true } };
         }

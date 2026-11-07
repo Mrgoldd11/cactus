@@ -112,17 +112,11 @@ describe('kenshi-mcp: мост к игре', () => {
     expect((await call('game_command', { cmd: 'teleport', confirm: true })).isError).toBe(true);
   });
 
-  it('game_towns читает города, borders требует confirm', async () => {
+  it('game_towns читает города', async () => {
     const t = await call('game_towns', { near: [0, 0, 0], range: 9000 });
     expect(t.text).toContain('городов: 1');
     expect(t.text).toContain('Хаб [hub-1] — town, радиус 1500, центр -4000, 100, 5000');
     expect(seen).toEqual([{ cmd: 'towns', args: { near: [0, 0, 0], range: 9000 } }]);
-    seen.length = 0;
-    const dry = await call('game_command', { cmd: 'borders', mult: 2 });
-    expect(dry.text).toContain('не выполнено: нарисовать в игре границы всех городов (радиус ×2)');
-    expect(seen).toEqual([]);
-    await call('game_command', { cmd: 'borders', on: false, confirm: true });
-    expect(seen).toEqual([{ cmd: 'borders', args: { on: false } }]);
   });
 
   it('game_trace: включить и прочитать новые записи', async () => {

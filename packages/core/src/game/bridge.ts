@@ -86,8 +86,7 @@ export type GameAction =
   | { cmd: 'teleport'; args: { pos: Vec3 } }
   | { cmd: 'camera'; args: { pos: Vec3 } }
   | { cmd: 'speed'; args: { value: number } }
-  | { cmd: 'pause'; args: { on: boolean } }
-  | { cmd: 'borders'; args: { on: boolean; mult?: number } };
+  | { cmd: 'pause'; args: { on: boolean } };
 
 /** Город из команды `towns` плагина. */
 export interface GameTown {

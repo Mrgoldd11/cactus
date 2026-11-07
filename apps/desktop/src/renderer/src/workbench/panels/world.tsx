@@ -32,6 +32,7 @@ const en = {
   medium: 'Medium',
   high: 'High',
   distance: 'Draw distance',
+  borders: 'Town borders',
   help: 'Mouse drag — look, middle — pan, wheel — forward/back, double-click — fly there, town name — fly to town, WASD — fly, Q/E — down/up, Shift — faster, F — fly to selected, Esc — deselect',
   fps: 'FPS',
   first: 'first picture',
@@ -94,6 +95,7 @@ const ru: WorldStrings = {
   medium: 'Среднее',
   high: 'Высокое',
   distance: 'Дальность',
+  borders: 'Границы городов',
   help: 'Мышь с кнопкой — осмотреться, средняя — сдвиг, колесо — вперёд/назад, двойной клик — подлететь, название города — к городу, WASD — полёт, Q/E — вниз/вверх, Shift — быстрее, F — к выбранному, Esc — снять выбор',
   fps: 'FPS',
   first: 'первая картинка',
@@ -519,6 +521,9 @@ function WorldPanel(): ReactNode {
             onChange={(e) => { set({ drawDistance: Number(e.target.value) }); }}
             style={{ verticalAlign: 'middle' }}
           />
+        </label>
+        <label title={s.borders}>
+          <input data-testid="world-borders" type="checkbox" checked={settings.borders} onChange={(e) => { set({ borders: e.target.checked }); }} style={{ verticalAlign: 'middle' }} /> {s.borders}
         </label>
         <span style={{ flex: 1 }} />
         {count > 0 && (

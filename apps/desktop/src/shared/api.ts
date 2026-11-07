@@ -238,7 +238,7 @@ export interface GameLinkStatus {
 export type GameReply = { ok: true; result: unknown } | { ok: false; code: string; message: string };
 
 /** Команды плагина, которые окно может отправить (через main). */
-export const GAME_COMMANDS = ['state', 'camera', 'teleport', 'speed', 'pause', 'borders', 'towns', 'trace', 'trace_get'] as const;
+export const GAME_COMMANDS = ['state', 'camera', 'teleport', 'speed', 'pause', 'towns', 'trace', 'trace_get'] as const;
 export type GameCommand = (typeof GAME_COMMANDS)[number];
 
 export interface KeditApi {

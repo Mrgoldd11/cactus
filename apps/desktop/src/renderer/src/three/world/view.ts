@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { type ModContext, type Vec3, type Vec4, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
+import { townBorderRadius, type ModContext, type Vec3, type Vec4, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
 import type { GameInstallInfo } from '../../../../shared/api.ts';
 import { WorkerPool } from './protocol.ts';
 import { TerrainLod, type TerrainQuality } from './terrain.ts';
@@ -21,9 +21,11 @@ export interface WorldSettings {
   quality: QualityLevel;
   /** Дальность прорисовки объектов (маркеров), единиц мира. */
   drawDistance: number;
+  /** Рисовать границы городов (круг радиусом `Town::getRadius` игры). */
+  borders: boolean;
 }
 
-export const DEFAULT_SETTINGS: WorldSettings = { quality: 'medium', drawDistance: 25000 };
+export const DEFAULT_SETTINGS: WorldSettings = { quality: 'medium', drawDistance: 25000, borders: false };
 
 const QUALITY: Record<QualityLevel, { terrain: TerrainQuality; foliage: FoliageQuality; models: number; modelDist: number; protos: number; markers: number; pixelRatio: number }> = {
   low: { terrain: { split: 1.6, maxLevel: 6, cache: 300, fullColour: 2 }, foliage: { radius: 2500, maxInstances: 1500 }, models: 400, modelDist: 3000, protos: 60, markers: 3000, pixelRatio: 1 },
@@ -35,6 +37,8 @@ export interface TownLabel {
   sid: string;
   name: string;
   pos: THREE.Vector3;
+  /** Радиус границы города (0 — границы нет). */
+  radius: number;
 }
 
 export interface WorldStatsView {
@@ -112,6 +116,11 @@ export class WorldView {
   private readonly host: HTMLElement;
   private readonly labels: HTMLDivElement;
   private readonly labelEls = new Map<string, HTMLDivElement>();
+  /** Границы городов: по кольцу на город, высота кольца ложится на рельеф. */
+  private readonly borderGroup = new THREE.Group();
+  private borderRings: { town: TownLabel; line: THREE.LineLoop }[] = [];
+  private bordersDirty = true;
+  private lastBorders = 0;
   private readonly hoverBox: THREE.LineSegments;
   private readonly selectBox: THREE.LineSegments;
   private readonly resize: ResizeObserver;
@@ -177,7 +186,7 @@ export class WorldView {
     const biomes = readBiomes(ctx);
     this.terrain = new TerrainLod(game, this.pool, q.terrain, biomes);
     // Пока у растительности нет подробного рельефа, новые тайлы — повод пересчитать её.
-    this.terrain.onChange = () => { this.invalidate(this.foliage.incomplete); };
+    this.terrain.onChange = () => { this.bordersDirty = true; this.invalidate(this.foliage.incomplete); };
     this.scene.add(this.terrain.group);
     this.objects = new WorldObjects(game, this.pool, ctx, world, q.objects);
     this.objects.groundAt = (x, z) => this.terrain.heightAt(x, z);
@@ -188,8 +197,11 @@ export class WorldView {
     this.towns = [];
     for (const t of world.allTowns()) {
       const name = (lang === 'ru' ? ctx.localizedName(t.target) : undefined) ?? ctx.name(t.target) ?? t.target;
-      this.towns.push({ sid: t.target, name: name || t.target, pos: new THREE.Vector3(t.position[0], t.position[1], t.position[2]) });
+      const rec = ctx.get(t.target);
+      const radius = townBorderRadius(rec?.ints.get('type'), rec?.floats.get('town radius mult') ?? 1);
+      this.towns.push({ sid: t.target, name: name || t.target, pos: new THREE.Vector3(t.position[0], t.position[1], t.position[2]), radius });
     }
+    this.buildBorders();
     this.foliage = new FoliageScatter(biomes, this.terrain, this.towns.map((t) => t.pos), this.objects.list.map((o) => o.pos), q.foliage);
 
     // Рамки подсветки: под мышью — светло-серая, выбранный — ярко-синяя (видны сквозь всё).
@@ -269,7 +281,41 @@ export class WorldView {
     this.objects.quality = q.objects;
     this.foliage.quality = q.foliage;
     this.renderer.setPixelRatio(q.pixelRatio);
+    this.borderGroup.visible = s.borders;
+    this.bordersDirty = true;
     this.fit();
+  }
+
+  private buildBorders(): void {
+    this.borderGroup.visible = this.settings.borders;
+    this.borderGroup.renderOrder = 5;
+    for (const t of this.towns) {
+      if (t.radius <= 0) continue;
+      const segs = t.radius > 2000 ? 160 : 96;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(segs * 3), 3));
+      const line = new THREE.LineLoop(geo, new THREE.LineBasicMaterial({ color: 0xffd23f, depthTest: false, transparent: true, opacity: 0.9 }));
+      line.frustumCulled = false;
+      line.renderOrder = 5;
+      this.borderGroup.add(line);
+      this.borderRings.push({ town: t, line });
+    }
+    this.scene.add(this.borderGroup);
+  }
+
+  /** Кольца ложатся на рельеф там, где он уже загружен; иначе — на высоту центра города. */
+  private refreshBorders(): void {
+    for (const { town, line } of this.borderRings) {
+      const pos = line.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const n = pos.count;
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2;
+        const x = town.pos.x + town.radius * Math.cos(a);
+        const z = town.pos.z + town.radius * Math.sin(a);
+        pos.setXYZ(k, x, (this.terrain.heightAt(x, z) ?? town.pos.y) + 15, z);
+      }
+      pos.needsUpdate = true;
+    }
   }
 
   private ray(e: { clientX: number; clientY: number }): THREE.Ray {
@@ -509,6 +555,12 @@ export class WorldView {
     this.camera.updateMatrixWorld();
     // LOD рельефа — каждый кадр (дёшево); объекты — не чаще ~6 раз в секунду.
     this.terrain.update(this.camera);
+    if (this.settings.borders && this.bordersDirty && now - this.lastBorders > 700) {
+      this.refreshBorders();
+      this.bordersDirty = false;
+      this.lastBorders = now;
+      this.dirty = true;
+    }
     if (this.objectsDirty && now - this.lastObjects > 150) {
       if (this.foliage.update(this.camera.position)) this.objects.setFoliage(this.foliage.byTarget);
       this.objects.update(this.camera);

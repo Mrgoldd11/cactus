@@ -185,7 +185,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         'Диалоги: tree — дерево, talk — какой диалог выберет игра у персонажа, play — разговор по шагам с ответами игрока; правки графа — операции edit addLine, insertLine, link, unlink, setText, duplicateLine, deleteLines, addCondition, addEffect.',
         'Массовые правки — bulk: сначала предпросмотр «было → станет», применяет только с apply: true.',
         'history — шаги понятными словами; undo/redo с to — отмена или повтор до шага.',
-        'Если запущена игра с плагином Kenshi Bridge — game_state (что в игре), game_trace (какой диалог выбрала игра и почему), game_towns (города игры, радиусы границ), game_command (телепорт, камера, скорость, пауза, рисование границ городов borders — только с согласия пользователя, confirm: true).',
+        'Если запущена игра с плагином Kenshi Bridge — game_state (что в игре), game_trace (какой диалог выбрала игра и почему), game_towns (города игры, радиусы границ), game_command (телепорт, камера, скорость, пауза — только с согласия пользователя, confirm: true).',
         'Если открыт Kenshi Mod Editor — connect_editor: дальше всё читается из окна редактора, а edit отправляет правки в окно набором изменений; пользователь их принимает или откатывает (editor_changes — их состояние). save и undo в этом режиме делает пользователь.',
         'Мир: list_in_area — что стоит вокруг точки или города; place / move / remove — правки мира мода (y — над землёй), своя отмена world_undo и world_history; save пишет и файлы уровня в leveldata.',
       ].join('\n'),
