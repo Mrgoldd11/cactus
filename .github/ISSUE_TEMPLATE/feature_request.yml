@@ -1,0 +1,53 @@
+name: Feature request
+description: Suggest something Cactus should do, or do better
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cactus is a Beta and the roadmap is public (`ROADMAP.md`). Check it first, your idea may already be planned.
+        A concrete problem you ran into is more useful than a feature name.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the modding task and where it currently hurts (in Cactus, or in the official FCS).
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Cactus to do?
+      description: A sketch, a list of steps, or "like FCS does it, but ...".
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Record list / search / fields
+        - Dialogue editing (graph, Talk, play)
+        - World / 3D view
+        - Mod merge / conflicts / load order
+        - Translation panel
+        - AI / MCP integration (including other AI providers)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: fcs
+    attributes:
+      label: Does the official FCS already do this?
+      options:
+        - "Yes"
+        - "No"
+        - "Not sure"
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Links, examples, mods that would benefit, screenshots.

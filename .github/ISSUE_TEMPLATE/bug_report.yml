@@ -1,0 +1,77 @@
+name: Bug report
+description: Something in Cactus crashes, shows wrong data, or behaves unexpectedly
+title: "[Bug] "
+labels: ["bug", "beta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing Cactus. This is a Beta, so bugs are expected and reports are the whole point.
+        **Please work on a copy of your mod** and keep a backup of your `.mod` file.
+  - type: input
+    id: version
+    attributes:
+      label: Cactus version
+      description: Help → About, or the name of the downloaded archive (e.g. 0.1.0-beta.1).
+      placeholder: "0.1.0-beta.1"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 10 22H2 / Windows 11 24H2"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What did you click or type, in order? The shorter and more exact, the faster it gets fixed.
+      placeholder: |
+        1. Open vanilla
+        2. Search for "katana"
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: mod
+    attributes:
+      label: Is a mod open? Which one?
+      description: Vanilla only, a new mod, or a specific mod (name, Steam Workshop link or Nexus link). Which mods are ticked as dependencies?
+      placeholder: "Vanilla only / my own mod / Workshop mod 1234567890 opened read-only"
+    validations:
+      required: true
+  - type: dropdown
+    id: ai
+    attributes:
+      label: Was the AI / MCP connection involved?
+      options:
+        - "No"
+        - "Yes, with Claude Desktop"
+        - "Yes, with Claude Code"
+        - "Yes, with another MCP client"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots
+      description: |
+        Cactus writes errors to a log file. Open it through the Help menu ("Open logs folder"; TODO-verify the exact menu label),
+        or look in the `logs` folder inside the app data folder under `%APPDATA%` (TODO-verify the folder name after the Cactus rename; it was `%APPDATA%\Kenshi Mod Editor\logs` in the closed beta). Attach the log file if there is one,
+        and a screenshot or short screen recording if the problem is visual.
+        **Check the log for personal paths before posting if that matters to you.**
+      placeholder: Drag files here, or paste the relevant lines of the log.

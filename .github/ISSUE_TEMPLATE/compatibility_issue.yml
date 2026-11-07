@@ -1,0 +1,95 @@
+name: Compatibility issue
+description: A mod or game setup that Cactus reads, saves or loads incorrectly
+title: "[Compat] "
+labels: ["compatibility", "beta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when Cactus handles a particular mod, Kenshi version or setup wrongly: a mod that will not open,
+        values that differ from FCS, a saved mod that the game rejects. Always work on a copy of the `.mod` file.
+  - type: input
+    id: cactus
+    attributes:
+      label: Cactus version
+      placeholder: "0.1.0-beta.1"
+    validations:
+      required: true
+  - type: input
+    id: kenshi
+    attributes:
+      label: Kenshi version
+      description: Shown in the game's main menu / launcher (for example 1.0.65).
+    validations:
+      required: true
+  - type: dropdown
+    id: store
+    attributes:
+      label: Where did you get Kenshi?
+      options:
+        - Steam
+        - GOG
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: mods
+    attributes:
+      label: Mod list and load order
+      description: The affected mod (name and Steam Workshop / Nexus link) and, if relevant, your `mods.cfg` load order.
+      placeholder: |
+        1. ExampleMod (workshop 1234567890)
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: feature
+    attributes:
+      label: Which Cactus feature is affected?
+      options:
+        - Opening a mod / vanilla
+        - Saving
+        - Fields and references
+        - Dialogue graph / Talk
+        - Mod merge
+        - Conflicts / load order (mods.cfg)
+        - Translation
+        - World / 3D view
+        - AI / MCP
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What goes wrong
+      description: Error text, what you see compared to what you expected.
+    validations:
+      required: true
+  - type: dropdown
+    id: fcs
+    attributes:
+      label: Does the same mod open and save correctly in the official FCS?
+      options:
+        - "Yes"
+        - "No, FCS has the same problem"
+        - "Did not try"
+    validations:
+      required: true
+  - type: dropdown
+    id: game
+    attributes:
+      label: If you saved the mod with Cactus, does the game load it?
+      options:
+        - Not applicable, I did not save
+        - "Yes, it works in game"
+        - "No, the game crashes or ignores it"
+        - "It loads but behaves differently"
+        - "Did not test in game"
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Logs, screenshots, files
+      description: Attach the Cactus log and screenshots. Please do not upload someone else's mod file without the author's permission, a link is enough.
