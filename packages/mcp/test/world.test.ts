@@ -92,38 +92,38 @@ describe('kenshi-mcp: мир', () => {
 
   it('list_in_area → place / move / remove → отмена → save пишет leveldata', async () => {
     const list = await call('list_in_area', { x: 100, z: 200, radius: 100 });
-    expect(list.text).toContain('Вокруг 100 200 (зона 32.32), радиус 100: объектов 2');
-    expect(list.text).toContain(`${ZONE}|0-buildinglist|1-base — Меч (X) · 0 м · x 100 y 2 z 200 · 0° · здание «Kiosk»`);
+    expect(list.text).toContain('Around 100 200 (zone 32.32), radius 100: objects 2');
+    expect(list.text).toContain(`${ZONE}|0-buildinglist|1-base — Меч (X) · 0 m · x 100 y 2 z 200 · 0° · building "Kiosk"`);
     expect((await call('list_in_area', {})).isError).toBe(true);
 
     await call('open_mod', { mod: 'My' });
     const placed = await call('place', { target: 'Shield', x: 300, z: 320, angle: 90 });
     expect(placed.isError).toBe(false);
-    const handle = /Поставлен (\S+)/.exec(placed.text)![1]!;
+    const handle = /Placed (\S+)/.exec(placed.text)![1]!;
     expect(handle.startsWith(`${ZONE}|0-buildinglist|`)).toBe(true);
 
     const moved = await call('move', { object: `${ZONE}|0-buildinglist|1-base`, dx: 10, y: 3, turn: 45 });
     expect(moved.text).toContain('x 110 y 3 z 200 · 45°');
-    expect(moved.text).toContain('карты высот нет');
+    expect(moved.text).toContain('no height map');
     expect((await call('move', { object: `${ZONE}|0-buildinglist|1-base`, x: 9000 })).isError).toBe(true);
     expect((await call('move', { object: 'nope' })).isError).toBe(true);
 
-    expect((await call('remove', { object: `${ZONE}|0-buildinglist|2-base` })).text).toContain('Убран');
+    expect((await call('remove', { object: `${ZONE}|0-buildinglist|2-base` })).text).toContain('Removed');
     const after = await call('list_in_area', { x: 100, z: 200, radius: 500 });
-    expect(after.text).toContain('объектов 2');
+    expect(after.text).toContain('objects 2');
     expect(after.text).toContain('Shield (Y) · ');
-    expect(after.text).toContain('изменено в моде');
+    expect(after.text).toContain('changed in the mod');
     expect(after.text).not.toContain('|2-base');
 
     const hist = await call('world_history');
-    expect(hist.text).toContain('#1 Новый объект: Shield');
-    expect(hist.text).toContain('#2 Сдвиг: Меч');
-    expect(hist.text).toContain('#3 Удаление: Shield');
-    expect((await call('world_undo')).text).toContain('отменено: Удаление: Shield');
-    expect((await call('world_undo', { redo: true })).text).toContain('повторено: Удаление: Shield');
+    expect(hist.text).toContain('#1 New object: Shield');
+    expect(hist.text).toContain('#2 Move: Меч');
+    expect(hist.text).toContain('#3 Removal: Shield');
+    expect((await call('world_undo')).text).toContain('undone: Removal: Shield');
+    expect((await call('world_undo', { redo: true })).text).toContain('redone: Removal: Shield');
 
     const saved = await call('save', { force: true });
-    expect(saved.text).toContain(`файлы уровня: leveldata/${ZONE}`);
+    expect(saved.text).toContain(`level files: leveldata/${ZONE}`);
     const file = readDataFile(readFileSync(join(fx.game, 'mods', 'My', 'leveldata', ZONE)));
     const holder = file.records.find((r) => r.stringId === '0-buildinglist')!;
     expect(holder.instances.get('1-base')!.position).toEqual([110, 3, 200]);
@@ -133,17 +133,17 @@ describe('kenshi-mcp: мир', () => {
     const state = file.records.find((r) => r.stringId === '1-base-S23')!;
     expect(state.floats.get('world Y pos')).toBe(503);
     expect(decodeText(state.strings.get('name')!)).toBe('Kiosk');
-    expect((await call('world_history')).text).not.toContain('не сохранено');
+    expect((await call('world_history')).text).not.toContain('not saved');
   });
 
   it('interior: раскладки, объекты, переход из мира; правки в interiors.level мода', async () => {
     const world = await call('interior', { building: `${ZONE}|0-buildinglist|1-base` });
     expect(world.isError, world.text).toBe(false);
-    expect(world.text).toContain('«Меч» (X): раскладок 1');
-    expect(world.text).toContain('X-Hall — «Hall»: объектов 1  ← показана');
-    expect(world.text).toContain('раскладка не названа — игра выбирает её сама');
-    expect(world.text).toContain('в мире у 0 зданий по имени; ещё у 1 из 1');
-    expect(world.text).toContain('interiors.level|X-Hall|10-base — Shield (Y) · другое · x 1 y 50 z 2 · 0° · этаж 0');
+    expect(world.text).toContain('"Меч" (X): layouts 1');
+    expect(world.text).toContain('X-Hall — "Hall": objects 1  ← shown');
+    expect(world.text).toContain('has no named layout: the game picks one itself');
+    expect(world.text).toContain('in the world it is named for 0 buildings; 1 more of 1');
+    expect(world.text).toContain('interiors.level|X-Hall|10-base — Shield (Y) · other · x 1 y 50 z 2 · 0° · floor 0');
     expect((await call('interior', { building: 'Sword', layout: 'nope' })).isError).toBe(true);
 
     await call('open_mod', { mod: 'My' });
@@ -151,14 +151,14 @@ describe('kenshi-mcp: мир', () => {
     const bed = /\$b = (\S+)/.exec(made.text)![1]!;
     const placed = await call('interior_place', { target: bed, layout: 'X-Hall', x: 5, y: 51, z: 5, angle: 90 });
     expect(placed.isError, placed.text).toBe(false);
-    expect(placed.text).toContain('мебель · x 5 y 51 z 5 · 90° · этаж 0');
-    expect(placed.text).toContain('состояние собрано заново');
+    expect(placed.text).toContain('furniture · x 5 y 51 z 5 · 90° · floor 0');
+    expect(placed.text).toContain('the state was built from scratch');
     expect((await call('interior_place', { target: 'Sword', layout: 'X-Hall', x: 0, y: 0, z: 0 })).isError).toBe(true);
-    const handle = /Поставлен (\S+)/.exec(placed.text)![1]!;
+    const handle = /Placed (\S+)/.exec(placed.text)![1]!;
     expect((await call('interior_move', { object: 'interiors.level|X-Hall|10-base', dy: 10, turn: 180 })).text).toContain('x 1 y 60 z 2 · 180°');
-    expect((await call('interior_remove', { object: handle })).text).toContain('Убран');
+    expect((await call('interior_remove', { object: handle })).text).toContain('Removed');
     expect((await call('interior_remove', { object: 'zone|a|b' })).isError).toBe(true);
-    expect((await call('world_history')).text).toContain('#3 Из интерьера: Bed');
+    expect((await call('world_history')).text).toContain('#3 From an interior: Bed');
     await call('world_undo');
 
     const saved = await call('save', { force: true });

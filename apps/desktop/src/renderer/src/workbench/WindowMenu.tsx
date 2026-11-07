@@ -15,6 +15,30 @@ interface Props {
   onOpen: (panelId: string) => void;
 }
 
+/** Три кнопки раскладок рядом с меню «Окно»: щелчок — сразу переключиться. */
+export function LayoutSwitch({ api, preset, onPreset }: Pick<Props, 'api' | 'preset' | 'onPreset'>): ReactNode {
+  const t = useT();
+  return (
+    <div className="layout-switch" role="radiogroup">
+      {PRESETS.map((p) => (
+        <button
+          key={p}
+          role="radio"
+          aria-checked={p === preset}
+          className={p === preset ? 'active' : ''}
+          disabled={!api}
+          data-testid={`window-preset-${p}`}
+          onClick={() => {
+            onPreset(p);
+          }}
+        >
+          {t[`preset_${p}`]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function WindowMenu({ api, preset, onPreset, onOpen }: Props): ReactNode {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -58,7 +82,7 @@ export function WindowMenu({ api, preset, onPreset, onOpen }: Props): ReactNode 
       {open && api && (
         <div className="menu" role="menu" data-testid="window-menu-list">
           <div className="menu-group">{t.windowPanels}</div>
-          {allPanels().map((d) => (
+          {allPanels().filter((d) => !d.placeholder).map((d) => (
             <button
               key={d.id}
               role="menuitemcheckbox"
@@ -75,24 +99,6 @@ export function WindowMenu({ api, preset, onPreset, onOpen }: Props): ReactNode 
               <span className="menu-icon">{d.icon}</span>
               {d.title(t)}
               {d.placeholder && <span className="muted"> · {t.placeholderSoon}</span>}
-            </button>
-          ))}
-          <div className="menu-sep" />
-          <div className="menu-group">{t.windowLayouts}</div>
-          {PRESETS.map((p) => (
-            <button
-              key={p}
-              role="menuitemradio"
-              aria-checked={p === preset}
-              className="menu-item"
-              data-testid={`window-preset-${p}`}
-              onClick={() => {
-                onPreset(p);
-                setOpen(false);
-              }}
-            >
-              <span className="menu-check">{p === preset ? '●' : ''}</span>
-              {t[`preset_${p}`]}
             </button>
           ))}
           <div className="menu-sep" />

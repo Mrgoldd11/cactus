@@ -116,20 +116,20 @@ export type GameErrorCode =
   | 'timeout';
 
 const ERROR_TEXT: Record<GameErrorCode, string> = {
-  bad_json: 'плагин не понял запрос',
-  bad_request: 'неверный запрос',
-  unknown_cmd: 'плагин не знает такой команды',
-  bad_args: 'неверные аргументы команды',
-  not_in_game: 'игра не в мире (меню или загрузка)',
-  no_selection: 'в игре не выбран персонаж',
-  no_camera: 'камера игры недоступна',
-  no_world: 'мир ещё не загружен',
-  no_renderer: 'рендерер игры не готов',
-  unsupported: 'эта версия игры не поддерживает команду',
-  busy: 'игра занята, повторите',
-  crash: 'команда упала внутри игры (игра работает)',
-  no_connection: 'игра не подключена: запустите Kenshi с RE_Kenshi и модом KenshiBridge',
-  timeout: 'игра не ответила',
+  bad_json: 'the plugin did not understand the request',
+  bad_request: 'invalid request',
+  unknown_cmd: 'the plugin does not know this command',
+  bad_args: 'invalid command arguments',
+  not_in_game: 'the game is not in a world (menu or loading)',
+  no_selection: 'no character is selected in the game',
+  no_camera: 'the game camera is unavailable',
+  no_world: 'the world is not loaded yet',
+  no_renderer: 'the game renderer is not ready',
+  unsupported: 'this game version does not support the command',
+  busy: 'the game is busy, try again',
+  crash: 'the command crashed inside the game (the game keeps running)',
+  no_connection: 'the game is not connected: start Kenshi with RE_Kenshi and the KenshiBridge mod (the plugin is optional, download: https://github.com/Mrgoldd11/Kenshi-Bridge)',
+  timeout: 'the game did not answer',
 };
 
 /** Понятное описание кода ошибки моста. */
@@ -146,38 +146,38 @@ export function formatGameState(s: GameState): string[] {
   const dayHours = ((s.time.hours % 24) + 24) % 24;
   const hours = Math.floor(dayHours);
   const mins = Math.floor((dayHours - hours) * 60);
-  out.push(`день ${Math.floor(s.time.days)}, ${hours}:${String(mins).padStart(2, '0')}; ${s.paused ? 'пауза' : `скорость ×${fmt(s.speed)}`}; сборка ${s.build}`);
+  out.push(`day ${Math.floor(s.time.days)}, ${hours}:${String(mins).padStart(2, '0')}; ${s.paused ? 'paused' : `speed ×${fmt(s.speed)}`}; build ${s.build}`);
   if (s.selected) {
     const sel = s.selected;
     const tpl = sel.template ? ` [${sel.template.stringId} «${sel.template.name}»]` : '';
-    const fac = sel.faction ? `, фракция «${sel.faction.name}» [${sel.faction.stringId}]` : '';
-    out.push(`выбран: ${sel.name}${tpl}${fac}${s.selectedIsPlayer ? ' (отряд игрока)' : ''}`);
-    out.push(`  позиция: ${formatVec3(sel.pos)}`);
-  } else out.push('выбран: никто');
+    const fac = sel.faction ? `, faction "${sel.faction.name}" [${sel.faction.stringId}]` : '';
+    out.push(`selected: ${sel.name}${tpl}${fac}${s.selectedIsPlayer ? ' (player squad)' : ''}`);
+    out.push(`  position: ${formatVec3(sel.pos)}`);
+  } else out.push('selected: nobody');
   const d = s.selectedDialogue;
-  if (d?.active) out.push(`  в разговоре: событие ${d.event}, диалог ${d.dialogue ?? '—'}, реплика ${d.line ?? '—'}${d.target ? `, с ${d.target}` : ''}`);
-  if (s.camera) out.push(`камера: ${formatVec3(s.camera.center)}`);
-  out.push(`персонажей у игрока: ${s.playerCharacters}`);
-  out.push(`трассировка диалога: ${s.trace ? 'включена' : 'выключена'}`);
+  if (d?.active) out.push(`  in conversation: event ${d.event}, dialogue ${d.dialogue ?? '—'}, line ${d.line ?? '—'}${d.target ? `, with ${d.target}` : ''}`);
+  if (s.camera) out.push(`camera: ${formatVec3(s.camera.center)}`);
+  out.push(`player characters: ${s.playerCharacters}`);
+  out.push(`dialogue trace: ${s.trace ? 'on' : 'off'}`);
   return out;
 }
 
-const STATUS: Record<TraceConditions, string> = { pass: 'прошёл', fail: 'отсеян условиями', not_reached: 'не дошла очередь' };
+const STATUS: Record<TraceConditions, string> = { pass: 'passed', fail: 'dropped by conditions', not_reached: 'not reached its turn' };
 
 export function traceStatusText(c: TraceConditions): string {
   return STATUS[c];
 }
 
-const who = (a: TraceActor | null): string => (a ? `${a.name}${a.player ? ' (игрок)' : ''}` : '—');
+const who = (a: TraceActor | null): string => (a ? `${a.name}${a.player ? ' (player)' : ''}` : '—');
 
 /** Запись трассировки строками: событие, кто, выбор и соперники по порядку проверки. */
 export function formatTraceRecord(r: TraceRecord): string[] {
   const out: string[] = [];
-  out.push(`#${r.seq} событие ${r.event}${r.wordswap ? ' (подстановка слов)' : ''}: ${who(r.speaker)} → ${who(r.target)}`);
-  out.push(r.chosen ? `  выбран: ${r.chosen.dialogue} «${r.chosen.dialogueName}», реплика ${r.chosen.line}` : '  ничего не выбрано');
+  out.push(`#${r.seq} event ${r.event}${r.wordswap ? ' (word swap)' : ''}: ${who(r.speaker)} → ${who(r.target)}`);
+  out.push(r.chosen ? `  chosen: ${r.chosen.dialogue} "${r.chosen.dialogueName}", line ${r.chosen.line}` : '  nothing chosen');
   for (const c of r.candidates) {
-    const chance = c.chanceTemporary < 100 || c.chancePermanent < 100 ? `, шанс ${c.chanceTemporary}/${c.chancePermanent}` : '';
-    out.push(`  ${c.chosen ? '✓' : '·'} ${c.id} «${c.name}» вес ${c.score}${chance} — ${c.chosen ? 'выбран' : STATUS[c.conditions]}`);
+    const chance = c.chanceTemporary < 100 || c.chancePermanent < 100 ? `, chance ${c.chanceTemporary}/${c.chancePermanent}` : '';
+    out.push(`  ${c.chosen ? '✓' : '·'} ${c.id} "${c.name}" weight ${c.score}${chance} — ${c.chosen ? 'chosen' : STATUS[c.conditions]}`);
   }
   return out;
 }

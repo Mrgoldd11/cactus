@@ -49,7 +49,17 @@ export function StartScreen({ games, game, onGame, onChooseFolder, folderError, 
 
   return (
     <div className="start" data-testid="start-screen">
-      <h1>{t.appTitle}</h1>
+      <h1 style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <svg width="34" height="38" viewBox="40 30 176 196" aria-hidden="true">
+          <g fill="none" stroke="#6fcf6f" strokeWidth="30" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M128 76V196" />
+            <path d="M128 156H88V112" />
+            <path d="M128 130H168V92" />
+          </g>
+          <circle cx="128" cy="52" r="13" fill="#e5c07b" />
+        </svg>
+        {t.appTitle}
+      </h1>
       <section className="start-section">
         <h2>{t.gameFolder}</h2>
         {games === undefined && <p className="muted">{t.detecting}</p>}

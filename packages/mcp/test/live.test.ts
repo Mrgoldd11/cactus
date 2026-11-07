@@ -58,13 +58,13 @@ describe('живая связь с редактором', () => {
   it('connect_editor, правка набором изменений, принять / откатить, правки в окне видны ИИ', async () => {
     const c = await call('connect_editor');
     expect(c.isError, c.text).toBe(false);
-    expect(c.text).toContain('подключено к редактору: Live.mod');
+    expect(c.text).toContain('connected to the editor: Live.mod');
     expect(server.clients().map((x) => x.name)).toEqual(['kenshi-mcp']);
 
     // Правка ИИ — сразу в окне, одной правкой истории, ждёт решения.
     const e = await call('edit', { label: 'тяжелее', ops: [{ op: 'set', id: 'X', field: 'weight', value: 7 }] });
     expect(e.isError, e.text).toBe(false);
-    expect(e.text).toContain('«тяжелее» — ждёт решения');
+    expect(e.text).toContain('"тяжелее" is waiting for the user decision');
     expect(e.text).toContain('weight');
     expect(editorCtx.get('X')?.floats.get('weight')).toBe(7);
     expect(editorCtx.history().undo.at(-1)?.label).toBe('ИИ: тяжелее');
@@ -88,16 +88,16 @@ describe('живая связь с редактором', () => {
     expect(decodeText(editorCtx.get('X')!.name)).toBe('Sword');
     expect(editorCtx.get('X')?.floats.get('weight')).toBe(7);
     const list = await call('editor_changes');
-    expect(list.text).toContain('«тяжелее» — принят');
-    expect(list.text).toContain('«имя» — откачен');
+    expect(list.text).toContain('"тяжелее" — accepted');
+    expect(list.text).toContain('"имя" — rolled back');
     expect((await call('show', { id: 'X' })).text).toContain('Sword');
 
     // Ctrl+Z в окне — набор помечается «отменён».
     // История: #1 тяжелее, #2 руками, #3 имя, #4 откат имени.
     for (let i = 0; i < 4; i++) editorCtx.undo();
-    expect((await call('editor_changes')).text).toContain('«тяжелее» — отменён в окне');
+    expect((await call('editor_changes')).text).toContain('"тяжелее" — undone in the window');
 
-    expect((await call('connect_editor', { disconnect: true })).text).toContain('отключено');
+    expect((await call('connect_editor', { disconnect: true })).text).toContain('disconnected');
     expect((await call('open_mod', { mod: 'Other' })).isError).toBe(false);
   });
 
@@ -109,7 +109,7 @@ describe('живая связь с редактором', () => {
     expect(host.pending).toBe(0);
     const r = await call('bulk', { type: 'ITEM', op: 'add', field: 'weight', value: '1', apply: true });
     expect(r.isError, r.text).toBe(false);
-    expect(r.text).toContain('ждёт решения пользователя');
+    expect(r.text).toContain('is waiting for the user decision');
     expect(host.pending).toBe(1);
     expect(editorCtx.get('X')?.floats.get('weight')).toBe(3);
     expect(editorCtx.get('Y')?.floats.get('weight')).toBe(6);
@@ -123,7 +123,7 @@ describe('живая связь с редактором', () => {
     expect(r.isError).toBe(true);
     expect(r.text).toContain('connect_editor');
     expect((await call('find', { text: 'sword' })).text).toContain('Sword');
-    expect((await call('connect_editor')).text).toContain('Редактор не запущен');
+    expect((await call('connect_editor')).text).toContain('The editor is not running');
   });
 
   it('из браузера (заголовок Origin) и без токена — отказ', async () => {

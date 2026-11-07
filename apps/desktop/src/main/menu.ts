@@ -9,7 +9,7 @@ import { app, BrowserWindow, clipboard, dialog, Menu, shell, type MenuItemConstr
 import type { Lang } from '../shared/api.ts';
 import { logDir, logFile } from './log.ts';
 
-export const APP_TITLE = 'Kenshi Mod Editor';
+export const APP_TITLE = 'Cactus';
 
 function about(lang: Lang): void {
   const ru = lang === 'ru';

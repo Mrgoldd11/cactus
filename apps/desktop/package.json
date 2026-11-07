@@ -1,6 +1,6 @@
 {
   "name": "@kenshi-editor/desktop",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta",
   "private": true,
   "description": "Kenshi mod editor: desktop app (Electron + React)",
   "type": "module",

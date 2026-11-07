@@ -3,11 +3,11 @@
  *
  *   pnpm beta            (= node apps/desktop/scripts/beta.ts)
  *
- * Что внутри `out/beta/KenshiModEditor-<версия>-win-x64.zip` (одна папка KenshiModEditor):
- * - Electron из node_modules, `electron.exe` переименован в `KenshiModEditor.exe`; из языков
+ * Что внутри `out/beta/Cactus-<версия>-win-x64.zip` (одна папка Cactus):
+ * - Electron из node_modules, `electron.exe` переименован в `Cactus.exe`; из языков
  *   Chromium оставлены английский и русский;
  * - `resources/app` — собранное приложение (`out/` electron-vite) и package.json с именем
- *   «Kenshi Mod Editor» (папка данных: `%APPDATA%\Kenshi Mod Editor`);
+ *   «Cactus» (папка данных: `%APPDATA%\Cactus`);
  * - `resources/mcp/kenshi-mcp.mjs` — MCP-сервер одним файлом (ядро, SDK и zod внутри).
  *   Запускается тем же exe с `ELECTRON_RUN_AS_NODE=1`: отдельный Node не нужен;
  * - `_ИНСТРУКЦИЯ.txt` — короткая инструкция для друзей (из `beta/README_RU.txt`; «_» — чтобы в
@@ -21,6 +21,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, r
 import { createRequire } from 'node:module';
 import { homedir, userInfo } from 'node:os';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
+import { rcedit } from 'rcedit';
 import { build } from 'vite';
 import { zipDir } from './zip.ts';
 
@@ -28,7 +29,7 @@ const app = resolve(import.meta.dirname, '..');
 const root = resolve(app, '../..');
 const pkg = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')) as { version: string };
 const VERSION = pkg.version;
-const NAME = 'KenshiModEditor';
+const NAME = 'Cactus';
 const outDir = join(root, 'out', 'beta');
 const stage = join(outDir, NAME);
 const zipPath = join(outDir, `${NAME}-${VERSION}-win-x64.zip`);
@@ -88,6 +89,19 @@ cpSync(dist, stage, {
   },
 });
 renameSync(join(stage, 'electron.exe'), join(stage, `${NAME}.exe`));
+await rcedit(join(stage, `${NAME}.exe`), {
+  icon: join(app, 'beta', 'cactus.ico'),
+  'version-string': {
+    ProductName: 'Cactus',
+    FileDescription: 'Cactus: mod editor for Kenshi',
+    CompanyName: 'Mrgoldd11',
+    LegalCopyright: 'Copyright (c) 2026 Mrgoldd11',
+    OriginalFilename: `${NAME}.exe`,
+    InternalFilename: NAME,
+  },
+  'file-version': `${VERSION.split('-')[0]}.0`,
+  'product-version': VERSION,
+});
 
 const appDir = join(stage, 'resources', 'app');
 mkdirSync(appDir, { recursive: true });
@@ -97,10 +111,10 @@ writeFileSync(
   `${JSON.stringify(
     {
       name: 'kenshi-mod-editor',
-      productName: 'Kenshi Mod Editor',
+      productName: 'Cactus',
       version: VERSION,
-      description: 'Kenshi mod editor',
-      license: 'MIT',
+      description: 'Cactus: mod editor for Kenshi',
+      license: 'SEE LICENSE IN LICENSE.txt',
       type: 'module',
       main: './out/main/index.js',
     },
@@ -113,7 +127,7 @@ cpSync(mcpFile, join(stage, 'resources', 'mcp', 'kenshi-mcp.mjs'));
 rmSync(mcpOut, { recursive: true, force: true });
 
 const crlf = (s: string): string => s.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
-const DOCS: Readonly<Record<string, string>> = { 'README_RU.txt': '_ИНСТРУКЦИЯ.txt', 'LICENSE.txt': 'LICENSE.txt' };
+const DOCS: Readonly<Record<string, string>> = { 'README_EN.txt': '_README.txt', 'README_RU.txt': '_ИНСТРУКЦИЯ.txt', 'LICENSE.txt': 'LICENSE.txt' };
 for (const [from, to] of Object.entries(DOCS)) {
   writeFileSync(join(stage, to), crlf(readFileSync(join(app, 'beta', from), 'utf8').replaceAll('{VERSION}', VERSION)));
 }

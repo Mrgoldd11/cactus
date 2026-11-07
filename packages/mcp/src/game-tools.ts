@@ -22,13 +22,13 @@ const vec3 = z.tuple([z.number(), z.number(), z.number()]);
 function describeAction(a: GameAction): string {
   switch (a.cmd) {
     case 'teleport':
-      return `перенести выбранного персонажа в ${formatVec3(a.args.pos)}`;
+      return `teleport the selected character to ${formatVec3(a.args.pos)}`;
     case 'camera':
-      return `поставить камеру в ${formatVec3(a.args.pos)}`;
+      return `move the camera to ${formatVec3(a.args.pos)}`;
     case 'speed':
-      return a.args.value === 0 ? 'поставить игру на паузу (скорость 0)' : `скорость времени ×${a.args.value}`;
+      return a.args.value === 0 ? 'pause the game (speed 0)' : `game speed ×${a.args.value}`;
     case 'pause':
-      return a.args.on ? 'поставить игру на паузу' : 'снять паузу';
+      return a.args.on ? 'pause the game' : 'unpause the game';
   }
 }
 
@@ -36,17 +36,17 @@ export function registerGameTools(server: McpServer, game: GameBridge): void {
   server.registerTool(
     'game_state',
     {
-      title: 'Состояние игры',
+      title: 'Game state',
       description:
-        'Что сейчас в запущенной Kenshi (через плагин Kenshi Bridge для RE_Kenshi): выбранный персонаж с шаблоном, фракцией и координатами, его разговор, время, пауза, камера. Только чтение.',
+        'What is in the running Kenshi now (through the Kenshi Bridge plugin for RE_Kenshi): the selected character with template, faction and coordinates, its conversation, time, pause, camera. Read only.',
       inputSchema: {},
-      annotations: { readOnlyHint: true, openWorldHint: false, title: 'Состояние игры' },
+      annotations: { readOnlyHint: true, openWorldHint: false, title: 'Game state' },
     },
     () =>
       guarded(async () => {
         const ping = await game.ping();
-        const head = `игра подключена: ${ping.plugin} ${ping.version}, протокол ${ping.protocol}`;
-        if (!ping.inGame) return [head, 'игра в меню или загружается'];
+        const head = `game connected: ${ping.plugin} ${ping.version}, protocol ${ping.protocol}`;
+        if (!ping.inGame) return [head, 'the game is in the menu or loading'];
         return [head, ...formatGameState(await game.state())];
       }),
   );
@@ -54,21 +54,21 @@ export function registerGameTools(server: McpServer, game: GameBridge): void {
   server.registerTool(
     'game_towns',
     {
-      title: 'Города в игре',
+      title: 'Towns in the game',
       description:
-        'Города и заставы загруженного мира в запущенной игре: центр, радиус границы, тип. near [x, y, z] + range — только рядом с точкой. Только чтение.',
+        'Towns and outposts of the loaded world in the running game: center, border radius, type. near [x, y, z] + range: only near a point. Read only.',
       inputSchema: {
-        near: vec3.optional().describe('Точка [x, y, z], рядом с которой искать'),
-        range: z.number().gt(0).optional().describe('Расстояние от near до границы города'),
-        mult: z.number().gt(0).max(20).optional().describe('Множитель радиуса (по умолчанию 1)'),
+        near: vec3.optional().describe('Point [x, y, z] to search around'),
+        range: z.number().gt(0).optional().describe('Distance from near to the town border'),
+        mult: z.number().gt(0).max(20).optional().describe('Radius multiplier (default 1)'),
       },
-      annotations: { readOnlyHint: true, openWorldHint: false, title: 'Города в игре' },
+      annotations: { readOnlyHint: true, openWorldHint: false, title: 'Towns in the game' },
     },
     (a) =>
       guarded(async () => {
         const r = await game.towns({ ...(a.near ? { near: a.near } : {}), ...(a.range !== undefined ? { range: a.range } : {}), ...(a.mult !== undefined ? { mult: a.mult } : {}) });
-        const out = [`городов: ${r.count}`];
-        for (const t of r.towns) out.push(`${t.name} [${t.stringId}] — ${t.typeName}, радиус ${Math.round(t.radius)}, центр ${formatVec3(t.pos)}`);
+        const out = [`towns: ${r.count}`];
+        for (const t of r.towns) out.push(`${t.name} [${t.stringId}] — ${t.typeName}, radius ${Math.round(t.radius)}, center ${formatVec3(t.pos)}`);
         return out;
       }),
   );
@@ -76,34 +76,34 @@ export function registerGameTools(server: McpServer, game: GameBridge): void {
   server.registerTool(
     'game_command',
     {
-      title: 'Команда игре',
+      title: 'Command to the game',
       description:
-        'Изменить запущенную игру: teleport (выбранный персонаж в точку), camera (камера в точку), speed (0..20, 0 — пауза), pause. Без confirm: true только показывает, что будет сделано: сначала спросите пользователя, затем повторите с confirm: true.',
+        'Change the running game: teleport (the selected character to a point), camera (camera to a point), speed (0..20, 0 is pause), pause. Without confirm: true it only shows what would be done: ask the user first, then repeat with confirm: true.',
       inputSchema: {
         cmd: z.enum(['teleport', 'camera', 'speed', 'pause']),
-        pos: vec3.optional().describe('Точка [x, y, z] для teleport и camera (координаты из where или game_state)'),
-        value: z.number().min(0).max(20).optional().describe('Скорость для speed'),
-        on: z.boolean().optional().describe('Для pause: true — пауза, false — снять'),
-        confirm: z.boolean().optional().describe('true — пользователь согласен, выполнить'),
+        pos: vec3.optional().describe('Point [x, y, z] for teleport and camera (coordinates from where or game_state)'),
+        value: z.number().min(0).max(20).optional().describe('Speed for speed'),
+        on: z.boolean().optional().describe('For pause: true to pause, false to unpause'),
+        confirm: z.boolean().optional().describe('true: the user agrees, execute'),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false, title: 'Команда игре' },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false, title: 'Command to the game' },
     },
     (a) =>
       guarded(async () => {
         let action: GameAction;
         if (a.cmd === 'teleport' || a.cmd === 'camera') {
-          if (!a.pos) throw new Error(`${a.cmd}: нужна точка pos [x, y, z]`);
+          if (!a.pos) throw new Error(`${a.cmd}: a point pos [x, y, z] is needed`);
           action = { cmd: a.cmd, args: { pos: a.pos } };
         } else if (a.cmd === 'speed') {
-          if (a.value === undefined) throw new Error('speed: нужно value 0..20');
+          if (a.value === undefined) throw new Error('speed: value 0..20 is needed');
           action = { cmd: 'speed', args: { value: a.value } };
         } else {
           action = { cmd: 'pause', args: { on: a.on ?? true } };
         }
         const what = describeAction(action);
-        if (!a.confirm) return [`не выполнено: ${what}.`, 'Спросите пользователя и повторите с confirm: true.'];
+        if (!a.confirm) return [`not done: ${what}.`, 'Ask the user and repeat with confirm: true.'];
         const r = await game.action(action);
-        return [`выполнено: ${what}`, JSON.stringify(r)];
+        return [`done: ${what}`, JSON.stringify(r)];
       }),
   );
 
@@ -111,29 +111,29 @@ export function registerGameTools(server: McpServer, game: GameBridge): void {
   server.registerTool(
     'game_trace',
     {
-      title: 'Трассировка диалога в игре',
+      title: 'Dialogue trace in the game',
       description:
-        'Какой диалог игра выбрала на событие и почему выпали соперники (отсеян условиями / не дошла очередь по весу). on — включить (filter player: клики игрока и разговоры с отрядом; all — всё), off — выключить, get — новые записи с прошлого get (since — с номера). Трассировка ничего не меняет в игре.',
+        'Which dialogue the game chose for an event and why the rivals dropped out (filtered by conditions / lost on weight). on turns it on (filter player: player clicks and squad conversations; all: everything), off turns it off, get returns the new entries since the last get (since: from a number). The trace changes nothing in the game.',
       inputSchema: {
         action: z.enum(['on', 'off', 'get']),
         filter: z.enum(['player', 'all']).optional(),
-        since: z.number().int().min(0).optional().describe('Номер записи, после которой читать (по умолчанию — с прошлого get)'),
-        limit: z.number().int().min(1).optional().describe('Сколько последних записей показать (по умолчанию 10)'),
+        since: z.number().int().min(0).optional().describe('Number of the entry to read after (default: since the last get)'),
+        limit: z.number().int().min(1).optional().describe('How many latest entries to show (default 10)'),
       },
-      annotations: { readOnlyHint: true, openWorldHint: false, title: 'Трассировка диалога' },
+      annotations: { readOnlyHint: true, openWorldHint: false, title: 'Dialogue trace' },
     },
     (a) =>
       guarded(async () => {
         if (a.action !== 'get') {
           const r = await game.setTrace(a.action === 'on', a.filter ?? 'player');
-          return [r.on ? `трассировка включена (${r.all ? 'всё' : 'игрок'}); поговорите в игре, затем game_trace get` : 'трассировка выключена'];
+          return [r.on ? `trace on (${r.all ? 'all' : 'player'}); talk in the game, then game_trace get` : 'trace off'];
         }
         const pageRes = await game.traceGet(a.since ?? since);
         since = pageRes.next;
         const items = pageRes.items.slice(-(a.limit ?? 10));
-        if (!items.length) return [`новых записей нет (следующий номер ${pageRes.next})`];
+        if (!items.length) return [`no new entries (next number ${pageRes.next})`];
         const out = items.flatMap(formatTraceRecord);
-        if (pageRes.items.length > items.length) out.unshift(`показаны последние ${items.length} из ${pageRes.items.length}`);
+        if (pageRes.items.length > items.length) out.unshift(`showing the last ${items.length} of ${pageRes.items.length}`);
         return out;
       }),
   );

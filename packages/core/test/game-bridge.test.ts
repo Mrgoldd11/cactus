@@ -122,9 +122,9 @@ describe('GameBridge', () => {
 describe('формат ответов игры', () => {
   it('состояние: время суток, выбранный, позиция', () => {
     const lines = formatGameState(STATE);
-    expect(lines[0]).toBe('день 12, 12:30; скорость ×1; сборка Steam');
+    expect(lines[0]).toBe('day 12, 12:30; speed ×1; build Steam');
     expect(lines[1]).toContain('Мэгги [42-x.mod «Maggie»]');
-    expect(lines[2]).toBe('  позиция: 1.3, 2, -3');
+    expect(lines[2]).toBe('  position: 1.3, 2, -3');
   });
 
   it('трассировка: выбор и причины выпадения соперников', () => {
@@ -143,11 +143,11 @@ describe('формат ответов игры', () => {
       checks: [],
     };
     expect(formatTraceRecord(r)).toEqual([
-      '#3 событие 1: Мэгги → Бип (игрок)',
-      '  выбран: d2 «Hi», реплика l1',
-      '  · d1 «Top» вес 50 — отсеян условиями',
-      '  ✓ d2 «Hi» вес 10, шанс 50/100 — выбран',
-      '  · d3 «Low» вес 1 — не дошла очередь',
+      '#3 event 1: Мэгги → Бип (player)',
+      '  chosen: d2 "Hi", line l1',
+      '  · d1 "Top" weight 50 — dropped by conditions',
+      '  ✓ d2 "Hi" weight 10, chance 50/100 — chosen',
+      '  · d3 "Low" weight 1 — not reached its turn',
     ]);
   });
 });

@@ -84,12 +84,12 @@ export class Session {
   }
 
   private vanilla(): Layer[] {
-    if (!hasGame(this.paths)) throw new SessionError(`Нет игры в ${this.paths.kenshi} (задайте KENSHI_DIR или --game)`);
+    if (!hasGame(this.paths)) throw new SessionError(`No game in ${this.paths.kenshi} (set KENSHI_DIR or --game)`);
     return (this.vanillaCache ??= loadVanillaLayers(this.paths));
   }
 
   schema(): GameSchema {
-    if (!hasGame(this.paths)) throw new SessionError(`Нет игры в ${this.paths.kenshi}`);
+    if (!hasGame(this.paths)) throw new SessionError(`No game in ${this.paths.kenshi}`);
     return (this.schemaCache ??= loadGameSchema(this.paths));
   }
 
@@ -114,7 +114,7 @@ export class Session {
   }
 
   open(req: OpenRequest): OpenResult {
-    if (this.live) throw new SessionError('Подключены к редактору: мод открывают в окне редактора (или connect_editor с disconnect: true)');
+    if (this.live) throw new SessionError('Connected to the editor: the mod is opened in the editor window (or connect_editor with disconnect: true)');
     return (this.current = this.load(req));
   }
 
@@ -156,7 +156,7 @@ export class Session {
    * читаются при первом обращении. С подключённым редактором мир правят в его окне.
    */
   worldEdits(): WorldEdits {
-    if (this.live) throw new SessionError('Подключены к редактору: объекты мира двигают в окне редактора (панель «Мир»). connect_editor с disconnect: true — править файл мода напрямую');
+    if (this.live) throw new SessionError('Connected to the editor: world objects are moved in the editor window (the World panel). connect_editor with disconnect: true edits the mod file directly');
     this.ctx();
     const cur = this.current!;
     if (this.editsCache?.owner !== cur) {
@@ -235,23 +235,23 @@ export class Session {
   /** Мод-источник слияния по имени установленного мода или пути. */
   mergeSource(spec: string, levels: boolean): { source: MergeSource; path: string; levelData?: LevelDataInfo } {
     const path = resolveModPath(this.paths, spec, this.cwd);
-    if (!path) throw new SessionError(`Мод-источник не найден: ${spec}`);
+    if (!path) throw new SessionError(`Source mod not found: ${spec}`);
     const levelData = levels ? detectLevelData(path) : undefined;
     return { source: readMergeSource(path), path, ...(levelData ? { levelData } : {}) };
   }
 
   /** Записать мод. Без пути — туда, откуда открыт. В папку игры — только с `force`. */
   save(path: string | undefined, force: boolean): { path: string; records: number; mergeStore?: string; world?: string[] } {
-    if (this.live) throw new SessionError('Подключены к редактору: сохраняет пользователь в окне (Ctrl+S)');
+    if (this.live) throw new SessionError('Connected to the editor: the user saves in the window (Ctrl+S)');
     const cur = this.current;
-    if (!cur) throw new SessionError('Мод не открыт: сначала open_mod');
+    if (!cur) throw new SessionError('No mod is open: open_mod first');
     const target = path !== undefined ? resolve(this.cwd, path) : cur.path;
-    if (target === undefined) throw new SessionError('Мод новый: укажите path');
+    if (target === undefined) throw new SessionError('The mod is new: give a path');
     if (isInWorkshop(this.paths, target)) {
-      throw new SessionError(`${target} — в мастерской Steam; туда не пишем никогда, даже с force. Править чужой мод — в копии в mods/ (kedit mods copy или кнопка в редакторе)`);
+      throw new SessionError(`${target} is in the Steam Workshop; we never write there, even with force. To edit someone else's mod, use a copy in mods/ (kedit mods copy or the button in the editor)`);
     }
     if (!force && isInGameFolders(this.paths, target)) {
-      throw new SessionError(`${target} — в папке игры или мастерской; запись туда только с force: true`);
+      throw new SessionError(`${target} is in the game or Workshop folder; writing there needs force: true`);
     }
     const file = saveModContext(cur.ctx, target);
     const world = this.saveWorld(cur, target);
@@ -295,7 +295,7 @@ export class Session {
   /** Подключиться к открытому редактору по файлу обнаружения и взять его мод. */
   async connectEditor(discoveryPath = liveDiscoveryPath()): Promise<LiveState> {
     const d = readLiveDiscovery(discoveryPath);
-    if (!d) throw new SessionError(`Редактор не запущен (нет ${discoveryPath}) — откройте Kenshi Mod Editor`);
+    if (!d) throw new SessionError(`The editor is not running (no ${discoveryPath}): open Cactus`);
     this.disconnectEditor();
     const client = await LiveClient.connect(d);
     try {
@@ -335,7 +335,7 @@ export class Session {
     } catch (e) {
       this.live = undefined;
       this.current = undefined;
-      throw new SessionError(`${e instanceof Error ? e.message : String(e)}. Дальше — без редактора; connect_editor — подключиться снова`);
+      throw new SessionError(`${e instanceof Error ? e.message : String(e)}. Continuing without the editor; connect_editor to connect again`);
     }
   }
 
@@ -359,7 +359,7 @@ export class Session {
   /** Отправить правки в окно редактора набором изменений ИИ. */
   async propose(title: string, ops: EditOp[]): Promise<ProposeResult> {
     const live = this.live;
-    if (!live) throw new SessionError('Редактор не подключён');
+    if (!live) throw new SessionError('The editor is not connected');
     const r = await live.client.request<ProposeResult>({ method: 'propose', title, ops });
     await this.sync();
     return r;
@@ -367,7 +367,7 @@ export class Session {
 
   async editorChangesets(): Promise<AiChangeset[]> {
     const live = this.live;
-    if (!live) throw new SessionError('Редактор не подключён');
+    if (!live) throw new SessionError('The editor is not connected');
     return live.client.request<AiChangeset[]>({ method: 'changesets' });
   }
 }

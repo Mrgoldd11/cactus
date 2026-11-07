@@ -2,7 +2,7 @@
  * Скриншоты для инструкции беты (`apps/desktop/beta/screenshots/`) — снимаются с собранной
  * беты, с пустыми настройками:
  *
- *   pnpm beta && node apps/desktop/scripts/beta-shots.ts [путь к KenshiModEditor.exe]
+ *   pnpm beta && node apps/desktop/scripts/beta-shots.ts [путь к Cactus.exe]
  *
  * Личного на снимках нет: путь к игре заменяется на обычный путь Steam, список установленных
  * модов не попадает в кадр.
@@ -13,7 +13,7 @@ import { join, resolve } from 'node:path';
 import { _electron as electron, type Page } from '@playwright/test';
 
 const app = resolve(import.meta.dirname, '..');
-const exe = process.argv[2] ?? join(app, '../../out/beta/KenshiModEditor/KenshiModEditor.exe');
+const exe = process.argv[2] ?? join(app, '../../out/beta/Cactus/Cactus.exe');
 const shots = join(app, 'beta', 'screenshots');
 mkdirSync(shots, { recursive: true });
 

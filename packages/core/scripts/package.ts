@@ -74,7 +74,7 @@ export function buildPackage(outDir: string, options: { tgz?: boolean } = {}): P
     [
       '# @kedit/core',
       '',
-      'Ядро Kenshi Mod Editor для своих скриптов: чтение и запись `.base`/`.mod` байт в байт,',
+      'Ядро Cactus для своих скриптов: чтение и запись `.base`/`.mod` байт в байт,',
       'схема `fcs.def`, слои модов (`ModContext`), диалоги, порядок загрузки, конфликты модов.',
       '',
       '```sh',

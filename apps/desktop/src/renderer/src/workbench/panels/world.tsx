@@ -7,7 +7,7 @@
  * Рендер и загрузка — `three/world/*`; здесь только интерфейс.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import { formatPosition, newBuildingStates, searchRecords, zoneOfPoint, type BuildingPlacement, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
+import { formatPosition, newBuildingStates, zoneOfPoint, type BuildingPlacement, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
 import { STRINGS, useLang } from '../../i18n.ts';
 import { isTypingIn, shortcut } from '../../keys.ts';
 import { ShowInGame } from '../../components/GameLink.tsx';
@@ -16,6 +16,7 @@ import type { Lang } from '../../../../shared/api.ts';
 import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
 import { InsideCard } from '../../components/InsideCard.tsx';
+import { PlaceBox } from '../../components/PlaceBox.tsx';
 import { interiorRequest, NumberField } from './interior.tsx';
 import { DEFAULT_EDIT, DEFAULT_SETTINGS, WorldView, type EditSettings, type QualityLevel, type WorldSettings, type WorldStatsView } from '../../three/world/view.ts';
 import type { WorldObject } from '../../three/world/objects.ts';
@@ -70,6 +71,7 @@ const en = {
   place: 'Place…',
   placeTip: 'New object from the records list — at the ground point in the screen centre',
   placeSearch: 'Building name (en/ru) or id',
+  noMatches: 'Nothing found',
   noGround: 'Point the camera at the ground (it is not loaded under the screen centre yet)',
   remove: 'Remove (Del)',
   stepMove: 'Move',
@@ -133,6 +135,7 @@ const ru: WorldStrings = {
   place: 'Поставить…',
   placeTip: 'Новый объект из списка записей — в точку земли в центре экрана',
   placeSearch: 'Имя здания (рус/англ) или id',
+  noMatches: 'Ничего не найдено',
   noGround: 'Наведите камеру на землю (под центром экрана она ещё не загружена)',
   remove: 'Удалить (Del)',
   stepMove: 'Сдвиг',
@@ -147,6 +150,8 @@ const ru: WorldStrings = {
 };
 const WORLD_STRINGS: Record<Lang, WorldStrings> = { en, ru };
 
+/** Что можно поставить в мир из списка «Поставить…». */
+const PLACE_TYPES = ['BUILDING'];
 const SETTINGS_KEY = 'kedit.world.settings';
 const EDIT_KEY = 'kedit.world.edit';
 const GRID_STEPS = [0, 10, 50, 100, 250, 500];
@@ -315,7 +320,6 @@ function WorldPanel(): ReactNode {
   const [edit, setEdit] = useState<EditSettings>(loadEdit);
   const [message, setMessage] = useState<string | undefined>();
   const [, setTick] = useState(0);
-  const [placing, setPlacing] = useState<string | undefined>();
 
   useEffect(() => {
     let cancelled = false;
@@ -425,7 +429,6 @@ function WorldPanel(): ReactNode {
       // Здание ставим готовым: без состояния игра делает из него стройплощадку «на продажу».
       const states = newBuildingStates(project.ctx.get(sid), at.y);
       const key = edits.place(path, holder, sid, [at.x, 0, at.z], [1, 0, 0, 0], states ? { states } : {}, `${s.stepPlace}: ${recordName(project, lang, sid)}`);
-      setPlacing(undefined);
       setMessage(undefined);
       const o = v.objects.find(path, holder, key);
       if (o) v.select(o);
@@ -449,12 +452,6 @@ function WorldPanel(): ReactNode {
     e.stopPropagation();
     undoRedo(k !== 'ctrl+z');
   };
-
-  const placeHits = useMemo(() => {
-    const q = placing?.trim();
-    if (!q) return [];
-    return searchRecords(project.ctx, { text: q, type: 'BUILDING' }).slice(0, 14);
-  }, [placing, project]);
 
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -575,27 +572,16 @@ function WorldPanel(): ReactNode {
           <span className="muted" data-testid="world-last-step" style={{ fontSize: '0.85em' }}>
             {edits.undoLabel() ?? ''}
           </span>
-          <input
-            data-testid="world-place"
+          <PlaceBox
+            project={project}
+            types={PLACE_TYPES}
+            testId="world-place"
             placeholder={s.place}
-            title={s.placeTip}
-            value={placing ?? ''}
-            style={{ width: 200 }}
-            onChange={(e) => { setPlacing(e.target.value); }}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setPlacing(undefined);
-              if (e.key === 'Enter' && placeHits[0]) placeRecord(placeHits[0].stringId);
-            }}
+            title={`${s.placeTip}. ${s.placeSearch}`}
+            emptyText={s.noMatches}
+            countText={(n, total) => `${n} / ${total}`}
+            onPick={placeRecord}
           />
-          {placeHits.length > 0 && (
-            <div className="menu" data-testid="world-place-hits" style={{ left: 'auto', right: 6, maxHeight: 320, overflow: 'auto', minWidth: 280 }}>
-              {placeHits.map((h) => (
-                <div key={h.stringId} className="menu-item" data-sid={h.stringId} style={{ cursor: 'pointer' }} onClick={() => { placeRecord(h.stringId); }}>
-                  {h.localizedName ?? h.name} <span className="muted">{h.stringId}</span>
-                </div>
-              ))}
-            </div>
-          )}
           {message && (
             <span className="error" data-testid="world-message" style={{ fontSize: '0.85em' }}>
               {message}

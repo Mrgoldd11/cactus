@@ -88,7 +88,7 @@ function paged<T>(items: readonly T[], offset: number, limit: number, line: (ite
 
 function record(ctx: ModContext, sid: string): GameRecord {
   const rec = ctx.get(sid) ?? ctx.lower(sid);
-  if (!rec) throw new SessionError(`Нет записи ${sid}`);
+  if (!rec) throw new SessionError(`No record ${sid}`);
   return rec;
 }
 
@@ -96,10 +96,10 @@ function record(ctx: ModContext, sid: string): GameRecord {
 function resolveId(ctx: ModContext, spec: string, preferTypes?: readonly string[]): string {
   const r = lookupRecord(ctx, spec, preferTypes ? { preferTypes } : {});
   if (r.stringId !== undefined) return r.stringId;
-  if (!r.candidates.length) throw new SessionError(`Нет записи «${spec}» (ни id, ни имени)`);
+  if (!r.candidates.length) throw new SessionError(`No record "${spec}" (neither an id nor a name)`);
   const list = r.candidates.slice(0, 20).map(formatHit);
-  if (r.candidates.length > 20) list.push(`… ещё ${r.candidates.length - 20}`);
-  throw new SessionError([`«${spec}»: подходит записей ${r.candidates.length} — укажите id:`, ...list].join('\n'));
+  if (r.candidates.length > 20) list.push(`… and ${r.candidates.length - 20} more`);
+  throw new SessionError([`"${spec}": ${r.candidates.length} records match, give an id:`, ...list].join('\n'));
 }
 
 const DIALOGUE_TYPES = ['DIALOGUE_PACKAGE', 'DIALOGUE', 'DIALOGUE_LINE', 'WORD_SWAPS'] as const;
@@ -111,18 +111,18 @@ function statusSummary(ctx: ModContext): string {
     counts.set(s, (counts.get(s) ?? 0) + 1);
   }
   const parts = [...counts].map(([k, n]) => `${k} ${n}`);
-  return `записей ${ctx.modRecords().length}${parts.length ? ` (${parts.join(', ')})` : ''}`;
+  return `records ${ctx.modRecords().length}${parts.length ? ` (${parts.join(', ')})` : ''}`;
 }
 
-const offset = z.number().int().min(0).optional().describe('Смещение страницы (из «дальше offset=…»)');
-const limit = (d: number): z.ZodOptional<z.ZodNumber> => z.number().int().min(0).optional().describe(`Размер страницы, по умолчанию ${d}; 0 — все`);
-const values = z.array(z.number().int()).max(3).optional().describe('Значения ссылки (до трёх чисел); по умолчанию — из схемы');
+const offset = z.number().int().min(0).optional().describe('Page offset (from "next offset=…")');
+const limit = (d: number): z.ZodOptional<z.ZodNumber> => z.number().int().min(0).optional().describe(`Page size, default ${d}; 0 for all`);
+const values = z.array(z.number().int()).max(3).optional().describe('Reference values (up to three numbers); by default from the schema');
 const scalar = z.union([z.boolean(), z.number(), z.string(), z.array(z.number())]);
-const dict = z.string().optional().describe('Словарь: bool, int, float, str, file, vec3, vec4 (если не ясно из схемы)');
+const dict = z.string().optional().describe('Dictionary: bool, int, float, str, file, vec3, vec4 (if not clear from the schema)');
 const enumIn = z.union([z.number().int(), z.string()]);
-const speaker = enumIn.optional().describe('Кто говорит: npc, player или TalkerEnum (T_ME, T_TARGET, …); по умолчанию после реплики NPC — ответ игрока, иначе NPC');
-const lineText = { text: z.string().optional(), texts: z.array(z.string()).optional().describe('Несколько формулировок (игра выбирает случайно)') };
-const as = z.string().optional().describe('Псевдоним новой записи ($x)');
+const speaker = enumIn.optional().describe('Who speaks: npc, player or a TalkerEnum (T_ME, T_TARGET, …); by default after an NPC line it is the player answer, otherwise the NPC');
+const lineText = { text: z.string().optional(), texts: z.array(z.string()).optional().describe('Several wordings (the game picks one at random)') };
+const as = z.string().optional().describe('Alias of the new record ($x)');
 
 const editOp = z.discriminatedUnion('op', [
   z.object({ op: z.literal('create'), type: z.union([z.string(), z.number()]), name: z.string(), id: z.string().optional(), as: z.string().optional() }),
@@ -178,16 +178,16 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
     { name: SERVER_NAME, version: '0.1.0-beta.1' },
     {
       instructions: [
-        'Данные Kenshi: ваниль (gamedata.base → Newwworld.mod → Dialogue.mod → rebirth.mod), зависимости мода, сам мод.',
-        'Сначала open_mod (или работайте по ванили без него). Записи — по строковому id или имени (show, tree, refs, diff); find ищет по англ. и рус. имени.',
-        'Правки (edit) — пачкой операций, одна отмена на пачку; save пишет только изменения. В папку игры save пишет только с force: true.',
-        'Схема типов и полей с описаниями из fcs.def — инструмент schema и ресурсы kenshi://schema/…',
-        'Диалоги: tree — дерево, talk — какой диалог выберет игра у персонажа, play — разговор по шагам с ответами игрока; правки графа — операции edit addLine, insertLine, link, unlink, setText, duplicateLine, deleteLines, addCondition, addEffect.',
-        'Массовые правки — bulk: сначала предпросмотр «было → станет», применяет только с apply: true.',
-        'history — шаги понятными словами; undo/redo с to — отмена или повтор до шага.',
-        'Если запущена игра с плагином Kenshi Bridge — game_state (что в игре), game_trace (какой диалог выбрала игра и почему), game_towns (города игры, радиусы границ), game_command (телепорт, камера, скорость, пауза — только с согласия пользователя, confirm: true).',
-        'Если открыт Kenshi Mod Editor — connect_editor: дальше всё читается из окна редактора, а edit отправляет правки в окно набором изменений; пользователь их принимает или откатывает (editor_changes — их состояние). save и undo в этом режиме делает пользователь.',
-        'Мир: list_in_area — что стоит вокруг точки или города; place / move / remove — правки мира мода (y — над землёй), своя отмена world_undo и world_history; save пишет и файлы уровня в leveldata.',
+        'Kenshi data: vanilla (gamedata.base → Newwworld.mod → Dialogue.mod → rebirth.mod), the mod dependencies, and the mod itself.',
+        'Call open_mod first (or work on vanilla without it). Address records by string id or name (show, tree, refs, diff); find searches English and Russian names.',
+        'Edits (edit) go in batches of operations, one undo per batch; save writes only the changes. save writes into the game folder only with force: true.',
+        'Schema of types and fields with descriptions from fcs.def: the schema tool and kenshi://schema/… resources.',
+        'Dialogues: tree shows the tree, talk shows which dialogue the game picks for a character, play runs a conversation step by step with player answers; graph edits are the edit operations addLine, insertLine, link, unlink, setText, duplicateLine, deleteLines, addCondition, addEffect.',
+        'Bulk edits: bulk shows a was → will be preview first and applies only with apply: true.',
+        'history lists steps in plain words; undo/redo with `to` go back or forward to a given step.',
+        'If the game runs with the Kenshi Bridge plugin (optional, separate open-source plugin for RE_Kenshi/KenshiLib, https://github.com/Mrgoldd11/Kenshi-Bridge; the user has to install it themselves): game_state (what is in the game), game_trace (which dialogue the game chose and why), game_towns (game towns, border radii), game_command (teleport, camera, speed, pause: only with the user consent, confirm: true).',
+        'If Cactus is open: connect_editor. After that everything is read from the editor window, and edit sends changes to the window as a change set that the user accepts or reverts (editor_changes shows their state). In this mode the user does save and undo.',
+        'World: list_in_area shows what stands around a point or town; place / move / remove edit the world of the mod (y is above ground), with their own world_undo and world_history; save also writes level files into leveldata.',
       ].join('\n'),
     },
   );
@@ -195,22 +195,22 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'open_mod',
     {
-      title: 'Открыть мод',
-      description: 'Открыть .mod (путь или имя установленного мода) поверх ванили и его зависимостей. Без mod — новый пустой мод с именем name.',
+      title: 'Open mod',
+      description: 'Open a .mod (path or name of an installed mod) on top of vanilla and its dependencies. Without mod: a new empty mod named name.',
       inputSchema: {
-        mod: z.string().optional().describe('Путь к .mod или имя мода из mods/ или мастерской; если файла нет — новый мод по этому пути'),
-        name: z.string().optional().describe('Имя файла нового мода (Мой мод.mod), если mod не задан'),
-        dependencies: z.array(z.string()).optional().describe('Зависимости вместо записанных в заголовке мода'),
+        mod: z.string().optional().describe('Path to a .mod, or a mod name from mods/ or the Workshop; if the file does not exist, a new mod at that path'),
+        name: z.string().optional().describe('File name of the new mod (My mod.mod) when mod is not set'),
+        dependencies: z.array(z.string()).optional().describe('Dependencies instead of those recorded in the mod header'),
       },
-      annotations: { ...READ, title: 'Открыть мод' },
+      annotations: { ...READ, title: 'Open mod' },
     },
     (a) =>
       run(() => {
         const r = session.open(compact({ mod: a.mod, name: a.name, dependencies: a.dependencies }));
-        const lines = [`${r.ctx.modName}${r.path ? ` — ${r.path}` : ' — новый, путь укажите в save'}`, statusSummary(r.ctx)];
-        if (r.dependencyPaths.length) lines.push(`зависимости: ${r.dependencyPaths.join(', ')}`);
-        if (r.missingDependencies.length) lines.push(`нет зависимостей: ${r.missingDependencies.join(', ')}`);
-        if (r.ctx.dirty) lines.push('есть несохранённые изменения');
+        const lines = [`${r.ctx.modName}${r.path ? ` — ${r.path}` : ' — new, give a path in save'}`, statusSummary(r.ctx)];
+        if (r.dependencyPaths.length) lines.push(`dependencies: ${r.dependencyPaths.join(', ')}`);
+        if (r.missingDependencies.length) lines.push(`missing dependencies: ${r.missingDependencies.join(', ')}`);
+        if (r.ctx.dirty) lines.push('there are unsaved changes');
         return lines;
       }),
   );
@@ -218,20 +218,20 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'find',
     {
-      title: 'Найти записи',
-      description: 'Записи по имени (англ. или рус.) или id, типу, значениям полей, статусу. Строка: id  ТИП  «имя» (рус.)  [статус].',
+      title: 'Find records',
+      description: 'Records by name (English or Russian) or id, type, field values, status. Line: id  TYPE  "name" (Russian)  [status].',
       inputSchema: {
-        text: z.string().optional().describe('Подстрока имени или id'),
-        type: z.union([z.string(), z.number()]).optional().describe('Тип: имя (DIALOGUE) или номер'),
-        fields: z.array(z.string()).optional().describe('Условия: ключ=знач, ключ~подстрока (или ключ:подстрока), ключ!:подстрока — не содержит, ключ?регэксп, != < > <= >=, ключ? — поле есть; для ссылок: список>5, список.v0=4, Ref>0'),
+        text: z.string().optional().describe('Substring of name or id'),
+        type: z.union([z.string(), z.number()]).optional().describe('Type: name (DIALOGUE) or number'),
+        fields: z.array(z.string()).optional().describe('Conditions: key=val, key~substring (or key:substring), key!:substring (does not contain), key?regexp, != < > <= >=, key? (field exists); for references: list>5, list.v0=4, Ref>0'),
         status: z.array(z.enum(['base', 'new', 'changed', 'deleted'])).optional(),
-        anywhere: z.string().optional().describe('Подстрока где угодно в записи'),
-        exact: z.boolean().optional().describe('Только точное совпадение имени'),
-        mod_only: z.boolean().optional().describe('Только записи мода'),
+        anywhere: z.string().optional().describe('Substring anywhere in the record'),
+        exact: z.boolean().optional().describe('Exact name match only'),
+        mod_only: z.boolean().optional().describe('Mod records only'),
         offset,
         limit: limit(30),
       },
-      annotations: { ...READ, title: 'Найти записи' },
+      annotations: { ...READ, title: 'Find records' },
     },
     (a) =>
       run(() => {
@@ -254,14 +254,14 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'show',
     {
-      title: 'Показать запись',
-      description: 'Итоговые поля и ссылки записи (ссылки с именами целей), статус; layers — какие слои её задают.',
+      title: 'Show record',
+      description: 'Resulting fields and references of a record (references with target names), status; layers shows which layers define it.',
       inputSchema: {
-        id: z.string().describe('Строковый id или имя записи (англ. или рус.)'),
-        max_refs: z.number().int().min(0).optional().describe('Ссылок на категорию, по умолчанию 20; 0 — все'),
+        id: z.string().describe('String id or record name (English or Russian)'),
+        max_refs: z.number().int().min(0).optional().describe('References per category, default 20; 0 for all'),
         layers: z.boolean().optional(),
       },
-      annotations: { ...READ, title: 'Показать запись' },
+      annotations: { ...READ, title: 'Show record' },
     },
     (a) =>
       run(() => {
@@ -274,15 +274,15 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'tree',
     {
-      title: 'Дерево диалога',
-      description: 'Дерево диалога по ссылкам dialogs/lines: реплики, условия, действия. Повторы и циклы не разворачиваются.',
+      title: 'Dialogue tree',
+      description: 'Dialogue tree by dialogs/lines references: lines, conditions, actions. Repeats and cycles are not expanded.',
       inputSchema: {
-        id: z.string().describe('Id или имя диалога, пакета или реплики'),
-        depth: z.number().int().min(1).optional().describe('Глубина, по умолчанию 6'),
-        max_nodes: z.number().int().min(1).optional().describe('Узлов, по умолчанию 60'),
-        full: z.boolean().optional().describe('Все поля реплик'),
+        id: z.string().describe('Id or name of a dialogue, package or line'),
+        depth: z.number().int().min(1).optional().describe('Depth, default 6'),
+        max_nodes: z.number().int().min(1).optional().describe('Nodes, default 60'),
+        full: z.boolean().optional().describe('All line fields'),
       },
-      annotations: { ...READ, title: 'Дерево диалога' },
+      annotations: { ...READ, title: 'Dialogue tree' },
     },
     (a) =>
       run(() => {
@@ -296,15 +296,15 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'refs',
     {
-      title: 'Ссылки записи',
-      description: 'Ссылки из записи (→ категория: цель) и на неё (← источник категория).',
+      title: 'Record references',
+      description: 'References from a record (→ category: target) and to it (← source category).',
       inputSchema: {
-        id: z.string().describe('Id или имя записи'),
-        direction: z.enum(['from', 'to', 'both']).optional().describe('По умолчанию both'),
+        id: z.string().describe('Id or record name'),
+        direction: z.enum(['from', 'to', 'both']).optional().describe('Default both'),
         offset,
         limit: limit(50),
       },
-      annotations: { ...READ, title: 'Ссылки записи' },
+      annotations: { ...READ, title: 'Record references' },
     },
     (a) =>
       run(() => {
@@ -325,15 +325,15 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'where',
     {
-      title: 'Где в игре',
+      title: 'Where in the game',
       description:
-        'Где запись встречается в игре: цепочка обратных ссылок (предмет ← список торговца ← отряд ← город) до городов, зданий, фракций и биомов, с координатами из файлов уровня. Каждый шаг пути — с категорией ссылки. Итог вида «Продаётся у «Оружейник» (отряд …): Груз, Хэн». `tree` — ещё и дерево обратных ссылок.',
+        'Where a record appears in the game: a chain of back-references (item ← trader list ← squad ← town) up to towns, buildings, factions and biomes, with coordinates from level files. Every step of the path has its reference category. Ends with a summary line, e.g. where the item is sold and in which towns. `tree` adds the back-reference tree.',
       inputSchema: {
-        id: z.string().describe('Id или имя записи'),
-        tree: z.boolean().optional().describe('Показать и дерево обратных ссылок'),
+        id: z.string().describe('Id or record name'),
+        tree: z.boolean().optional().describe('Also show the back-reference tree'),
         limit: limit(20),
       },
-      annotations: { ...READ, title: 'Где в игре' },
+      annotations: { ...READ, title: 'Where in the game' },
     },
     (a) =>
       run(() => {
@@ -348,14 +348,14 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'inspect',
     {
-      title: 'Что внутри',
+      title: 'What is inside',
       description:
-        'Карточка объекта, как по клику в сцене или в панели «Модель»: что это (имя, тип, из какого мода, меняют ли его моды), что внутри и на что ссылается (части здания, интерьер, мебель, товары, отряды, диалоги… по категориям, у размещённых объектов — координаты), кто ссылается на него, и из каких файлов модели он собран. Скриптов у объектов Kenshi нет — «внутри» только данные записи. Пустое так и помечено.',
+        'Object card, as on a click in the scene or in the Model panel: what it is (name, type, which mod it comes from, whether mods change it), what is inside and what it references (building parts, interior, furniture, goods, squads, dialogues… by category; for placed objects, coordinates), who references it, and which model files it is built from. Kenshi objects have no scripts, so inside means only the record data. Empty parts are marked as such.',
       inputSchema: {
-        id: z.string().describe('Id или имя записи (объекта сцены, здания, части, предмета)'),
+        id: z.string().describe('Id or name of a record (scene object, building, part, item)'),
         limit: limit(20),
       },
-      annotations: { ...READ, title: 'Что внутри' },
+      annotations: { ...READ, title: 'What is inside' },
     },
     (a) =>
       run(() => {
@@ -365,8 +365,8 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         const lines = formatInside(inspectRecord(ctx, id, { limit: max === 0 ? Infinity : max })).split('\n');
         const model = modelOfRecord(ctx, id);
         if (model.pieces.length > 0) {
-          lines.push('модель:');
-          for (const p of model.pieces) lines.push(`  ${p.mesh}${p.texture ? ` + ${p.texture}` : ''}${p.source !== id ? `  (часть ${refLabel(ctx, p.source)})` : ''}`);
+          lines.push('model:');
+          for (const p of model.pieces) lines.push(`  ${p.mesh}${p.texture ? ` + ${p.texture}` : ''}${p.source !== id ? `  (part ${refLabel(ctx, p.source)})` : ''}`);
         }
         for (const n of model.notes) lines.push(`  ${n}`);
         return lines;
@@ -376,14 +376,14 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'talk',
     {
-      title: 'Разговор с персонажем',
+      title: 'Talk to a character',
       description:
-        'Симулятор разговора: какие диалоги есть у персонажа на событие (1 — игрок заговорил, по умолчанию), откуда каждый (персонаж, его пакет, отряд, фракция; слой-источник), очки, условия, действия (арест, атака, торговля, найм) и вердикт: какой выберет игра, какой сработает только при условиях, какой не прозвучит. Затем начало разговора победителя с русским текстом и выбором игрока. Выбор считается по правилу из кода игры (очки, порядок, розыгрыш поровну, шансы). Разговор дальше по шагам — play.',
+        'Conversation simulator: which dialogues a character has for an event (1 is the player speaking, the default), where each comes from (character, its package, squad, faction; source layer), scores, conditions, actions (arrest, attack, trade, hire) and a verdict: which one the game picks, which fires only under conditions, which never plays. Then the start of the winning conversation with its text and the player choices. The choice follows the rule from the game code (scores, order, equal draw, chances). Use play to continue step by step.',
       inputSchema: {
-        id: z.string().describe('Id или имя персонажа (CHARACTER)'),
-        event: z.number().int().min(0).optional().describe('Событие (DIALOGUE_PACKAGE dialogs v0); 1 — разговор по клику'),
+        id: z.string().describe('Id or name of a character (CHARACTER)'),
+        event: z.number().int().min(0).optional().describe('Event (DIALOGUE_PACKAGE dialogs v0); 1 is a conversation on click'),
       },
-      annotations: { ...READ, title: 'Разговор с персонажем' },
+      annotations: { ...READ, title: 'Talk to a character' },
     },
     (a) =>
       run(() => {
@@ -397,15 +397,15 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'diff',
     {
-      title: 'Что меняет мод',
-      description: 'Изменения мода относительно нижних слоёв: по всем записям мода или по одной (id). Последняя строка — итог «новых N, изменённых M, удалённых K».',
+      title: 'What the mod changes',
+      description: 'Changes of the mod relative to the lower layers: for all mod records or for one (id). The last line is a summary: new N, changed M, deleted K.',
       inputSchema: {
-        id: z.string().optional().describe('Id или имя записи'),
-        status: z.array(z.enum(['added', 'changed', 'removed'])).optional().describe('Только такие изменения'),
+        id: z.string().optional().describe('Id or record name'),
+        status: z.array(z.enum(['added', 'changed', 'removed'])).optional().describe('Only these changes'),
         offset,
         limit: limit(20),
       },
-      annotations: { ...READ, title: 'Что меняет мод' },
+      annotations: { ...READ, title: 'What the mod changes' },
     },
     (a) =>
       run(() => {
@@ -414,7 +414,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         const diffs = ids.flatMap((sid) => modRecordDiff(ctx, sid) ?? []);
         const shown = filterDiffs(diffs, a.status);
         const lines = paged(shown, a.offset ?? 0, a.limit ?? 20, (d) => formatRecordDiff(ctx, d));
-        lines.push(`${formatDiffSummary(diffs)}${a.status ? `; показаны: ${a.status.join(', ')}` : ''}`);
+        lines.push(`${formatDiffSummary(diffs)}${a.status ? `; shown: ${a.status.join(', ')}` : ''}`);
         return lines;
       }),
   );
@@ -422,10 +422,10 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'validate',
     {
-      title: 'Проверить мод',
-      description: 'Битые ссылки, поля вне схемы, ссылки не на тот тип, значения вне enum, диалоги без реплик, висячие ссылки на записи, удалённые зависимостями.',
+      title: 'Validate mod',
+      description: 'Broken references, fields outside the schema, references of the wrong type, values outside the enum, dialogues without lines, dangling references to records removed by dependencies.',
       inputSchema: { offset, limit: limit(50) },
-      annotations: { ...READ, title: 'Проверить мод' },
+      annotations: { ...READ, title: 'Validate mod' },
     },
     (a) =>
       run(() => {
@@ -433,7 +433,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         const issues = validateMod(ctx);
         const errors = issues.filter((i) => i.severity === 'error').length;
         const lines = issues.length ? paged(issues, a.offset ?? 0, a.limit ?? 50, (i) => [formatIssue(ctx, i)]) : [];
-        lines.push(`ошибок ${errors}, предупреждений ${issues.length - errors}`);
+        lines.push(`errors ${errors}, warnings ${issues.length - errors}`);
         return lines;
       }),
   );
@@ -446,33 +446,33 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'edit',
     {
-      title: 'Править мод',
+      title: 'Edit mod',
       description: [
-        'Пачка операций одной правкой (одна отмена). Новые записи можно назвать псевдонимом as: "$x" и ссылаться на него дальше (id/target: "$x").',
-        'create {type,name,id?,as?}; duplicate {from,name?,id?,as?}; delete {id,removeReferences?}; restore {id}; revert {id} — убрать запись из мода;',
-        'rename {id,name}; set {id,field,value,dict?} — enum-поле можно задать именем (DR_ONCE_ONLY, ONCE_ONLY) или числом; reset {id,field,dict?} — вернуть значение нижнего слоя;',
+        'A batch of operations as one edit (one undo). New records can be named with an alias as: "$x" and referenced later (id/target: "$x").',
+        'create {type,name,id?,as?}; duplicate {from,name?,id?,as?}; delete {id,removeReferences?}; restore {id}; revert {id} (remove the record from the mod);',
+        'rename {id,name}; set {id,field,value,dict?} (an enum field can be set by name, DR_ONCE_ONLY or ONCE_ONLY, or by number); reset {id,field,dict?} (return the value of the lower layer);',
         'addRef {id,category,target,values?}; removeRef {id,category,target}; setRefs {id,category,refs:[{target,values?}]};',
-        'info {author?,description?,dependencies?,references?,version?,lastId?} — заголовок мода.',
-        'Граф диалога (как в редакторе; parent — диалог или реплика, child — реплика):',
-        'addLine {parent,speaker?,text?|texts?,as?} — новая реплика в конце ветки; insertLine {parent,child,speaker?,text?,as?} — вместо связи parent→child: parent→новая→child;',
-        'link {parent,child} — связь (петля, общий ответ); unlink {parent,child}; setText {id,text|texts}; duplicateLine {id,parent?,as?} — копия со своими условиями;',
-        'deleteLines {lines?,links?:[{parent,child}]} — удалить реплики (с их условиями) и связи; revertLine {id} — реплику игры как в игре;',
+        'info {author?,description?,dependencies?,references?,version?,lastId?} (the mod header).',
+        'Dialogue graph (as in the editor; parent is a dialogue or a line, child is a line):',
+        'addLine {parent,speaker?,text?|texts?,as?} (a new line at the end of the branch); insertLine {parent,child,speaker?,text?,as?} (instead of the link parent→child: parent→new→child);',
+        'link {parent,child} (a link: loop, shared answer); unlink {parent,child}; setText {id,text|texts}; duplicateLine {id,parent?,as?} (a copy with its own conditions);',
+        'deleteLines {lines?,links?:[{parent,child}]} (delete lines with their conditions, and links); revertLine {id} (restore a game line as in the game);',
         'addCondition {id,cond,value,who?,cmp?,tag?} — cond: DialogConditionEnum (DC_…), who: TalkerEnum, cmp: ComparisonEnum (CE_EQUALS, CE_LESS, CE_MORE); addEffect {id,action,values?} — DialogActionEnum (DA_…); removeAction {id,category,action}.',
-        'Ванильные реплики можно править: правка ложится слоем мода поверх игры.',
+        'Vanilla lines can be edited: the edit goes into the mod layer on top of the game.',
       ].join('\n'),
       inputSchema: {
         ops: z.array(editOp).min(1),
-        label: z.string().optional().describe('Подпись правки в истории'),
+        label: z.string().optional().describe('Label of the edit in the history'),
       },
-      annotations: { ...EDIT, title: 'Править мод' },
+      annotations: { ...EDIT, title: 'Edit mod' },
     },
     (a) =>
       run(async () => {
         if (session.editor) {
-          const r = await session.propose(a.label ?? `${a.ops.length} правок`, a.ops.map((op) => compact(op)));
-          const lines = [`в редакторе: набор изменений #${r.changeset.id} «${r.changeset.title}» — ждёт решения пользователя (принять / откатить)`];
+          const r = await session.propose(a.label ?? `${a.ops.length} edits`, a.ops.map((op) => compact(op)));
+          const lines = [`in the editor: change set #${r.changeset.id} "${r.changeset.title}" is waiting for the user decision (accept / revert)`];
           const aliases = Object.entries(r.aliases);
-          if (aliases.length) lines.push(`псевдонимы: ${aliases.map(([k, v]) => `${k} = ${v}`).join(', ')}`);
+          if (aliases.length) lines.push(`aliases: ${aliases.map(([k, v]) => `${k} = ${v}`).join(', ')}`);
           lines.push(...r.changeset.summary);
           return lines;
         }
@@ -481,10 +481,10 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         const r = applyOps(ctx, a.ops.map((op) => compact(op)), a.label);
         const lines: string[] = [];
         const aliases = Object.entries(r.aliases);
-        if (aliases.length) lines.push(`псевдонимы: ${aliases.map(([k, v]) => `${k} = ${v}`).join(', ')}`);
+        if (aliases.length) lines.push(`aliases: ${aliases.map(([k, v]) => `${k} = ${v}`).join(', ')}`);
         const cs = ctx.history().undo.at(-1);
         if (cs && ctx.history().undo.length > before) lines.push(title(ctx, cs), ...formatChangeset(ctx, cs).slice(1));
-        else lines.push('ничего не изменилось');
+        else lines.push('nothing changed');
         return lines;
       }),
   );
@@ -492,28 +492,28 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'bulk',
     {
-      title: 'Массовая правка',
+      title: 'Bulk edit',
       description: [
-        'Записи одного типа по условиям → одна операция над полем: set (задать), mul (умножить), add (прибавить), replace (заменить текст; field "name" — имя записи), refAdd / refRemove (добавить или убрать ссылку: field — список ссылок, например items; value — id или имя цели; values — v0..v2).',
-        'По умолчанию только предпросмотр «было → станет», ничего не меняет. apply: true — применить одной правкой (одна отмена);',
-        'если подключён редактор — отправляет набор изменений в окно, пользователь принимает или откатывает. Сохранение — отдельно (save).',
+        'Records of one type by conditions → one operation on a field: set, mul (multiply), add, replace (replace text; field "name" is the record name), refAdd / refRemove (add or remove a reference: field is a reference list such as items; value is the id or name of the target; values are v0..v2).',
+        'By default only a was → will be preview, nothing is changed. apply: true applies it as one edit (one undo);',
+        'if the editor is connected, it sends a change set to the window and the user accepts or reverts it. Saving is separate (save).',
       ].join('\n'),
       inputSchema: {
-        type: z.union([z.string(), z.number()]).describe('Тип записей: имя (WEAPON) или номер'),
-        text: z.string().optional().describe('Подстрока имени (англ. или рус.) или id'),
-        fields: z.array(z.string()).optional().describe('Условия: ключ=знач, ключ~подстрока (или ключ:подстрока), ключ!:подстрока — не содержит, ключ?регэксп, != < > <= >=, ключ? — поле есть; для ссылок: список>5, список.v0=4, Ref>0'),
-        mod_only: z.boolean().optional().describe('Только записи, которые уже есть в моде'),
+        type: z.union([z.string(), z.number()]).describe('Record type: name (WEAPON) or number'),
+        text: z.string().optional().describe('Substring of name (English or Russian) or id'),
+        fields: z.array(z.string()).optional().describe('Conditions: key=val, key~substring (or key:substring), key!:substring (does not contain), key?regexp, != < > <= >=, key? (field exists); for references: list>5, list.v0=4, Ref>0'),
+        mod_only: z.boolean().optional().describe('Only records that already exist in the mod'),
         op: z.enum(['set', 'mul', 'add', 'replace', 'refAdd', 'refRemove']),
-        field: z.string().describe('Ключ поля (для replace можно name)'),
-        value: z.string().describe('set — значение (enum — имя или число); mul/add — число; replace — на что заменить'),
-        find: z.string().optional().describe('replace: что искать'),
-        values: z.array(z.number()).optional().describe('refAdd: значения ссылки v0, v1, v2'),
-        regex: z.boolean().optional().describe('replace: find — регулярное выражение ($1 — группы)'),
+        field: z.string().describe('Field key (for replace it can be name)'),
+        value: z.string().describe('set: the value (enum: name or number); mul/add: a number; replace: what to replace with'),
+        find: z.string().optional().describe('replace: what to look for'),
+        values: z.array(z.number()).optional().describe('refAdd: reference values v0, v1, v2'),
+        regex: z.boolean().optional().describe('replace: find is a regular expression ($1 for groups)'),
         case_sensitive: z.boolean().optional(),
-        apply: z.boolean().optional().describe('true — применить; без него только предпросмотр'),
+        apply: z.boolean().optional().describe('true to apply; without it only a preview'),
         limit: limit(50),
       },
-      annotations: { ...EDIT, title: 'Массовая правка' },
+      annotations: { ...EDIT, title: 'Bulk edit' },
     },
     (a) =>
       run(async () => {
@@ -524,47 +524,47 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
           compact({ kind: a.op, field: a.field, value: a.value, find: a.find, regex: a.regex, caseSensitive: a.case_sensitive, values: a.values }),
         );
         const lines = formatBulkPreview(p, a.limit === 0 ? Infinity : (a.limit ?? 50));
-        if (!a.apply) return [...lines, 'предпросмотр: ничего не изменено (apply: true — применить)'];
-        if (p.ops.length === 0) return [...lines, 'менять нечего'];
+        if (!a.apply) return [...lines, 'preview: nothing changed (apply: true to apply)'];
+        if (p.ops.length === 0) return [...lines, 'nothing to change'];
         if (session.editor) {
           const r = await session.propose(p.label, p.ops);
-          return [...lines, `в редакторе: набор изменений #${r.changeset.id} «${r.changeset.title}» — ждёт решения пользователя (принять / откатить)`];
+          return [...lines, `in the editor: change set #${r.changeset.id} "${r.changeset.title}" is waiting for the user decision (accept / revert)`];
         }
         applyBulk(ctx, p);
         const cs = ctx.history().undo.at(-1);
-        return [...lines, cs ? `применено: ${title(ctx, cs)}` : 'применено'];
+        return [...lines, cs ? `applied: ${title(ctx, cs)}` : 'applied'];
       }),
   );
 
   server.registerTool(
     'merge',
     {
-      title: 'Слияние модов',
+      title: 'Merge mods',
       description: [
-        'Слияние: что другой мод (source — имя установленного мода или путь к .mod/.base) меняет относительно открытого мода: новые, изменённые (с полями «было → станет») и удалённые записи; конфликты — когда поле меняли и вы, и источник.',
-        'По умолчанию только предпросмотр. apply: true — слить выбранное одной правкой (одна отмена), выбор: ids / types / kinds / all. recursive — вместе с записями, на которые ссылаются (целый диалог); fix_refs — добавить и новые записи, на которые ссылаются принятые.',
-        'conflicts: mine (по умолчанию, остаются ваши значения) | source; resolutions — по записям и полям (ключ из предпросмотра, например ints:value; для удаления — record).',
-        'reject / unreject — отклонить и не показывать при следующих слияниях (show_rejected: показать их). Слияние данных уровня (leveldata, *.zone) не поддержано: levels: true только сообщает о них.',
-        'Нельзя слить мод, открытый как зависимость. Мод и файл решений <мод>.kedit-merge.json пишет save (в папку игры — с force). Подключён редактор: только предпросмотр, слить — панелью «Слияние» в окне.',
+        'Merge: what another mod (source is the name of an installed mod or a path to .mod/.base) changes relative to the open mod: new, changed (with was → will be fields) and deleted records; conflicts are when the field was changed both by you and by the source.',
+        'By default only a preview. apply: true merges the selection as one edit (one undo), selection: ids / types / kinds / all. recursive also takes the records they reference (a whole dialogue); fix_refs also adds the new records referenced by the accepted ones.',
+        'conflicts: mine (the default, your values stay) | source; resolutions are per record and field (the key from the preview, for example ints:value; for deletion it is record).',
+        'reject / unreject reject and hide in the next merges (show_rejected shows them). Merging level data (leveldata, *.zone) is not supported: levels: true only reports it.',
+        'A mod that is open as a dependency cannot be merged. The mod and the decisions file <mod>.kedit-merge.json are written by save (into the game folder only with force). With the editor connected only a preview is possible; merge with the Merge panel in the window.',
       ].join('\n'),
       inputSchema: {
-        source: z.string().describe('Мод-источник: имя установленного мода или путь к файлу'),
-        ids: z.array(z.string()).optional().describe('Какие записи слить (id из предпросмотра)'),
-        types: z.array(z.string()).optional().describe('Слить записи этих типов (имя или номер)'),
-        kinds: z.array(z.enum(['new', 'changed', 'deleted'])).optional().describe('Слить записи этого вида изменения'),
-        all: z.boolean().optional().describe('Слить всё из списка'),
+        source: z.string().describe('Source mod: name of an installed mod or a path to the file'),
+        ids: z.array(z.string()).optional().describe('Which records to merge (ids from the preview)'),
+        types: z.array(z.string()).optional().describe('Merge records of these types (name or number)'),
+        kinds: z.array(z.enum(['new', 'changed', 'deleted'])).optional().describe('Merge records of this kind of change'),
+        all: z.boolean().optional().describe('Merge everything in the list'),
         recursive: z.boolean().optional(),
         fix_refs: z.boolean().optional(),
         conflicts: z.enum(['mine', 'source']).optional(),
-        resolutions: z.record(z.string(), z.record(z.string(), z.enum(['mine', 'source']))).optional().describe('id записи → ключ поля → mine | source'),
+        resolutions: z.record(z.string(), z.record(z.string(), z.enum(['mine', 'source']))).optional().describe('record id → field key → mine | source'),
         reject: z.array(z.string()).optional(),
         unreject: z.array(z.string()).optional(),
         show_rejected: z.boolean().optional(),
-        levels: z.boolean().optional().describe('Показать данные уровня источника (они не сливаются)'),
-        apply: z.boolean().optional().describe('true — слить; без него только предпросмотр'),
+        levels: z.boolean().optional().describe('Show the level data of the source (it is not merged)'),
+        apply: z.boolean().optional().describe('true to merge; without it only a preview'),
         limit: limit(50),
       },
-      annotations: { ...EDIT, title: 'Слияние модов' },
+      annotations: { ...EDIT, title: 'Merge mods' },
     },
     (a) =>
       run(() => {
@@ -574,17 +574,17 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         const options = { showRejected: a.show_rejected ?? false, ...(levelData ? { levelData } : {}) };
         const lines: string[] = [];
         if (a.reject?.length || a.unreject?.length) {
-          if (session.editor) throw new SessionError('Подключены к редактору: решения слияния принимаются в панели «Слияние»');
+          if (session.editor) throw new SessionError('Connected to the editor: merge decisions are made in the Merge panel');
           const done = a.reject?.length ? rejectMerge(ctx, source, ledger, a.reject, options) : [];
           if (a.unreject?.length) unrejectMerge(ledger, source, a.unreject);
-          lines.push(`отклонено ${done.length}, возвращено ${a.unreject?.length ?? 0} (запишутся вместе с модом: save)`);
+          lines.push(`rejected ${done.length}, restored ${a.unreject?.length ?? 0} (saved together with the mod: save)`);
         }
         const plan = planMerge(ctx, source, ledger, options);
         lines.push(...formatMergePlan(plan, a.limit === 0 ? Infinity : (a.limit ?? 50)));
-        if (!a.apply) return [...lines, 'предпросмотр: ничего не изменено (apply: true с ids / types / kinds / all — слить)'];
-        if (session.editor) throw new SessionError('Подключены к редактору: слияние применяется в панели «Слияние» окна (здесь доступен предпросмотр)');
+        if (!a.apply) return [...lines, 'preview: nothing changed (apply: true with ids / types / kinds / all to merge)'];
+        if (session.editor) throw new SessionError('Connected to the editor: the merge is applied in the Merge panel of the window (only a preview is available here)');
         const accept = selectMergeChanges(plan, compact({ ids: a.ids, types: a.types, kinds: a.kinds, all: a.all }));
-        if (accept.length === 0) throw new SessionError('Что сливать? Укажите ids, types, kinds или all: true');
+        if (accept.length === 0) throw new SessionError('What to merge? Give ids, types, kinds or all: true');
         const result = applyMerge(
           ctx,
           source,
@@ -593,16 +593,16 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
           options,
         );
         const cs = ctx.history().undo.at(-1);
-        return [...formatMergeResult(result), cs && result.changesetId !== undefined ? `применено: ${title(ctx, cs)}` : 'менять нечего', 'сохранение — отдельно (save)'];
+        return [...formatMergeResult(result), cs && result.changesetId !== undefined ? `applied: ${title(ctx, cs)}` : 'nothing to change', 'saving is separate (save)'];
       }),
   );
 
   const stepTo = {
-    to: z.number().int().min(0).optional().describe('Номер шага #N из history: отменить/повторить всё до него включительно (undo to: 0 — мод как при открытии)'),
+    to: z.number().int().min(0).optional().describe('Step number #N from history: undo/redo everything up to it inclusive (undo to: 0 is the mod as it was opened)'),
   };
   const step = (dir: 'undo' | 'redo', to: number | undefined): Promise<ToolResult> =>
     run(() => {
-      if (session.editor) throw new SessionError('Подключены к редактору: отмену делает пользователь в окне (или откатывает набор изменений)');
+      if (session.editor) throw new SessionError('Connected to the editor: the user undoes in the window (or reverts the change set)');
       const ctx = session.ctx();
       let done: Changeset[];
       if (to === undefined) {
@@ -612,26 +612,26 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         const first = ctx.history().undo[0];
         done = to === 0 ? (first ? ctx.undoTo(first.id) : []) : ctx.undoTo(to);
       } else done = ctx.redoTo(to);
-      if (!done.length) return [dir === 'undo' ? 'отменять нечего' : 'повторять нечего'];
-      return [`${dir === 'undo' ? 'отменено' : 'повторено'}:`, ...done.map((cs) => `  ${title(ctx, cs)}`)];
+      if (!done.length) return [dir === 'undo' ? 'nothing to undo' : 'nothing to redo'];
+      return [`${dir === 'undo' ? 'undone' : 'redone'}:`, ...done.map((cs) => `  ${title(ctx, cs)}`)];
     });
   server.registerTool(
     'undo',
     {
-      title: 'Отменить',
-      description: 'Отменить последнюю правку или (to) все правки до шага #N включительно. Ответ — отменённые шаги понятными словами.',
+      title: 'Undo',
+      description: 'Undo the last edit or (to) all edits up to step #N inclusive. The answer lists the undone steps in plain words.',
       inputSchema: stepTo,
-      annotations: { ...EDIT, title: 'Отменить' },
+      annotations: { ...EDIT, title: 'Undo' },
     },
     (a) => step('undo', a.to),
   );
   server.registerTool(
     'redo',
     {
-      title: 'Повторить',
-      description: 'Повторить отменённую правку или (to) все отменённые до шага #N включительно.',
+      title: 'Redo',
+      description: 'Redo an undone edit or (to) all undone ones up to step #N inclusive.',
       inputSchema: stepTo,
-      annotations: { ...EDIT, title: 'Повторить' },
+      annotations: { ...EDIT, title: 'Redo' },
     },
     (a) => step('redo', a.to),
   );
@@ -639,11 +639,11 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'history',
     {
-      title: 'История правок',
+      title: 'Edit history',
       description:
-        'Шаги правок понятными словами, как в окне редактора («Добавлен ответ игрока „…“», «Изменено «damage» у «Катана» → 20»): действующие по порядку до «вы здесь», ниже — отменённые (их вернёт redo). detail — изменения одного шага по номеру.',
-      inputSchema: { detail: z.number().int().optional().describe('Номер шага (#N)') },
-      annotations: { ...READ, title: 'История правок' },
+        'Edit steps in plain words, as in the editor window: the active ones in order up to "you are here", below them the undone ones (redo brings them back). detail shows the changes of one step by number.',
+      inputSchema: { detail: z.number().int().optional().describe('Step number (#N)') },
+      annotations: { ...READ, title: 'Edit history' },
     },
     (a) =>
       run(() => {
@@ -651,14 +651,14 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         const { undo, redo } = ctx.history();
         if (a.detail !== undefined) {
           const cs = [...undo, ...redo].find((c) => c.id === a.detail);
-          if (!cs) throw new SessionError(`Нет правки #${a.detail}`);
+          if (!cs) throw new SessionError(`No edit #${a.detail}`);
           return [title(ctx, cs), ...formatChangeset(ctx, cs).slice(1)];
         }
-        const state = ctx.dirty ? 'есть несохранённые изменения' : 'всё сохранено';
-        if (!undo.length && !redo.length) return ['правок нет', state];
-        const done = ['#0 мод как при открытии', ...undo.map((c) => title(ctx, c))];
-        const lines = [...done.slice(0, -1), `${done.at(-1) ?? ''}  ← вы здесь`];
-        if (redo.length) lines.push('отменено (redo вернёт):', ...[...redo].reverse().map((c) => `  ${title(ctx, c)}`));
+        const state = ctx.dirty ? 'there are unsaved changes' : 'everything is saved';
+        if (!undo.length && !redo.length) return ['no edits', state];
+        const done = ['#0 the mod as it was opened', ...undo.map((c) => title(ctx, c))];
+        const lines = [...done.slice(0, -1), `${done.at(-1) ?? ''}  ← you are here`];
+        if (redo.length) lines.push('undone (redo brings them back):', ...[...redo].reverse().map((c) => `  ${title(ctx, c)}`));
         lines.push(state);
         return lines;
       }),
@@ -667,17 +667,17 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'play',
     {
-      title: 'Разговор по шагам',
+      title: 'Conversation step by step',
       description:
-        'Проигрыватель разговора, как в окне редактора: персонаж + событие → какой диалог игра выберет и почему остальные нет (по правилу из кода игры), что скажет NPC, какие ответы увидит игрок. answers — id ответов игрока по порядку (или @npc — «NPC продолжает сам»), чтобы пройти дальше. mode: met — условия считаются выполненными (по умолчанию), none — проходят только реплики без условий; assume — для отдельных записей: условия выполнены (true) или нет (false).',
+        'Conversation player, as in the editor window: character + event → which dialogue the game picks and why the others do not (by the rule from the game code), what the NPC says, which answers the player sees. answers are the ids of the player answers in order (or @npc: the NPC continues alone) to go further. mode: met means conditions are treated as met (the default), none means only lines without conditions pass; assume sets, for individual records, whether conditions are met (true) or not (false).',
       inputSchema: {
-        id: z.string().describe('Id или имя персонажа (CHARACTER)'),
-        event: z.number().int().min(0).optional().describe('Событие; 1 — игрок заговорил (по умолчанию)'),
-        answers: z.array(z.string()).optional().describe('Ответы игрока по порядку: id реплик из прошлого вывода или @npc'),
+        id: z.string().describe('Id or name of a character (CHARACTER)'),
+        event: z.number().int().min(0).optional().describe('Event; 1 is the player speaking (the default)'),
+        answers: z.array(z.string()).optional().describe('Player answers in order: line ids from the previous output, or @npc'),
         mode: z.enum(['met', 'none']).optional(),
-        assume: z.record(z.string(), z.boolean()).optional().describe('id диалога или реплики → условия выполнены (true) или нет (false)'),
+        assume: z.record(z.string(), z.boolean()).optional().describe('dialogue or line id → conditions met (true) or not (false)'),
       },
-      annotations: { ...READ, title: 'Разговор по шагам' },
+      annotations: { ...READ, title: 'Conversation step by step' },
     },
     (a) =>
       run(() => {
@@ -697,13 +697,13 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'save',
     {
-      title: 'Сохранить мод',
-      description: 'Записать мод (только изменения относительно нижних слоёв). Без path — туда, откуда открыт. В папку игры или мастерской — только с force: true.',
+      title: 'Save mod',
+      description: 'Write the mod (only the changes relative to the lower layers). Without path: to where it was opened from. Into the game or Workshop folder only with force: true.',
       inputSchema: {
         path: z.string().optional(),
-        force: z.boolean().optional().describe('Разрешить запись в папку игры или мастерской'),
+        force: z.boolean().optional().describe('Allow writing into the game or Workshop folder'),
       },
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false, title: 'Сохранить мод' },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false, title: 'Save mod' },
     },
     (a) =>
       run(() => {
@@ -711,9 +711,9 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         const ctx = session.ctx();
         const errors = validateMod(ctx).filter((i) => i.severity === 'error');
         const lines = [`${r.path}: ${statusSummary(ctx)}`];
-        if (errors.length) lines.push(`ошибок проверки: ${errors.length} (validate)`);
-        if (r.mergeStore) lines.push(`решения слияния: ${r.mergeStore}`);
-        if (r.world) lines.push(`файлы уровня: ${r.world.map((f) => `leveldata/${f}`).join(', ')}`);
+        if (errors.length) lines.push(`validation errors: ${errors.length} (validate)`);
+        if (r.mergeStore) lines.push(`merge decisions: ${r.mergeStore}`);
+        if (r.world) lines.push(`level files: ${r.world.map((f) => `leveldata/${f}`).join(', ')}`);
         return lines;
       }),
   );
@@ -721,25 +721,25 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'connect_editor',
     {
-      title: 'Подключиться к редактору',
+      title: 'Connect to the editor',
       description:
-        'Подключиться к открытому окну Kenshi Mod Editor (локально): дальше find/show/… читают мод из окна, edit отправляет правки в окно набором изменений, который пользователь принимает или откатывает. disconnect: true — отключиться.',
+        'Connect to the open Cactus window (locally): after that find/show/… read the mod from the window, and edit sends changes to the window as a change set that the user accepts or reverts. disconnect: true disconnects.',
       inputSchema: { disconnect: z.boolean().optional() },
-      annotations: { ...READ, title: 'Подключиться к редактору' },
+      annotations: { ...READ, title: 'Connect to the editor' },
     },
     (a) =>
       guarded(async () => {
         if (a.disconnect) {
           const was = session.editor !== undefined;
           session.disconnectEditor();
-          return [was ? 'отключено от редактора; дальше — по ванили (open_mod — открыть мод)' : 'редактор и так не подключён'];
+          return [was ? 'disconnected from the editor; now working on vanilla (open_mod opens a mod)' : 'the editor was not connected anyway'];
         }
         const st = await session.connectEditor();
         const ctx = session.ctx();
-        const lines = [`подключено к редактору: ${st.modName}${st.modPath ? ` — ${st.modPath}` : ' (новый, не сохранён)'}`, statusSummary(ctx)];
-        if (st.dependencies.length) lines.push(`зависимости: ${st.dependencies.map((d) => d.name).join(', ')}`);
-        if (st.game !== undefined && st.game.toLowerCase() !== session.paths.kenshi.toLowerCase()) lines.push(`внимание: в редакторе игра ${st.game}, у сервера — ${session.paths.kenshi}`);
-        if (st.dirty) lines.push('в окне есть несохранённые изменения');
+        const lines = [`connected to the editor: ${st.modName}${st.modPath ? ` — ${st.modPath}` : ' (new, not saved)'}`, statusSummary(ctx)];
+        if (st.dependencies.length) lines.push(`dependencies: ${st.dependencies.map((d) => d.name).join(', ')}`);
+        if (st.game !== undefined && st.game.toLowerCase() !== session.paths.kenshi.toLowerCase()) lines.push(`warning: the editor uses the game ${st.game}, the server uses ${session.paths.kenshi}`);
+        if (st.dirty) lines.push('there are unsaved changes in the window');
         return lines;
       }),
   );
@@ -747,30 +747,30 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'editor_changes',
     {
-      title: 'Наборы изменений в редакторе',
-      description: 'Наборы изменений, отправленные в редактор (edit при connect_editor), и решение пользователя по каждому: ждёт, принят, откачен, отменён.',
-      annotations: { ...READ, title: 'Наборы изменений в редакторе' },
+      title: 'Change sets in the editor',
+      description: 'Change sets sent to the editor (edit while connect_editor is active) and the user decision on each: pending, accepted, rolled back, undone.',
+      annotations: { ...READ, title: 'Change sets in the editor' },
     },
     () =>
       run(async () => {
         const list = await session.editorChangesets();
-        if (!list.length) return ['наборов изменений нет'];
-        const label: Record<string, string> = { pending: 'ждёт решения', accepted: 'принят', 'rolled-back': 'откачен', undone: 'отменён в окне' };
-        return list.map((c) => `#${c.id} «${c.title}» — ${label[c.status] ?? c.status}; записи: ${c.touched.join(', ')}`);
+        if (!list.length) return ['no change sets'];
+        const label: Record<string, string> = { pending: 'waiting for a decision', accepted: 'accepted', 'rolled-back': 'rolled back', undone: 'undone in the window' };
+        return list.map((c) => `#${c.id} "${c.title}" — ${label[c.status] ?? c.status}; records: ${c.touched.join(', ')}`);
       }),
   );
 
   server.registerTool(
     'touched',
     {
-      title: 'Кто меняет запись',
+      title: 'Who changes a record',
       description:
-        'Какие моды игрока (по порядку mods.cfg; all — все установленные) и открытый мод меняют запись и что именно: поля, ссылки, удаление. Поздний мод побеждает. Только чтение.',
+        'Which mods of the player (in mods.cfg order; all means all installed) and the open mod change the record and what exactly: fields, references, deletion. A later mod wins. Read only.',
       inputSchema: {
-        id: z.string().describe('Строковый id или имя записи'),
-        all: z.boolean().optional().describe('Все установленные моды, не только включённые в mods.cfg'),
+        id: z.string().describe('String id or record name'),
+        all: z.boolean().optional().describe('All installed mods, not only those enabled in mods.cfg'),
       },
-      annotations: { ...READ, title: 'Кто меняет запись' },
+      annotations: { ...READ, title: 'Who changes a record' },
     },
     (a) =>
       run(() => {
@@ -779,13 +779,13 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         try {
           sid = resolveId(ctx, a.id);
         } catch (e) {
-          if (!(e instanceof SessionError) || !e.message.startsWith('Нет записи')) throw e;
+          if (!(e instanceof SessionError) || !e.message.startsWith('No record')) throw e;
         }
         const { layers, broken } = session.modLayers(a.all ?? false);
         const r = touchedBy(layers, sid);
         const nameOf = (s: string): string => refLabel(ctx, s);
-        const lines = [`${sid} ${ctx.name(sid) ?? ''} — модов: ${r.touches.length}${r.base ? '' : ' (записи нет в ванили)'}`, ...formatTouches(r, nameOf)];
-        for (const b of broken) lines.push(`не прочитан ${b.name}: ${b.error}`);
+        const lines = [`${sid} ${ctx.name(sid) ?? ''} — mods: ${r.touches.length}${r.base ? '' : ' (the record is not in vanilla)'}`, ...formatTouches(r, nameOf)];
+        for (const b of broken) lines.push(`could not read ${b.name}: ${b.error}`);
         return lines;
       }),
   );
@@ -793,27 +793,27 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'conflicts',
     {
-      title: 'Конфликты модов',
+      title: 'Mod conflicts',
       description:
-        'Записи и поля, которые несколько модов меняют по-разному, значения каждого мода и кто победит (поздний в mods.cfg). mod_only — только конфликты открытого мода. Только чтение.',
+        'Records and fields that several mods change differently, the value of each mod and who wins (the later one in mods.cfg). mod_only: only conflicts of the open mod. Read only.',
       inputSchema: {
-        mod_only: z.boolean().optional().describe('Только конфликты открытого мода (его несохранённые правки тоже)'),
-        all: z.boolean().optional().describe('Все установленные моды, не только включённые в mods.cfg'),
+        mod_only: z.boolean().optional().describe('Only conflicts of the open mod (including its unsaved edits)'),
+        all: z.boolean().optional().describe('All installed mods, not only those enabled in mods.cfg'),
         offset,
         limit: limit(20),
       },
-      annotations: { ...READ, title: 'Конфликты модов' },
+      annotations: { ...READ, title: 'Mod conflicts' },
     },
     (a) =>
       run(() => {
         const ctx = session.ctx();
         const { layers, broken, opened } = session.modLayers(a.all ?? false);
-        if (a.mod_only && opened === undefined) throw new SessionError('Мод не открыт или в нём нет записей: open_mod');
+        if (a.mod_only && opened === undefined) throw new SessionError('No mod is open or it has no records: open_mod');
         const found = findConflicts(layers, a.mod_only && opened !== undefined ? { only: opened } : {});
         const nameOf = (s: string): string => refLabel(ctx, s);
         const fields = found.reduce((n, x) => n + x.fields.length, 0);
-        const head = [`модов ${layers.filter((l) => !isVanillaLayer(l.name)).length}; записей с конфликтами ${found.length}, полей ${fields}`];
-        for (const b of broken) head.push(`не прочитан ${b.name}: ${b.error}`);
+        const head = [`mods ${layers.filter((l) => !isVanillaLayer(l.name)).length}; records with conflicts ${found.length}, fields ${fields}`];
+        for (const b of broken) head.push(`could not read ${b.name}: ${b.error}`);
         return [...head, ...paged(found, a.offset ?? 0, a.limit ?? 20, (x) => formatConflict(x, nameOf))];
       }),
   );
@@ -821,22 +821,22 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerTool(
     'schema',
     {
-      title: 'Схема',
-      description: 'Без аргументов — типы записей; type — поля типа с описаниями из fcs.def; enum — значения перечисления.',
+      title: 'Schema',
+      description: 'Without arguments: the record types; type: the fields of a type with descriptions from fcs.def; enum: the values of an enumeration.',
       inputSchema: { type: z.string().optional(), enum: z.string().optional(), offset, limit: limit(100) },
-      annotations: { ...READ, title: 'Схема' },
+      annotations: { ...READ, title: 'Schema' },
     },
     (a) =>
       run(() => {
         const schema = session.schema();
         if (a.enum !== undefined) {
           const lines = formatEnum(schema, a.enum);
-          if (!lines) throw new SessionError(`Нет перечисления ${a.enum}`);
+          if (!lines) throw new SessionError(`No enumeration ${a.enum}`);
           return lines;
         }
         if (a.type !== undefined) {
           const t = findTypeSchema(schema, a.type);
-          if (!t) throw new SessionError(`Нет типа ${a.type}`);
+          if (!t) throw new SessionError(`No type ${a.type}`);
           return formatTypeSchema(t);
         }
         return paged(listTypes(schema), a.offset ?? 0, a.limit ?? 100, (t) => [typeLine(t)]);
@@ -853,7 +853,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerResource(
     'schema-types',
     'kenshi://schema/types',
-    { title: 'Типы записей', description: 'Все типы записей: число полей и ссылок', mimeType: 'text/plain' },
+    { title: 'Record types', description: 'All record types: number of fields and references', mimeType: 'text/plain' },
     (uri) => resourceText(uri, listTypes(session.schema()).map(typeLine)),
   );
 
@@ -864,11 +864,11 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         resources: listTypes(session.schema()).map((t) => ({ uri: `kenshi://schema/type/${t.name}`, name: t.name, mimeType: 'text/plain' })),
       }),
     }),
-    { title: 'Поля типа', description: 'Поля типа записи с видами, значениями по умолчанию и описаниями из fcs.def', mimeType: 'text/plain' },
+    { title: 'Type fields', description: 'Fields of a record type with kinds, default values and descriptions from fcs.def', mimeType: 'text/plain' },
     (uri, vars) => {
       const name = one(vars['name']);
       const t = findTypeSchema(session.schema(), name);
-      if (!t) throw new SessionError(`Нет типа ${name}`);
+      if (!t) throw new SessionError(`No type ${name}`);
       return resourceText(uri, formatTypeSchema(t));
     },
   );
@@ -876,11 +876,11 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   server.registerResource(
     'schema-enum',
     new ResourceTemplate('kenshi://schema/enum/{name}', { list: undefined }),
-    { title: 'Перечисление', description: 'Значения перечисления из fcs_enums.def', mimeType: 'text/plain' },
+    { title: 'Enumeration', description: 'Values of an enumeration from fcs_enums.def', mimeType: 'text/plain' },
     (uri, vars) => {
       const name = one(vars['name']);
       const lines = formatEnum(session.schema(), name);
-      if (!lines) throw new SessionError(`Нет перечисления ${name}`);
+      if (!lines) throw new SessionError(`No enumeration ${name}`);
       return resourceText(uri, lines);
     },
   );
@@ -892,5 +892,5 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
 }
 
 function typeLine(t: ReturnType<typeof listTypes>[number]): string {
-  return `${t.name}  полей ${t.fields}, ссылок ${t.references}${t.inferred ? ' (из данных)' : ''}`;
+  return `${t.name}  fields ${t.fields}, references ${t.references}${t.inferred ? ' (from data)' : ''}`;
 }

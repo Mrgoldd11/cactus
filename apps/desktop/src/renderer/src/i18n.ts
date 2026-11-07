@@ -9,7 +9,7 @@ import { mergeEn, mergeRu } from './i18n-merge.ts';
 import { specialEn, specialRu } from './i18n-special.ts';
 
 const en = {
-  appTitle: 'Kenshi Mod Editor',
+  appTitle: 'Cactus',
   // стартовый экран
   gameFolder: 'Game folder',
   detecting: 'Looking for Kenshi…',
@@ -292,7 +292,7 @@ const en = {
   resetLayout: 'Reset layout',
   preset_data: 'Data',
   preset_dialogue: 'Dialogues',
-  preset_scene: 'Scene (coming later)',
+  preset_scene: 'World',
   panel_categories: 'Categories',
   panel_records: 'Records',
   panel_inspector: 'Inspector',
@@ -604,7 +604,7 @@ const en = {
 export type Strings = typeof en;
 
 const ru: Strings = {
-  appTitle: 'Редактор модов Kenshi',
+  appTitle: 'Cactus',
   gameFolder: 'Папка игры',
   detecting: 'Ищу Kenshi…',
   noGameFound: 'Kenshi не найдена автоматически. Выберите папку игры.',
@@ -878,7 +878,7 @@ const ru: Strings = {
   resetLayout: 'Сбросить раскладку',
   preset_data: 'Данные',
   preset_dialogue: 'Диалоги',
-  preset_scene: 'Сцена (позже)',
+  preset_scene: 'Мир',
   panel_categories: 'Категории',
   panel_records: 'Записи',
   panel_inspector: 'Инспектор',

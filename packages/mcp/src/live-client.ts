@@ -31,10 +31,10 @@ export class LiveClient {
     });
     ws.addEventListener('close', (ev) => {
       this.closed = true;
-      this.closeReason ??= ev.reason || `код ${ev.code}`;
+      this.closeReason ??= ev.reason || `code ${ev.code}`;
       for (const [, p] of this.pending) {
         clearTimeout(p.timer);
-        p.reject(new Error(`Связь с редактором прервана (${this.closeReason})`));
+        p.reject(new Error(`Connection to the editor was lost (${this.closeReason})`));
       }
       this.pending.clear();
     });
@@ -44,7 +44,7 @@ export class LiveClient {
   static async connect(d: LiveDiscovery, client = 'kenshi-mcp'): Promise<LiveClient> {
     const ws = new WebSocket(`ws://127.0.0.1:${d.port}`);
     await new Promise<void>((resolve, reject) => {
-      const fail = (): void => { reject(new Error(`Не удалось подключиться к редактору на порту ${d.port}`)); };
+      const fail = (): void => { reject(new Error(`Could not connect to the editor on port ${d.port}`)); };
       ws.addEventListener('open', () => { resolve(); }, { once: true });
       ws.addEventListener('error', fail, { once: true });
     });
@@ -54,12 +54,12 @@ export class LiveClient {
   }
 
   request<T = unknown>(body: LiveRequestBody): Promise<T> {
-    if (this.closed) return Promise.reject(new Error(`Связь с редактором прервана (${this.closeReason ?? 'закрыта'})`));
+    if (this.closed) return Promise.reject(new Error(`Connection to the editor was lost (${this.closeReason ?? 'closed'})`));
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error('Редактор не ответил за 30 с'));
+        reject(new Error('The editor did not answer within 30 s'));
       }, TIMEOUT);
       this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
       this.ws.send(JSON.stringify({ id, ...body }));
@@ -68,7 +68,7 @@ export class LiveClient {
 
   close(): void {
     if (this.closed) return;
-    this.closeReason = 'отключено';
+    this.closeReason = 'disconnected';
     this.ws.close(1000, 'bye');
   }
 }

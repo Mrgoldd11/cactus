@@ -286,7 +286,7 @@ export function formatTranslationPo(source: string, rows: readonly TranslationRo
     poString('MIME-Version: 1.0\n'),
     poString('Content-Type: text/plain; charset=UTF-8\n'),
     poString('Content-Transfer-Encoding: 8bit\n'),
-    poString('X-Generator: Kenshi Mod Editor\n'),
+    poString('X-Generator: Cactus\n'),
     poString(`X-Kedit-Source: ${source}\n`),
     '',
   ];

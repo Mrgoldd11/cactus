@@ -1633,6 +1633,15 @@ button.small.active {
 .menu-wrap > button.active {
   border-color: var(--accent);
 }
+.layout-switch {
+  display: flex;
+  gap: 2px;
+  margin-left: 6px;
+}
+.layout-switch > button.active {
+  border-color: var(--accent);
+  color: var(--text);
+}
 .menu {
   position: absolute;
   top: calc(100% + 4px);

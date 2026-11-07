@@ -146,7 +146,7 @@ export function App(): ReactNode {
             // Отказ от правок: автосохранение уходит в резервные копии, а не пропадает.
             void window.kedit.keepAutosave(project.ref).catch(() => undefined);
           }
-          window.kedit.setDirty(false, 'Kenshi Mod Editor');
+          window.kedit.setDirty(false, 'Cactus');
           setProject(undefined);
         }}
         lang={settings.lang}

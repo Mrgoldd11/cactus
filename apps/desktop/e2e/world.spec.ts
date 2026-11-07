@@ -143,6 +143,25 @@ test('панель «Мир»: рельеф, полёт, клик по здан�
     await expect(lastStep).toHaveText('');
     await expect(page.getByTestId('world-undo')).toBeDisabled();
 
+    // «Поставить…»: клик по полю раскрывает весь список (его можно листать), текст сужает его, Esc закрывает.
+    const placeBox = page.getByTestId('world-place');
+    const placeHits = page.getByTestId('world-place-hits');
+    await placeBox.click();
+    await expect(placeHits).toBeVisible();
+    await expect(placeHits.locator('[data-sid]').first()).toBeVisible();
+    const allCount = Number((await placeHits.textContent())?.match(/(\d+) \/ (\d+)/)?.[2]);
+    expect(allCount).toBeGreaterThan(100);
+    await page.screenshot({ path: join(shots, '64-world-place-list.png') });
+    await placeBox.fill('Storm House');
+    await expect(placeHits.locator('[data-sid]').first()).toContainText(/Storm|Крепк/i);
+    await page.keyboard.press('Escape');
+    await expect(placeHits).toBeHidden();
+    await placeBox.fill('Крепкий дом');
+    await placeHits.locator('[data-sid]').first().click();
+    await expect(placeHits).toBeHidden();
+    await expect(placeBox).toHaveValue('');
+    while (await page.getByTestId('world-undo').isEnabled()) await page.getByTestId('world-undo').click();
+
     // Esc снимает выбор.
     await canvas.focus();
     await page.keyboard.press('Escape');

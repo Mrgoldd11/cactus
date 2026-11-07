@@ -298,7 +298,11 @@ export class Project {
     const req = { game: this.bundle.game, modPaths, interiors };
     let files = await window.kedit.loadWorld({ ...req, known: parsedFiles.keys() });
     if (files.some((f) => f.bytes.length === 0 && !parsedFiles.has(f.key))) files = await window.kedit.loadWorld(req);
-    return files.map((f) => ({ layer: f.layer, path: f.path, file: parsedFiles.take(f.key, f.bytes) }));
+    // Файлов уровня тысячи, а кэш вмещает 64: разбор новых вытеснял бы известные main'у файлы,
+    // которые идут дальше по списку (байты им не присланы) → «Нет в кэше». Поэтому сначала
+    // забираем все, что уже разобрано, и только потом разбираем остальное.
+    const hits = files.map((f) => (f.bytes.length === 0 ? parsedFiles.get(f.key) : undefined));
+    return files.map((f, i) => ({ layer: f.layer, path: f.path, file: hits[i] ?? parsedFiles.take(f.key, f.bytes) }));
   }
 
   /** Правки мира с дочитанными интерьерами (`interiors.level` ванили, зависимостей и мода). */

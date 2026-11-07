@@ -1,5 +1,5 @@
 /**
- * Папка игры, выбранная в окне Kenshi Mod Editor (`settings.json` в папке данных приложения).
+ * Папка игры, выбранная в окне Cactus (`settings.json` в папке данных приложения).
  * MCP-сервер берёт её, если игра не задана явно (`--game`, KENSHI_DIR, kenshi-paths.json):
  * тогда ИИ видит ту же игру, что и пользователь в окне.
  */
@@ -11,7 +11,7 @@ export function editorDataDirs(env: NodeJS.ProcessEnv = process.env): string[] {
   const out: string[] = [];
   if (env['KEDIT_USER_DATA']) out.push(env['KEDIT_USER_DATA']);
   const appData = env['APPDATA'];
-  if (appData) out.push(join(appData, 'Kenshi Mod Editor'), join(appData, '@kenshi-editor', 'desktop'));
+  if (appData) out.push(join(appData, 'Cactus'), join(appData, 'Kenshi Mod Editor'), join(appData, '@kenshi-editor', 'desktop'));
   return out;
 }
 

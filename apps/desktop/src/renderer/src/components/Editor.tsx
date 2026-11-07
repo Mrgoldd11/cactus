@@ -18,7 +18,7 @@ import { ValueStore, useStore } from '../workbench/store.ts';
 import { findNode, initialCategory } from '../workbench/category.ts';
 import type { StatusMessage, Workbench as WorkbenchValue } from '../workbench/context.ts';
 import { Workbench } from '../workbench/Workbench.tsx';
-import { WindowMenu } from '../workbench/WindowMenu.tsx';
+import { LayoutSwitch, WindowMenu } from '../workbench/WindowMenu.tsx';
 import { UndoRedoButtons, stepOf } from './History.tsx';
 import { GameIndicator } from './GameLink.tsx';
 import { applyPreset, isPreset, openPanel, type PresetId } from '../workbench/layouts.ts';
@@ -325,6 +325,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
         </button>
         <span className="sep" />
         <WindowMenu api={apiRef.current} preset={preset} onPreset={choosePreset} onOpen={open} />
+        <LayoutSwitch api={apiRef.current} preset={preset} onPreset={choosePreset} />
         <span className="grow" />
         <button
           data-testid="live-status"

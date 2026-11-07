@@ -96,35 +96,35 @@ describe('kenshi-mcp: мост к игре', () => {
   it('game_state читает состояние', async () => {
     const r = await call('game_state');
     expect(r.isError).toBe(false);
-    expect(r.text).toContain('игра подключена: kenshi-bridge 0.1.0');
-    expect(r.text).toContain('день 3, 8:00; пауза');
-    expect(r.text).toContain('выбран: Мэгги [t1 «Maggie»]');
-    expect(r.text).toContain('позиция: 10, 20, 30');
+    expect(r.text).toContain('game connected: kenshi-bridge 0.1.0');
+    expect(r.text).toContain('day 3, 8:00; paused');
+    expect(r.text).toContain('selected: Мэгги [t1 «Maggie»]');
+    expect(r.text).toContain('position: 10, 20, 30');
   });
 
   it('game_command без confirm ничего не шлёт игре', async () => {
     const r = await call('game_command', { cmd: 'camera', pos: [1, 2, 3] });
-    expect(r.text).toContain('не выполнено: поставить камеру в 1, 2, 3');
+    expect(r.text).toContain('not done: move the camera to 1, 2, 3');
     expect(seen).toEqual([]);
     const ok = await call('game_command', { cmd: 'camera', pos: [1, 2, 3], confirm: true });
-    expect(ok.text).toContain('выполнено: поставить камеру');
+    expect(ok.text).toContain('done: move the camera');
     expect(seen).toEqual([{ cmd: 'camera', args: { pos: [1, 2, 3] } }]);
     expect((await call('game_command', { cmd: 'teleport', confirm: true })).isError).toBe(true);
   });
 
   it('game_towns читает города', async () => {
     const t = await call('game_towns', { near: [0, 0, 0], range: 9000 });
-    expect(t.text).toContain('городов: 1');
-    expect(t.text).toContain('Хаб [hub-1] — town, радиус 1500, центр -4000, 100, 5000');
+    expect(t.text).toContain('towns: 1');
+    expect(t.text).toContain('Хаб [hub-1] — town, radius 1500, center -4000, 100, 5000');
     expect(seen).toEqual([{ cmd: 'towns', args: { near: [0, 0, 0], range: 9000 } }]);
   });
 
   it('game_trace: включить и прочитать новые записи', async () => {
-    expect((await call('game_trace', { action: 'on' })).text).toContain('трассировка включена (игрок)');
+    expect((await call('game_trace', { action: 'on' })).text).toContain('trace on (player)');
     const first = await call('game_trace', { action: 'get' });
-    expect(first.text).toContain('#1 событие 1: Мэгги → Бип (игрок)');
-    expect(first.text).toContain('✓ d1 «Hello» вес 5 — выбран');
-    expect((await call('game_trace', { action: 'get' })).text).toContain('новых записей нет');
+    expect(first.text).toContain('#1 event 1: Мэгги → Бип (player)');
+    expect(first.text).toContain('✓ d1 "Hello" weight 5 — chosen');
+    expect((await call('game_trace', { action: 'get' })).text).toContain('no new entries');
   });
 
   it('без игры — понятная ошибка', async () => {
@@ -137,7 +137,7 @@ describe('kenshi-mcp: мост к игре', () => {
     await c.connect(b);
     const r = (await c.callTool({ name: 'game_state', arguments: {} })) as { content: { text: string }[]; isError?: boolean };
     expect(r.isError).toBe(true);
-    expect(r.content[0]!.text).toContain('игра не подключена');
+    expect(r.content[0]!.text).toContain('the game is not connected');
     await c.close();
   });
 });

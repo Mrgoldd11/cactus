@@ -64,13 +64,15 @@ export function applyPreset(api: DockviewApi, preset: PresetId, t: Strings): voi
     width(api, 'line', 400);
     height(api, 'player', Math.round(api.height * 0.38));
   } else {
+    // «Мир»: список записей слева, карта по центру, справа выбранный объект и его модель.
     add(api, t, 'records');
     add(api, t, 'world', right('records'));
-    add(api, t, 'model', within('world'), { inactive: true });
-    add(api, t, 'components', right('world'));
-    add(api, t, 'inspector', within('components'), { inactive: true });
+    add(api, t, 'inspector', right('world'));
+    add(api, t, 'model', within('inspector'));
+    add(api, t, 'where', within('inspector'), { inactive: true });
     width(api, 'records', 300);
-    width(api, 'components', 340);
+    width(api, 'inspector', 360);
+    api.getPanel('inspector')?.api.setActive();
   }
   const first = preset === 'data' ? 'records' : preset === 'dialogue' ? 'graph' : 'world';
   api.getPanel(first)?.api.setActive();

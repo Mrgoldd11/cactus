@@ -15,7 +15,6 @@ import {
   moveInterior,
   placeInterior,
   removeInterior,
-  searchRecords,
   type InteriorLayout,
   type InteriorObject,
   type WorldEdits,
@@ -23,6 +22,7 @@ import {
 } from '@kenshi-editor/core';
 import { STRINGS, useLang } from '../../i18n.ts';
 import { isTypingIn, shortcut } from '../../keys.ts';
+import { PlaceBox } from '../../components/PlaceBox.tsx';
 import type { Lang } from '../../../../shared/api.ts';
 import { registerPanel, type PanelProps } from '../registry.ts';
 import { useFollowed, useWorkbench } from '../context.ts';
@@ -54,6 +54,7 @@ const en = {
   place: 'Place…',
   placeTip: 'New furniture or item spot from the records list — at the point in the screen centre',
   placeSearch: 'Name (en/ru) or id',
+  noMatches: 'Nothing found',
   remove: 'Remove (Del)',
   focus: 'Show (F)',
   stepMove: 'Move inside',
@@ -111,6 +112,7 @@ const ru: InteriorStrings = {
   place: 'Поставить…',
   placeTip: 'Новая мебель или точка предметов из списка записей — в точку в центре экрана',
   placeSearch: 'Имя (рус/англ) или id',
+  noMatches: 'Ничего не найдено',
   remove: 'Удалить (Del)',
   focus: 'Показать (F)',
   stepMove: 'Сдвиг в интерьере',
@@ -143,6 +145,9 @@ const ru: InteriorStrings = {
   loadingModels: 'модели…',
 };
 const INTERIOR_STRINGS: Record<Lang, InteriorStrings> = { en, ru };
+
+/** Что можно поставить в интерьер: мебель и точки предметов. */
+const PLACE_TYPES = ['BUILDING', 'ITEM_PLACEMENT_GROUP'];
 
 /** Просьба открыть интерьер (кнопка «Внутри» в карточке здания мира): здание и имя раскладки. */
 export const interiorRequest = new ValueStore<{ building: string; layout?: string } | undefined>(undefined);
@@ -218,7 +223,6 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
   const [edit, setEdit] = useState<InteriorEditSettings>(loadEdit);
   const [message, setMessage] = useState<string | undefined>();
   const [note, setNote] = useState<string | undefined>();
-  const [placing, setPlacing] = useState<string | undefined>();
   const [tick, setTick] = useState(0);
   const [loadingModels, setLoadingModels] = useState(0);
   const request = useStore(interiorRequest);
@@ -365,17 +369,10 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
     const ok = run(() => {
       const r = placeInterior(edits, project.ctx, current.sid, target, at, [1, 0, 0, 0], `${s.stepPlace} «${current.name}»: ${name(target)}`);
       setNote(r.template ? `${s.copied} ${r.template}` : s.fresh);
-      setPlacing(undefined);
       pendingSelect.current = r.key;
     });
     if (!ok) setNote(undefined);
   };
-
-  const placeHits = useMemo(() => {
-    const q = placing?.trim();
-    if (!q) return [];
-    return [...searchRecords(project.ctx, { text: q, type: 'BUILDING' }), ...searchRecords(project.ctx, { text: q, type: 'ITEM_PLACEMENT_GROUP' })].slice(0, 16);
-  }, [placing, project]);
 
   const undoRedo = (redo: boolean): void => {
     if (!edits) return;
@@ -469,27 +466,17 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
             <span className="muted" data-testid="interior-last-step" style={{ fontSize: '0.85em' }}>
               {edits.undoLabel() ?? ''}
             </span>
-            <input
-              data-testid="interior-place"
+            <PlaceBox
+              project={project}
+              types={PLACE_TYPES}
+              testId="interior-place"
               placeholder={s.place}
               title={`${s.placeTip}. ${s.placeSearch}`}
-              value={placing ?? ''}
-              style={{ width: 200 }}
-              onChange={(e) => { setPlacing(e.target.value); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setPlacing(undefined);
-                if (e.key === 'Enter' && placeHits[0]) placeRecord(placeHits[0].stringId);
-              }}
+              emptyText={s.noMatches}
+              countText={(n, total) => `${n} / ${total}`}
+              detail={(e) => `${e.type === 'BUILDING' ? s.furniture : s.items} · ${e.sid}`}
+              onPick={placeRecord}
             />
-            {placeHits.length > 0 && (
-              <div className="menu" data-testid="interior-place-hits" style={{ left: 'auto', right: 6, top: '100%', maxHeight: 320, overflow: 'auto', minWidth: 280 }}>
-                {placeHits.map((h) => (
-                  <div key={h.stringId} className="menu-item" data-sid={h.stringId} style={{ cursor: 'pointer' }} onClick={() => { placeRecord(h.stringId); }}>
-                    {h.localizedName ?? h.name} <span className="muted">{h.type === 'BUILDING' ? s.furniture : s.items} · {h.stringId}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </>
         )}
         <span style={{ flex: 1 }} />

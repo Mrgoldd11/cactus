@@ -326,7 +326,7 @@ async function startLive(): Promise<void> {
         liveStatus = { ...liveStatus, clients };
         pushLiveStatus();
       },
-      app: `Kenshi Mod Editor ${app.getVersion()}`,
+      app: `Cactus ${app.getVersion()}`,
     });
     liveStatus = { port: liveServer.port, clients: [] };
   } catch (err) {
@@ -538,7 +538,7 @@ function createWindow(): void {
     const ru = settings.lang === 'ru';
     const choice = dialog.showMessageBoxSync(win, {
       type: 'question',
-      title: 'Kenshi Mod Editor',
+      title: 'Cactus',
       buttons: ru ? ['Закрыть без сохранения', 'Отмена'] : ['Close without saving', 'Cancel'],
       defaultId: 1,
       cancelId: 1,
