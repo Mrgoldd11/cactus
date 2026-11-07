@@ -43,6 +43,9 @@ In Cactus: **Help → Connect AI (MCP)… → Copy**, then paste into Claude Des
 
 Cactus speaks standard **MCP (stdio)**, so any MCP-capable AI client can connect: Claude Desktop, Claude Code and, in principle, ChatGPT-based tools, Qwen and other models. **Verified only with Claude** so far; other clients are untested, and reports are welcome. Ready-made setup snippets exist for Claude only; for other clients, point them at the same stdio command that *Connect AI (MCP)* copies.
 
+## Optional: Kenshi Bridge (live link to the running game)
+[**Kenshi Bridge**](https://github.com/Mrgoldd11/Kenshi-Bridge) is a separate **open-source** (GPLv3) plugin for [RE_Kenshi](https://github.com/BFrizzleFoShizzle/RE_Kenshi) built on KenshiLib. With it Cactus and the AI can see the running game: the selected character and position, which dialogue the game actually chose and why, the town list with border radii, and (with your confirmation) teleport, camera, speed and pause. It is **not required**; Cactus works without it. Status: the plugin itself is checked in game, but the link between the Cactus window / AI tools and the plugin has **not been tested with the real game yet**. Cactus itself stays closed source; the two programs share no code and talk only over a local socket (`127.0.0.1`).
+
 ## Known limitations of the Beta
 - Windows x64 only; zip + exe, no installer; not code-signed (SmartScreen warning).
 - Tested mostly with Steam Kenshi 1.0.65 on one machine; GOG detection has had less testing.
@@ -52,7 +55,7 @@ Cactus speaks standard **MCP (stdio)**, so any MCP-capable AI client can connect
 - Some panels are rough; it is a one-person project.
 
 ## Compatibility
-Verified on **Kenshi 1.0.65 (Steam)**. Cactus reads `gamedata.base`, your mods and `mods.cfg` and writes standard `.mod` files. It does not touch saves and needs no game plugin (RE_Kenshi is not required). If a mod doesn't open, a value differs from the FCS, or the game rejects a mod after Cactus saved it — please open a **Compatibility issue**.
+Verified on **Kenshi 1.0.65 (Steam)**. Cactus reads `gamedata.base`, your mods and `mods.cfg` and writes standard `.mod` files. It does not touch saves and needs no game plugin (RE_Kenshi is not required; the Bridge above is optional). If a mod doesn't open, a value differs from the FCS, or the game rejects a mod after Cactus saved it — please open a **Compatibility issue**.
 
 ## Feedback
 Use [GitHub Issues](../../issues/new/choose): **Bug report**, **Feature request**, **Compatibility issue**. Attach the version (*Help → About*), the log (*Help → Open log folder*), steps and a screenshot.
