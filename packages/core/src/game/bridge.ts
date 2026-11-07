@@ -86,7 +86,19 @@ export type GameAction =
   | { cmd: 'teleport'; args: { pos: Vec3 } }
   | { cmd: 'camera'; args: { pos: Vec3 } }
   | { cmd: 'speed'; args: { value: number } }
-  | { cmd: 'pause'; args: { on: boolean } };
+  | { cmd: 'pause'; args: { on: boolean } }
+  | { cmd: 'borders'; args: { on: boolean; mult?: number } };
+
+/** Город из команды `towns` плагина. */
+export interface GameTown {
+  stringId: string;
+  name: string;
+  type: number;
+  typeName: string;
+  /** Радиус границы города (с множителем из запроса). */
+  radius: number;
+  pos: Vec3;
+}
 
 export type GameErrorCode =
   | 'bad_json'
@@ -96,6 +108,8 @@ export type GameErrorCode =
   | 'not_in_game'
   | 'no_selection'
   | 'no_camera'
+  | 'no_world'
+  | 'no_renderer'
   | 'unsupported'
   | 'busy'
   | 'crash'
@@ -110,6 +124,8 @@ const ERROR_TEXT: Record<GameErrorCode, string> = {
   not_in_game: 'игра не в мире (меню или загрузка)',
   no_selection: 'в игре не выбран персонаж',
   no_camera: 'камера игры недоступна',
+  no_world: 'мир ещё не загружен',
+  no_renderer: 'рендерер игры не готов',
   unsupported: 'эта версия игры не поддерживает команду',
   busy: 'игра занята, повторите',
   crash: 'команда упала внутри игры (игра работает)',

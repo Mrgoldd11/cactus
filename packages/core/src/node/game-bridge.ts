@@ -9,8 +9,10 @@ import {
   type GameAction,
   type GamePing,
   type GameState,
+  type GameTown,
   type TracePage,
 } from '../game/bridge.ts';
+import type { Vec3 } from '../format/types.ts';
 
 export class GameBridgeError extends Error {
   override name = 'GameBridgeError';
@@ -160,6 +162,11 @@ export class GameBridge {
   /** Команда, меняющая игру (телепорт, камера, скорость, пауза). */
   action(a: GameAction): Promise<Record<string, unknown>> {
     return this.request(a.cmd, a.args);
+  }
+
+  /** Города мира с центром и радиусом границы (только чтение). */
+  towns(args: { near?: Vec3; range?: number; mult?: number } = {}): Promise<{ towns: GameTown[]; count: number }> {
+    return this.request('towns', args);
   }
 
   setTrace(on: boolean, filter: 'player' | 'all' = 'player'): Promise<{ on: boolean; all: boolean }> {
