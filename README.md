@@ -49,6 +49,8 @@ In Cactus: **Help → Connect AI (MCP)… → Copy**, then paste into Claude Des
 
 Cactus speaks standard **MCP (stdio)**, so any MCP-capable AI client can connect: Claude Desktop, Claude Code and, in principle, ChatGPT-based tools, Qwen and other models. **Verified only with Claude** so far; other clients are untested, and reports are welcome. Ready-made setup snippets exist for Claude only; for other clients, point them at the same stdio command that *Connect AI (MCP)* copies.
 
+The tool names, descriptions and parameters the AI sees are in **English**, so the AI can work in any language you talk to it in. Game record names are shown in both English and Russian. Some of the longer result texts (conversation simulator, "where in game", merge summaries) are still in Russian in this Beta; an AI reads them fine, but it is on the list to translate.
+
 ## Optional: Kenshi Bridge (live link to the running game)
 [**Kenshi Bridge**](https://github.com/Mrgoldd11/Kenshi-Bridge) is a separate **open-source** (GPLv3) plugin for [RE_Kenshi](https://github.com/BFrizzleFoShizzle/RE_Kenshi) built on KenshiLib. With it Cactus and the AI can see the running game: the selected character and position, which dialogue the game actually chose and why, the town list with border radii, and (with your confirmation) teleport, camera, speed and pause. It is **not required**; Cactus works without it. Status: the plugin itself is checked in game, but the link between the Cactus window / AI tools and the plugin has **not been tested with the real game yet**. Cactus itself stays closed source; the two programs share no code and talk only over a local socket (`127.0.0.1`).
 
