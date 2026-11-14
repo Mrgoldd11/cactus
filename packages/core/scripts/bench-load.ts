@@ -9,7 +9,7 @@ import {
   buildCategoryTree, decodeText, itemTypeName, ModContext, parseGameSchema, parsePo, readDataFile, withInferredFields, VANILLA_FILES,
   type Layer,
 } from '../src/index.ts';
-import { detectGameInstalls, gamedataPoPath, SCHEMA_FILES, vanillaFilePaths } from '../src/node/index.ts';
+import { detectGameInstalls, gamedataPoPath, installedModFiles, loadModContext, SCHEMA_FILES, vanillaFilePaths } from '../src/node/index.ts';
 
 const dir = process.argv[2];
 const game = dir ? { kenshi: dir, workshop: undefined } : detectGameInstalls()[0];
@@ -53,3 +53,18 @@ t0 = t(`индекс поиска (${n} записей)`, t0);
 buildCategoryTree(schema, types);
 t('дерево категорий', t0);
 t('ИТОГО', start);
+
+// Opening a mod the way MCP and CLI do it (loadModContext): vanilla layers and the translation
+// are already in memory, the schema is read from disk. Median of several runs. Stage 8b
+// (FCS Extended) must not make this slower for a mod that has no extensions.
+const benchMod = process.argv[3] ?? installedModFiles(game as never).find((m) => m.source === 'mods')?.path;
+if (benchMod) {
+  const runs: number[] = [];
+  for (let i = 0; i < 9; i++) {
+    const s0 = performance.now();
+    loadModContext({ paths: game as never, modPath: benchMod, vanilla: layers, po: poParsed });
+    runs.push(performance.now() - s0);
+  }
+  runs.sort((a, b) => a - b);
+  console.log(`${'loadModContext, median of 9'.padEnd(34)} ${runs[4]!.toFixed(1).padStart(6)} мс  (min ${runs[0]!.toFixed(1)}, ${benchMod})`);
+}

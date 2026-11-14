@@ -130,16 +130,34 @@ export type ItemTypeName = (typeof ITEM_TYPE_NAMES)[number];
 
 const byName = new Map<string, number>(ITEM_TYPE_NAMES.map((n, i) => [n, i]));
 
-/** Имя типа по номеру; для неизвестных номеров — `TYPE_<n>`. */
-export function itemTypeName(type: number): string {
-  return ITEM_TYPE_NAMES[type] ?? `TYPE_${type}`;
+/**
+ * Record types added on top of the built-in table. The game and FCS know only the types above;
+ * plugins add their own (FCS Extended: `enum itemType { VARIABLE=900 }` in a mod's `fcs.def`).
+ * The table is plain data that belongs to a schema (`GameSchema.itemTypes`), not global state:
+ * two mods with different extensions can be open in one process.
+ */
+export interface ItemTypes {
+  /** Number -> name of the added types. */
+  readonly extra: ReadonlyMap<number, string>;
+  /** Name -> number of the added types. Two names may share a number; `extra` then holds the last one. */
+  readonly extraByName: ReadonlyMap<string, number>;
 }
 
-/** Номер типа по имени (`DIALOGUE` → 18) или undefined. */
-export function itemTypeId(name: string): number | undefined {
-  return byName.get(name);
+/** The built-in table alone. */
+export const VANILLA_ITEM_TYPES: ItemTypes = { extra: new Map(), extraByName: new Map() };
+
+/** Имя типа по номеру; для неизвестных номеров — `TYPE_<n>`. `types` — таблица схемы с типами расширений. */
+export function itemTypeName(type: number, types?: ItemTypes): string {
+  return ITEM_TYPE_NAMES[type] ?? types?.extra.get(type) ?? `TYPE_${type}`;
 }
 
-export function isItemTypeName(name: string): name is ItemTypeName {
-  return byName.has(name);
+/** Номер типа по имени (`DIALOGUE` → 18) или undefined. `types` — таблица схемы с типами расширений. */
+export function itemTypeId(name: string, types?: ItemTypes): number | undefined {
+  return byName.get(name) ?? types?.extraByName.get(name);
+}
+
+export function isItemTypeName(name: string): name is ItemTypeName;
+export function isItemTypeName(name: string, types: ItemTypes | undefined): boolean;
+export function isItemTypeName(name: string, types?: ItemTypes): boolean {
+  return byName.has(name) || (types?.extraByName.has(name) ?? false);
 }

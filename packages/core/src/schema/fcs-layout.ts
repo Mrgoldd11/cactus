@@ -23,6 +23,8 @@ export interface LayoutNode {
   filters: LayoutFilter[];
   children: LayoutNode[];
   line: number;
+  /** Schema extension (mod folder name) that added the node; absent for the game's own nodes. */
+  extension?: string;
 }
 
 export interface FcsLayout {

@@ -59,6 +59,8 @@ export interface FieldDef {
   inferred?: boolean;
   /** Поле не описано в fcs.def, но известно из FCS (`builtin-enums.ts`). */
   builtin?: boolean;
+  /** Schema extension (mod folder name) that added the field; absent for the game's own fields. */
+  extension?: string;
   /** Номер строки в fcs.def (с 1); 0 у выведенных полей. */
   line: number;
 }

@@ -19,6 +19,8 @@ export interface EnumValue {
   group?: string;
   /** Короткая подпись по-русски (`builtin-enums.ts`). */
   label?: string;
+  /** Schema extension (mod folder name) that added the value; absent for the game's own values. */
+  extension?: string;
 }
 
 export interface EnumDef {
@@ -28,15 +30,32 @@ export interface EnumDef {
   line: number;
   /** Enum встроен в FCS, его нет в fcs_enums.def (`builtin-enums.ts`). */
   builtin?: boolean;
+  /** Schema extension (mod folder name) that created the enum; absent for the game's own enums. */
+  extension?: string;
 }
 
 export interface FcsEnums {
   enums: Map<string, EnumDef>;
+  /**
+   * Every `enum` block in file order, repeats included. `enums` keeps only the last block of a
+   * name; schema extensions need all of them, because FCS Extended appends a repeated block to
+   * the existing enum instead of replacing it.
+   */
+  blocks: EnumDef[];
   warnings: ParseWarning[];
 }
 
-export function parseFcsEnums(text: string): FcsEnums {
+export interface ParseEnumsOptions {
+  /**
+   * Do not warn about a repeated block. In a schema extension a repeated block is the normal way
+   * to add values to an existing enum.
+   */
+  allowRepeats?: boolean;
+}
+
+export function parseFcsEnums(text: string, options: ParseEnumsOptions = {}): FcsEnums {
   const enums = new Map<string, EnumDef>();
+  const blocks: EnumDef[] = [];
   const warnings: ParseWarning[] = [];
   const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
 
@@ -94,10 +113,11 @@ export function parseFcsEnums(text: string): FcsEnums {
       const m = /^enum\s+(?:(shared)\s+)?([A-Za-z_]\w*)\s*(\{.*)?$/.exec(line);
       if (m) {
         current = { name: m[2]!, shared: m[1] !== undefined, values: [], line: lineNo };
-        if (enums.has(current.name)) {
+        if (enums.has(current.name) && options.allowRepeats !== true) {
           warnings.push({ line: lineNo, message: `повтор enum ${current.name}`, text: raw });
         }
         enums.set(current.name, current);
+        blocks.push(current);
         next = 0;
         group = undefined;
         line = m[3] ?? '';
@@ -129,5 +149,5 @@ export function parseFcsEnums(text: string): FcsEnums {
     }
   }
   if (open) warnings.push({ line: lines.length, message: 'enum не закрыт', text: '' });
-  return { enums, warnings };
+  return { enums, blocks, warnings };
 }
