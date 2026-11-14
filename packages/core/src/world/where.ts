@@ -216,7 +216,7 @@ export function plainRuName(s: string): string {
 
 function info(ctx: ModContext, id: string, rec?: GameRecord): WhereRecordInfo {
   const r = rec ?? ctx.get(id);
-  const out: WhereRecordInfo = { id, type: r ? itemTypeName(r.type) : '?', name: r ? decodeText(r.name) : id };
+  const out: WhereRecordInfo = { id, type: r ? ctx.typeName(r.type) : '?', name: r ? decodeText(r.name) : id };
   const ru = ctx.localizedName(id);
   if (ru) out.nameRu = ru;
   return out;
@@ -292,7 +292,7 @@ class WhereWalker {
 
   type(s: string): string {
     const r = this.ctx.get(s);
-    return r ? itemTypeName(r.type) : '?';
+    return r ? this.ctx.typeName(r.type) : '?';
   }
 
   step(p: WhereParent): WhereStep {

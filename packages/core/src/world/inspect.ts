@@ -4,7 +4,6 @@
  * её меняет) и её связи: на что она ссылается (части, мебель, товары, отряды, диалоги…) и кто
  * ссылается на неё. Только то, что есть в данных; ничего не додумываем.
  */
-import { itemTypeName } from '../format/item-types.ts';
 import type { ModContext, RecordStatus } from '../model/context.ts';
 
 export interface InsideLink {
@@ -47,7 +46,7 @@ function link(ctx: ModContext, sid: string, values?: number[]): InsideLink {
   const h = ctx.headline(sid);
   if (h) {
     out.name = ctx.name(sid) ?? '';
-    out.type = itemTypeName(h.type);
+    out.type = ctx.typeName(h.type);
     const ru = ctx.localizedName(sid);
     if (ru) out.nameRu = ru;
   }
@@ -63,7 +62,7 @@ export function inspectRecord(ctx: ModContext, sid: string, options: { limit?: n
   const out: RecordInside = { sid, exists: rec !== undefined, layers: origin?.layers ?? [], links: [], usedBy: [], usedByTotal: 0 };
   if (rec) {
     out.name = ctx.name(sid) ?? '';
-    out.type = itemTypeName(rec.type);
+    out.type = ctx.typeName(rec.type);
     const ru = ctx.localizedName(sid);
     if (ru) out.nameRu = ru;
   }

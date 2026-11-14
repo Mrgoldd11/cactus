@@ -76,7 +76,7 @@ const VALUE_DICTS = ['bools', 'floats', 'ints', 'vec3s', 'vec4s', 'strings', 'fi
 export function analyzeCoverage(schema: GameSchema, inputs: readonly CoverageInput[]): CoverageReport {
   // Типы всех записей по строковому id — чтобы проверять цели ссылок и экземпляров.
   const typeById = new Map<string, string>();
-  for (const { file } of inputs) for (const r of file.records) typeById.set(r.stringId, itemTypeName(r.type));
+  for (const { file } of inputs) for (const r of file.records) typeById.set(r.stringId, itemTypeName(r.type, schema.itemTypes));
 
   const typeStats = new Map<string, { records: number; files: Set<string> }>();
   const missing = new Map<string, Occurrence & { type: string; dict: RecordDict; key: string }>();
@@ -98,7 +98,7 @@ export function analyzeCoverage(schema: GameSchema, inputs: readonly CoverageInp
   for (const { label, file } of inputs) {
     for (const rec of file.records) {
       records++;
-      const type = itemTypeName(rec.type);
+      const type = itemTypeName(rec.type, schema.itemTypes);
       let st = typeStats.get(type);
       if (!st) {
         st = { records: 0, files: new Set() };

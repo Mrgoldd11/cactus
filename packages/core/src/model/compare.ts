@@ -4,7 +4,6 @@
  * поверх ванили), для числовых столбцов — наибольшее и наименьшее значение (выбросы).
  */
 import { decodeText } from '../text.ts';
-import { itemTypeId } from '../format/item-types.ts';
 import type { GameRecord } from '../format/types.ts';
 import { DICT_FOR_KIND } from '../schema/game-schema.ts';
 import { isVanillaLayer } from '../vanilla.ts';
@@ -101,7 +100,7 @@ export function compareText(ctx: ModContext, typeName: string, rec: GameRecord, 
  * редактора), иначе перебираются все записи. Удалённые модом записи не входят.
  */
 export function compareTable(ctx: ModContext, typeName: string, options: { ids?: Iterable<string> } = {}): CompareTable {
-  const type = itemTypeId(typeName);
+  const type = ctx.typeId(typeName);
   const recs: GameRecord[] = [];
   for (const sid of options.ids ?? ctx.allStringIds()) {
     const rec = ctx.get(sid);

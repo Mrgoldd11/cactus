@@ -3,7 +3,6 @@
  * Повторно встреченная запись не разворачивается второй раз (диалоги бывают с циклами).
  */
 import { decodeText } from '../text.ts';
-import { itemTypeName } from '../format/item-types.ts';
 import type { GameRecord } from '../format/types.ts';
 import type { ModContext } from './context.ts';
 import { describeDialogAction, formatEnumValue, getEnum, refValueEnum } from './enums.ts';
@@ -79,7 +78,7 @@ export function buildDialogueTree(ctx: ModContext, stringId: string, options: Di
     const rec = ctx.get(sid);
     const node: DialogueNode = {
       stringId: sid,
-      type: rec ? itemTypeName(rec.type) : '?',
+      type: rec ? ctx.typeName(rec.type) : '?',
       name: rec ? decodeText(rec.name) : '',
       texts: [],
       conditions: [],

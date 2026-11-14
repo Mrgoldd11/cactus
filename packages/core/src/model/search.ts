@@ -3,7 +3,7 @@
  * статусу и значениям полей; плюс «где угодно» — подстрока в любом значении записи.
  */
 import { decodeText } from '../text.ts';
-import { itemTypeId, itemTypeName } from '../format/item-types.ts';
+import { itemTypeId, type ItemTypes } from '../format/item-types.ts';
 import type { GameRecord } from '../format/types.ts';
 import type { ModContext, RecordStatus } from './context.ts';
 import { SCALAR_DICTS, scalarMap } from './record-ops.ts';
@@ -75,10 +75,11 @@ function regexOf(pattern: string): RegExp {
   return re;
 }
 
-export function resolveTypeFilter(type: string | number): number {
+/** Record type by number or name; `types` adds the types of schema extensions. */
+export function resolveTypeFilter(type: string | number, types?: ItemTypes): number {
   if (typeof type === 'number') return type;
   if (/^\d+$/.test(type)) return Number(type);
-  const id = itemTypeId(type.toUpperCase());
+  const id = itemTypeId(type.toUpperCase(), types);
   if (id === undefined) throw new Error(`Неизвестный тип записи «${type}»`);
   return id;
 }
@@ -173,7 +174,7 @@ export function recordHaystack(ctx: ModContext, rec: GameRecord): string {
 
 /** Все совпадения по порядку слоёв (порядку первого появления записей). */
 export function searchRecords(ctx: ModContext, q: SearchQuery): SearchHit[] {
-  const type = q.type === undefined ? undefined : resolveTypeFilter(q.type);
+  const type = q.type === undefined ? undefined : resolveTypeFilter(q.type, ctx.schema?.itemTypes);
   const text = q.text?.toLowerCase();
   const anywhere = q.anywhere?.toLowerCase();
   const statuses = q.status ? new Set(q.status) : undefined;
@@ -196,7 +197,7 @@ export function searchRecords(ctx: ModContext, q: SearchQuery): SearchHit[] {
     }
     if (q.fields && !q.fields.every((f) => matchesFilter(ctx, rec, f))) continue;
     if (anywhere !== undefined && !recordHaystack(ctx, rec).includes(anywhere)) continue;
-    const hit: SearchHit = { stringId: sid, type: itemTypeName(rec.type), name, status };
+    const hit: SearchHit = { stringId: sid, type: ctx.typeName(rec.type), name, status };
     if (ru !== undefined) hit.localizedName = ru;
     out.push(hit);
   }

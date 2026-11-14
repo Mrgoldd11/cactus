@@ -100,7 +100,7 @@ export function fieldDict(ctx: ModContext, stringId: string, key: string, value?
   if (explicit) return parseDictName(explicit);
   const rec = ctx.get(stringId) ?? ctx.lower(stringId);
   if (rec) for (const d of SCALAR_DICTS) if (scalarMap(rec, d).has(key)) return d;
-  const ts = rec && ctx.schema?.types.get(itemTypeName(rec.type));
+  const ts = rec && ctx.schema?.types.get(ctx.typeName(rec.type));
   const f = ts ? findField(ts, key) : undefined;
   const fromSchema = f ? DICT_FOR_KIND[f.kind] : undefined;
   if (fromSchema && fromSchema !== 'refs' && fromSchema !== 'instances') return fromSchema;
@@ -115,7 +115,7 @@ export function fieldDict(ctx: ModContext, stringId: string, key: string, value?
 function enumInput(ctx: ModContext, stringId: string, key: string, value: JsonScalar): JsonScalar {
   if (typeof value !== 'string' || /^-?\d+$/.test(value.trim())) return value;
   const rec = ctx.get(stringId) ?? ctx.lower(stringId);
-  const def = rec && fieldEnum(ctx.schema, itemTypeName(rec.type), key, rec);
+  const def = rec && fieldEnum(ctx.schema, ctx.typeName(rec.type), key, rec);
   if (!def) return value;
   const n = parseEnumValue(def, value);
   if (n === undefined) throw new EditError(`В ${def.name} нет значения «${value}»`);
@@ -218,7 +218,7 @@ export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = defaul
   function applyOne(op: EditOp): void {
     switch (op.op) {
       case 'create': {
-        const sid = ctx.createRecord(resolveTypeFilter(op.type), op.name, op.id !== undefined ? { stringId: op.id } : {});
+        const sid = ctx.createRecord(resolveTypeFilter(op.type, ctx.schema?.itemTypes), op.name, op.id !== undefined ? { stringId: op.id } : {});
         alias(op.as, sid);
         created.push(sid);
         touched.add(sid);

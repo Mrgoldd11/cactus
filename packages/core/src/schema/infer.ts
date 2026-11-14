@@ -38,7 +38,7 @@ function mostCommon(m: Map<string, number>): string | undefined {
  */
 export function withInferredFields(schema: GameSchema, files: readonly DataFile[]): GameSchema {
   const typeById = new Map<string, string>();
-  for (const f of files) for (const r of f.records) typeById.set(r.stringId, itemTypeName(r.type));
+  for (const f of files) for (const r of f.records) typeById.set(r.stringId, itemTypeName(r.type, schema.itemTypes));
 
   // Тип → имя поля → вид → кандидат.
   const found = new Map<string, Map<string, Map<FieldKind, Candidate>>>();
@@ -58,7 +58,7 @@ export function withInferredFields(schema: GameSchema, files: readonly DataFile[
   const instByType = new Map<string, Map<string, boolean>>();
   for (const file of files) {
     for (const rec of file.records) {
-      const type = itemTypeName(rec.type);
+      const type = itemTypeName(rec.type, schema.itemTypes);
       const ts = schema.types.get(type);
       let memo = knownByType.get(type);
       if (!memo) knownByType.set(type, (memo = new Map<string, boolean>()));

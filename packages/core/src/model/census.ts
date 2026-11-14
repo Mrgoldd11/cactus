@@ -56,7 +56,7 @@ export interface CensusOptions {
 function idsOf(ctx: ModContext, type: string, index: TypeIndex | undefined): readonly string[] {
   if (index) return index.get(type) ?? [];
   const out: string[] = [];
-  for (const r of ctx.records()) if (itemTypeName(r.type) === type) out.push(r.stringId);
+  for (const r of ctx.records()) if (ctx.typeName(r.type) === type) out.push(r.stringId);
   return out;
 }
 

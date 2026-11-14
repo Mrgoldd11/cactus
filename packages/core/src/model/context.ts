@@ -9,7 +9,7 @@
  * с последнего сохранения» — это «снимок не тот же объект, что был сохранён».
  */
 import { decodeText, encodeText } from '../text.ts';
-import { itemTypeName } from '../format/item-types.ts';
+import { itemTypeId, itemTypeName } from '../format/item-types.ts';
 import { joinModList, splitModList } from '../format/helpers.ts';
 import { emptyRecord, FileType, type DataFile, type GameRecord, type Instance, type ModHeader, type Reference } from '../format/types.ts';
 import { indexPoByRecord, type PoFile, type RecordTranslation } from '../locale/po.ts';
@@ -795,10 +795,23 @@ export class ModContext {
     }, `${stringId}: − объект ${key}`);
   }
 
+  /**
+   * Name of a record type: a built-in one, or one added by a schema extension of this context.
+   * A number nobody declared is shown as `TYPE_<number>`.
+   */
+  typeName(type: number): string {
+    return itemTypeName(type, this.schema?.itemTypes);
+  }
+
+  /** Number of a record type by name (built-in or from a schema extension); undefined if unknown. */
+  typeId(name: string): number | undefined {
+    return itemTypeId(name, this.schema?.itemTypes);
+  }
+
   /** Значения новой ссылки по умолчанию из схемы (или 0, 0, 0). */
   refDefaults(stringId: string, category: string): number[] {
     const rec = this.get(stringId);
-    const type = rec && this.schema?.types.get(itemTypeName(rec.type));
+    const type = rec && this.schema?.types.get(this.typeName(rec.type));
     const def = type?.fields.get(category);
     return def?.refDefaults ?? [0, 0, 0];
   }

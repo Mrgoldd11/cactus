@@ -5,7 +5,6 @@
  * выражены обычными операциями `set`/`rename` — их же отправляет MCP в окно редактора.
  */
 import { decodeText } from '../text.ts';
-import { itemTypeId, itemTypeName } from '../format/item-types.ts';
 import type { GameRecord } from '../format/types.ts';
 import { DICT_FOR_KIND, findField } from '../schema/game-schema.ts';
 import { EditError, type ModContext } from './context.ts';
@@ -81,7 +80,7 @@ export interface BulkPreview {
 
 /** Записи типа по условиям, без удалённых модом; порядок — как в слоях. */
 export function bulkSelect(ctx: ModContext, query: BulkQuery): GameRecord[] {
-  const type = typeof query.type === 'number' ? query.type : /^\d+$/.test(query.type) ? Number(query.type) : itemTypeId(query.type.toUpperCase());
+  const type = typeof query.type === 'number' ? query.type : /^\d+$/.test(query.type) ? Number(query.type) : ctx.typeId(query.type.toUpperCase());
   if (type === undefined) throw new EditError(`Неизвестный тип записи «${String(query.type)}»`);
   const text = query.text?.trim().toLowerCase();
   const out: GameRecord[] = [];
@@ -125,7 +124,7 @@ function fieldOf(ctx: ModContext, rec: GameRecord, key: string): { dict: ScalarD
     const v = scalarMap(rec, dict).get(key);
     if (v !== undefined) return { dict, value: v };
   }
-  const ts = ctx.schema?.types.get(itemTypeName(rec.type));
+  const ts = ctx.schema?.types.get(ctx.typeName(rec.type));
   const f = ts ? findField(ts, key) : undefined;
   const dict = f ? DICT_FOR_KIND[f.kind] : undefined;
   if (!f || dict === undefined || dict === 'refs' || dict === 'instances' || dict === 'vec3s' || dict === 'vec4s') return undefined;
@@ -152,7 +151,7 @@ export function previewBulk(ctx: ModContext, query: BulkQuery, op: BulkOperation
   const key = op.field.trim();
   if (key === '') throw new EditError('Укажите поле');
   const recs = bulkSelect(ctx, query);
-  const typeName = typeof query.type === 'number' ? itemTypeName(query.type) : query.type.toUpperCase();
+  const typeName = typeof query.type === 'number' ? ctx.typeName(query.type) : query.type.toUpperCase();
   if (op.kind === 'refAdd' || op.kind === 'refRemove') return previewRefs(ctx, recs, typeName, op, key);
   const re = op.kind === 'replace' ? pattern(op) : undefined;
   const factor = op.kind === 'mul' || op.kind === 'add' ? number(op.value, op.kind === 'mul' ? 'Умножить на' : 'Прибавить') : 0;
@@ -209,7 +208,7 @@ export function previewBulk(ctx: ModContext, query: BulkQuery, op: BulkOperation
       continue;
     }
     if (value !== undefined && scalarEqual(value, next)) continue;
-    const typeOf = itemTypeName(rec.type);
+    const typeOf = ctx.typeName(rec.type);
     changes.push({ sid, name, field: key, before: compareText(ctx, typeOf, rec, dict, key, value), after: compareText(ctx, typeOf, rec, dict, key, next) });
     ops.push({ op: 'set', id: sid, field: key, value: jsonOf(dict, next), dict });
   }
@@ -243,7 +242,7 @@ function previewRefs(ctx: ModContext, recs: GameRecord[], typeName: string, op: 
     const sid = rec.stringId;
     const name = decodeText(rec.name) || sid;
     const list = rec.refs.get(category);
-    const ts = ctx.schema?.types.get(itemTypeName(rec.type));
+    const ts = ctx.schema?.types.get(ctx.typeName(rec.type));
     const known = list !== undefined || (ts ? findField(ts, category)?.kind === 'reference' : false);
     if (!known) {
       skipped.push({ sid, name, reason: `нет списка ссылок «${category}»` });
@@ -277,14 +276,14 @@ export function bulkFieldValue(ctx: ModContext, rec: GameRecord, key: string): s
   if (key === BULK_NAME_FIELD) return decodeText(rec.name);
   const f = fieldOf(ctx, rec, key);
   if (!f || f.value === undefined) return undefined;
-  return compareText(ctx, itemTypeName(rec.type), rec, f.dict, key, f.value);
+  return compareText(ctx, ctx.typeName(rec.type), rec, f.dict, key, f.value);
 }
 
 /** Значение для `set` из текста: как в applyOps (enum по имени, bool, число). */
 function applyProbe(ctx: ModContext, rec: GameRecord, dict: ScalarDict, key: string, text: string): ScalarValue {
   const trimmed = text.trim();
   if (dict === 'ints' && !/^-?\d+$/.test(trimmed)) {
-    const def = fieldEnum(ctx.schema, itemTypeName(rec.type), key, rec);
+    const def = fieldEnum(ctx.schema, ctx.typeName(rec.type), key, rec);
     const n = def ? parseEnumValue(def, trimmed) : undefined;
     if (n === undefined) throw new EditError(`«${trimmed}» — не число${def ? ` и не значение ${def.name}` : ''}`);
     return n;

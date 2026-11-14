@@ -3,7 +3,6 @@
  * Ссылки всегда показываются с именем цели: `Имя [sid]`.
  */
 import { decodeText } from '../text.ts';
-import { itemTypeName } from '../format/item-types.ts';
 import type { GameRecord, Instance, Reference } from '../format/types.ts';
 import { applyLayer, isRemovedRef, SCALAR_DICTS, scalarMap, type ScalarDict, type ScalarValue } from './record-ops.ts';
 import type { Changeset, ModContext } from './context.ts';
@@ -73,7 +72,7 @@ function formatInstance(ctx: ModContext, i: Instance): string {
 export function recordHeadline(ctx: ModContext, rec: GameRecord): string {
   const ru = ctx.localizedName(rec.stringId);
   const status = ctx.status(rec.stringId);
-  return `${itemTypeName(rec.type)} ${rec.stringId} «${decodeText(rec.name)}»${ru ? ` (${ru})` : ''}${status && status !== 'base' ? ` — ${status}` : ''}`;
+  return `${ctx.typeName(rec.type)} ${rec.stringId} «${decodeText(rec.name)}»${ru ? ` (${ru})` : ''}${status && status !== 'base' ? ` — ${status}` : ''}`;
 }
 
 export interface FormatRecordOptions {
@@ -95,7 +94,7 @@ export function formatRecord(ctx: ModContext, rec: GameRecord, options: FormatRe
   for (const dict of SCALAR_DICTS) {
     for (const [k, v] of scalarMap(rec, dict)) out.push(`  ${DICT_LABEL[dict]} ${k} = ${formatFieldValue(ctx, rec, dict, k, v)}`);
   }
-  const typeName = itemTypeName(rec.type);
+  const typeName = ctx.typeName(rec.type);
   const hide = new Set(options.hideCategories ?? []);
   const max = options.maxRefsPerCategory ?? Infinity;
   for (const [cat, list] of rec.refs) {
@@ -121,7 +120,7 @@ export function formatRecord(ctx: ModContext, rec: GameRecord, options: FormatRe
  */
 export function formatFieldValue(ctx: ModContext, rec: GameRecord, dict: ScalarDict, key: string, v: ScalarValue): string {
   if (dict === 'ints') {
-    const def = fieldEnum(ctx.schema, itemTypeName(rec.type), key, rec);
+    const def = fieldEnum(ctx.schema, ctx.typeName(rec.type), key, rec);
     if (def) return formatEnumValue(def, v as number);
   }
   return formatScalar(dict, v);
@@ -134,7 +133,7 @@ export function formatFieldChange(ctx: ModContext, c: FieldChange, rec?: GameRec
     case 'name':
       return `имя: «${decodeText(c.before)}» → «${decodeText(c.after)}»`;
     case 'type':
-      return `тип: ${itemTypeName(c.before)} → ${itemTypeName(c.after)}`;
+      return `тип: ${ctx.typeName(c.before)} → ${ctx.typeName(c.after)}`;
     case 'flags':
       return `флаги: 0x${c.before.toString(16)} → 0x${c.after.toString(16)}`;
     case 'field': {
@@ -161,7 +160,7 @@ export function formatFieldChange(ctx: ModContext, c: FieldChange, rec?: GameRec
 export function formatRecordDiff(ctx: ModContext, d: RecordDiff): string[] {
   const rec = (d.after ?? d.before)!;
   const mark = d.change === 'added' ? '+' : d.change === 'removed' ? '−' : '~';
-  const head = `${mark} ${itemTypeName(rec.type)} ${d.stringId} «${decodeText(rec.name)}»`;
+  const head = `${mark} ${ctx.typeName(rec.type)} ${d.stringId} «${decodeText(rec.name)}»`;
   if (d.change !== 'changed') return [head];
   return [head, ...d.fields.map((c) => `    ${formatFieldChange(ctx, c, rec)}`)];
 }
@@ -246,7 +245,7 @@ export interface RecordJson {
 
 /** Запись как JSON: поля по словарям, ссылки с именами целей. */
 export function recordToJson(ctx: ModContext, rec: GameRecord, options: { maxRefsPerCategory?: number } = {}): RecordJson {
-  const out: RecordJson = { stringId: rec.stringId, type: itemTypeName(rec.type), name: decodeText(rec.name), fields: {}, refs: {}, instances: {} };
+  const out: RecordJson = { stringId: rec.stringId, type: ctx.typeName(rec.type), name: decodeText(rec.name), fields: {}, refs: {}, instances: {} };
   const ru = ctx.localizedName(rec.stringId);
   if (ru) out.localizedName = ru;
   const st = ctx.status(rec.stringId);
@@ -260,7 +259,7 @@ export function recordToJson(ctx: ModContext, rec: GameRecord, options: { maxRef
     for (const [k, v] of m) d[k] = v instanceof Uint8Array ? decodeText(v) : Array.isArray(v) ? [...v] : (v);
     out.fields[DICT_LABEL[dict]] = d;
   }
-  const typeName = itemTypeName(rec.type);
+  const typeName = ctx.typeName(rec.type);
   for (const [k, v] of rec.ints) {
     const def = fieldEnum(ctx.schema, typeName, k, rec);
     const ev = def && enumValue(def, v);

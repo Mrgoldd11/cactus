@@ -5,7 +5,7 @@
  * одной отменой. Работает на любом наборе модов: битые ссылки помечаются `missing`.
  */
 import { decodeText } from '../text.ts';
-import { itemTypeId, itemTypeName } from '../format/item-types.ts';
+import { itemTypeId } from '../format/item-types.ts';
 import type { GameRecord, Reference } from '../format/types.ts';
 import { plainRuName } from '../world/where.ts';
 import { EditError, type ModContext, type RecordStatus } from './context.ts';
@@ -41,7 +41,7 @@ export interface GraphOptions {
 function idsOf(ctx: ModContext, type: string, index: TypeIndex | undefined): readonly string[] {
   const got = index?.get(type);
   if (got) return got;
-  const t = itemTypeId(type);
+  const t = ctx.typeId(type);
   const out: string[] = [];
   for (const r of ctx.records()) if (r.type === t) out.push(r.stringId);
   return out;
@@ -50,7 +50,7 @@ function idsOf(ctx: ModContext, type: string, index: TypeIndex | undefined): rea
 export function graphRef(ctx: ModContext, sid: string): GraphRef {
   const rec = ctx.get(sid);
   const ru = ctx.localizedName(sid);
-  const out: GraphRef = { sid, type: rec ? itemTypeName(rec.type) : '?', name: rec ? decodeText(rec.name) : sid };
+  const out: GraphRef = { sid, type: rec ? ctx.typeName(rec.type) : '?', name: rec ? decodeText(rec.name) : sid };
   if (ru !== undefined) out.ru = plainRuName(ru);
   const status = ctx.status(sid);
   if (status !== undefined) out.status = status;
@@ -59,7 +59,7 @@ export function graphRef(ctx: ModContext, sid: string): GraphRef {
 }
 
 function arityOf(ctx: ModContext, rec: GameRecord, category: string): number {
-  return ctx.schema?.types.get(itemTypeName(rec.type))?.fields.get(category)?.refDefaults?.length ?? 3;
+  return ctx.schema?.types.get(ctx.typeName(rec.type))?.fields.get(category)?.refDefaults?.length ?? 3;
 }
 
 function link(ctx: ModContext, rec: GameRecord, category: string, r: Reference): GraphLink {

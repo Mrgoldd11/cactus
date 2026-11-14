@@ -242,7 +242,7 @@ function checkRefs(ctx: ModContext, delta: GameRecord, issues: ValidationIssue[]
 
 function checkSchema(ctx: ModContext, schema: GameSchema, delta: GameRecord, rec: GameRecord, issues: ValidationIssue[]): void {
   const sid = delta.stringId;
-  const typeName = itemTypeName(rec.type);
+  const typeName = itemTypeName(rec.type, schema.itemTypes);
   const ts: TypeSchema | undefined = schema.types.get(typeName);
   if (!ts) {
     issues.push({ severity: 'warning', code: 'unknown-type', stringId: sid, message: `тип ${typeName} не описан в схеме` });
@@ -284,14 +284,14 @@ function checkSchema(ctx: ModContext, schema: GameSchema, delta: GameRecord, rec
     for (const r of list) {
       if (isRemovedRef(r)) continue;
       const t = ctx.get(r.target);
-      if (t && itemTypeName(t.type) !== f.targetType) {
+      if (t && itemTypeName(t.type, schema.itemTypes) !== f.targetType) {
         issues.push({
           severity: 'warning',
           code: 'wrong-target-type',
           stringId: sid,
           key: cat,
           target: r.target,
-          message: `${cat} ждёт ${f.targetType}, а ${r.target} — ${itemTypeName(t.type)}`,
+          message: `${cat} ждёт ${f.targetType}, а ${r.target} — ${itemTypeName(t.type, schema.itemTypes)}`,
         });
       }
     }

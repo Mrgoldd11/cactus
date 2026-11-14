@@ -94,7 +94,7 @@ function layoutEnumValue(schema: GameSchema | undefined, type: TypeSchema | unde
 /** Подходит ли запись под фильтры узла (`building category==DOORS`, `is node=true`). */
 export function matchesLayoutFilters(schema: GameSchema | undefined, rec: GameRecord, filters: readonly LayoutFilter[]): boolean {
   if (filters.length === 0) return true;
-  const typeName = itemTypeName(rec.type);
+  const typeName = itemTypeName(rec.type, schema?.itemTypes);
   const type = schema?.types.get(typeName);
   return filters.every((flt) => {
     const got = filterFieldValue(schema, type, rec, flt.field);
@@ -114,7 +114,7 @@ export function matchesLayoutFilters(schema: GameSchema | undefined, rec: GameRe
 export function matchesCategory(schema: GameSchema | undefined, rec: GameRecord, node: CategoryNode): boolean {
   if (node.id === OTHER_TYPES_ID) return false;
   if (node.type === undefined) return true;
-  return itemTypeName(rec.type) === node.type && matchesLayoutFilters(schema, rec, node.filters);
+  return itemTypeName(rec.type, schema?.itemTypes) === node.type && matchesLayoutFilters(schema, rec, node.filters);
 }
 
 // ---------------------------------------------------------------- поля
@@ -178,7 +178,7 @@ export function fieldRows(ctx: ModContext, stringId: string): FieldRow[] {
   if (!rec) return [];
   const lower = ctx.lower(stringId);
   const touched = ctx.delta(stringId) !== undefined;
-  const typeName = itemTypeName(rec.type);
+  const typeName = ctx.typeName(rec.type);
   const type = ctx.schema?.types.get(typeName);
   const rows: FieldRow[] = [];
   const seen = new Set<string>();
@@ -264,7 +264,7 @@ export function refGroups(ctx: ModContext, stringId: string): RefGroup[] {
   if (!rec) return [];
   const lower = ctx.lower(stringId);
   const touched = ctx.delta(stringId) !== undefined;
-  const typeName = itemTypeName(rec.type);
+  const typeName = ctx.typeName(rec.type);
   const type = ctx.schema?.types.get(typeName);
   const cats: string[] = [];
   for (const def of type?.fields.values() ?? []) if (def.kind === 'reference') cats.push(def.name);
@@ -303,7 +303,7 @@ function describeTarget(ctx: ModContext, row: RefRow): RefRow {
   const t = ctx.get(row.ref.target) ?? ctx.lower(row.ref.target);
   if (t) {
     row.targetName = decodeText(t.name);
-    row.targetType = itemTypeName(t.type);
+    row.targetType = ctx.typeName(t.type);
   }
   const st = ctx.status(row.ref.target);
   if (st) row.targetStatus = st;

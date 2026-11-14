@@ -8,11 +8,17 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   applyExtensionLayers,
+  fieldRows,
+  firstDifference,
+  ModContext,
   parseDefFile,
   parseFcsDef,
   parseFcsEnums,
   parseFcsLayout,
   prepareSchemaBase,
+  readDataFile,
+  refGroups,
+  writeDataFile,
   type ExtensionLayer,
   type SchemaSources,
 } from '../src/index.ts';
@@ -22,6 +28,7 @@ const paths = resolveGamePaths();
 const game = hasGame(paths);
 const EXAMPLES = join(import.meta.dirname, '../../../../kenshi-bridge/_downloads/examples');
 const WORLD_STATES = join(EXAMPLES, 'WorldStates/WorldStates/FCS.def');
+const WORLD_STATES_MOD = join(EXAMPLES, 'WorldStates/WorldStates/WorldStates.mod');
 const DIALOGUE_EXT = join(EXAMPLES, 'Dialogue/DialogueExtensions/fcs.def');
 const examples = existsSync(WORLD_STATES) && existsSync(DIALOGUE_EXT);
 
@@ -95,6 +102,28 @@ describe.skipIf(!game || !examples)('schema extensions: real extensions', () => 
     // The game's own part of the schema is untouched.
     expect(base.schema.types.has('VARIABLE')).toBe(false);
     expect(base.schema.types.get('DIALOGUE')!.fields.has('variable equals')).toBe(false);
+  });
+
+  it('WorldStates.mod with its extension: type 900 is VARIABLE, the file is written byte for byte', () => {
+    const schema = applyExtensionLayers(prepareSchemaBase(sources()), [layer('WorldStates', WORLD_STATES)]);
+    const bytes = readFileSync(WORLD_STATES_MOD);
+    const ctx = new ModContext({ layers: [], mod: readDataFile(bytes), modName: 'WorldStates.mod', schema });
+    expect(ctx.typeName(900)).toBe('VARIABLE');
+    expect(ctx.typeId('VARIABLE')).toBe(900);
+    // The published mod is only a header: its records are made by the mods that use it.
+    expect([...ctx.modRecords()]).toHaveLength(0);
+    expect(firstDifference(bytes, writeDataFile(ctx.buildModFile()))).toBe(-1);
+
+    // A record of the new type, made the way a mod author would.
+    const variable = ctx.createRecord(ctx.typeId('VARIABLE')!, 'Days passed');
+    const line = ctx.createRecord(ctx.typeId('DIALOGUE_LINE')!, 'line');
+    ctx.addReference(line, 'variable equals', variable);
+    expect(fieldRows(ctx, variable).find((r) => r.key === 'value')).toMatchObject({ def: { kind: 'int', extension: 'WorldStates' } });
+    const group = refGroups(ctx, line).find((g) => g.category === 'variable equals')!;
+    expect(group).toMatchObject({ targetType: 'VARIABLE', def: { description: 'checks the value of a variable' } });
+    expect(group.rows[0]).toMatchObject({ ref: { target: variable, v0: 0 }, targetType: 'VARIABLE' });
+    const again = readDataFile(writeDataFile(ctx.buildModFile()));
+    expect(again.records.map((r) => r.type)).toEqual([900, ctx.typeId('DIALOGUE_LINE')]);
   });
 
   it('DialogueExtensions: conditions are appended to the enum built into FCS', () => {

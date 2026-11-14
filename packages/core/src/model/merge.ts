@@ -26,7 +26,6 @@
  * (`MERGE_LEVEL_DATA_NOTE`), файлы не трогаются.
  */
 import { bytesEqual, decodeText } from '../text.ts';
-import { itemTypeName } from '../format/item-types.ts';
 import { splitModList } from '../format/helpers.ts';
 import { FileType, type DataFile, type GameRecord } from '../format/types.ts';
 import type { ModContext } from './context.ts';
@@ -447,8 +446,8 @@ function fieldView(ctx: ModContext, f: FieldChange, rec: GameRecord, conflict: b
       view.after = decodeText(f.after);
       break;
     case 'type':
-      view.before = itemTypeName(f.before);
-      view.after = itemTypeName(f.after);
+      view.before = ctx.typeName(f.before);
+      view.after = ctx.typeName(f.after);
       break;
     case 'field':
       view.label = f.key;
@@ -583,7 +582,7 @@ function compute(ctx: ModContext, source: MergeSource, state: MergeSourceState, 
       sid,
       kind,
       type: shown.type,
-      typeName: itemTypeName(shown.type),
+      typeName: ctx.typeName(shown.type),
       name: decodeText(shown.name),
       fields: views,
       conflictCount,
