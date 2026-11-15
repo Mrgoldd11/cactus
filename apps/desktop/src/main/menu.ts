@@ -82,55 +82,122 @@ function connectAi(lang: Lang): void {
   });
 }
 
+/** Menu labels; a new interface language adds one more dictionary to MENU. */
+const menuEn = {
+  file: 'File',
+  quit: 'Exit',
+  edit: 'Edit',
+  undo: 'Undo',
+  redo: 'Redo',
+  cut: 'Cut',
+  copy: 'Copy',
+  paste: 'Paste',
+  selectAll: 'Select all',
+  view: 'View',
+  resetZoom: 'Actual size',
+  zoomIn: 'Zoom in',
+  zoomOut: 'Zoom out',
+  fullScreen: 'Full screen',
+  devTools: 'Developer tools',
+  help: 'Help',
+  logFolder: 'Open log folder',
+  connectAi: 'Connect AI (MCP)…',
+  about: 'About',
+};
+type MenuStrings = typeof menuEn;
+const menuRu: MenuStrings = {
+  file: 'Файл',
+  quit: 'Выход',
+  edit: 'Правка',
+  undo: 'Отменить',
+  redo: 'Повторить',
+  cut: 'Вырезать',
+  copy: 'Копировать',
+  paste: 'Вставить',
+  selectAll: 'Выделить всё',
+  view: 'Вид',
+  resetZoom: 'Обычный масштаб',
+  zoomIn: 'Крупнее',
+  zoomOut: 'Мельче',
+  fullScreen: 'Во весь экран',
+  devTools: 'Инструменты разработчика',
+  help: 'Справка',
+  logFolder: 'Открыть папку логов',
+  connectAi: 'Подключить ИИ (MCP)…',
+  about: 'О программе',
+};
+const menuZh: MenuStrings = {
+  file: '文件',
+  quit: '退出',
+  edit: '编辑',
+  undo: '撤销',
+  redo: '重做',
+  cut: '剪切',
+  copy: '复制',
+  paste: '粘贴',
+  selectAll: '全选',
+  view: '视图',
+  resetZoom: '实际大小',
+  zoomIn: '放大',
+  zoomOut: '缩小',
+  fullScreen: '全屏',
+  devTools: '开发者工具',
+  help: '帮助',
+  logFolder: '打开日志文件夹',
+  connectAi: '连接 AI (MCP)…',
+  about: '关于',
+};
+const MENU: Readonly<Record<Lang, MenuStrings>> = { en: menuEn, ru: menuRu, zh: menuZh };
+
 export function buildMenu(lang: Lang): void {
-  const t = (ru: string, en: string, zh: string): string => pick(lang, { en: en, ru: ru, zh: zh });
+  const m = MENU[lang];
   const template: MenuItemConstructorOptions[] = [
     {
-      label: t('Файл', 'File', '文件'),
-      submenu: [{ role: 'quit', label: t('Выход', 'Exit', '退出') }],
+      label: m.file,
+      submenu: [{ role: 'quit', label: m.quit }],
     },
     {
-      label: t('Правка', 'Edit', '编辑'),
+      label: m.edit,
       submenu: [
-        { role: 'undo', label: t('Отменить', 'Undo', '撤销') },
-        { role: 'redo', label: t('Повторить', 'Redo', '重做') },
+        { role: 'undo', label: m.undo },
+        { role: 'redo', label: m.redo },
         { type: 'separator' },
-        { role: 'cut', label: t('Вырезать', 'Cut', '剪切') },
-        { role: 'copy', label: t('Копировать', 'Copy', '复制') },
-        { role: 'paste', label: t('Вставить', 'Paste', '粘贴') },
-        { role: 'selectAll', label: t('Выделить всё', 'Select all', '全选') },
+        { role: 'cut', label: m.cut },
+        { role: 'copy', label: m.copy },
+        { role: 'paste', label: m.paste },
+        { role: 'selectAll', label: m.selectAll },
       ],
     },
     {
-      label: t('Вид', 'View', '视图'),
+      label: m.view,
       submenu: [
-        { role: 'resetZoom', label: t('Обычный масштаб', 'Actual size', '实际大小') },
-        { role: 'zoomIn', label: t('Крупнее', 'Zoom in', '放大') },
-        { role: 'zoomOut', label: t('Мельче', 'Zoom out', '缩小') },
+        { role: 'resetZoom', label: m.resetZoom },
+        { role: 'zoomIn', label: m.zoomIn },
+        { role: 'zoomOut', label: m.zoomOut },
         { type: 'separator' },
-        { role: 'togglefullscreen', label: t('Во весь экран', 'Full screen', '全屏') },
-        { role: 'toggleDevTools', label: t('Инструменты разработчика', 'Developer tools', '开发者工具') },
+        { role: 'togglefullscreen', label: m.fullScreen },
+        { role: 'toggleDevTools', label: m.devTools },
       ],
     },
     {
-      label: t('Справка', 'Help', '帮助'),
+      label: m.help,
       submenu: [
         {
-          label: t('Открыть папку логов', 'Open log folder', '打开日志文件夹'),
+          label: m.logFolder,
           click: () => {
             const dir = logDir();
             if (dir) void shell.openPath(dir);
           },
         },
         {
-          label: t('Подключить ИИ (MCP)…', 'Connect AI (MCP)…', '连接 AI (MCP)…'),
+          label: m.connectAi,
           click: () => {
             connectAi(lang);
           },
         },
         { type: 'separator' },
         {
-          label: t('О программе', 'About', '关于'),
+          label: m.about,
           click: () => {
             about(lang);
           },

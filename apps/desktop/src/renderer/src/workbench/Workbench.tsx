@@ -188,7 +188,7 @@ export function Workbench({ wb, initial, preset, onApi, onChange }: Props): Reac
         api.fromJSON(initial.layout as Parameters<DockviewApi['fromJSON']>[0]);
         restored = api.panels.length > 0;
       } catch (err) {
-        console.warn('Раскладку не восстановить, ставлю по умолчанию', err);
+        console.warn('Cannot restore the layout, using the default', err);
       }
     }
     if (!restored) applyPreset(api, presetRef.current, tRef.current);

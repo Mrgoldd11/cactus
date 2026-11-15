@@ -59,7 +59,7 @@ export class WorkerPool {
 
   dispose(): void {
     for (const w of this.workers) w.terminate();
-    for (const p of this.pending.values()) p.reject(new Error('закрыто'));
+    for (const p of this.pending.values()) p.reject(new Error('closed'));
     this.pending.clear();
   }
 }

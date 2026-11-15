@@ -81,14 +81,14 @@ async function png(bytes: Uint8Array, size: number): Promise<{ width: number; he
     if (type === 'IHDR') {
       w = dv.getUint32(p + 8);
       h = dv.getUint32(p + 12);
-      if (data[8] !== 8 || data[12] !== 0) throw new Error('PNG: нужен 8 бит без чересстрочности');
+      if (data[8] !== 8 || data[12] !== 0) throw new Error('PNG: needs 8 bits per channel, not interlaced');
       colourType = data[9]!;
     } else if (type === 'IDAT') idat.push(data);
     else if (type === 'IEND') break;
     p += 12 + len;
   }
   const bpp = colourType === 6 ? 4 : colourType === 2 ? 3 : 0;
-  if (!bpp || !w || !h) throw new Error('PNG: нужен RGB или RGBA');
+  if (!bpp || !w || !h) throw new Error('PNG: needs RGB or RGBA');
   const stream = new Blob(idat as BlobPart[]).stream().pipeThrough(new DecompressionStream('deflate'));
   const raw = new Uint8Array(await new Response(stream).arrayBuffer());
   // Снятие фильтров строк.

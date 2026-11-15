@@ -315,12 +315,12 @@ let liveRid = 1;
 /** Запрос ИИ — окну проекта; ответ придёт по `liveResponse`. */
 function forwardLive(req: LiveRequestBody): Promise<unknown> {
   const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
-  if (!win) return Promise.reject(new Error('Окно редактора закрыто'));
+  if (!win) return Promise.reject(new Error('The editor window is closed'));
   const rid = liveRid++;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       liveWaits.delete(rid);
-      reject(new Error('Окно редактора не ответило'));
+      reject(new Error('The editor window did not answer'));
     }, 25_000);
     liveWaits.set(rid, { resolve, reject, timer });
     win.webContents.send(IPC.liveRequest, { rid, req });

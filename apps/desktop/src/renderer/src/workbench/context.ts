@@ -41,7 +41,7 @@ export const WorkbenchContext = createContext<Workbench | null>(null);
 
 export function useWorkbench(): Workbench {
   const wb = useContext(WorkbenchContext);
-  if (!wb) throw new Error('Панель вне рабочего пространства');
+  if (!wb) throw new Error('Panel outside the workspace');
   return wb;
 }
 

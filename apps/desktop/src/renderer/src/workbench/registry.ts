@@ -49,7 +49,7 @@ export interface PanelDef {
 const panels = new Map<string, PanelDef>();
 
 export function registerPanel(def: PanelDef): PanelDef {
-  if (panels.has(def.id)) throw new Error(`Панель ${def.id} уже зарегистрирована`);
+  if (panels.has(def.id)) throw new Error(`Panel ${def.id} is already registered`);
   panels.set(def.id, def);
   return def;
 }
