@@ -48,6 +48,19 @@ export interface ModelPiece {
    * (камни, скалы).
    */
   terrain?: boolean;
+  /**
+   * Material type TERRAIN on a record that still names its own texture. The game ignores that
+   * texture (the terrain shader has no slot for it); the viewer keeps it for UV-mapped meshes
+   * and falls back to the ground look for meshes without UVs.
+   */
+  terrainMode?: boolean;
+  /**
+   * Material type TRIPLANAR / DUAL_TRIPLANAR: the texture is projected along the world axes
+   * (`triplanar.hlsl`: coord = world / 5000 * tile), mesh UVs are not used and often absent.
+   */
+  triplanar?: boolean;
+  /** Second diffuse texture of DUAL_TEXTURE / DUAL_TRIPLANAR, blended in by vertex colour alpha. */
+  texture2?: string;
 }
 
 export interface RecordModel {
@@ -201,17 +214,20 @@ const MESH_FIELDS: Record<string, readonly string[]> = {
 };
 
 /** MapFeatureMode (fcs.def): TERRAIN — текстура земли биома (если своей нет), FOLIAGE — вырезы по альфе. */
+const MODE_TRIPLANAR = 1;
 const MODE_TERRAIN = 2;
+const MODE_DUAL_TEXTURE = 3;
 const MODE_FOLIAGE = 4;
+const MODE_DUAL_TRIPLANAR = 5;
 
 /**
  * FOLIAGE_MESH: модель с текстурой из самой записи и, у деревьев, листва отдельной моделью.
  * Маска вырезов — альфа карты нормалей (у листвы — `leaves normal`, без неё — `normal map`);
  * без карты нормалей игра берёт плоскую (`flat.dds`, альфа 1) — вырезов нет.
  */
-function foliagePieces(rec: GameRecord, sid: string, out: RecordModel): void {
+function foliagePieces(rec: GameRecord, sid: string, out: RecordModel, modeField = 'material type'): void {
   const mesh = file(rec, 'mesh');
-  const mode = rec.ints.get('material type') ?? 0;
+  const mode = rec.ints.get(modeField) ?? 0;
   const normal = file(rec, 'normal map');
   if (mesh !== undefined && /\.mesh$/i.test(mesh)) {
     const piece: ModelPiece = { mesh, source: sid, field: 'mesh' };
@@ -224,9 +240,20 @@ function foliagePieces(rec: GameRecord, sid: string, out: RecordModel): void {
       const tx = rec.floats.get('tile X') ?? 1;
       const ty = rec.floats.get('tile Y') ?? 1;
       if (tx !== 1 || ty !== 1) piece.tile = [tx, ty];
+      if (mode === MODE_TERRAIN) piece.terrainMode = true;
+      if (tex && (mode === MODE_TRIPLANAR || mode === MODE_DUAL_TRIPLANAR)) piece.triplanar = true;
+      if (tex && (mode === MODE_DUAL_TEXTURE || mode === MODE_DUAL_TRIPLANAR)) {
+        const tex2 = file(rec, 'texture map 2');
+        if (tex2) piece.texture2 = tex2;
+      }
       if (mode === MODE_FOLIAGE && normal) {
         piece.alphaMap = normal;
         piece.alphaTest = rec.ints.get('alpha threshold') ?? 128;
+        // MAP_FEATURES: threshold 0 switches the cut-outs off.
+        if (piece.alphaTest <= 0) {
+          delete piece.alphaMap;
+          delete piece.alphaTest;
+        }
       }
     }
     out.pieces.push(piece);
@@ -250,6 +277,27 @@ function foliagePieces(rec: GameRecord, sid: string, out: RecordModel): void {
  * Модель записи. `interior: true` — для здания внутренние части вместо наружных.
  * Пустой `pieces` — у записи нет модели (или она в `.phs`).
  */
+/**
+ * The FOLIAGE_MESH rock a foliage-spawned building (`is foliage`: iron, copper) sits on: the
+ * first one (by string id, ore rocks first) whose `building type` points at the building.
+ */
+export function foliageRockOf(ctx: ModContext, building: GameRecord): GameRecord | undefined {
+  if (building.bools.get('is foliage') !== true) return undefined;
+  let best: GameRecord | undefined;
+  let bestOre = false;
+  for (const r of ctx.records()) {
+    if (itemTypeName(r.type) !== 'FOLIAGE_MESH' || !isMesh(file(r, 'mesh'))) continue;
+    if (!refs(r, 'building type').some((x) => x.target === building.stringId)) continue;
+    // Plain boulders may name an ore too; the dedicated `ResourceRock` meshes win.
+    const ore = /resourcerock/i.test(file(r, 'mesh') ?? '');
+    if (!best || (ore && !bestOre) || (ore === bestOre && r.stringId.localeCompare(best.stringId, 'en', { numeric: true }) < 0)) {
+      best = r;
+      bestOre = ore;
+    }
+  }
+  return best;
+}
+
 export function modelOfRecord(ctx: ModContext, sid: string, options: { interior?: boolean } = {}): RecordModel {
   const rec = ctx.get(sid);
   const type = rec ? itemTypeName(rec.type) : '';
@@ -260,6 +308,11 @@ export function modelOfRecord(ctx: ModContext, sid: string, options: { interior?
   }
   if (type === 'BUILDING') {
     buildingPieces(ctx, rec, out, options.interior === true, new Set());
+    // Ore deposits have no parts: the game spawns them on a foliage rock that names them.
+    if (out.pieces.length === 0 && options.interior !== true) {
+      const rock = foliageRockOf(ctx, rec);
+      if (rock) foliagePieces(rock, rock.stringId, out);
+    }
     return out;
   }
   if (type === 'BUILDING_PART') {
@@ -268,6 +321,11 @@ export function modelOfRecord(ctx: ModContext, sid: string, options: { interior?
   }
   if (type === 'FOLIAGE_MESH') {
     foliagePieces(rec, sid, out);
+    return out;
+  }
+  // MAP_FEATURES (huge scenery from features.dat): same material fields, the mode is `texture mode`.
+  if (type === 'MAP_FEATURES') {
+    if (rec.bools.get('hidden') !== true) foliagePieces(rec, sid, out, 'texture mode');
     return out;
   }
   const fields = MESH_FIELDS[type] ?? [...rec.files.keys()];
@@ -287,7 +345,7 @@ export function hasModel(ctx: ModContext, sid: string): boolean {
   const rec = ctx.get(sid);
   if (!rec) return false;
   const type = itemTypeName(rec.type);
-  if (type === 'BUILDING') return refs(rec, 'parts').length > 0 || refs(rec, 'interior').length > 0;
+  if (type === 'BUILDING') return refs(rec, 'parts').length > 0 || refs(rec, 'interior').length > 0 || foliageRockOf(ctx, rec) !== undefined;
   if (type === 'BUILDING_PART') return isMesh(file(rec, 'phs or mesh'));
   for (const f of MESH_FIELDS[type] ?? [...rec.files.keys()]) if (isMesh(file(rec, f))) return true;
   return false;

@@ -2,7 +2,7 @@
  * Файловая часть главного процесса без Electron: поиск игры, список модов, чтение всего,
  * что нужно окну для контекста, запись мода. Подтверждения и диалоги — в `index.ts`.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { VANILLA_FILES } from '@kenshi-editor/core';
 import {
@@ -309,7 +309,8 @@ export function readIconDataUrl(game: GameInstallInfo, iconPath: string): string
   return `data:${mime};base64,${readFileSync(full).toString('base64')}`;
 }
 
-const ASSET_TYPES = new Set(['.mesh', '.dds', '.png', '.material', '.skeleton']);
+// `.dat` — map features (`data/newland/land/features.dat`).
+const ASSET_TYPES = new Set(['.mesh', '.dds', '.png', '.material', '.skeleton', '.dat']);
 /** Больше этого — не модель и не текстура игры. */
 const MAX_ASSET = 256 * 1024 * 1024;
 
@@ -332,7 +333,42 @@ export function readGameAsset(game: GameInstallInfo, relPath: string): Uint8Arra
       // нет доступа — как нет файла
     }
   }
+  // The game (Ogre) finds resources by file name, so records with a stale folder still work
+  // there (`land/textures/RobotArm_DIF.dds` really lives in `Assets/Textures`). Same here.
+  const byName = assetIndex(game.kenshi).get(basename(rel).toLowerCase());
+  if (byName) {
+    try {
+      if (statSync(byName).size <= MAX_ASSET) return readFileSync(byName);
+    } catch {
+      // gone since the index was built
+    }
+  }
   return null;
+}
+
+const assetIndexes = new Map<string, Map<string, string>>();
+
+/** File name → full path for every model and texture under the game's `data` (built once). */
+function assetIndex(root: string): Map<string, string> {
+  const known = assetIndexes.get(root);
+  if (known) return known;
+  const index = new Map<string, string>();
+  assetIndexes.set(root, index);
+  const walk = (dir: string): void => {
+    let list;
+    try {
+      list = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of list) {
+      const full = join(dir, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (/\.(dds|mesh|png)$/i.test(e.name) && !index.has(e.name.toLowerCase())) index.set(e.name.toLowerCase(), full);
+    }
+  };
+  walk(join(root, 'data'));
+  return index;
 }
 
 const heightmaps = new Map<string, Promise<Heightmap | null>>();

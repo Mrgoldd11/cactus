@@ -3,6 +3,7 @@
  * списком последних шагов и панель «История». Второй истории нет — всё читается из
  * `ctx.history()`, переход к шагу — `ctx.undoTo / redoTo / goToStep`.
  */
+import type { Lang } from '../../../shared/api.ts';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { describeChangeset, type Changeset, type TranslationIndex } from '@kenshi-editor/core';
 import { useLang, useT, type Strings } from '../i18n.ts';
@@ -39,7 +40,7 @@ export interface Step {
 }
 
 /** Шаг истории с названием на языке интерфейса. */
-export function stepOf(project: Project, cs: Changeset, lang: 'ru' | 'en'): Step {
+export function stepOf(project: Project, cs: Changeset, lang: Lang): Step {
   const tr = translations.get(project);
   const d = describeChangeset(project.ctx, cs, tr ? { translation: tr } : {});
   return { cs, text: lang === 'ru' ? d.ru : d.en, ai: d.ai, rollback: d.rollback };

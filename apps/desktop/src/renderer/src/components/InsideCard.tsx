@@ -36,7 +36,20 @@ const ru: InsideStrings = {
   more: 'ещё',
   noRecord: 'нет записи',
 };
-const INSIDE_STRINGS: Record<Lang, InsideStrings> = { en, ru };
+const zh: InsideStrings = {
+  title: '内部内容',
+  missing: '数据中没有这条记录',
+  from: '来自',
+  changedBy: '修改者',
+  status: { base: '', new: '你的 Mod 中新增', changed: '被你的 Mod 修改', deleted: '被你的 Mod 删除' },
+  links: '包含 / 链接到',
+  usedBy: '被谁使用',
+  instances: '已放置的对象',
+  empty: '空',
+  more: '更多',
+  noRecord: '无记录',
+};
+const INSIDE_STRINGS: Record<Lang, InsideStrings> = { en, ru, zh };
 
 function LinkItem({ l, lang, go, s }: { l: InsideLink; lang: Lang; go: (sid: string) => void; s: InsideStrings }): ReactNode {
   if (l.name === undefined)

@@ -1,12 +1,17 @@
 /**
- * Строки интерфейса на двух языках. Сообщения ядра (ошибки правки, проверки) приходят
+ * Строки интерфейса на трёх языках (en, ru, zh). Сообщения ядра (ошибки правки, проверки) приходят
  * по-русски и показываются как есть.
  */
 import { createContext, useContext } from 'react';
 import type { Lang } from '../../shared/api.ts';
 import { backupEn, backupRu } from './i18n-backup.ts';
+import { extensionsEn, extensionsRu, extensionsZh } from './i18n-extensions.ts';
 import { mergeEn, mergeRu } from './i18n-merge.ts';
 import { specialEn, specialRu } from './i18n-special.ts';
+import { zh1 } from './i18n-zh-1.ts';
+import { zh2 } from './i18n-zh-2.ts';
+import { specialZh } from './i18n-zh-special.ts';
+import { backupZh, mergeZh } from './i18n-zh-misc.ts';
 
 const en = {
   appTitle: 'Cactus',
@@ -599,6 +604,7 @@ const en = {
   ...specialEn,
   ...mergeEn,
   ...backupEn,
+  ...extensionsEn,
 };
 
 export type Strings = typeof en;
@@ -1185,9 +1191,17 @@ const ru: Strings = {
   ...specialRu,
   ...mergeRu,
   ...backupRu,
+  ...extensionsRu,
 };
 
-export const STRINGS: Record<Lang, Strings> = { en, ru };
+const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh };
+
+export const STRINGS: Record<Lang, Strings> = { en, ru, zh };
+
+/** Язык по набору строк: для заголовков панелей, которым в `title(t)` дают только `Strings`. */
+export function langOf(t: Strings): Lang {
+  return t === STRINGS.ru ? 'ru' : t === STRINGS.zh ? 'zh' : 'en';
+}
 
 export const LangContext = createContext<{ lang: Lang; t: Strings }>({ lang: 'ru', t: ru });
 

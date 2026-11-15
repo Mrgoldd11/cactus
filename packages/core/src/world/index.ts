@@ -6,3 +6,5 @@ export * from './edit.ts';
 export * from './interior.ts';
 export * from './building-state.ts';
 export * from './town-border.ts';
+export * from './features.ts';
+export * from './game-dump.ts';

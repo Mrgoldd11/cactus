@@ -92,8 +92,50 @@ const ru: typeof en = {
   weight: 'вес',
 };
 
+const zh: typeof en = {
+  panel: '游戏',
+  panelHint: '通过 Kenshi Bridge 插件连接运行中的游戏：所选角色、时间、对话追踪',
+  off: '游戏未连接',
+  offHint: '请使用 RE_Kenshi 启动 Kenshi，并启用 KenshiBridge Mod',
+  menu: '游戏：在菜单中',
+  on: '游戏已连接',
+  selected: '已选择',
+  nobody: '没有选中任何人',
+  position: '位置',
+  faction: '阵营',
+  day: '第几天',
+  paused: '已暂停',
+  speed: '速度',
+  pause: '暂停',
+  resume: '继续',
+  refresh: '刷新',
+  traceOn: '追踪对话',
+  traceOff: '停止追踪',
+  traceHint: '记录游戏选择了哪个对话，以及其余对话为何被淘汰',
+  traceEmpty: '还没有记录：请在游戏中与某人交谈',
+  showInGame: '在游戏中显示',
+  showInGameTip: '把游戏镜头移到这里',
+  teleport: '传送到这里',
+  teleportTip: '把游戏中选中的角色传送到这里',
+  teleportAsk: (pos: string) => `要把游戏中选中的角色传送到 ${pos} 吗？`,
+  asInGame: '游戏中的实际情况',
+  asInGameNone: '游戏还没有为这个角色在此事件下选择过对话（追踪已开启——请在游戏中与其交谈）。',
+  asInGameOff: '请开启追踪并在游戏中与这个角色交谈，即可对比。',
+  chosen: '已选中',
+  nothing: '什么都没选',
+  st_pass: '通过',
+  st_fail: '条件不满足',
+  st_not_reached: '未轮到',
+  same: '与编辑器一致',
+  differs: '编辑器会选择另一个对话',
+  speaker: '说话者',
+  event: '事件',
+  done: '完成',
+  weight: '权重',
+};
+
 export type GameStrings = typeof en;
-export const GAME_STRINGS: Record<Lang, GameStrings> = { en, ru };
+export const GAME_STRINGS: Record<Lang, GameStrings> = { en, ru, zh };
 
 export function useGameT(): GameStrings {
   return GAME_STRINGS[useLang()];

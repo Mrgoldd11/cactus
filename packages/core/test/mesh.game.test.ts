@@ -5,7 +5,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { decodeDds, gamePath, hasModel, itemTypeName, modelOfRecord, parseOgreMesh, triangleIndices } from '../src/index.ts';
+import { decodeDds, gamePath, hasModel, itemTypeName, MAP_FEATURES_PATH, modelOfRecord, parseMapFeatures, parseOgreMesh, triangleIndices } from '../src/index.ts';
 import { hasGame, loadModContext, resolveGamePaths } from '../src/node/index.ts';
 
 const paths = resolveGamePaths();
@@ -108,5 +108,31 @@ describe.skipIf(!game)('модели на файлах игры', () => {
     const terrain = models.flatMap((m) => m.pieces).filter((p) => p.terrain);
     expect(terrain.length).toBeGreaterThan(20);
     for (const p of terrain) expect(p.texture).toBeUndefined();
+    // TRIPLANAR / DUAL_TRIPLANAR: the texture is projected in world space; dual carries a second texture.
+    const tri = models.flatMap((m) => m.pieces).filter((p) => p.triplanar);
+    expect(tri.length).toBeGreaterThan(50);
+    for (const p of tri) expect(p.texture).toMatch(/\.dds$/i);
+    expect(tri.some((p) => p.texture2 !== undefined)).toBe(true);
+  });
+
+  it('map features: features.dat places MAP_FEATURES records that have models', () => {
+    const list = parseMapFeatures(read(MAP_FEATURES_PATH));
+    expect(list.length).toBeGreaterThan(1500);
+    const arms = list.filter((f) => /^RobotArm/.test(ctx.name(f.target) ?? ''));
+    expect(arms.length).toBeGreaterThan(3);
+    for (const f of arms) {
+      const m = modelOfRecord(ctx, f.target);
+      expect(m.type).toBe('MAP_FEATURES');
+      expect(m.pieces[0]?.mesh).toMatch(/\.mesh$/i);
+      expect(Math.hypot(...f.rotation)).toBeCloseTo(1, 2);
+    }
+    expect(() => parseMapFeatures(new Uint8Array(16))).toThrow();
+  });
+
+  it('ore deposit: a building without parts is drawn as its foliage rock', () => {
+    const m = modelOfRecord(ctx, '42248-gamedata.base');
+    expect(m.type).toBe('BUILDING');
+    expect(m.pieces[0]?.mesh).toMatch(/ResourceRock-IRON.*\.mesh$/i);
+    expect(hasModel(ctx, '42248-gamedata.base')).toBe(true);
   });
 });

@@ -1,8 +1,8 @@
 /**
  * Корень окна: язык и настройки, поиск игры, стартовый экран или открытый проект.
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { GameInstallInfo, Lang, ModRef, ProjectRequest, RecoveryInfo, Settings } from '../../shared/api.ts';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { LANGS, type GameInstallInfo, type Lang, type ModRef, type ProjectRequest, type RecoveryInfo, type Settings } from '../../shared/api.ts';
 import { LangContext, STRINGS } from './i18n.ts';
 import { openProject, openRecovered, prefetchVanilla, type Project } from './project.ts';
 import { setLiveProject } from './live.ts';
@@ -200,21 +200,58 @@ export function App(): ReactNode {
   );
 }
 
+/** Выпадающий список языков: кнопка с текущим языком, под ней блоки с остальными. */
 export function LangSwitch({ lang, onLang }: { lang: Lang; onLang: (l: Lang) => void }): ReactNode {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent): void => {
+      if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
+  const current = LANGS.find((l) => l.code === lang) ?? LANGS[0]!;
   return (
-    <span className="lang-switch" data-testid="lang-switch">
-      {(['en', 'ru'] as const).map((l) => (
-        <button
-          key={l}
-          className={l === lang ? 'active' : ''}
-          data-testid={`lang-${l}`}
-          onClick={() => {
-            onLang(l);
-          }}
-        >
-          {l.toUpperCase()}
-        </button>
-      ))}
+    <span className="lang-switch" data-testid="lang-switch" ref={root}>
+      <button
+        className="lang-current"
+        data-testid="lang-current"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => {
+          setOpen(!open);
+        }}
+      >
+        {current.name} <span className="lang-arrow">▾</span>
+      </button>
+      {open && (
+        <div className="lang-menu" role="listbox" data-testid="lang-menu">
+          {LANGS.map((l) => (
+            <button
+              key={l.code}
+              role="option"
+              aria-selected={l.code === lang}
+              className={l.code === lang ? 'active' : ''}
+              data-testid={`lang-${l.code}`}
+              onClick={() => {
+                onLang(l.code);
+                setOpen(false);
+              }}
+            >
+              {l.name}
+            </button>
+          ))}
+        </div>
+      )}
     </span>
   );
 }

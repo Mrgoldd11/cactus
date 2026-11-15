@@ -49,6 +49,26 @@ function reply(cmd: string, args: Record<string, unknown>): unknown {
       return Number(args['since']) >= 1 ? { next: 1, items: [] } : { next: 1, items: [TRACE] };
     case 'towns':
       return { towns: [{ stringId: 'hub-1', name: 'Хаб', type: 2, typeName: 'town', radius: 1500.4, pos: [-4000, 100, 5000] }], count: 1 };
+    case 'dump':
+      return {
+        dir: 'C:\\dump',
+        foliageHook: true,
+        zoneReloadHook: true,
+        foliageFiles: 3,
+        buildingFiles: 4,
+        filesWritten: 7,
+        loaded: [
+          { zone: [14, 21], foliage: 120, buildings: 9, foliageFile: true },
+          { zone: [14, 22], foliage: null, buildings: null, foliageFile: false },
+        ],
+        foliage: 120,
+        buildings: 9,
+        ...(args['near']
+          ? { near: { foliage: [{ id: 'tree-1', p: [1, 2, 3], yaw: 90, scale: 1.5 }], buildings: [{ id: 'torch-1', name: 'Torch', p: [4, 5, 6], q: [1, 0, 0, 0], f: 0 }] } }
+          : {}),
+      };
+    case 'flyover':
+      return { running: args['action'] !== 'stop', rect: [0, 0, 63, 63], index: 5, total: 4096, visited: 3, skipped: 2, timeouts: 0, zone: [5, 0], foliageFiles: 3, buildingFiles: 4 };
     default:
       return { ok: cmd };
   }
@@ -117,6 +137,30 @@ describe('kenshi-mcp: мост к игре', () => {
     expect(t.text).toContain('towns: 1');
     expect(t.text).toContain('Хаб [hub-1] — town, radius 1500, center -4000, 100, 5000');
     expect(seen).toEqual([{ cmd: 'towns', args: { near: [0, 0, 0], range: 9000 } }]);
+  });
+
+  it('game_dump shows what is dumped', async () => {
+    const t = await call('game_dump', { near: [1, 2, 3], range: 200 });
+    expect(t.text).toContain('on disk: foliage of 3 zones, buildings of 4 zones');
+    expect(t.text).toContain('zone 14.21: foliage 120, buildings 9');
+    expect(t.text).toContain('zone 14.22: foliage not recorded');
+    expect(t.text).toContain('tree-1 at 1.0, 2.0, 3.0, yaw 90.0, scale 1.50');
+    expect(t.text).toContain('torch-1 "Torch" at 4.0, 5.0, 6.0');
+    expect(seen).toEqual([{ cmd: 'dump', args: { near: [1, 2, 3], range: 200 } }]);
+  });
+
+  it('game_flyover moves the camera only with confirm', async () => {
+    const no = await call('game_flyover', { action: 'start', rect: [14, 21, 15, 22] });
+    expect(no.text).toContain('not done: start the camera fly-over of zones 14.21 – 15.22');
+    expect(seen).toEqual([]);
+    const yes = await call('game_flyover', { action: 'start', rect: [14, 21, 15, 22], confirm: true });
+    expect(yes.text).toContain('fly-over: running');
+    expect(yes.text).toContain('5 of 4096 done');
+    expect((await call('game_flyover', { action: 'stop' })).text).toContain('fly-over: not running');
+    expect(seen).toEqual([
+      { cmd: 'flyover', args: { action: 'start', rect: [14, 21, 15, 22] } },
+      { cmd: 'flyover', args: { action: 'stop' } },
+    ]);
   });
 
   it('game_trace: включить и прочитать новые записи', async () => {

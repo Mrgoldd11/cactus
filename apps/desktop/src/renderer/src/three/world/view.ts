@@ -5,12 +5,13 @@
  */
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { townBorderRadius, type ModContext, type Vec3, type Vec4, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
-import type { GameInstallInfo } from '../../../../shared/api.ts';
+import { MAP_FEATURES_PATH, parseMapFeatures, townBorderRadius, type ModContext, type Vec3, type Vec4, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
+import type { GameInstallInfo, Lang } from '../../../../shared/api.ts';
 import { WorkerPool } from './protocol.ts';
 import { TerrainLod, type TerrainQuality } from './terrain.ts';
 import { readBiomes } from './biomes.ts';
 import { FoliageScatter, type FoliageQuality } from './foliage.ts';
+import { WorldDump } from './dump.ts';
 import { WorldObjects, type ObjectsQuality, type WorldObject } from './objects.ts';
 import { FlyControls } from './fly.ts';
 import { letterOf } from '../../keys.ts';
@@ -23,9 +24,14 @@ export interface WorldSettings {
   drawDistance: number;
   /** Рисовать границы городов (круг радиусом `Town::getRadius` игры). */
   borders: boolean;
+  /**
+   * Draw buildings known only from the game dump (placed by mods that are not opened here).
+   * Off by default: the world shows what the opened data has.
+   */
+  gameBuildings: boolean;
 }
 
-export const DEFAULT_SETTINGS: WorldSettings = { quality: 'medium', drawDistance: 25000, borders: false };
+export const DEFAULT_SETTINGS: WorldSettings = { quality: 'medium', drawDistance: 25000, borders: false, gameBuildings: false };
 
 const QUALITY: Record<QualityLevel, { terrain: TerrainQuality; foliage: FoliageQuality; models: number; modelDist: number; protos: number; markers: number; pixelRatio: number }> = {
   low: { terrain: { split: 1.6, maxLevel: 6, cache: 300, fullColour: 2 }, foliage: { radius: 2500, maxInstances: 1500 }, models: 400, modelDist: 3000, protos: 60, markers: 3000, pixelRatio: 1 },
@@ -66,6 +72,14 @@ export interface WorldStatsView {
   /** Растительность: экземпляров вокруг камеры и нарисовано (в кадре). */
   foliage: number;
   foliageDrawn: number;
+  /** Foliage instances standing exactly as in the running game (plugin dump). */
+  foliageFromGame: number;
+  /** Zones that have a game dump: foliage and buildings. */
+  dumpZones: number;
+  /** Buildings only the game dump has, near the camera: all / drawn / without a model in the opened data. */
+  dumpBuildings: number;
+  dumpBuildingsDrawn: number;
+  dumpBuildingsNoModel: number;
   overview: number;
   /** Где камера (для e2e и «Показать в игре»). */
   camera: { x: number; y: number; z: number };
@@ -111,6 +125,8 @@ export class WorldView {
   readonly terrain: TerrainLod;
   readonly objects: WorldObjects;
   readonly foliage: FoliageScatter;
+  /** What the running game has dumped through the Kenshi Bridge plugin (real foliage, all buildings). */
+  readonly dump = new WorldDump();
   readonly towns: TownLabel[];
   private readonly pool: WorkerPool;
   private readonly host: HTMLElement;
@@ -126,6 +142,7 @@ export class WorldView {
   private readonly resize: ResizeObserver;
   private readonly fog: THREE.Fog;
   private raf = 0;
+  private disposed = false;
   private dirty = true;
   private lastObjects = 0;
   private objectsDirty = true;
@@ -154,7 +171,7 @@ export class WorldView {
   /** Последний pointerdown пришёлся на гизмо — щелчок после него не выбирает. */
   private gizmoDown = false;
 
-  constructor(host: HTMLElement, game: GameInstallInfo, ctx: ModContext, world: WorldIndex, settings: WorldSettings, lang: 'en' | 'ru' = 'ru') {
+  constructor(host: HTMLElement, game: GameInstallInfo, ctx: ModContext, world: WorldIndex, settings: WorldSettings, lang: Lang = 'ru') {
     this.host = host;
     this.settings = settings;
     const q = qualityOf(settings);
@@ -193,6 +210,12 @@ export class WorldView {
     this.objects.groundMap = this.terrain.colourMap;
     this.objects.onChange = () => { this.invalidate(true); };
     this.scene.add(this.objects.group);
+    // Huge hand-placed scenery (robot arms, bridges, wrecks) lives in its own file.
+    void window.kedit.readGameAsset(game, MAP_FEATURES_PATH).then((bytes) => {
+      if (!bytes || this.disposed) return;
+      this.objects.setFeatures(parseMapFeatures(bytes));
+      this.invalidate(true);
+    }).catch((e: unknown) => { console.warn('world: map features', e); });
 
     this.towns = [];
     for (const t of world.allTowns()) {
@@ -203,6 +226,10 @@ export class WorldView {
     }
     this.buildBorders();
     this.foliage = new FoliageScatter(biomes, this.terrain, this.towns.map((t) => t.pos), this.objects.list.map((o) => o.pos), q.foliage);
+    this.foliage.dump = this.dump;
+    this.objects.dump = this.dump;
+    this.objects.showDumpBuildings = settings.gameBuildings;
+    this.dump.onChange = () => { this.invalidate(true); };
 
     // Рамки подсветки: под мышью — светло-серая, выбранный — ярко-синяя (видны сквозь всё).
     const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
@@ -283,6 +310,7 @@ export class WorldView {
     this.renderer.setPixelRatio(q.pixelRatio);
     this.borderGroup.visible = s.borders;
     this.bordersDirty = true;
+    this.objects.showDumpBuildings = s.gameBuildings;
     this.fit();
   }
 
@@ -536,6 +564,11 @@ export class WorldView {
   }
 
   /** Перелететь к точке (город): смотрим на землю в этой точке. */
+  /** Fly to world coordinates (the height is taken from the terrain). */
+  flyToXZ(x: number, z: number, dist = 2500): void {
+    this.flyToPoint(new THREE.Vector3(x, this.terrain.heightAt(x, z) ?? 0, z), dist);
+  }
+
   flyToPoint(p: THREE.Vector3, dist = 2500): void {
     const look = p.clone();
     const g = this.terrain.heightAt(p.x, p.z);
@@ -654,6 +687,11 @@ export class WorldView {
       failed: this.objects.failed,
       foliage: this.foliage.count,
       foliageDrawn: this.objects.drawnFoliage,
+      foliageFromGame: this.foliage.fromGame,
+      dumpZones: Math.max(this.dump.foliageZoneCount, this.dump.buildingZoneCount),
+      dumpBuildings: this.objects.extraNear,
+      dumpBuildingsDrawn: this.objects.drawnExtras,
+      dumpBuildingsNoModel: this.objects.extraNoModel,
       overview: Math.round(this.terrain.overviewProgress * 100),
       camera: this.cameraState(),
       gizmo: this.gizmoProbe(),
@@ -689,6 +727,7 @@ export class WorldView {
   }
 
   dispose(): void {
+    this.disposed = true;
     cancelAnimationFrame(this.raf);
     this.resize.disconnect();
     const el = this.renderer.domElement;
@@ -700,6 +739,7 @@ export class WorldView {
     this.gizmo.detach();
     this.gizmo.dispose();
     this.fly.dispose();
+    this.dump.dispose();
     this.terrain.dispose();
     this.objects.dispose();
     this.pool.dispose();

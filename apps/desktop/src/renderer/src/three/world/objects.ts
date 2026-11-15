@@ -11,7 +11,7 @@
  * Разбор `.mesh` и `.dds` — в фоновом потоке (`WorkerPool`).
  */
 import * as THREE from 'three';
-import { decodeText, modelOfRecord, zoneOfPath, WORLD_HALF, ZONE_COUNT, ZONE_SIZE, type BuildingPlacement, type Instance, type ModContext, type Placement, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
+import { decodeText, modelOfRecord, zoneOfPath, WORLD_HALF, ZONE_COUNT, ZONE_SIZE, type BuildingPlacement, type DumpBuilding, type Instance, type MapFeature, type ModContext, type Placement, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
 import type { GameInstallInfo } from '../../../../shared/api.ts';
 import type { SubmeshArrays, WorkerPool } from './protocol.ts';
 import { averageColour } from './biomes.ts';
@@ -76,12 +76,16 @@ const ROCK_TILE = 1 / 90;
 /** Растительность меньше этой доли расстояния до камеры не рисуется. */
 const FOLIAGE_MIN_SIZE = 0.015;
 
+/** Vertex colour tints rgb only: its alpha is a blend weight in the game, not opacity. */
+const COLOUR_RGB = '#if defined( USE_COLOR_ALPHA ) || defined( USE_COLOR )\ndiffuseColor.rgb *= vColor.rgb;\n#endif';
+
 function dataTexture(rgba: Uint8Array, width: number, height: number): THREE.DataTexture {
   const tex = new THREE.DataTexture(rgba, width, height, THREE.RGBAFormat);
   tex.flipY = false;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
   tex.generateMipmaps = true;
   tex.anisotropy = 4;
   tex.needsUpdate = true;
@@ -91,6 +95,22 @@ function dataTexture(rgba: Uint8Array, width: number, height: number): THREE.Dat
 function zoneKey(x: number, y: number): number {
   return y * ZONE_COUNT + x;
 }
+
+/** Ore rocks are sunk into the ground by this much (FOLIAGE_MESH `vertical offset` is -7…-20). */
+const ORE_SINK = -10;
+
+/** A building known only from the game dump. */
+interface Extra {
+  target: string;
+  pos: THREE.Vector3;
+  matrix: THREE.Matrix4;
+}
+
+/** A dump building this close (x and z) to an editor object of the same record is that object. */
+const EXTRA_MATCH = 25;
+/** A dump building this close to an editor object of any record stands in its place. */
+const EXTRA_SAME_SPOT = 2;
+const ONE = new THREE.Vector3(1, 1, 1);
 
 export class WorldObjects {
   readonly group = new THREE.Group();
@@ -112,6 +132,25 @@ export class WorldObjects {
   /** Растительность: модель → матрицы (задаёт `setFoliage`). */
   private foliage = new Map<string, THREE.Matrix4[]>();
   drawnFoliage = 0;
+  /** Map features (features.dat): hand-placed huge scenery, drawn as models only, not selectable. */
+  private features: { target: string; matrix: THREE.Matrix4; pos: THREE.Vector3; scale: number }[] = [];
+  drawnFeatures = 0;
+  /**
+   * Buildings of the running game (plugin dump, `dump.ts`). Those the editor data does not have
+   * (placed by mods outside the opened set, or spawned by the game) are drawn as models only.
+   */
+  dump: { version: number; buildings(zx: number, zy: number): DumpBuilding[] | 'loading' | undefined } | undefined;
+  /**
+   * Draw the dump buildings the editor data does not have. Off by default: they come from mods
+   * that are not opened here, and the world must show only the opened data.
+   */
+  showDumpBuildings = false;
+  private dumpVersion = -1;
+  private readonly extras = new Map<number, Extra[]>();
+  /** Dump-only buildings near the camera: all, drawn as models, and with no model in the opened data. */
+  extraNear = 0;
+  drawnExtras = 0;
+  extraNoModel = 0;
   private loading = 0;
   private tick = 0;
   quality: ObjectsQuality;
@@ -150,9 +189,9 @@ export class WorldObjects {
     const [w, x, y, z] = p.rotation;
     // y экземпляра — над землёй; высота в мире — `world Y pos` состояния здания,
     // без него — земля + y (узнаём, когда рельеф загрузится).
-    const o: WorldObject = { index, p, pos: new THREE.Vector3(p.position[0], b?.worldY ?? p.position[1], p.position[2]), quat: new THREE.Quaternion(x, y, z, w).normalize() };
+    const o: WorldObject = { index, p, pos: new THREE.Vector3(p.position[0], this.heightOf(p, b), p.position[2]), quat: new THREE.Quaternion(x, y, z, w).normalize() };
     if (b) o.b = b;
-    else this.lift(o);
+    if (!b || this.absoluteY(p)) this.lift(o);
     this.list.push(o);
     this.byKey.set(objectKey(p.file, p.holder, p.key), o);
     const zx = Math.floor(p.position[0] / ZONE_SIZE) + ZONE_COUNT / 2;
@@ -207,7 +246,7 @@ export class WorldObjects {
     for (const [path, sids] of states)
       for (const o of this.list) {
         if (o.gone || !o.b || o.p.file.toLowerCase() !== path || !o.p.states.some((st) => sids.has(st))) continue;
-        const wy = worldYOf(edits, o.p.file, o.p.states);
+        const wy = this.absoluteY(o.p) ? undefined : worldYOf(edits, o.p.file, o.p.states);
         if (wy !== undefined && wy !== o.pos.y) {
           o.b = { ...o.b, worldY: wy };
           o.pos.y = wy;
@@ -228,10 +267,24 @@ export class WorldObjects {
     else delete o.b;
     const [w, x, y, z] = p.rotation;
     o.quat.set(x, y, z, w).normalize();
-    o.pos.set(p.position[0], o.b?.worldY ?? p.position[1], p.position[2]);
-    if (!o.b) this.lift(o);
+    o.pos.set(p.position[0], this.heightOf(p, o.b), p.position[2]);
+    if (!o.b || this.absoluteY(p)) this.lift(o);
     else delete o.needsGround;
     return o;
+  }
+
+  /**
+   * Ore deposits and other buildings with `is foliage` are spawned by the game on foliage rocks:
+   * their instance y is already the absolute world height, and `world Y pos` of the state is
+   * that height plus the ground once more (measured: median 450 units above the ground).
+   */
+  private absoluteY(p: Placement): boolean {
+    return this.ctx.get(p.target)?.bools.get('is foliage') === true;
+  }
+
+  private heightOf(p: Placement, b: BuildingPlacement | undefined): number {
+    if (b && this.absoluteY(p)) return p.position[1];
+    return b?.worldY ?? p.position[1];
   }
 
   /** Объект без состояния здания — на высоту земли + y экземпляра (если рельеф уже есть). */
@@ -239,7 +292,9 @@ export class WorldObjects {
     const g = this.groundAt(o.p.position[0], o.p.position[2]);
     if (g === undefined) o.needsGround = true;
     else {
-      o.pos.y = g + o.p.position[1];
+      // Ore rocks sit on the ground like foliage (sunk a little); about 8% of the saved heights
+      // are 100–900 units off today's terrain, so the ground wins over the saved y.
+      o.pos.y = o.b ? g + ORE_SINK : g + o.p.position[1];
       delete o.needsGround;
     }
   }
@@ -247,6 +302,51 @@ export class WorldObjects {
   /** Растительность вокруг камеры (рисуется при следующем `update`). */
   setFoliage(m: Map<string, THREE.Matrix4[]>): void {
     this.foliage = m;
+  }
+
+  /** Map features of the whole world (drawn on the next `update`). */
+  setFeatures(list: readonly MapFeature[]): void {
+    this.features = list.map((f) => {
+      const [w, x, y, z] = f.rotation;
+      const pos = new THREE.Vector3(...f.position);
+      const scale = new THREE.Vector3(...f.scale);
+      const matrix = new THREE.Matrix4().compose(pos, new THREE.Quaternion(x, y, z, w).normalize(), scale);
+      return { target: f.target, matrix, pos, scale: Math.max(Math.abs(scale.x), Math.abs(scale.y), Math.abs(scale.z)) };
+    });
+  }
+
+  /** Dump buildings of a zone that match no editor object (same record within a few units). */
+  private extrasOf(zx: number, zy: number): Extra[] | undefined {
+    const k = zoneKey(zx, zy);
+    const cached = this.extras.get(k);
+    if (cached) return cached;
+    const list = this.dump?.buildings(zx, zy);
+    if (!list || list === 'loading') return undefined;
+    // Editor objects of this zone and its neighbours, by record.
+    const known = new Map<string, THREE.Vector3[]>();
+    for (let y = zy - 1; y <= zy + 1; y++)
+      for (let x = zx - 1; x <= zx + 1; x++) {
+        if (x < 0 || y < 0 || x >= ZONE_COUNT || y >= ZONE_COUNT) continue;
+        for (const i of this.grid.get(zoneKey(x, y)) ?? []) {
+          const o = this.list[i]!;
+          const l = known.get(o.p.target);
+          if (l) l.push(o.pos);
+          else known.set(o.p.target, [o.pos]);
+        }
+      }
+    const out: Extra[] = [];
+    const all = [...known.values()].flat();
+    for (const b of list) {
+      const [px, py, pz] = b.position;
+      if (known.get(b.id)?.some((p) => Math.abs(p.x - px) < EXTRA_MATCH && Math.abs(p.z - pz) < EXTRA_MATCH)) continue;
+      // The game may swap the record (a torch of one kind for another): the same spot is the same object.
+      if (all.some((p) => Math.abs(p.x - px) < EXTRA_SAME_SPOT && Math.abs(p.z - pz) < EXTRA_SAME_SPOT)) continue;
+      const [w, x, y, z] = b.rotation;
+      const pos = new THREE.Vector3(px, py, pz);
+      out.push({ target: b.id, pos, matrix: new THREE.Matrix4().compose(pos, new THREE.Quaternion(x, y, z, w).normalize(), ONE) });
+    }
+    this.extras.set(k, out);
+    return out;
   }
 
   boxOf(o: WorldObject): THREE.Box3 {
@@ -383,8 +483,77 @@ export class WorldObjects {
     return mat;
   }
 
+  /**
+   * UV-mapped scenery with vertex colours: the texture is multiplied by vertex colour rgb, and
+   * `second` (DUAL_TEXTURE) is blended in by vertex colour alpha, as in the game's `objects.hlsl`.
+   */
+  private colouredMaterial(map: THREE.Texture, second: THREE.Texture | null, alphaTest: number): THREE.Material {
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, map, vertexColors: true, side: THREE.DoubleSide, alphaTest });
+    mat.customProgramCacheKey = () => (second ? 'kedit-coloured-dual' : 'kedit-coloured');
+    mat.onBeforeCompile = (shader) => {
+      if (second) shader.uniforms.tSecond = { value: second };
+      let fs = shader.fragmentShader.replace('#include <color_fragment>', COLOUR_RGB);
+      if (second) {
+        fs = 'uniform sampler2D tSecond;\n' + fs.replace(
+          '#include <map_fragment>',
+          '#include <map_fragment>\ndiffuseColor.rgb = mix( texture2D( tSecond, vMapUv ).rgb, diffuseColor.rgb, vColor.a );',
+        );
+      }
+      shader.fragmentShader = fs;
+    };
+    return mat;
+  }
+
+  /**
+   * Texture projected along the world axes, as the game's `triplanar.hlsl` does: for material
+   * types TRIPLANAR / DUAL_TRIPLANAR and for any textured mesh that has no UVs. `second` is
+   * blended in by vertex colour alpha (DUAL_TRIPLANAR; needs vertex colours). Vertex colour rgb
+   * tints the result (the game's COLOURING variants).
+   */
+  private triplanarMaterial(tex: THREE.Texture, tile: readonly [number, number], second: THREE.Texture | null, colors: boolean): THREE.Material {
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: colors, side: THREE.DoubleSide });
+    const dual = second !== null && colors;
+    mat.customProgramCacheKey = () => `kedit-triplanar${dual ? '-dual' : ''}${colors ? '-col' : ''}`;
+    mat.onBeforeCompile = (shader) => {
+      const head = 'varying vec3 kTriP;\nvarying vec3 kTriN;\n';
+      shader.uniforms.tTri = { value: tex };
+      shader.uniforms.triTile = { value: new THREE.Vector3(tile[0] / 5000, tile[0] / 5000, tile[1] / 5000) };
+      if (dual) shader.uniforms.tTri2 = { value: second };
+      shader.vertexShader = head + 'uniform vec3 triTile;\n' + shader.vertexShader.replace(
+        '#include <worldpos_vertex>',
+        [
+          '#include <worldpos_vertex>',
+          '#ifdef USE_INSTANCING',
+          'mat4 kModel = modelMatrix * instanceMatrix;',
+          '#else',
+          'mat4 kModel = modelMatrix;',
+          '#endif',
+          'kTriP = ( kModel * vec4( transformed, 1.0 ) ).xyz * triTile;',
+          'kTriN = mat3( kModel ) * objectNormal;',
+        ].join('\n'),
+      );
+      shader.fragmentShader = head + 'uniform sampler2D tTri;\n' + (dual ? 'uniform sampler2D tTri2;\n' : '') + shader.fragmentShader.replace('#include <color_fragment>', COLOUR_RGB).replace(
+        '#include <map_fragment>',
+        [
+          '#include <map_fragment>',
+          '{',
+          // Blend weights exactly as in triplanar.hlsl.
+          '  vec3 kb = clamp( abs( normalize( kTriN ) ) - 0.2, 0.0, 1.0 );',
+          '  kb = kb * kb * 49.0;',
+          '  kb /= kb.x + kb.y + kb.z + 1e-5;',
+          '  vec3 kd = texture2D( tTri, kTriP.yz ).rgb * kb.x + texture2D( tTri, kTriP.xz ).rgb * kb.y + texture2D( tTri, kTriP.xy ).rgb * kb.z;',
+          dual ? '  vec3 kd2 = texture2D( tTri2, kTriP.yz ).rgb * kb.x + texture2D( tTri2, kTriP.xz ).rgb * kb.y + texture2D( tTri2, kTriP.xy ).rgb * kb.z;\n  kd = mix( kd2, kd, vColor.a );' : '',
+          '  diffuseColor.rgb *= kd;',
+          '}',
+        ].join('\n'),
+      );
+    };
+    return mat;
+  }
+
   private async loadProto(target: string, proto: Proto): Promise<void> {
     const model = modelOfRecord(this.ctx, target, { interior: false });
+    const scenery = model.type === 'FOLIAGE_MESH' || model.type === 'MAP_FEATURES';
     if (model.pieces.length === 0) {
       proto.state = 'none';
       return;
@@ -394,7 +563,9 @@ export class WorldObjects {
       const tex = !piece.texture ? Promise.resolve(null) : piece.alphaMap ? this.maskedTexture(piece.texture, piece.alphaMap) : this.texture(piece.texture);
       const [subs, loaded] = await Promise.all([this.mesh(piece.mesh).catch(() => null), tex.catch(() => null)]);
       if (!subs) continue;
-      const rock = piece.terrain ? await this.texture(ROCK_DETAIL).catch(() => null) : null;
+      const second = piece.texture2 ? await this.texture(piece.texture2).catch(() => null) : null;
+      if (second) proto.texPaths.push(piece.texture2!.toLowerCase());
+      const rock = piece.terrain || piece.terrainMode ? await this.texture(ROCK_DETAIL).catch(() => null) : null;
       if (rock) proto.texPaths.push(ROCK_DETAIL.toLowerCase());
       proto.meshPaths.push(piece.mesh.toLowerCase());
       if (piece.texture) proto.texPaths.push(piece.texture.toLowerCase());
@@ -418,12 +589,23 @@ export class WorldObjects {
         else geo.computeVertexNormals();
         geo.computeBoundingBox();
         box.union(geo.boundingBox!.clone().applyMatrix4(offset));
-        if (piece.terrain) {
+        // TERRAIN without UVs cannot show its own texture (and the game ignores it): ground look.
+        if (piece.terrain || (piece.terrainMode && !s.uvs)) {
           proto.parts.push({ geo, mat: this.terrainMaterial(rock), offset });
           continue;
         }
+        // No UVs (or a triplanar material type): project the texture along the world axes.
+        if (loaded && (piece.triplanar || !s.uvs)) {
+          proto.parts.push({ geo, mat: this.triplanarMaterial(loaded, piece.tile ?? [1, 1], second, s.colors !== undefined), offset });
+          continue;
+        }
+        // Scenery meshes carry their tint in vertex colours (grey grass textures turn green).
+        if (map && s.colors && scenery) {
+          proto.parts.push({ geo, mat: this.colouredMaterial(map, second, alphaTest), offset });
+          continue;
+        }
         const colors = !map && s.colors !== undefined;
-        const mat = new THREE.MeshLambertMaterial({ color: map || colors ? 0xffffff : model.type === 'FOLIAGE_MESH' ? STONE : GREY, map, vertexColors: colors, side: THREE.DoubleSide, alphaTest });
+        const mat = new THREE.MeshLambertMaterial({ color: map || colors ? 0xffffff : scenery ? STONE : GREY, map, vertexColors: colors, side: THREE.DoubleSide, alphaTest });
         proto.parts.push({ geo, mat, offset });
       }
     }
@@ -513,6 +695,60 @@ export class WorldObjects {
       drawnFoliage += shown.length;
     }
     this.drawnFoliage = drawnFoliage;
+
+    // Map features: landmarks, so they are drawn as far as the markers reach.
+    let drawnFeatures = 0;
+    for (const f of this.features) {
+      const d = f.pos.distanceTo(cam);
+      if (d > q.markerDist + 4000) continue;
+      const proto = this.protos.get(f.target) ?? (want.length < 8 && this.loading < 8 ? (want.push(f.target), this.proto(f.target)) : undefined);
+      if (!proto) continue;
+      proto.used = this.tick;
+      if (proto.state !== 'ready') continue;
+      sphere.set(f.pos, proto.radius * f.scale);
+      if (!frustum.intersectsSphere(sphere)) continue;
+      const l = foliage.get(f.target);
+      if (l) l.push(f.matrix);
+      else foliage.set(f.target, [f.matrix]);
+      drawnFeatures++;
+    }
+    this.drawnFeatures = drawnFeatures;
+
+    // Buildings only the running game has (plugin dump): models, not selectable.
+    if (this.dump && this.dump.version !== this.dumpVersion) {
+      this.dumpVersion = this.dump.version;
+      this.extras.clear();
+    }
+    let extraNear = 0;
+    let drawnExtras = 0;
+    let extraNoModel = 0;
+    if (this.dump && this.showDumpBuildings) {
+      const half = ZONE_COUNT / 2;
+      const e0x = Math.max(0, Math.floor((cam.x - q.modelDist) / ZONE_SIZE) + half);
+      const e1x = Math.min(ZONE_COUNT - 1, Math.floor((cam.x + q.modelDist) / ZONE_SIZE) + half);
+      const e0y = Math.max(0, Math.floor((cam.z - q.modelDist) / ZONE_SIZE) + half);
+      const e1y = Math.min(ZONE_COUNT - 1, Math.floor((cam.z + q.modelDist) / ZONE_SIZE) + half);
+      for (let zy = e0y; zy <= e1y; zy++)
+        for (let zx = e0x; zx <= e1x; zx++)
+          for (const b of this.extrasOf(zx, zy) ?? []) {
+            if (b.pos.distanceTo(cam) > q.modelDist) continue;
+            extraNear++;
+            const proto = this.protos.get(b.target) ?? (want.length < 8 && this.loading < 8 ? (want.push(b.target), this.proto(b.target)) : undefined);
+            if (!proto) continue;
+            proto.used = this.tick;
+            if (proto.state === 'none') extraNoModel++;
+            if (proto.state !== 'ready') continue;
+            sphere.set(b.pos, proto.radius);
+            if (!frustum.intersectsSphere(sphere)) continue;
+            const l = foliage.get(b.target);
+            if (l) l.push(b.matrix);
+            else foliage.set(b.target, [b.matrix]);
+            drawnExtras++;
+          }
+    }
+    this.extraNear = extraNear;
+    this.drawnExtras = drawnExtras;
+    this.extraNoModel = extraNoModel;
 
     // Маркеры.
     if (this.markers.instanceMatrix.count < markers.length) this.resizeMarkers(markers.length);

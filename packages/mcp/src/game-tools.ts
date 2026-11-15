@@ -4,7 +4,7 @@
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { formatGameState, formatTraceRecord, formatVec3, type GameAction } from '@kenshi-editor/core';
+import { formatDumpStatus, formatFlyoverStatus, formatGameState, formatTraceRecord, formatVec3, type GameAction, type GameFlyoverArgs } from '@kenshi-editor/core';
 import type { GameBridge } from '@kenshi-editor/core/node';
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
@@ -70,6 +70,72 @@ export function registerGameTools(server: McpServer, game: GameBridge): void {
         const out = [`towns: ${r.count}`];
         for (const t of r.towns) out.push(`${t.name} [${t.stringId}] — ${t.typeName}, radius ${Math.round(t.radius)}, center ${formatVec3(t.pos)}`);
         return out;
+      }),
+  );
+
+  server.registerTool(
+    'game_dump',
+    {
+      title: 'World dump from the game',
+      description:
+        'What the Kenshi Bridge plugin has dumped of the loaded world for the editor World view: real places of foliage (trees, rocks, bushes) and all buildings the game holds with every enabled mod, one file per zone, kept between runs. Shows the dump folder, how many of the 4096 zones are on disk and the zones loaded now. now: true writes the loaded zones right away. near [x, y, z] + range lists the foliage and buildings around a point (to compare with the editor). Changes nothing in the game.',
+      inputSchema: {
+        now: z.boolean().optional().describe('Write everything loaded to disk right away'),
+        near: vec3.optional().describe('Point [x, y, z] to list foliage and buildings around'),
+        range: z.number().gt(0).max(5000).optional().describe('Distance from near (default 300)'),
+        limit: z.number().int().min(1).max(500).optional().describe('How many of each to list (default 60)'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false, title: 'World dump from the game' },
+    },
+    (a) =>
+      guarded(async () =>
+        formatDumpStatus(
+          await game.dump({
+            ...(a.now ? { now: true } : {}),
+            ...(a.near ? { near: a.near } : {}),
+            ...(a.range !== undefined ? { range: a.range } : {}),
+            ...(a.limit !== undefined ? { limit: a.limit } : {}),
+          }),
+        ),
+      ),
+  );
+
+  server.registerTool(
+    'game_flyover',
+    {
+      title: 'Map fly-over for the dump',
+      description:
+        'Fly the game camera over the map zone by zone so that the plugin dumps foliage and buildings of every zone (see game_dump). action: start (rect [x0, y0, x1, y1] in zone indices 0..63, default the whole 64×64 map; zones already dumped are skipped unless force), stop, resume (continue a stopped fly-over, also after a game restart), status. The whole map takes hours and moves the camera all the time: start and resume run only with confirm: true, after the user explicitly asked for it. stop and status are free.',
+      inputSchema: {
+        action: z.enum(['start', 'stop', 'resume', 'status']),
+        rect: z
+          .tuple([z.number().int().min(0).max(63), z.number().int().min(0).max(63), z.number().int().min(0).max(63), z.number().int().min(0).max(63)])
+          .optional()
+          .describe('Zones [x0, y0, x1, y1], inclusive'),
+        force: z.boolean().optional().describe('Visit zones that already have dump files too'),
+        dwell: z.number().int().min(200).max(60000).optional().describe('Milliseconds to stay over a loaded zone (default 1500)'),
+        timeout: z.number().int().min(5).max(600).optional().describe('Seconds to wait for a zone to load (default 40)'),
+        confirm: z.boolean().optional().describe('true: the user asked for the fly-over, execute'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false, title: 'Map fly-over for the dump' },
+    },
+    (a) =>
+      guarded(async () => {
+        const moves = a.action === 'start' || a.action === 'resume';
+        if (moves && !a.confirm) {
+          const where = a.rect ? `zones ${a.rect[0]}.${a.rect[1]} – ${a.rect[2]}.${a.rect[3]}` : 'the whole map (4096 zones, hours)';
+          return [`not done: ${a.action} the camera fly-over of ${a.action === 'resume' ? 'the stopped run' : where}.`, 'Ask the user and repeat with confirm: true.'];
+        }
+        const args: GameFlyoverArgs = { action: a.action };
+        if (a.action === 'start') {
+          if (a.rect) args.rect = a.rect;
+          if (a.force) args.force = true;
+        }
+        if (moves) {
+          if (a.dwell !== undefined) args.dwell = a.dwell;
+          if (a.timeout !== undefined) args.timeout = a.timeout;
+        }
+        return formatFlyoverStatus(await game.flyover(args));
       }),
   );
 

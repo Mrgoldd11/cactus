@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { formatPosition, newBuildingStates, zoneOfPoint, type BuildingPlacement, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
-import { STRINGS, useLang } from '../../i18n.ts';
+import { langOf, useLang } from '../../i18n.ts';
 import { isTypingIn, shortcut } from '../../keys.ts';
 import { ShowInGame } from '../../components/GameLink.tsx';
 import { useGameLink } from '../../game.ts';
@@ -42,6 +42,10 @@ const en = {
   models: 'models',
   markers: 'boxes',
   foliage: 'plants',
+  fromGame: 'as in game',
+  gameBuildings: 'game-only buildings',
+  noModel: 'no model',
+  showGameBuildings: 'Buildings of other mods (from the game)',
   colour: 'ground colour',
   object: 'Object in the world',
   record: 'Record',
@@ -106,6 +110,10 @@ const ru: WorldStrings = {
   models: 'моделей',
   markers: 'коробок',
   foliage: 'растений',
+  fromGame: 'как в игре',
+  gameBuildings: 'построек только из игры',
+  noModel: 'без модели',
+  showGameBuildings: 'Постройки других модов (из игры)',
   colour: 'цвет земли',
   object: 'Объект в мире',
   record: 'Запись',
@@ -148,7 +156,74 @@ const ru: WorldStrings = {
   insideTip: 'Открыть интерьер этого здания: мебель, сундуки, кровати — сдвинуть, добавить, удалить',
   editHelp: 'G — сдвиг, R — поворот, тяните стрелки / кольцо, Del — удалить, Ctrl+Z / Ctrl+Y — отмена / повтор правок мира',
 };
-const WORLD_STRINGS: Record<Lang, WorldStrings> = { en, ru };
+const zh: WorldStrings = {
+  panel: '世界',
+  hint: '整个游戏世界的 3D 视图：地形、建筑、城镇；用镜头飞行，点击对象',
+  loading: '正在读取世界…',
+  failed: '无法读取世界',
+  noGame: '游戏文件夹中没有高度图（data/newland/land/fullmap.tif）。',
+  search: '飞往城镇…',
+  quality: '画质',
+  low: '低',
+  medium: '中',
+  high: '高',
+  distance: '绘制距离',
+  borders: '城镇边界',
+  help: '鼠标拖动——环顾，中键——平移，滚轮——前进/后退，双击——飞到该处，城镇名称——飞往城镇，WASD——飞行，Q/E——下降/上升，Shift——加速，F——飞到所选对象，Esc——取消选择',
+  fps: '帧率',
+  first: '首帧',
+  memory: '内存',
+  tiles: '地块',
+  models: '模型',
+  markers: '方框',
+  foliage: '植被',
+  fromGame: '与游戏一致',
+  gameBuildings: '仅游戏中的建筑',
+  noModel: '无模型',
+  showGameBuildings: '其他模组的建筑(来自游戏)',
+  colour: '地面颜色',
+  object: '世界中的对象',
+  record: '记录',
+  where: '位置',
+  town: '城镇',
+  faction: '阵营',
+  squad: '小队',
+  residents: '居民',
+  interior: '室内',
+  name: '名称',
+  file: '文件',
+  empty: '空',
+  focus: '飞到 (F)',
+  objects: '个对象',
+  move: '移动 (G)',
+  rotate: '旋转 (R)',
+  grid: '网格',
+  angle: '角度',
+  off: '关',
+  ground: '贴地',
+  groundTip: '沿地面移动（红/蓝箭头）时，对象会保持离地高度；绿色箭头用于升降',
+  height: '离地高度',
+  heightTip: '离地面的高度（绿色操纵箭头的作用相同）',
+  undo: '撤销',
+  redo: '重做',
+  nothing: '无',
+  place: '放置…',
+  placeTip: '从记录列表中放置新对象——放在屏幕中心的地面点上',
+  placeSearch: '建筑名称（英/俄）或 ID',
+  noMatches: '未找到',
+  noGround: '请把镜头对准地面（屏幕中心下方的地面尚未加载）',
+  remove: '移除 (Del)',
+  stepMove: '移动',
+  stepRotate: '旋转',
+  stepPlace: '放置',
+  stepRemove: '移除',
+  edited: '已在 Mod 中修改——保存 Mod 时会写入 leveldata',
+  noBridge: '在游戏中显示：请启动装有 Kenshi Bridge 插件的 Kenshi 并载入存档',
+  inside: '进入内部…',
+  insideTip: '打开这座建筑的室内：家具、箱子、床——移动、添加、移除',
+  editHelp: 'G——移动，R——旋转，拖动箭头 / 圆环，Del——移除，Ctrl+Z / Ctrl+Y——撤销 / 重做世界修改',
+};
+const WORLD_STRINGS: Record<Lang, WorldStrings> = { en, ru, zh };
 
 /** Что можно поставить в мир из списка «Поставить…». */
 const PLACE_TYPES = ['BUILDING'];
@@ -201,6 +276,8 @@ function ObjectCard({ o, s, onFocus, onRemove, onHeight, edited }: { o: WorldObj
   const { project, go, open } = useWorkbench();
   const link = useGameLink();
   const b: BuildingPlacement | undefined = o.b;
+  // Only buildings you can walk into: the record has interior parts or the instance names a layout.
+  const hasInside = b !== undefined && (b.interior !== undefined || (project.ctx.get(o.p.target)?.refs.get('interior') ?? []).length > 0);
   const rows: [string, ReactNode][] = [
     [s.record, <SidLink sid={o.p.target} go={go} empty={s.empty} />],
     [s.name, b?.name ?? <span className="muted">{s.empty}</span>],
@@ -218,7 +295,7 @@ function ObjectCard({ o, s, onFocus, onRemove, onHeight, edited }: { o: WorldObj
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
         <b style={{ flex: 1 }}>{s.object}</b>
         <button onClick={onFocus}>{s.focus}</button>
-        {b && (
+        {b && hasInside && (
           <button
             data-testid="world-inside"
             title={s.insideTip}
@@ -271,7 +348,8 @@ function Stats({ st, s }: { st: WorldStatsView | undefined; s: WorldStrings }): 
     `${s.tiles} ${st.tilesDrawn}/${st.tiles}`,
     `${s.models} ${st.models}`,
     `${s.markers} ${st.markers}`,
-    st.foliage > 0 ? `${s.foliage} ${st.foliageDrawn}/${st.foliage}` : '',
+    st.foliage > 0 ? `${s.foliage} ${st.foliageDrawn}/${st.foliage}${st.foliageFromGame > 0 ? ` (${s.fromGame} ${st.foliageFromGame})` : ''}` : '',
+    st.dumpBuildings > 0 ? `${s.gameBuildings} ${st.dumpBuildingsDrawn}/${st.dumpBuildings}${st.dumpBuildingsNoModel > 0 ? ` (${s.noModel} ${st.dumpBuildingsNoModel})` : ''}` : '',
     st.overview < 100 ? `${s.colour} ${st.overview}%` : '',
   ].filter(Boolean);
   return (
@@ -292,6 +370,11 @@ function Stats({ st, s }: { st: WorldStatsView | undefined; s: WorldStrings }): 
       data-detailed={st.detailed}
       data-foliage={st.foliage}
       data-foliage-drawn={st.foliageDrawn}
+      data-foliage-game={st.foliageFromGame}
+      data-dump-zones={st.dumpZones}
+      data-dump-buildings={st.dumpBuildings}
+      data-dump-buildings-drawn={st.dumpBuildingsDrawn}
+      data-dump-buildings-no-model={st.dumpBuildingsNoModel}
       data-triangles={st.triangles}
       data-calls={st.drawCalls}
       data-overview={st.overview}
@@ -469,6 +552,14 @@ function WorldPanel(): ReactNode {
     const v = view.current;
     const q = name.trim().toLowerCase();
     if (!v || !q) return;
+    // Two numbers — world coordinates "x z" (as in the object card).
+    const xz = /^(-?\d+(?:[.,]\d+)?)[\s;,]+(-?\d+(?:[.,]\d+)?)$/.exec(q);
+    if (xz) {
+      const x = Number(xz[1]!.replace(',', '.'));
+      const z = Number(xz[2]!.replace(',', '.'));
+      v.flyToXZ(x, z);
+      return;
+    }
     const t = v.towns.find((x) => x.name.toLowerCase() === q) ?? v.towns.find((x) => x.name.toLowerCase().includes(q));
     if (t) v.flyToPoint(t.pos);
   };
@@ -522,6 +613,11 @@ function WorldPanel(): ReactNode {
         <label title={s.borders}>
           <input data-testid="world-borders" type="checkbox" checked={settings.borders} onChange={(e) => { set({ borders: e.target.checked }); }} style={{ verticalAlign: 'middle' }} /> {s.borders}
         </label>
+        {stats !== undefined && stats.dumpZones > 0 && (
+          <label title={s.showGameBuildings}>
+            <input data-testid="world-game-buildings" type="checkbox" checked={settings.gameBuildings} onChange={(e) => { set({ gameBuildings: e.target.checked }); }} style={{ verticalAlign: 'middle' }} /> {s.showGameBuildings}
+          </label>
+        )}
         <span style={{ flex: 1 }} />
         {count > 0 && (
           <span className="muted" style={{ fontSize: '0.85em' }}>
@@ -625,8 +721,8 @@ function WorldPanel(): ReactNode {
 
 registerPanel({
   id: 'world',
-  title: (t) => WORLD_STRINGS[t === STRINGS.en ? 'en' : 'ru'].panel,
-  hint: (t) => WORLD_STRINGS[t === STRINGS.en ? 'en' : 'ru'].hint,
+  title: (t) => WORLD_STRINGS[langOf(t)].panel,
+  hint: (t) => WORLD_STRINGS[langOf(t)].hint,
   icon: '🗺',
   component: WorldPanel,
   area: 'center',

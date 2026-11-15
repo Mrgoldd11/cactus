@@ -99,6 +99,88 @@ export interface GameTown {
   pos: Vec3;
 }
 
+/** Answer of the `dump` command: what the plugin has recorded of the loaded world. */
+export interface GameDumpStatus {
+  /** Folder with the zone files. */
+  dir: string;
+  /** Foliage is recorded (false: the hook is not available in this game build). */
+  foliageHook: boolean;
+  zoneReloadHook: boolean;
+  /** Zones that have a file on disk. */
+  foliageFiles: number;
+  buildingFiles: number;
+  filesWritten: number;
+  lastError?: string;
+  /** Zones loaded in the game now; null = nothing recorded for the zone. */
+  loaded: { zone: [number, number]; foliage: number | null; buildings: number | null; pending?: boolean; foliageFile: boolean }[];
+  foliage: number;
+  buildings: number;
+  /** Only with `near`: what stands around the point. */
+  near?: {
+    foliage: { id: string; p: Vec3; yaw: number; scale: number }[];
+    buildings: { id: string; name: string; p: Vec3; q: [number, number, number, number]; f: number }[];
+  };
+}
+
+/** Answer of the `flyover` command. */
+export interface GameFlyoverStatus {
+  running: boolean;
+  /** Zone rectangle x0, y0, x1, y1. */
+  rect: [number, number, number, number];
+  index: number;
+  total: number;
+  visited: number;
+  skipped: number;
+  timeouts: number;
+  zone?: [number, number];
+  stopped?: string;
+  foliageFiles: number;
+  buildingFiles: number;
+}
+
+export interface GameFlyoverArgs {
+  action: 'start' | 'stop' | 'resume' | 'status';
+  rect?: [number, number, number, number];
+  force?: boolean;
+  /** Milliseconds to stand over a loaded zone. */
+  dwell?: number;
+  /** Seconds to wait for a zone before moving on. */
+  timeout?: number;
+}
+
+/** Dump status as text lines (MCP and logs). */
+export function formatDumpStatus(s: GameDumpStatus): string[] {
+  const out = [
+    `dump folder: ${s.dir}`,
+    `on disk: foliage of ${s.foliageFiles} zones, buildings of ${s.buildingFiles} zones (4096 zones in the world)`,
+    `foliage recording: ${s.foliageHook ? 'on' : 'NOT available in this game build'}`,
+    `loaded now: ${s.loaded.length} zones, ${s.foliage} foliage instances, ${s.buildings} buildings`,
+  ];
+  if (s.lastError) out.push(`last error: ${s.lastError}`);
+  for (const z of s.loaded) {
+    const fol = z.foliage === null ? 'foliage not recorded (zone was loaded before the plugin saw it; reload the zone)' : `foliage ${z.foliage}`;
+    out.push(`  zone ${z.zone[0]}.${z.zone[1]}: ${fol}, buildings ${z.buildings ?? 'not read yet'}${z.pending ? ' (being written)' : ''}`);
+  }
+  if (s.near) {
+    out.push(`foliage near the point: ${s.near.foliage.length}`);
+    for (const f of s.near.foliage) out.push(`  ${f.id} at ${f.p.map((v) => v.toFixed(1)).join(', ')}, yaw ${f.yaw.toFixed(1)}, scale ${f.scale.toFixed(2)}`);
+    out.push(`buildings near the point: ${s.near.buildings.length}`);
+    for (const b of s.near.buildings) out.push(`  ${b.id} "${b.name}" at ${b.p.map((v) => v.toFixed(1)).join(', ')}${b.f ? `, flags ${b.f}` : ''}`);
+  }
+  return out;
+}
+
+/** Fly-over status as text lines. */
+export function formatFlyoverStatus(s: GameFlyoverStatus): string[] {
+  const out = [
+    `fly-over: ${s.running ? 'running' : `not running${s.stopped ? ` (${s.stopped})` : ''}`}`,
+    `zones ${s.rect[0]}.${s.rect[1]} – ${s.rect[2]}.${s.rect[3]}: ${s.index} of ${s.total} done (visited ${s.visited}, already dumped ${s.skipped}, not loaded in time ${s.timeouts})`,
+    `on disk: foliage of ${s.foliageFiles} zones, buildings of ${s.buildingFiles} zones`,
+  ];
+  if (s.running && s.zone) out.push(`camera is over zone ${s.zone[0]}.${s.zone[1]}`);
+  return out;
+}
+
 export type GameErrorCode =
   | 'bad_json'
   | 'bad_request'
@@ -111,6 +193,7 @@ export type GameErrorCode =
   | 'no_renderer'
   | 'unsupported'
   | 'busy'
+  | 'nothing_to_resume'
   | 'crash'
   | 'no_connection'
   | 'timeout';
@@ -127,6 +210,7 @@ const ERROR_TEXT: Record<GameErrorCode, string> = {
   no_renderer: 'the game renderer is not ready',
   unsupported: 'this game version does not support the command',
   busy: 'the game is busy, try again',
+  nothing_to_resume: 'there is no stopped fly-over to resume',
   crash: 'the command crashed inside the game (the game keeps running)',
   no_connection: 'the game is not connected: start Kenshi with RE_Kenshi and the KenshiBridge mod (the plugin is optional, download: https://github.com/Mrgoldd11/Kenshi-Bridge)',
   timeout: 'the game did not answer',

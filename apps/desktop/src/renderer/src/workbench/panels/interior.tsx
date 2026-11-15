@@ -20,7 +20,7 @@ import {
   type WorldEdits,
   type WorldIndex,
 } from '@kenshi-editor/core';
-import { STRINGS, useLang } from '../../i18n.ts';
+import { langOf, useLang } from '../../i18n.ts';
 import { isTypingIn, shortcut } from '../../keys.ts';
 import { PlaceBox } from '../../components/PlaceBox.tsx';
 import type { Lang } from '../../../../shared/api.ts';
@@ -144,7 +144,64 @@ const ru: InteriorStrings = {
   help: 'Левая кнопка — вращать вид, средняя/правая — сдвигать, колесо — ближе/дальше, клик — выбрать, G/R — сдвиг/поворот, Del — удалить, F — показать, Esc — снять выбор, Ctrl+Z / Ctrl+Y — отмена / повтор правок мира',
   loadingModels: 'модели…',
 };
-const INTERIOR_STRINGS: Record<Lang, InteriorStrings> = { en, ru };
+const zh: InteriorStrings = {
+  panel: '室内',
+  hint: '建筑内部：家具、箱子、工作台、床、物品点——移动、旋转、添加、移除',
+  none: '请选择一座建筑（“世界”窗口中的记录或对象）。',
+  loading: '正在读取室内布局…',
+  failed: '无法读取室内布局',
+  noLayouts: '游戏文件中没有这座建筑的室内布局。',
+  layout: '布局',
+  exterior: '室外',
+  shop: '商店',
+  bar: '酒吧',
+  recruitment: '招募',
+  flophouse: '廉价旅馆',
+  objects: '个对象',
+  move: '移动 (G)',
+  rotate: '旋转 (R)',
+  grid: '网格',
+  angle: '角度',
+  off: '关',
+  undo: '撤销',
+  redo: '重做',
+  nothing: '无',
+  place: '放置…',
+  placeTip: '从记录列表中放置新的家具或物品点——放在屏幕中心的位置',
+  placeSearch: '名称（英/俄）或 ID',
+  noMatches: '未找到',
+  remove: '移除 (Del)',
+  focus: '定位 (F)',
+  stepMove: '室内移动',
+  stepRotate: '室内旋转',
+  stepPlace: '放入室内',
+  stepRemove: '从室内移除',
+  object: '对象',
+  record: '记录',
+  kind: '种类',
+  furniture: '家具',
+  items: '物品点',
+  other: '其他',
+  where: '位置',
+  turn: '旋转',
+  floor: '楼层',
+  lock: '锁',
+  locked: '已上锁',
+  level: '等级',
+  contents: '生成内容',
+  state: '状态',
+  key: '钥匙',
+  edited: '已在 Mod 中修改——保存 Mod 时会写入 leveldata/interiors.level',
+  usage: (named: number, unnamed: number, total: number): string =>
+    `在世界中：有 ${named} 座建筑按名称使用此布局；此类建筑共 ${total} 座，其中 ${unnamed} 座没有布局名称——由游戏自行选择。`,
+  shared: '此布局是共用的：修改它会改变所有使用它的建筑的这个室内。',
+  notIn: '居民（NPC）和商店商品不属于布局——游戏从城镇、阵营和小队获取它们。',
+  fresh: '任何布局中都没有这种对象的样本：其状态是从零构建的（未在游戏中验证）。',
+  copied: '状态复制自',
+  help: '鼠标左键——旋转视角，中键/右键——平移，滚轮——缩放，点击——选择，G/R——移动/旋转，Del——移除，F——定位，Esc——取消选择，Ctrl+Z / Ctrl+Y——撤销 / 重做世界修改',
+  loadingModels: '模型…',
+};
+const INTERIOR_STRINGS: Record<Lang, InteriorStrings> = { en, ru, zh };
 
 /** Что можно поставить в интерьер: мебель и точки предметов. */
 const PLACE_TYPES = ['BUILDING', 'ITEM_PLACEMENT_GROUP'];
@@ -641,8 +698,8 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
 
 registerPanel({
   id: 'interior',
-  title: (t) => INTERIOR_STRINGS[t === STRINGS.en ? 'en' : 'ru'].panel,
-  hint: (t) => INTERIOR_STRINGS[t === STRINGS.en ? 'en' : 'ru'].hint,
+  title: (t) => INTERIOR_STRINGS[langOf(t)].panel,
+  hint: (t) => INTERIOR_STRINGS[langOf(t)].hint,
   icon: '⌂',
   component: InteriorPanel,
   area: 'center',

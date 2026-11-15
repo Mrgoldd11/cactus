@@ -2,18 +2,18 @@
  * Окна автосохранения и копий: настройки, «Найдена более свежая копия», «Резервные копии мода».
  */
 import { useEffect, useState, type ReactNode } from 'react';
-import type { BackupItem, RecoveryInfo, Settings } from '../../../shared/api.ts';
+import { LOCALE, type BackupItem, type Lang, type RecoveryInfo, type Settings } from '../../../shared/api.ts';
 import { useLang, useT } from '../i18n.ts';
 import type { Project } from '../project.ts';
 import { Modal } from './widgets.tsx';
 
-export function formatTime(ms: number, lang: string): string {
-  return new Date(ms).toLocaleString(lang === 'ru' ? 'ru-RU' : 'en-GB', { dateStyle: 'short', timeStyle: 'medium' });
+export function formatTime(ms: number, lang: Lang): string {
+  return new Date(ms).toLocaleString(LOCALE[lang], { dateStyle: 'short', timeStyle: 'medium' });
 }
 
 /** Только часы и минуты — для строки состояния. */
-export function formatClock(ms: number, lang: string): string {
-  return new Date(ms).toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
+export function formatClock(ms: number, lang: Lang): string {
+  return new Date(ms).toLocaleTimeString(LOCALE[lang], { hour: '2-digit', minute: '2-digit' });
 }
 
 export function formatSize(bytes: number): string {

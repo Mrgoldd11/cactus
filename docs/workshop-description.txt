@@ -1,0 +1,51 @@
+=== TITLE ===
+Cactus - Mod Editor for Kenshi (external tool)
+
+=== TAGS / TYPE ===
+Tool / Utility (not a gameplay mod)
+
+=== DESCRIPTION (Steam BBCode) ===
+[h1]Cactus - a free mod editor for Kenshi[/h1]
+
+A modern, free alternative to the FCS: dialogue graph, "where in the game" reference tracer, world view, safe saving with autosave/backups, and AI assistant integration (MCP).
+
+[b]This Workshop item is only an information page.[/b] The program itself is downloaded from GitHub (the .mod file in this item is an empty placeholder - it does not change your game, you can unsubscribe at any time).
+
+[h2]Download[/h2]
+[url=https://github.com/Mrgoldd11/Cactus/releases/latest]Cactus v0.1.0 Beta - GitHub Releases[/url]
+Open "Assets" and download Cactus-0.1.0-beta-win-x64.zip (about 143 MB).
+
+[list]
+[*] Unzip to a simple folder (e.g. C:\Cactus), do not run from inside the archive.
+[*] Run Cactus.exe. Nothing to install.
+[*] Windows may show "Windows protected your PC" because the app is not code-signed yet: More info -> Run anyway.
+[*] Your Kenshi install (Steam/GOG) is found automatically.
+[/list]
+
+[h2]Features[/h2]
+[list]
+[*] "Where in game": follow a record's back-references (item <- trader list <- squad <- town, with coordinates).
+[*] Field editing with the vanilla value always in view and one-click revert.
+[*] History in plain words, autosave, safe saving with backups.
+[*] Bulk edit with a "was -> will be" preview.
+[*] Dialogue graph, conversation player and a "Talk" simulator (which dialogue the game would pick and why).
+[*] 3D world view with buildings and town borders: rotate the camera, move and rotate placed objects.
+[*] 3D model viewer: spin, pan and zoom a record's mesh right in the editor.
+[*] MCP server: any MCP-capable AI can edit your mod live; changes arrive as a change set you accept or revert.
+[/list]
+
+[h2]Optional: Kenshi Bridge[/h2]
+A separate open-source (GPLv3) RE_Kenshi plugin that connects the running game to the editor.
+[url=https://github.com/Mrgoldd11/Kenshi-Bridge/releases/latest]Kenshi Bridge - GitHub Releases[/url]
+
+[h2]Links[/h2]
+[url=https://github.com/Mrgoldd11/Cactus]Cactus on GitHub[/url] (README, screenshots, issue tracker)
+
+Requirements: Windows 10/11 x64, Kenshi installed. Cactus reads your own game files; nothing from the game is bundled.
+Note: this is a helper tool only - it does not change gameplay. Beta: back up your .mod files and work on copies.
+
+=== UPLOAD STEPS (done by you, via FCS) ===
+1. Create an empty mod named e.g. "Cactus (info only)" in FCS (no records).
+2. Add a preview image (assets/cactus-banner.png from the Cactus repo works).
+3. Click Upload to Workshop, accept the Steam Workshop Legal Agreement.
+4. Paste the description above on the item's Workshop page (title, description, visibility).

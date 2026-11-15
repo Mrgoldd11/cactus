@@ -3,7 +3,7 @@
  * всё чтение и запись — через эти вызовы, main выполняет их и спрашивает подтверждение,
  * если запись идёт в папку игры или мастерской.
  */
-import type { LiveRequestBody } from '@kenshi-editor/core';
+import type { ExtensionLayer, LiveRequestBody } from '@kenshi-editor/core';
 
 export type GameSource = 'config' | 'steam' | 'gog' | 'manual';
 
@@ -11,6 +11,20 @@ export interface GameInstallInfo {
   kenshi: string;
   workshop: string;
   source: GameSource;
+}
+
+/** Zone of the world dump; `stamp` changes when the plugin rewrites the file. */
+export interface WorldDumpZone {
+  x: number;
+  y: number;
+  stamp: string;
+}
+
+/** What the Kenshi Bridge plugin has dumped of the game world (same shape as core's GameDumpIndex). */
+export interface WorldDumpIndex {
+  dir: string;
+  foliage: WorldDumpZone[];
+  buildings: WorldDumpZone[];
 }
 
 export interface ModEntry {
@@ -45,6 +59,11 @@ export interface ProjectRequest {
   dependencies?: string[];
   /** Другие моды слоями под модом (по порядку `mods.cfg`), без записи в его заголовок. */
   contextMods?: string[];
+  /**
+   * Path of the mod file when the window keeps the mod itself and sends no `modPath` (other
+   * dependencies, a restored version): its folder is still searched for schema extensions.
+   */
+  extensionsOf?: string;
   /** Ключи файлов, уже разобранных в окне (`ParsedFileCache`): их байты не присылаются. */
   known?: string[];
 }
@@ -91,6 +110,12 @@ export interface ProjectBundle {
   /** Какие из `dependencies` — моды контекста (не записаны в заголовке мода). */
   contextMods?: string[];
   schema: { fcsDef: string; fcsEnums?: string; fcsLayout?: string };
+  /**
+   * Schema extensions (FCS Extended files: `fcs.def`, `fcs_preload.def`, `*.def.patch`) of the
+   * mod folder and of the folders of its dependencies, in load order, with the texts of their
+   * files. The window applies them on top of `schema`. Absent when there are none.
+   */
+  extensions?: ExtensionLayer[];
   /** Русский перевод `locale/ru_RU/gamedata.po`. */
   po?: string;
   /** Путь сохранения по умолчанию для нового мода. */
@@ -136,7 +161,18 @@ export type SaveResult =
   | { ok: true; path: string; provenance?: ModProvenance; backupError?: string }
   | { ok: false; cancelled: boolean; error?: string; workshop?: boolean };
 
-export type Lang = 'en' | 'ru';
+export type Lang = 'en' | 'ru' | 'zh';
+
+/** Языки интерфейса: код и название на самом языке (для выпадающего списка). */
+export const LANGS: readonly { code: Lang; name: string }[] = [
+  { code: 'en', name: 'English' },
+  { code: 'ru', name: 'Русский' },
+  { code: 'zh', name: '简体中文' },
+];
+
+export const isLang = (v: unknown): v is Lang => LANGS.some((l) => l.code === v);
+/** Локаль для форматирования дат и чисел на языке интерфейса. */
+export const LOCALE: Record<Lang, string> = { en: 'en-GB', ru: 'ru-RU', zh: 'zh-CN' };
 
 export interface Settings {
   lang: Lang;
@@ -272,6 +308,10 @@ export interface KeditApi {
    * или мастерской; иначе null.
    */
   readGameAsset(game: GameInstallInfo, relPath: string): Promise<Uint8Array | null>;
+  /** Zones of the world dump made by the Kenshi Bridge plugin in the running game (foliage, buildings). */
+  listWorldDump(): Promise<WorldDumpIndex>;
+  /** One zone file of that dump, or null. */
+  readWorldDump(kind: 'foliage' | 'buildings', x: number, y: number): Promise<Uint8Array | null>;
   /**
    * Тайл рельефа (квадродерево карты высот `fullmap.tif`): 129×129 значений карты высот.
    * null — нет карты высот в папке игры.
@@ -341,6 +381,8 @@ export const IPC = {
   loadWorld: 'kedit:load-world',
   readIcon: 'kedit:read-icon',
   readGameAsset: 'kedit:read-game-asset',
+  listWorldDump: 'kedit:list-world-dump',
+  readWorldDump: 'kedit:read-world-dump',
   readTerrainTile: 'kedit:read-terrain-tile',
   savePngFile: 'kedit:save-png-file',
   readTranslation: 'kedit:read-translation',

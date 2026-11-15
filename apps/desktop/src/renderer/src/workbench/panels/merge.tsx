@@ -25,7 +25,7 @@ import {
   type MergeResult,
   type MergeSource,
 } from '@kenshi-editor/core';
-import type { ModEntry } from '../../../../shared/api.ts';
+import { LOCALE, type ModEntry } from '../../../../shared/api.ts';
 import { useLang, useT, type Strings } from '../../i18n.ts';
 import { tryEdit, useProjectVersion } from '../../hooks.ts';
 import type { Project } from '../../project.ts';
@@ -202,7 +202,8 @@ function ChangeDetail({ change, session, project, onPick, onOpen }: {
 
 function MergePanel(): ReactNode {
   const t = useT();
-  const ru = useLang() === 'ru';
+  const lang = useLang();
+  const ru = lang === 'ru';
   const { project, go, report, status } = useWorkbench();
   const version = useProjectVersion(project);
   const ctx = project.ctx;
@@ -462,7 +463,7 @@ function MergePanel(): ReactNode {
               {t.mgLevelFound(plan.levelData.files.length, plan.levelData.dir)}
             </div>
           )}
-          {lastMerge && <div className="muted mods-panel-note">{t.mgLast(new Date(lastMerge.at).toLocaleString(ru ? 'ru-RU' : 'en-GB'), lastMerge.accepted)}</div>}
+          {lastMerge && <div className="muted mods-panel-note">{t.mgLast(new Date(lastMerge.at).toLocaleString(LOCALE[lang]), lastMerge.accepted)}</div>}
 
           <div className="mods-panel-bar">
             {(['new', 'changed', 'deleted'] as const).map((k) => (

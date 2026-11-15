@@ -64,6 +64,8 @@ function foliageRules(ctx: ModContext, layers: readonly { target: string }[]): F
     for (const ref of layer?.refs.get('meshes') ?? []) {
       const r = ctx.get(ref.target);
       if (!r || ref.v0 <= 0) continue;
+      // Ore rocks carry a building (`building type`); their real places are in the zone files.
+      if ((r.refs.get('building type') ?? []).length > 0) continue;
       const f = (k: string, d: number): number => r.floats.get(k) ?? d;
       const i = (k: string, d: number): number => r.ints.get(k) ?? d;
       const b = (k: string): boolean => r.bools.get(k) === true;

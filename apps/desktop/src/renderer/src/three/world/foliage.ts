@@ -17,6 +17,7 @@
 import * as THREE from 'three';
 import { TERRAIN_MAX_LEVEL, WORLD_HALF, ZONE_SIZE } from '@kenshi-editor/core';
 import type { Biome, FoliageRule } from './biomes.ts';
+import type { DumpFoliageZone } from './dump.ts';
 
 export interface FoliageQuality {
   /** Радиус круга с растительностью вокруг камеры; 0 — выключено. */
@@ -28,6 +29,12 @@ export interface FoliageQuality {
 export interface FoliageGround {
   heightAt(x: number, z: number, minLevel?: number): number | undefined;
   biomeAt(x: number, z: number): number | undefined;
+}
+
+/** Real foliage places dumped from the running game (`dump.ts`). */
+export interface FoliageDumpSource {
+  version: number;
+  foliage(zx: number, zy: number): DumpFoliageZone | 'loading' | undefined;
 }
 
 interface Item {
@@ -64,10 +71,15 @@ export class FoliageScatter {
   /** Что рисовать: модель → матрицы. */
   readonly byTarget = new Map<string, THREE.Matrix4[]>();
   count = 0;
+  /** How many of them stand exactly where the game put them (zones with a dump). */
+  fromGame = 0;
+  /** Game dump: zones that have it take foliage from it instead of the random scatter. */
+  dump: FoliageDumpSource | undefined;
+  private dumpVersion = -1;
   /** Есть клетки, для которых ещё нет подробного рельефа или очередь новых клеток. */
   incomplete = false;
   quality: FoliageQuality;
-  private readonly cells = new Map<string, { items: Item[]; used: number }>();
+  private readonly cells = new Map<string, { items: Item[]; used: number; fromGame: number }>();
   private readonly towns: { x: number; z: number }[];
   private readonly buildings = new Map<string, { x: number; z: number }[]>();
   private readonly biomes: Map<number, Biome>;
@@ -91,6 +103,12 @@ export class FoliageScatter {
   /** Пересчитать набор вокруг камеры. true — набор изменился. */
   update(cam: THREE.Vector3): boolean {
     this.tick++;
+    if (this.dump && this.dump.version !== this.dumpVersion) {
+      // Dumped zones changed: cells may now come from the dump (or from a newer one).
+      this.dumpVersion = this.dump.version;
+      this.cells.clear();
+      this.signature = '?';
+    }
     const r = this.quality.radius;
     const g = this.ground.heightAt(cam.x, cam.z);
     // Высоко над землёй растительность не видна — не тратим время.
@@ -112,6 +130,7 @@ export class FoliageScatter {
     const keys: string[] = [];
     const parts: Item[][] = [];
     let total = 0;
+    let fromGame = 0;
     for (const { ix, iz } of order) {
       const k = `${ix},${iz}`;
       let c = this.cells.get(k);
@@ -120,22 +139,24 @@ export class FoliageScatter {
           incomplete = true;
           continue;
         }
-        const items = this.makeCell(ix, iz);
-        if (!items) {
+        const made1 = this.makeCell(ix, iz);
+        if (!made1) {
           incomplete = true;
           continue;
         }
         made++;
-        c = { items, used: this.tick };
+        c = { items: made1.items, used: this.tick, fromGame: made1.fromGame };
         this.cells.set(k, c);
       }
       c.used = this.tick;
       if (total + c.items.length > this.quality.maxInstances) break;
       total += c.items.length;
+      fromGame += c.fromGame;
       keys.push(k);
       parts.push(c.items);
     }
     this.incomplete = incomplete;
+    this.fromGame = fromGame;
     this.trim();
     return this.set(parts, keys.join(';'));
   }
@@ -192,10 +213,35 @@ export class FoliageScatter {
   }
 
   /** Посев клетки; undefined — подробного рельефа здесь ещё нет. */
-  private makeCell(ix: number, iz: number): Item[] | undefined {
+  private makeCell(ix: number, iz: number): { items: Item[]; fromGame: number } | undefined {
     const x0 = ix * CELL;
     const z0 = iz * CELL;
-    if (Math.abs(x0 + CELL / 2) > WORLD_HALF || Math.abs(z0 + CELL / 2) > WORLD_HALF) return [];
+    if (Math.abs(x0 + CELL / 2) > WORLD_HALF || Math.abs(z0 + CELL / 2) > WORLD_HALF) return { items: [], fromGame: 0 };
+    // Zones under the cell (a cell can straddle a zone border). Those that have a game dump
+    // take their foliage from it; the scatter fills only the rest.
+    const items: Item[] = [];
+    const dumped = new Set<number>();
+    let zones = 0;
+    if (this.dump) {
+      const zx0 = Math.floor(x0 / ZONE_SIZE);
+      const zx1 = Math.floor((x0 + CELL - 0.01) / ZONE_SIZE);
+      const zz0 = Math.floor(z0 / ZONE_SIZE);
+      const zz1 = Math.floor((z0 + CELL - 0.01) / ZONE_SIZE);
+      const half = WORLD_HALF / ZONE_SIZE;
+      for (let zz = zz0; zz <= zz1; zz++)
+        for (let zx = zx0; zx <= zx1; zx++) {
+          zones++;
+          const d = this.dump.foliage(zx + half, zz + half);
+          if (d === 'loading') return undefined;
+          if (!d) continue;
+          dumped.add(zz * 4096 + zx);
+          // Buckets of the dump use the same cell grid.
+          for (const it of d.cells.get(`${ix},${iz}`) ?? []) items.push(it);
+        }
+    }
+    const fromGame = items.length;
+    if (dumped.size > 0 && dumped.size === zones) return { items, fromGame };
+    const inDumped = (x: number, z: number): boolean => dumped.size > 0 && dumped.has(Math.floor(z / ZONE_SIZE) * 4096 + Math.floor(x / ZONE_SIZE));
     if (this.ground.heightAt(x0 + CELL / 2, z0 + CELL / 2, MIN_LEVEL) === undefined) return undefined;
     // Какие биомы есть в клетке (сетка 4×4).
     const present = new Set<number>();
@@ -205,7 +251,6 @@ export class FoliageScatter {
         if (b === undefined) return undefined;
         if (this.biomes.get(b)?.foliage.length) present.add(b);
       }
-    const items: Item[] = [];
     const rand = rng(cellSeed(ix, iz));
     const between = (p: [number, number]): number => p[0] + (p[1] - p[0]) * rand();
     for (const index of [...present].sort((a, b) => a - b)) {
@@ -232,13 +277,14 @@ export class FoliageScatter {
             const yaw = rand() * Math.PI * 2;
             const scale = between(rule.scale);
             const offset = between(rule.offset);
+            if (inDumped(x, z)) continue;
             const it = this.place(rule, x, z, yaw, scale, offset);
             if (it) items.push(it);
           }
         }
       }
     }
-    return items;
+    return { items, fromGame };
   }
 
   private place(rule: FoliageRule, x: number, z: number, yaw: number, scale: number, offset: number): Item | undefined {

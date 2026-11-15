@@ -73,7 +73,10 @@ try {
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
   await page.getByTestId('open-vanilla').waitFor({ timeout: 60_000 });
   await page.getByTestId('mods-table').waitFor();
-  if (EN) await page.getByTestId('lang-switch').getByText('EN', { exact: true }).click();
+  if (EN) {
+    await page.getByTestId('lang-current').click();
+    await page.getByTestId('lang-en').click();
+  }
   await page.waitForTimeout(500);
   log(`viewport ${JSON.stringify(await page.evaluate(() => [innerWidth, innerHeight]))}`);
 

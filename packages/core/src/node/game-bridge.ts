@@ -7,6 +7,9 @@ import {
   GAME_BRIDGE_PORT,
   gameErrorText,
   type GameAction,
+  type GameDumpStatus,
+  type GameFlyoverArgs,
+  type GameFlyoverStatus,
   type GamePing,
   type GameState,
   type GameTown,
@@ -167,6 +170,16 @@ export class GameBridge {
   /** Города мира с центром и радиусом границы (только чтение). */
   towns(args: { near?: Vec3; range?: number; mult?: number } = {}): Promise<{ towns: GameTown[]; count: number }> {
     return this.request('towns', args);
+  }
+
+  /** What the plugin has dumped of the loaded world (read only); `now` writes the files right away. */
+  dump(args: { now?: boolean; near?: Vec3; range?: number; limit?: number } = {}): Promise<GameDumpStatus> {
+    return this.request('dump', args);
+  }
+
+  /** Camera fly-over that gets zones dumped. start/resume move the game camera: ask the user first. */
+  flyover(args: GameFlyoverArgs): Promise<GameFlyoverStatus> {
+    return this.request('flyover', args);
   }
 
   setTrace(on: boolean, filter: 'player' | 'all' = 'player'): Promise<{ on: boolean; all: boolean }> {

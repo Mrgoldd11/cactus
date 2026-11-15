@@ -4,7 +4,7 @@
  */
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { GameState } from '@kenshi-editor/core';
-import { STRINGS, useLang } from '../../i18n.ts';
+import { langOf, useLang } from '../../i18n.ts';
 import { GAME_STRINGS, gameRequest, gameState, replyError, setGameTrace, useGameLink, useGameT, useGameTrace } from '../../game.ts';
 import { ShowInGame, TraceView } from '../../components/GameLink.tsx';
 import { registerPanel } from '../registry.ts';
@@ -141,10 +141,10 @@ function TraceSection({ onGo }: { onGo: (sid: string) => void }): ReactNode {
 
 registerPanel({
   id: 'game',
-  title: (t) => GAME_STRINGS[t === STRINGS.en ? 'en' : 'ru'].panel,
+  title: (t) => GAME_STRINGS[langOf(t)].panel,
   icon: '◉',
   component: GamePanel,
   area: 'right',
   order: 95,
-  hint: (t) => GAME_STRINGS[t === STRINGS.en ? 'en' : 'ru'].panelHint,
+  hint: (t) => GAME_STRINGS[langOf(t)].panelHint,
 });

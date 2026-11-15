@@ -8,22 +8,22 @@ import { join } from 'node:path';
 import { app, BrowserWindow, clipboard, dialog, Menu, shell, type MenuItemConstructorOptions } from 'electron';
 import type { Lang } from '../shared/api.ts';
 import { logDir, logFile } from './log.ts';
+import { pick } from './tr.ts';
 
 export const APP_TITLE = 'Cactus';
 
 function about(lang: Lang): void {
-  const ru = lang === 'ru';
   const v = process.versions;
   const options = {
     type: 'info' as const,
-    title: ru ? 'О программе' : 'About',
+    title: pick(lang, 'О программе', 'About', '关于'),
     message: `${APP_TITLE} ${app.getVersion()}`,
     detail: [
-      ru ? 'Редактор модов Kenshi. Бета-версия для проверки.' : 'Kenshi mod editor. Beta for testing.',
-      ru ? 'Лицензия: MIT (предварительно).' : 'License: MIT (preliminary).',
+      pick(lang, 'Редактор модов Kenshi. Бета-версия для проверки.', 'Kenshi mod editor. Beta for testing.', 'Kenshi Mod 编辑器。测试版。'),
+      pick(lang, 'Лицензия: MIT (предварительно).', 'License: MIT (preliminary).', '许可证：MIT（暂定）。'),
       '',
       `Electron ${v.electron}, Chromium ${v.chrome}, Node ${v.node}`,
-      `${ru ? 'Журнал' : 'Log'}: ${logFile() ?? '—'}`,
+      `${pick(lang, 'Журнал', 'Log', '日志')}: ${logFile() ?? '—'}`,
     ].join('\n'),
     buttons: ['OK'],
   };
@@ -44,32 +44,44 @@ export function mcpLaunch(): { command: string; args: string[]; env?: Record<str
 const quoteArg = (s: string): string => (/[\s"]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s);
 
 function connectAi(lang: Lang): void {
-  const ru = lang === 'ru';
   const m = mcpLaunch();
   const desktopJson = JSON.stringify({ mcpServers: { kenshi: m } }, null, 2);
   const env = Object.entries(m.env ?? {}).map(([k, v]) => `-e ${k}=${v} `).join('');
   const codeCmd = `claude mcp add kenshi --scope user ${env}-- ${[m.command, ...m.args].map(quoteArg).join(' ')}`;
   const options = {
     type: 'info' as const,
-    title: ru ? 'Подключить ИИ (MCP)' : 'Connect AI (MCP)',
-    message: ru ? 'Настройка MCP-сервера для Claude' : 'MCP server setup for Claude',
-    detail: (ru
-      ? [
-          'Claude Desktop: Настройки → Developer → Edit Config, вставьте в claude_desktop_config.json (если там уже есть mcpServers — добавьте только блок "kenshi"):',
-          desktopJson,
-          'Claude Code (в терминале):',
-          codeCmd,
-          'Потом перезапустите Claude.',
-        ]
-      : [
-          'Claude Desktop: Settings → Developer → Edit Config, paste into claude_desktop_config.json (if mcpServers already exists, add only the "kenshi" block):',
-          desktopJson,
-          'Claude Code (in a terminal):',
-          codeCmd,
-          'Then restart Claude.',
-        ]
+    title: pick(lang, 'Подключить ИИ (MCP)', 'Connect AI (MCP)', '连接 AI (MCP)'),
+    message: pick(lang, 'Настройка MCP-сервера для Claude', 'MCP server setup for Claude', '为 Claude 配置 MCP 服务器'),
+    detail: pick(
+      lang,
+      [
+        'Claude Desktop: Настройки → Developer → Edit Config, вставьте в claude_desktop_config.json (если там уже есть mcpServers — добавьте только блок "kenshi"):',
+        desktopJson,
+        'Claude Code (в терминале):',
+        codeCmd,
+        'Потом перезапустите Claude.',
+      ],
+      [
+        'Claude Desktop: Settings → Developer → Edit Config, paste into claude_desktop_config.json (if mcpServers already exists, add only the "kenshi" block):',
+        desktopJson,
+        'Claude Code (in a terminal):',
+        codeCmd,
+        'Then restart Claude.',
+      ],
+      [
+        'Claude Desktop：设置 → Developer → Edit Config，粘贴到 claude_desktop_config.json 中（如果其中已有 mcpServers，只需添加 "kenshi" 这一块）：',
+        desktopJson,
+        'Claude Code（在终端中）：',
+        codeCmd,
+        '然后重启 Claude。',
+      ],
     ).join('\n\n'),
-    buttons: ru ? ['Копировать для Claude Desktop', 'Копировать для Claude Code', 'Закрыть'] : ['Copy for Claude Desktop', 'Copy for Claude Code', 'Close'],
+    buttons: pick(
+      lang,
+      ['Копировать для Claude Desktop', 'Копировать для Claude Code', 'Закрыть'],
+      ['Copy for Claude Desktop', 'Copy for Claude Code', 'Close'],
+      ['复制给 Claude Desktop', '复制给 Claude Code', '关闭'],
+    ),
     defaultId: 0,
     cancelId: 2,
   };
@@ -81,54 +93,54 @@ function connectAi(lang: Lang): void {
 }
 
 export function buildMenu(lang: Lang): void {
-  const ru = lang === 'ru';
+  const t = (ru: string, en: string, zh: string): string => pick(lang, ru, en, zh);
   const template: MenuItemConstructorOptions[] = [
     {
-      label: ru ? 'Файл' : 'File',
-      submenu: [{ role: 'quit', label: ru ? 'Выход' : 'Exit' }],
+      label: t('Файл', 'File', '文件'),
+      submenu: [{ role: 'quit', label: t('Выход', 'Exit', '退出') }],
     },
     {
-      label: ru ? 'Правка' : 'Edit',
+      label: t('Правка', 'Edit', '编辑'),
       submenu: [
-        { role: 'undo', label: ru ? 'Отменить' : 'Undo' },
-        { role: 'redo', label: ru ? 'Повторить' : 'Redo' },
+        { role: 'undo', label: t('Отменить', 'Undo', '撤销') },
+        { role: 'redo', label: t('Повторить', 'Redo', '重做') },
         { type: 'separator' },
-        { role: 'cut', label: ru ? 'Вырезать' : 'Cut' },
-        { role: 'copy', label: ru ? 'Копировать' : 'Copy' },
-        { role: 'paste', label: ru ? 'Вставить' : 'Paste' },
-        { role: 'selectAll', label: ru ? 'Выделить всё' : 'Select all' },
+        { role: 'cut', label: t('Вырезать', 'Cut', '剪切') },
+        { role: 'copy', label: t('Копировать', 'Copy', '复制') },
+        { role: 'paste', label: t('Вставить', 'Paste', '粘贴') },
+        { role: 'selectAll', label: t('Выделить всё', 'Select all', '全选') },
       ],
     },
     {
-      label: ru ? 'Вид' : 'View',
+      label: t('Вид', 'View', '视图'),
       submenu: [
-        { role: 'resetZoom', label: ru ? 'Обычный масштаб' : 'Actual size' },
-        { role: 'zoomIn', label: ru ? 'Крупнее' : 'Zoom in' },
-        { role: 'zoomOut', label: ru ? 'Мельче' : 'Zoom out' },
+        { role: 'resetZoom', label: t('Обычный масштаб', 'Actual size', '实际大小') },
+        { role: 'zoomIn', label: t('Крупнее', 'Zoom in', '放大') },
+        { role: 'zoomOut', label: t('Мельче', 'Zoom out', '缩小') },
         { type: 'separator' },
-        { role: 'togglefullscreen', label: ru ? 'Во весь экран' : 'Full screen' },
-        { role: 'toggleDevTools', label: ru ? 'Инструменты разработчика' : 'Developer tools' },
+        { role: 'togglefullscreen', label: t('Во весь экран', 'Full screen', '全屏') },
+        { role: 'toggleDevTools', label: t('Инструменты разработчика', 'Developer tools', '开发者工具') },
       ],
     },
     {
-      label: ru ? 'Справка' : 'Help',
+      label: t('Справка', 'Help', '帮助'),
       submenu: [
         {
-          label: ru ? 'Открыть папку логов' : 'Open log folder',
+          label: t('Открыть папку логов', 'Open log folder', '打开日志文件夹'),
           click: () => {
             const dir = logDir();
             if (dir) void shell.openPath(dir);
           },
         },
         {
-          label: ru ? 'Подключить ИИ (MCP)…' : 'Connect AI (MCP)…',
+          label: t('Подключить ИИ (MCP)…', 'Connect AI (MCP)…', '连接 AI (MCP)…'),
           click: () => {
             connectAi(lang);
           },
         },
         { type: 'separator' },
         {
-          label: ru ? 'О программе' : 'About',
+          label: t('О программе', 'About', '关于'),
           click: () => {
             about(lang);
           },

@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { modelOfRecord, type RecordModel } from '@kenshi-editor/core';
-import { STRINGS, useLang } from '../../i18n.ts';
+import { langOf, useLang } from '../../i18n.ts';
 import type { Lang } from '../../../../shared/api.ts';
 import { shortcut } from '../../keys.ts';
 import { registerPanel, type PanelProps } from '../registry.ts';
@@ -56,7 +56,27 @@ const ru: ModelStrings = {
   iconSaved: 'Иконка сохранена',
   help: 'Левая кнопка — вращать, средняя/правая — сдвигать, колесо — ближе/дальше',
 };
-const MODEL_STRINGS: Record<Lang, ModelStrings> = { en, ru };
+const zh: ModelStrings = {
+  panel: '模型',
+  hint: '来自游戏文件的所选记录的 3D 模型',
+  none: '请选择武器、护甲、建筑或物品。',
+  noModel: '这条记录没有 3D 模型。',
+  loading: '正在加载模型…',
+  failed: '无法读取该模型',
+  missing: '游戏文件夹中没有',
+  triangles: '个三角面',
+  parts: '个部件',
+  frame: '适应视图 (F)',
+  front: '前视 (1)',
+  right: '右视 (3)',
+  top: '俯视 (7)',
+  wire: '线框 (W)',
+  interior: '室内',
+  icon: '保存图标…',
+  iconSaved: '图标已保存',
+  help: '鼠标左键——旋转，中键/右键——平移，滚轮——缩放',
+};
+const MODEL_STRINGS: Record<Lang, ModelStrings> = { en, ru, zh };
 
 /** Типы записей, у которых в игре бывает модель. */
 const MODEL_TYPES = [
@@ -297,8 +317,8 @@ function ModelPanel({ def, params }: PanelProps): ReactNode {
 
 registerPanel({
   id: 'model',
-  title: (t) => MODEL_STRINGS[t === STRINGS.en ? 'en' : 'ru'].panel,
-  hint: (t) => MODEL_STRINGS[t === STRINGS.en ? 'en' : 'ru'].hint,
+  title: (t) => MODEL_STRINGS[langOf(t)].panel,
+  hint: (t) => MODEL_STRINGS[langOf(t)].hint,
   icon: '◈',
   component: ModelPanel,
   area: 'center',

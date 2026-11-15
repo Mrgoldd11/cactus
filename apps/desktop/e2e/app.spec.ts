@@ -241,6 +241,7 @@ test('сценарий: копия катаны, имя и урон, в ассо
     const vendor = recs.find((r) => r.stringId === WEAPON_VENDOR)!;
     expect(vendor.refs.get('weapons')?.some((r) => r.target === sid)).toBe(true);
 
+    await page.getByTestId('lang-current').click();
     await page.getByTestId('lang-en').click();
     await expect(page.getByTestId('save')).toHaveText('Save');
     await page.getByTestId('cat-mod').click();
@@ -248,6 +249,22 @@ test('сценарий: копия катаны, имя и урон, в ассо
     await page.getByTestId('tab-fields').click();
     await page.getByTestId('field-filter').fill('');
     await page.screenshot({ path: join(shots, '09-english-fields.png') });
+    // Китайский: выпадающий список показывает текущий язык, список открывается под кнопкой.
+    await page.getByTestId('lang-current').click();
+    await expect(page.getByTestId('lang-menu')).toBeVisible();
+    await page.getByTestId('lang-zh').click();
+    await expect(page.getByTestId('lang-menu')).toHaveCount(0);
+    await expect(page.getByTestId('lang-current')).toContainText('简体中文');
+    await expect(page.getByTestId('save')).toHaveText('保存');
+    // Заголовки панелей «Игра», «Модель», «Мир», «Внутри» в меню «Окно» — тоже по-китайски.
+    await page.getByTestId('window-menu').click();
+    await expect(page.getByTestId('window-panel-game')).toContainText('游戏');
+    await expect(page.getByTestId('window-panel-model')).toContainText('模型');
+    await expect(page.getByTestId('window-panel-world')).toContainText('世界');
+    await expect(page.getByTestId('window-panel-interior')).toContainText('室内');
+    await page.screenshot({ path: join(shots, '10-chinese.png') });
+    await page.getByTestId('window-menu').click();
+    await page.getByTestId('lang-current').click();
     await page.getByTestId('lang-ru').click();
   } finally {
     await closeApp(app);
