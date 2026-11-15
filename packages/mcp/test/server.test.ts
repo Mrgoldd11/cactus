@@ -100,6 +100,29 @@ describe('kenshi-mcp: чтение', () => {
     const en = await client.readResource({ uri: 'kenshi://schema/enum/Kind' });
     expect((en.contents[0] as { text: string }).text).toContain('TOOL = 0');
   });
+
+  it('the schema follows the opened mod: a schema extension in its folder adds a type and fields', async () => {
+    writeFileSync(
+      join(fx.game, 'mods', 'My', 'fcs.def'),
+      ['// enum itemType { COUNTER=900 }', '[COUNTER]', 'amount:  0 "how much"', '', '[ITEM]', 'charges:  3 "from the extension"'].join(EOL),
+    );
+    // No mod is opened: the schema of the game alone.
+    expect((await call('schema', { type: 'counter' })).isError).toBe(true);
+    expect((await call('schema', { type: 'item' })).text).not.toContain('charges');
+
+    await call('open_mod', { mod: 'My' });
+    expect((await call('schema', { type: 'counter' })).text).toContain('amount: int = 0 — how much');
+    expect((await call('schema', { type: 'item' })).text).toContain('charges: int = 3 — from the extension');
+    const type = await client.readResource({ uri: 'kenshi://schema/type/COUNTER' });
+    expect((type.contents[0] as { text: string }).text).toContain('amount: int = 0');
+    const edit = await call('edit', { ops: [{ op: 'create', type: 'COUNTER', name: 'Days passed' }] });
+    expect(edit.isError).toBe(false);
+    expect((await call('find', { type: 'COUNTER' })).text).toContain('COUNTER  «Days passed»');
+
+    // Another mod has no extension: its schema is the game's again.
+    await call('open_mod', { name: 'Other.mod' });
+    expect((await call('schema', { type: 'counter' })).isError).toBe(true);
+  });
 });
 
 describe('kenshi-mcp: конфликты модов', () => {

@@ -56,7 +56,8 @@ t('ИТОГО', start);
 
 // Opening a mod the way MCP and CLI do it (loadModContext): vanilla layers and the translation
 // are already in memory, the schema is read from disk. Median of several runs. Stage 8b
-// (FCS Extended) must not make this slower for a mod that has no extensions.
+// (FCS Extended) must not make this slower for a mod that has no extensions. The first run
+// is printed apart: it parses the schema, the later ones take it from the schema cache.
 const benchMod = process.argv[3] ?? installedModFiles(game as never).find((m) => m.source === 'mods')?.path;
 if (benchMod) {
   const runs: number[] = [];
@@ -65,6 +66,7 @@ if (benchMod) {
     loadModContext({ paths: game as never, modPath: benchMod, vanilla: layers, po: poParsed });
     runs.push(performance.now() - s0);
   }
+  const first = runs[0]!;
   runs.sort((a, b) => a - b);
-  console.log(`${'loadModContext, median of 9'.padEnd(34)} ${runs[4]!.toFixed(1).padStart(6)} мс  (min ${runs[0]!.toFixed(1)}, ${benchMod})`);
+  console.log(`${'loadModContext, median of 9'.padEnd(34)} ${runs[4]!.toFixed(1).padStart(6)} мс  (first ${first.toFixed(1)}, min ${runs[0]!.toFixed(1)}, ${benchMod})`);
 }

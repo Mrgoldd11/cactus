@@ -11,6 +11,7 @@ import type { DataFile } from '../format/types.ts';
 import { ModContext, type Layer } from '../model/context.ts';
 import type { PoFile } from '../locale/po.ts';
 import type { GameSchema } from '../schema/game-schema.ts';
+import { extensionsFor, type ExtensionChoice, type FoundExtension } from './extensions.ts';
 import { installedModFiles, VANILLA_FILES, vanillaFilePaths, type GamePaths } from './paths.ts';
 import { gamedataPoPath, loadGamedataPo, loadGameSchema } from './schema.ts';
 
@@ -32,6 +33,12 @@ export interface LoadContextOptions {
   context?: readonly string[];
   /** Загрузить схему FCS (по умолчанию да, если fcs.def есть) или взять уже прочитанную. */
   schema?: boolean | GameSchema;
+  /**
+   * Schema extensions (FCS Extended files in mod folders) to add to the schema read from disk.
+   * Default: those of the mod and of the mods loaded under it; a choice changes the set, `false`
+   * turns extensions off. Not used when `schema` is `false` or a ready schema.
+   */
+  extensions?: ExtensionChoice | false;
   /** Загрузить русский gamedata.po для поиска (по умолчанию да, если файл есть) или взять уже прочитанный. */
   po?: boolean | PoFile;
   /** Уже прочитанные ванильные слои (чтобы не читать их заново). */
@@ -46,6 +53,8 @@ export interface LoadedContext {
   dependencyPaths: string[];
   /** Моды контекста, которые нашлись (не зависимости). */
   context: string[];
+  /** Schema extensions found for the mod, in load order; their def files are in `ctx.schema`. */
+  extensions: FoundExtension[];
 }
 
 export function loadVanillaLayers(paths: GamePaths): Layer[] {
@@ -148,14 +157,27 @@ export function loadModContext(options: LoadContextOptions): LoadedContext {
   for (const dep of plan.dependencies) layers.push({ name: dep.name, file: readDataFile(readFileSync(dep.path)) });
   const wantSchema = options.schema ?? existsSync(join(paths.kenshi, 'fcs.def'));
   const wantPo = options.po ?? existsSync(gamedataPoPath(paths));
+  const dependencyPaths = plan.dependencies.map((d) => d.path);
+  let schema: GameSchema | undefined;
+  let extensions: FoundExtension[] = [];
+  if (typeof wantSchema === 'object') schema = wantSchema;
+  else if (wantSchema) {
+    if (options.extensions !== false) {
+      // The folder of the mod counts even before the mod file exists: a new mod may be started
+      // in a folder that already has its fcs.def.
+      const modFiles = [...(options.modPath !== undefined ? [options.modPath] : []), ...dependencyPaths];
+      extensions = extensionsFor(paths, modFiles, options.extensions);
+    }
+    schema = loadGameSchema(paths, { extensions });
+  }
   const ctx = new ModContext({
     layers,
     modName: plan.modName,
     ...(plan.mod ? { mod: plan.mod } : {}),
-    ...(typeof wantSchema === 'object' ? { schema: wantSchema } : wantSchema ? { schema: loadGameSchema(paths) } : {}),
+    ...(schema ? { schema } : {}),
     ...(typeof wantPo === 'object' ? { po: wantPo } : wantPo ? { po: loadGamedataPo(paths) } : {}),
   });
-  return { ctx, missingDependencies: plan.missingDependencies, dependencyPaths: plan.dependencies.map((d) => d.path), context: plan.context };
+  return { ctx, missingDependencies: plan.missingDependencies, dependencyPaths, context: plan.context, extensions };
 }
 
 /** Записать мод (только изменения) в файл и считать контекст сохранённым. */

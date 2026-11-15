@@ -15,6 +15,7 @@ import {
   parseFcsDef,
   parseFcsEnums,
   parseFcsLayout,
+  parseGameSchema,
   prepareSchemaBase,
   readDataFile,
   refGroups,
@@ -22,7 +23,7 @@ import {
   type ExtensionLayer,
   type SchemaSources,
 } from '../src/index.ts';
-import { hasGame, loadGameSchema, resolveGamePaths } from '../src/node/index.ts';
+import { findExtensions, hasGame, loadGameSchema, loadModContext, resolveGamePaths } from '../src/node/index.ts';
 
 const paths = resolveGamePaths();
 const game = hasGame(paths);
@@ -59,12 +60,25 @@ describe.skipIf(!game)('schema extensions: files of the game', () => {
   it('without extensions the schema is the one the game loader builds', () => {
     const base = prepareSchemaBase(sources());
     const schema = applyExtensionLayers(base, []);
-    const plain = loadGameSchema(paths);
-    expect(schema.warnings).toEqual(plain.warnings);
-    expect([...schema.types.keys()]).toEqual([...plain.types.keys()]);
-    expect([...schema.enums.keys()]).toEqual([...plain.enums.keys()]);
-    expect(schema.layout).toEqual(plain.layout);
+    for (const plain of [parseGameSchema(sources()), loadGameSchema(paths)]) {
+      expect(schema.warnings).toEqual(plain.warnings);
+      expect(schema.types).toEqual(plain.types);
+      expect(schema.enums).toEqual(plain.enums);
+      expect(schema.layout).toEqual(plain.layout);
+    }
     expect(schema.itemTypes.extra.size).toBe(0);
+  });
+
+  it('opening a mod without extensions: the schema of the game, read once', () => {
+    const plain = loadGameSchema(paths);
+    expect(loadGameSchema(paths)).toBe(plain);
+    const loaded = loadModContext({ paths, vanilla: [], po: false });
+    expect(loaded.extensions).toEqual([]);
+    expect(loaded.ctx.schema).toBe(plain);
+    // The installed extensions, whatever they are, come with their files and in a fixed order.
+    const found = findExtensions(paths);
+    expect(found.every((e) => e.stamps.length > 0)).toBe(true);
+    expect(found.map((e) => e.id)).toEqual(findExtensions(paths).map((e) => e.id));
   });
 });
 
@@ -124,6 +138,28 @@ describe.skipIf(!game || !examples)('schema extensions: real extensions', () => 
     expect(group.rows[0]).toMatchObject({ ref: { target: variable, v0: 0 }, targetType: 'VARIABLE' });
     const again = readDataFile(writeDataFile(ctx.buildModFile()));
     expect(again.records.map((r) => r.type)).toEqual([900, ctx.typeId('DIALOGUE_LINE')]);
+  });
+
+  it('WorldStates.mod opened from its folder: the extension next to it is found and applied', () => {
+    const loaded = loadModContext({ paths, modPath: WORLD_STATES_MOD });
+    expect(loaded.extensions).toHaveLength(1);
+    expect(loaded.extensions[0]).toMatchObject({ name: 'WorldStates', source: 'folder', def: WORLD_STATES, plugins: ['WorldStates_FCS.dll'], patches: [] });
+    const { ctx } = loaded;
+    expect(ctx.schema!.extensions).toEqual(['WorldStates']);
+    expect(ctx.typeName(900)).toBe('VARIABLE');
+    expect(ctx.schema!.types.get('VARIABLE')!.fields.get('value')).toMatchObject({ kind: 'int', extension: 'WorldStates' });
+    expect(ctx.schema!.types.get('DIALOGUE_LINE')!.fields.get('variable equals')).toMatchObject({
+      targetType: 'VARIABLE',
+      description: 'checks the value of a variable',
+    });
+    expect(ctx.schema!.warnings).toEqual(loadGameSchema(paths).warnings);
+    expect(firstDifference(readFileSync(WORLD_STATES_MOD), writeDataFile(ctx.buildModFile()))).toBe(-1);
+
+    // The same mod again: the schema comes from memory. Without extensions: the game's schema.
+    expect(loadModContext({ paths, modPath: WORLD_STATES_MOD, vanilla: [], po: false }).ctx.schema).toBe(ctx.schema);
+    const off = loadModContext({ paths, modPath: WORLD_STATES_MOD, vanilla: [], po: false, extensions: false });
+    expect(off.ctx.schema).toBe(loadGameSchema(paths));
+    expect(off.ctx.typeName(900)).toBe('TYPE_900');
   });
 
   it('DialogueExtensions: conditions are appended to the enum built into FCS', () => {

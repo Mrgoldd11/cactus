@@ -9,6 +9,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { base64ToBytes, type DataFile, MergeLedger, type MergeSource, type LevelDataInfo, ModContext, readDataFile, type GameSchema, type Layer, type LiveSnapshot, type LiveState, type PoFile, type ProposeResult, type TranslationIndex, type AiChangeset, type EditOp, WorldEdits, WorldIndex, writeDataFile } from '@kenshi-editor/core';
 import {
   detectLevelData,
+  extensionsFor,
   gamedataPoPath,
   loadMergeLedger,
   readMergeSource,
@@ -63,7 +64,6 @@ export class Session {
   readonly paths: GamePaths;
   readonly cwd: string;
   private vanillaCache?: Layer[];
-  private schemaCache?: GameSchema;
   private poCache?: PoFile | null;
   private translationCache?: TranslationIndex | null;
   private current?: OpenResult;
@@ -88,9 +88,14 @@ export class Session {
     return (this.vanillaCache ??= loadVanillaLayers(this.paths));
   }
 
+  /**
+   * Schema of the opened mod: the game's schema with the schema extensions of the mod and of
+   * its dependencies. Without a mod, the game's schema alone. Core keeps parsed schemas in
+   * memory by the state of their files, so nothing is cached here.
+   */
   schema(): GameSchema {
     if (!hasGame(this.paths)) throw new SessionError(`No game in ${this.paths.kenshi}`);
-    return (this.schemaCache ??= loadGameSchema(this.paths));
+    return this.current?.ctx.schema ?? loadGameSchema(this.paths);
   }
 
   /** Русский перевод текстов игры (`ru_RU.translation`), если есть. */
@@ -127,8 +132,9 @@ export class Session {
       ...(path !== undefined ? { modPath: path } : {}),
       ...(req.name !== undefined ? { modName: req.name } : {}),
       ...(req.dependencies ? { dependencies: req.dependencies } : {}),
-      // Схема и перевод одни на сессию: при повторном открытии не читаются заново.
-      schema: this.schema(),
+      // The schema depends on the mod (its schema extensions); core reads it from disk once
+      // per state of the files. The translation is one for the session.
+      schema: true,
       ...(this.po() ? { po: this.po()! } : { po: false }),
     });
     return { ...loaded, ...(path !== undefined ? { path } : {}) };
@@ -350,7 +356,9 @@ export class Session {
       layers: [...this.vanilla(), ...deps],
       modName: snap.modName,
       mod: readDataFile(base64ToBytes(snap.mod)),
-      schema: this.schema(),
+      schema: loadGameSchema(this.paths, {
+        extensions: extensionsFor(this.paths, [...(snap.modPath !== undefined ? [snap.modPath] : []), ...snap.dependencies.map((d) => d.path)]),
+      }),
       ...(po ? { po } : {}),
     });
     return { ctx, ...(snap.modPath !== undefined ? { path: snap.modPath } : {}), missingDependencies: [], dependencyPaths: snap.dependencies.map((d) => d.path) };
