@@ -214,7 +214,7 @@ export const TALK_VERDICT_LABELS: Readonly<Record<TalkVerdict, string>> = {
 export interface TalkCandidate {
   dialog: string;
   name: string;
-  ru?: string;
+  localized?: string;
   /** Все источники этого диалога (один диалог может прийти несколькими путями). */
   sources: TalkSource[];
   /** Очки, как их считает игра: `score bonus` с надбавками. */
@@ -254,7 +254,7 @@ export interface TalkLine {
   oddsIf?: number;
   conditions: string[];
   effects: string[];
-  texts: { en: string; ru?: string }[];
+  texts: { en: string; localized?: string }[];
   /** Реплику перебивает соседняя (подходит всегда, раньше в списке, очков больше). */
   shadowedBy?: string;
   /** Варианты игрока после реплики NPC (один уровень). */
@@ -264,7 +264,7 @@ export interface TalkLine {
 export interface TalkSimulation {
   character: string;
   name: string;
-  ru?: string;
+  localized?: string;
   event: number;
   eventLabel: string;
   /** В порядке, в котором их перебирает игра; заблокированные, пустые и без записи — в конце. */
@@ -361,8 +361,8 @@ export function simulateTalk(ctx: ModContext, character: string, event = EVENT_T
       actions: [],
       verdict: 'missing',
     };
-    const ru = ctx.localizedName(s.dialog);
-    if (ru !== undefined) cand.ru = ru;
+    const loc = ctx.localizedName(s.dialog);
+    if (loc !== undefined) cand.localized = loc;
     const o = ctx.origin(s.dialog);
     if (o) cand.origin = o.origin;
     if (rec) {
@@ -409,8 +409,8 @@ export function simulateTalk(ctx: ModContext, character: string, event = EVENT_T
   const live = (x: TalkCandidate): number => (x.verdict === 'locked' || x.verdict === 'empty' || x.verdict === 'missing' ? 1 : 0);
   const candidates = [...byDialog.values()].sort((a, b) => live(a) - live(b) || (rank.get(a.dialog) ?? 0) - (rank.get(b.dialog) ?? 0));
   const sim: TalkSimulation = { character, name: ctx.name(character) ?? character, event, eventLabel: eventLabelOf(ctx, event), candidates, pool, opening: [] };
-  const ru = ctx.localizedName(character);
-  if (ru !== undefined) sim.ru = ru;
+  const loc = ctx.localizedName(character);
+  if (loc !== undefined) sim.localized = loc;
   const winner = candidates.find((x) => x.verdict === 'wins');
   if (winner) sim.winner = winner.dialog;
   const of = winner?.dialog ?? pool[0];
@@ -453,7 +453,7 @@ export function simulateTalk(ctx: ModContext, character: string, event = EVENT_T
 const textOf = (l: TalkLine): string => {
   const t = l.texts[0];
   if (!t) return '(без текста)';
-  return `«${t.ru ?? t.en}»${l.texts.length > 1 ? ` (+${l.texts.length - 1} вариантов)` : ''}`;
+  return `«${t.localized ?? t.en}»${l.texts.length > 1 ? ` (+${l.texts.length - 1} вариантов)` : ''}`;
 };
 
 const pct = (p: number): string => `${String(Math.round(p * 100))}%`;
@@ -489,7 +489,7 @@ function reason(x: TalkCandidate, nameOf: (d: string) => string): string | undef
 
 /** Отчёт симуляции текстом (для CLI и MCP). */
 export function formatTalk(sim: TalkSimulation): string[] {
-  const out = [`${sim.ru ?? sim.name} (${sim.character}), событие ${sim.eventLabel}`];
+  const out = [`${sim.localized ?? sim.name} (${sim.character}), событие ${sim.eventLabel}`];
   if (!sim.candidates.length) {
     out.push('  диалогов на это событие нет');
     return out;
@@ -497,7 +497,7 @@ export function formatTalk(sim: TalkSimulation): string[] {
   const byId = new Map(sim.candidates.map((x) => [x.dialog, x]));
   const nameOf = (d: string): string => {
     const x = byId.get(d);
-    return x ? (x.ru ?? x.name) : d;
+    return x ? (x.localized ?? x.name) : d;
   };
   if (sim.winner !== undefined) out.push(`  итог: без всяких условий игра выберет «${nameOf(sim.winner)}»`);
   else if (sim.pool.length) out.push(`  итог: без условий игра выберет случайно один из ${String(sim.pool.length)}: ${sim.pool.map((d) => `«${nameOf(d)}» (${pct(byId.get(d)?.odds ?? 0)})`).join(', ')}`);
@@ -506,7 +506,7 @@ export function formatTalk(sim: TalkSimulation): string[] {
   for (const x of sim.candidates) {
     const via = [...new Set(x.sources.map((s) => (s.via === 'character' ? TALK_VIA_LABELS[s.via] : `${TALK_VIA_LABELS[s.via]} ${s.holder}`)))].join('; ');
     const why = reason(x, nameOf);
-    out.push(`  ${x.verdict === 'wins' ? '▶' : '·'} ${x.ru ?? x.name} (${x.dialog}) — ${TALK_VERDICT_LABELS[x.verdict]}${why ? `: ${why}` : ''}`);
+    out.push(`  ${x.verdict === 'wins' ? '▶' : '·'} ${x.localized ?? x.name} (${x.dialog}) — ${TALK_VERDICT_LABELS[x.verdict]}${why ? `: ${why}` : ''}`);
     const parts = x.scoreParts.some((p) => p.key !== 'bonus') ? ` (${formatScoreParts(x.scoreParts)})` : '';
     out.push(`      очки ${String(x.score)}${parts}${x.total !== undefined && x.total !== x.score ? `, с первой репликой — до ${String(x.total)}` : ''}`);
     out.push(`      ${x.always ? 'без условий' : x.conditions.length ? `условия: ${x.conditions.join('; ')}` : 'условия у реплик'}${x.actions.length ? `; действия: ${x.actions.map((a) => ACTION_KIND_LABELS[a]).join(', ')}` : ''}`);

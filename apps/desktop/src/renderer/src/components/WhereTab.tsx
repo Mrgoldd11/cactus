@@ -15,7 +15,7 @@ import {
   type WhereStep,
   type WorldIndex,
 } from '@kenshi-editor/core';
-import { useLang, useT } from '../i18n.ts';
+import { inLang, useLang, useT } from '../i18n.ts';
 import type { Project } from '../project.ts';
 import { ShowInGame } from './GameLink.tsx';
 
@@ -132,7 +132,7 @@ function PathView({ path, onGo }: { path: readonly WhereStep[]; onGo: (sid: stri
         <span key={`${s.id}:${i}`} className="where-step">
           {'← '}
           <span className="badge tiny">{s.type}</span> <RecLink r={s} onGo={onGo} />{' '}
-          <span className="muted mono" title={lang === 'ru' ? s.ru : s.en}>
+          <span className="muted mono" title={inLang(s, lang)}>
             ({s.category})
           </span>
         </span>

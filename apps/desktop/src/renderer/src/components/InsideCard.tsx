@@ -51,14 +51,14 @@ const zh: InsideStrings = {
 };
 const INSIDE_STRINGS: Record<Lang, InsideStrings> = { en, ru, zh };
 
-function LinkItem({ l, lang, go, s }: { l: InsideLink; lang: Lang; go: (sid: string) => void; s: InsideStrings }): ReactNode {
+function LinkItem({ l, go, s }: { l: InsideLink; go: (sid: string) => void; s: InsideStrings }): ReactNode {
   if (l.name === undefined)
     return (
       <li className="muted mono" data-sid={l.sid}>
         {l.sid} — {s.noRecord}
       </li>
     );
-  const name = (lang === 'ru' ? l.nameRu : undefined) ?? (l.name || l.sid);
+  const name = l.localizedName ?? (l.name || l.sid);
   return (
     <li data-sid={l.sid}>
       <a
@@ -76,7 +76,7 @@ function LinkItem({ l, lang, go, s }: { l: InsideLink; lang: Lang; go: (sid: str
   );
 }
 
-function Groups({ groups, lang, go, s }: { groups: InsideGroup[]; lang: Lang; go: (sid: string) => void; s: InsideStrings }): ReactNode {
+function Groups({ groups, go, s }: { groups: InsideGroup[]; go: (sid: string) => void; s: InsideStrings }): ReactNode {
   if (groups.length === 0) return <div className="muted">{s.empty}</div>;
   return groups.map((g) => (
     <div key={g.category} data-category={g.category}>
@@ -85,7 +85,7 @@ function Groups({ groups, lang, go, s }: { groups: InsideGroup[]; lang: Lang; go
       </div>
       <ul style={{ margin: '0 0 4px', paddingLeft: 16 }}>
         {g.links.map((l, i) => (
-          <LinkItem key={`${l.sid}#${i}`} l={l} lang={lang} go={go} s={s} />
+          <LinkItem key={`${l.sid}#${i}`} l={l} go={go} s={s} />
         ))}
       </ul>
     </div>
@@ -96,7 +96,7 @@ export function InsideCard({ project, sid, go }: { project: Project; sid: string
   const lang = useLang();
   const s = INSIDE_STRINGS[lang];
   const card = inspectRecord(project.ctx, sid);
-  const name = (lang === 'ru' ? card.nameRu : undefined) ?? (card.name || sid);
+  const name = card.localizedName ?? (card.name || sid);
   const otherLayers = card.layers.slice(1);
   return (
     <div data-testid="inside-card" data-sid={sid}>
@@ -119,7 +119,7 @@ export function InsideCard({ project, sid, go }: { project: Project; sid: string
             </a>{' '}
             <span className="badge">{card.type}</span>
           </div>
-          {lang === 'ru' && card.nameRu && card.name && <div className="muted">{card.name}</div>}
+          {card.localizedName && card.name && <div className="muted">{card.name}</div>}
           <div className="muted mono">{sid}</div>
           <div className="muted">
             {s.from} {card.origin}
@@ -127,12 +127,12 @@ export function InsideCard({ project, sid, go }: { project: Project; sid: string
             {card.status && s.status[card.status] && ` · ${s.status[card.status]}`}
           </div>
           <div style={{ marginTop: 6, fontWeight: 600 }}>{s.links}</div>
-          <Groups groups={card.links} lang={lang} go={go} s={s} />
+          <Groups groups={card.links} go={go} s={s} />
           <div style={{ marginTop: 6, fontWeight: 600 }}>
             {s.usedBy}
             {card.usedByTotal > 0 && ` (${card.usedByTotal})`}
           </div>
-          <Groups groups={card.usedBy} lang={lang} go={go} s={s} />
+          <Groups groups={card.usedBy} go={go} s={s} />
         </>
       )}
     </div>

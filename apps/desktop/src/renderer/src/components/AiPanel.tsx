@@ -58,7 +58,7 @@ export function AiPanel({ project, changesets, status, onGo, onReport, onClose }
               return (
                 <div key={d.stringId} className="ai-rec">
                   <button className={`link ai-rec-link ${d.change}`} onClick={() => { onGo(d.stringId); }} data-sid={d.stringId}>
-                    {d.change === 'added' ? '+' : d.change === 'removed' ? '−' : '~'} {e?.ru || e?.name || (rec ? decodeText(rec.name) : d.stringId)}
+                    {d.change === 'added' ? '+' : d.change === 'removed' ? '−' : '~'} {e?.localized || e?.name || (rec ? decodeText(rec.name) : d.stringId)}
                   </button>
                   {fields.length > 0 && <pre className="ai-fields">{fields.map((f) => f.trim()).join('\n')}</pre>}
                 </div>

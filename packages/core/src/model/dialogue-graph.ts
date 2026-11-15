@@ -21,7 +21,7 @@ import { formatEnumValue, getEnum, refValueEnum, shortEnumLabel } from './enums.
 export const CHOICE_SPEAKERS: ReadonlySet<number> = new Set([1, 2]);
 export interface DialogueGraphText {
   en: string;
-  ru?: string;
+  localized?: string;
 }
 
 export type DialogueIssueKind = 'missing' | 'no-lines' | 'shadowed' | 'truncated';
@@ -38,7 +38,7 @@ export interface DialogueGraphNode {
   id: string;
   type: string;
   name: string;
-  ru?: string;
+  localized?: string;
   texts: DialogueGraphText[];
   speaker?: number;
   /** Подпись говорящего: «я», «собеседник», ... */
@@ -149,8 +149,8 @@ export function buildDialogueGraph(ctx: ModContext, stringId: string, options: D
       depth,
       issues: [],
     };
-    const ru = ctx.localizedName(n.stringId);
-    if (ru !== undefined) node.ru = ru;
+    const loc = ctx.localizedName(n.stringId);
+    if (loc !== undefined) node.localized = loc;
     if (rec) {
       for (const [k, v] of rec.strings) {
         if (!/^text\d+$/.test(k)) continue;
@@ -158,7 +158,7 @@ export function buildDialogueGraph(ctx: ModContext, stringId: string, options: D
         if (en === '') continue;
         const t: DialogueGraphText = { en };
         const tr = translatedText(options.translation, n.stringId, k, en);
-        if (tr !== undefined) t.ru = tr;
+        if (tr !== undefined) t.localized = tr;
         node.texts.push(t);
       }
       if (n.type === 'DIALOGUE_LINE') {

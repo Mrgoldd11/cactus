@@ -7,7 +7,7 @@
  */
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { addDialoguePackage, censusNoPackage, npcCensus, type Census, type CensusChar } from '@kenshi-editor/core';
-import { useLang, useT } from '../../i18n.ts';
+import { useDataLocale, useT } from '../../i18n.ts';
 import { tryEdit, useProjectVersion } from '../../hooks.ts';
 import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
@@ -30,7 +30,7 @@ const FILTERS: Record<Filter, (c: CensusChar) => boolean> = {
 
 function CensusPanel(): ReactNode {
   const t = useT();
-  const ru = useLang() === 'ru';
+  const dataLocale = useDataLocale();
   const { project, go, open, report } = useWorkbench();
   const version = useProjectVersion(project);
   const ctx = project.ctx;
@@ -54,7 +54,7 @@ function CensusPanel(): ReactNode {
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const [pkg, setPkg] = useState('');
 
-  const label = (sid: string, en?: string): string => (ru ? (ctx.localizedName(sid) ?? en ?? ctx.name(sid) ?? sid) : (en ?? ctx.name(sid) ?? sid));
+  const label = (sid: string, en?: string): string => (ctx.localizedName(sid) ?? en ?? ctx.name(sid) ?? sid);
   const data = census?.data;
   const byId = useMemo(() => new Map((data?.chars ?? []).map((c) => [c.sid, c])), [data]);
   const groups = data ? (groupBy === 'faction' ? data.byFaction : data.byTown) : [];
@@ -65,7 +65,7 @@ function CensusPanel(): ReactNode {
     const base = activeGroup ? activeGroup.chars.map((sid) => byId.get(sid)!) : data.chars;
     const f = FILTERS[filter];
     return base
-      .filter((c) => f(c) && (query === '' || `${c.name}\n${c.ru ?? ''}\n${c.sid}`.toLowerCase().includes(query)))
+      .filter((c) => f(c) && (query === '' || `${c.name}\n${c.localized ?? ''}\n${c.sid}`.toLowerCase().includes(query)))
       .sort((a, b) => b.towns.length - a.towns.length || a.name.localeCompare(b.name));
   }, [data, activeGroup, byId, filter, query]);
 
@@ -74,7 +74,7 @@ function CensusPanel(): ReactNode {
       (project.idsByType().get('DIALOGUE_PACKAGE') ?? [])
         .map((sid) => ({ sid, label: label(sid) }))
         .sort((a, b) => a.label.localeCompare(b.label)),
-    [project, version, ru],
+    [project, version, dataLocale],
   );
   const selected = [...picked].filter((sid) => byId.has(sid));
 
@@ -199,7 +199,7 @@ function CensusPanel(): ReactNode {
                         </td>
                         <td>
                           <button className="link" onClick={() => { go(c.sid); }} title={`${c.sid}\n${t.ceOpen}`}>
-                            {ru ? (c.ru ?? c.name) : c.name}
+                            {c.localized ?? c.name}
                           </button>
                         </td>
                         <td>{c.factions.map((f) => label(f)).join(', ')}</td>

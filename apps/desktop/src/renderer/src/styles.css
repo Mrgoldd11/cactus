@@ -486,6 +486,10 @@ textarea {
   align-items: center;
   padding: 0 8px;
 }
+.list-grid.no-tr {
+  /* No data language: the translation column is hidden. */
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1fr);
+}
 .list-header {
   height: 22px;
   color: var(--muted);
@@ -529,7 +533,7 @@ textarea {
 .list-row .type {
   color: var(--muted);
 }
-.list-row.st-deleted .ru,
+.list-row.st-deleted .tr-name,
 .list-row.st-deleted .sid {
   text-decoration: line-through;
 }
@@ -564,7 +568,7 @@ textarea {
   align-items: center;
   font-size: 12px;
 }
-.record-meta .ru {
+.record-meta .tr-name {
   font-style: italic;
 }
 .tabs {

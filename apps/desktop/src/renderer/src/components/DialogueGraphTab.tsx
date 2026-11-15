@@ -54,9 +54,9 @@ import {
   type DialogueGraph,
   type DialogueGraphNode,
   type LineLink,
-  type TranslationIndex,
 } from '@kenshi-editor/core';
-import { useLang, useT } from '../i18n.ts';
+import { inLang, useLang, useT } from '../i18n.ts';
+import { useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
 import { tryEdit } from '../hooks.ts';
 import { isTypingIn, shortcut } from '../keys.ts';
@@ -92,7 +92,6 @@ interface Actions {
 
 type LineData = {
   node: DialogueGraphNode;
-  ru: boolean;
   status: string | undefined;
   checks: DialogCheck[];
   removed: number;
@@ -160,10 +159,10 @@ function hiddenBy(graph: DialogueGraph, collapsed: ReadonlySet<string>): { hidde
 
 function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, onShowLine, isLineOpen }: Props): ReactNode {
   const t = useT();
+  // Core explains issues only in Russian so far; other languages get the short dictionary text.
   const lang = useLang();
-  const ru = lang === 'ru';
   const ctx = project.ctx;
-  const [translation, setTranslation] = useState<TranslationIndex | undefined | null>(null);
+  const translation = useGameTexts(project);
   const flow = useReactFlow();
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -185,20 +184,6 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   /** Последний узел, выбранный кликом в самом графе (к нему не подъезжаем). */
   const clicked = useRef<string | undefined>(undefined);
 
-  useEffect(() => {
-    let alive = true;
-    project.translation().then(
-      (tr) => {
-        if (alive) setTranslation(tr);
-      },
-      () => {
-        if (alive) setTranslation(undefined);
-      },
-    );
-    return () => {
-      alive = false;
-    };
-  }, [project]);
 
   const root = focusRoot !== undefined && ctx.get(focusRoot) ? focusRoot : sid;
   const graph = useMemo((): DialogueGraph => buildDialogueGraph(ctx, root, translation ? { translation } : {}), [ctx, root, version, translation]);
@@ -214,7 +199,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     const q = query.trim().toLowerCase();
     if (q === '') return [];
     return graph.nodes
-      .filter((n) => [n.id, n.name, n.ru ?? '', ...n.texts.flatMap((x) => [x.en, x.ru ?? ''])].some((s) => s.toLowerCase().includes(q)))
+      .filter((n) => [n.id, n.name, n.localized ?? '', ...n.texts.flatMap((x) => [x.en, x.localized ?? ''])].some((s) => s.toLowerCase().includes(q)))
       .map((n) => n.id);
   }, [graph, query]);
   const matchSet = useMemo(() => new Set(matches), [matches]);
@@ -459,7 +444,6 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
         position: { x: p.x, y: p.y },
         data: {
           node: n,
-          ru,
           status: ctx.status(n.id),
           checks: checksByNode.get(n.id) ?? [],
           removed: editable ? removedLinks(ctx, n.id).length : 0,
@@ -490,7 +474,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
       ...(e.back ? { animated: true } : {}),
     }));
     return { nodes, edges, pos };
-  }, [graph, collapsed, moved, ru, checksByNode, matchSet, selNodes, selEdges, editing, tree, version]);
+  }, [graph, collapsed, moved, checksByNode, matchSet, selNodes, selEdges, editing, tree, version]);
 
   // Стартовый вид в читаемом масштабе: граф целиком, если влезает, иначе корень у левого края.
   const startView = useRef<(inst: ReactFlowInstance<LineNode>) => void>(() => undefined);
@@ -793,7 +777,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
               >
                 {i.node}
               </button>{' '}
-              {ru ? i.text : t[`dgIssue_${i.kind}`]}
+              {inLang({ en: t[`dgIssue_${i.kind}`], ru: i.text }, lang)}
             </li>
           ))}
           {shown.length > 30 && <li className="muted">… {shown.length - 30}</li>}
@@ -962,6 +946,7 @@ function InlineText({ sid, value, actions }: { sid: string; value: string; actio
 
 const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>): ReactNode {
   const t = useT();
+  const lang = useLang();
   const n = data.node;
   const kind = n.type === 'DIALOGUE_LINE' ? (n.choice ? 'choice' : 'npc') : 'head';
   const worst = data.checks.some((c) => c.severity === 'error') ? ' dg-bad' : data.checks.some((c) => c.severity === 'warning') ? ' dg-warnnode' : '';
@@ -994,7 +979,7 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
         {data.status === 'new' && <span className="st-badge st-new">{t.lineStatus_new}</span>}
         {data.status === 'changed' && <span className="st-badge st-changed">{t.lineStatus_changed}</span>}
         {n.eventLabel !== undefined && <span className="dg-event mono">{n.eventLabel}</span>}
-        {n.type !== 'DIALOGUE_LINE' && <span className="dg-name">{n.ru ?? n.name}</span>}
+        {n.type !== 'DIALOGUE_LINE' && <span className="dg-name">{n.localized ?? n.name}</span>}
         <span className="dg-score muted mono">
           {n.score ? `+${n.score}` : ''}
           {n.chance !== undefined && n.chance < 100 ? ` ${n.chance}%` : ''}
@@ -1028,8 +1013,8 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
       ) : (
         <>
           {n.texts.slice(0, MAX_TEXTS).map((x, i) => (
-            <div key={i} className="dg-text" title={data.ru ? x.en : (x.ru ?? '')}>
-              «{data.ru ? (x.ru ?? x.en) : x.en}»
+            <div key={i} className="dg-text" title={x.localized !== undefined ? x.en : ''}>
+              «{x.localized ?? x.en}»
             </div>
           ))}
           {n.type === 'DIALOGUE_LINE' && n.texts.length === 0 && <div className="dg-text muted">{t.dgEmptyText}</div>}
@@ -1062,7 +1047,7 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
       )}
       {notes.map((x, i) => (
         <div key={`i${i}`} className={`dg-warn dg-sev-${x.severity}`} data-kind={x.kind}>
-          {x.severity === 'info' ? 'ℹ' : '⚠'} {data.ru ? x.text : t[`dgIssue_${x.kind}`]}
+          {x.severity === 'info' ? 'ℹ' : '⚠'} {inLang({ en: t[`dgIssue_${x.kind}`], ru: x.text }, lang)}
         </div>
       ))}
       {end && <div className="dg-end small muted">⏹ {t.dgEnd}</div>}

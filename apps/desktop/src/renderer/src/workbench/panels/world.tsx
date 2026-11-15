@@ -243,8 +243,8 @@ function loadEdit(): EditSettings {
 }
 
 /** Имя записи для людей (рус., если есть). */
-function recordName(project: ReturnType<typeof useWorkbench>['project'], lang: Lang, sid: string): string {
-  return ((lang === 'ru' ? project.ctx.localizedName(sid) : undefined) ?? project.ctx.name(sid)) || sid;
+function recordName(project: ReturnType<typeof useWorkbench>['project'], sid: string): string {
+  return (project.ctx.localizedName(sid) ?? project.ctx.name(sid)) || sid;
 }
 
 function loadSettings(): WorldSettings {
@@ -259,9 +259,8 @@ function loadSettings(): WorldSettings {
 
 function SidLink({ sid, go, empty }: { sid: string | undefined; go: (sid: string) => void; empty: string }): ReactNode {
   const { project } = useWorkbench();
-  const lang = useLang();
   if (!sid) return <span className="muted">{empty}</span>;
-  const name = (lang === 'ru' ? project.ctx.localizedName(sid) : undefined) ?? project.ctx.name(sid) ?? sid;
+  const name = project.ctx.localizedName(sid) ?? project.ctx.name(sid) ?? sid;
   return (
     <a href="#" onClick={(e) => {
         e.preventDefault();
@@ -424,7 +423,7 @@ function WorldPanel(): ReactNode {
   // Окно создаётся заново при смене проекта (настройки — на лету).
   useEffect(() => {
     if (!world || !host.current) return;
-    const v = new WorldView(host.current, project.bundle.game, project.ctx, world, settings, lang);
+    const v = new WorldView(host.current, project.bundle.game, project.ctx, world, settings);
     view.current = v;
     v.onSelect = (o) => {
       setSelected(o);
@@ -448,7 +447,7 @@ function WorldPanel(): ReactNode {
     v.setEdit(edit);
     v.onEditChange = (e) => { setEdit(e); };
     v.onCommit = (o, c) => {
-      const label = `${v.edit.mode === 'rotate' ? s.stepRotate : s.stepMove}: ${recordName(project, lang, o.p.target)}`;
+      const label = `${v.edit.mode === 'rotate' ? s.stepRotate : s.stepMove}: ${recordName(project, o.p.target)}`;
       try {
         edits.move(o.p.file, o.p.holder, o.p.key, c.position, c.rotation, c.worldY !== undefined ? { worldY: c.worldY } : {}, label);
         setMessage(undefined);
@@ -478,7 +477,7 @@ function WorldPanel(): ReactNode {
   const removeObject = (o: WorldObject): void => {
     if (!edits) return;
     try {
-      edits.remove(o.p.file, o.p.holder, o.p.key, `${s.stepRemove}: ${recordName(project, lang, o.p.target)}`);
+      edits.remove(o.p.file, o.p.holder, o.p.key, `${s.stepRemove}: ${recordName(project, o.p.target)}`);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : String(e));
     }
@@ -490,7 +489,7 @@ function WorldPanel(): ReactNode {
     const [x, y0, z] = o.p.position;
     const q = o.quat;
     try {
-      edits.move(o.p.file, o.p.holder, o.p.key, [x, y, z], [q.w, q.x, q.y, q.z], o.b ? { worldY: o.pos.y + (y - y0) } : {}, `${s.stepMove}: ${recordName(project, lang, o.p.target)}`);
+      edits.move(o.p.file, o.p.holder, o.p.key, [x, y, z], [q.w, q.x, q.y, q.z], o.b ? { worldY: o.pos.y + (y - y0) } : {}, `${s.stepMove}: ${recordName(project, o.p.target)}`);
       setMessage(undefined);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : String(e));
@@ -511,7 +510,7 @@ function WorldPanel(): ReactNode {
     try {
       // Здание ставим готовым: без состояния игра делает из него стройплощадку «на продажу».
       const states = newBuildingStates(project.ctx.get(sid), at.y);
-      const key = edits.place(path, holder, sid, [at.x, 0, at.z], [1, 0, 0, 0], states ? { states } : {}, `${s.stepPlace}: ${recordName(project, lang, sid)}`);
+      const key = edits.place(path, holder, sid, [at.x, 0, at.z], [1, 0, 0, 0], states ? { states } : {}, `${s.stepPlace}: ${recordName(project, sid)}`);
       setMessage(undefined);
       const o = v.objects.find(path, holder, key);
       if (o) v.select(o);

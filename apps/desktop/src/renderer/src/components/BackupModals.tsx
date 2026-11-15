@@ -2,7 +2,7 @@
  * Окна автосохранения и копий: настройки, «Найдена более свежая копия», «Резервные копии мода».
  */
 import { useEffect, useState, type ReactNode } from 'react';
-import { LOCALE, type BackupItem, type Lang, type RecoveryInfo, type Settings } from '../../../shared/api.ts';
+import { DATA_LOCALE_AUTO, DATA_LOCALE_NONE, dataLocaleFor, LOCALE, type BackupItem, type GameInstallInfo, type GameLocaleInfo, type Lang, type RecoveryInfo, type Settings } from '../../../shared/api.ts';
 import { useLang, useT } from '../i18n.ts';
 import type { Project } from '../project.ts';
 import { Modal } from './widgets.tsx';
@@ -22,8 +22,39 @@ export function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function SettingsModal({ settings, onChange, onClose }: { settings: Settings; onChange: (patch: Partial<Settings>) => void; onClose: () => void }): ReactNode {
+export function SettingsModal({
+  settings,
+  game,
+  onChange,
+  onClose,
+}: {
+  settings: Settings;
+  /** Game install whose `locale` folders are offered as data languages. */
+  game?: GameInstallInfo | undefined;
+  onChange: (patch: Partial<Settings>) => void;
+  onClose: () => void;
+}): ReactNode {
   const t = useT();
+  const lang = useLang();
+  const [locales, setLocales] = useState<GameLocaleInfo[]>([]);
+  useEffect(() => {
+    if (!game) return;
+    let alive = true;
+    window.kedit.listGameLocales(game).then(
+      (list) => {
+        if (alive) setLocales(list);
+      },
+      () => undefined,
+    );
+    return () => {
+      alive = false;
+    };
+  }, [game]);
+  const choice = settings.dataLocale ?? DATA_LOCALE_AUTO;
+  const auto = dataLocaleFor(lang, DATA_LOCALE_AUTO);
+  // A saved choice whose folder is gone (or no game yet) still shows as an option.
+  const codes = locales.map((l) => l.code);
+  if (choice !== DATA_LOCALE_AUTO && choice !== DATA_LOCALE_NONE && !codes.includes(choice)) codes.push(choice);
   const num = (raw: string, fallback: number): number => {
     const n = Number(raw.replace(',', '.'));
     return Number.isFinite(n) && n >= 0 ? n : fallback;
@@ -71,6 +102,28 @@ export function SettingsModal({ settings, onChange, onClose }: { settings: Setti
         />
       </label>
       <p className="muted settings-hint">{t.settingsBackupsHint}</p>
+      <label className="settings-row">
+        <span>{t.settingsDataLocale}</span>
+        <select
+          data-testid="data-locale"
+          value={choice}
+          onChange={(e) => {
+            onChange({ dataLocale: e.target.value });
+          }}
+        >
+          <option value={DATA_LOCALE_AUTO}>{t.settingsDataLocaleAuto(auto ?? t.settingsDataLocaleNone)}</option>
+          <option value={DATA_LOCALE_NONE}>{t.settingsDataLocaleNone}</option>
+          {codes.map((c) => {
+            const info = locales.find((l) => l.code === c);
+            return (
+              <option key={c} value={c}>
+                {info && !info.names ? `${c} (${t.settingsDataLocaleTextsOnly})` : c}
+              </option>
+            );
+          })}
+        </select>
+      </label>
+      <p className="muted settings-hint">{t.settingsDataLocaleHint}</p>
     </Modal>
   );
 }

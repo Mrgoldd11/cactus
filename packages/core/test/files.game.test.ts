@@ -91,7 +91,7 @@ describe.skipIf(!game)(`игра: ${paths.kenshi}`, () => {
     });
 
     it('номера типов совпадают с комментариями «Type:» в gamedata.po', () => {
-      const po = loadGamedataPo(paths);
+      const po = loadGamedataPo(paths, 'ru_RU');
       expect(po.warnings).toEqual([]);
       const byId = new Map<string, string>();
       for (const { file } of vanilla()) for (const r of file.records) byId.set(r.stringId, itemTypeName(r.type));

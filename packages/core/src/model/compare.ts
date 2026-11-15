@@ -7,7 +7,7 @@ import { decodeText } from '../text.ts';
 import type { GameRecord } from '../format/types.ts';
 import { DICT_FOR_KIND } from '../schema/game-schema.ts';
 import { isVanillaLayer } from '../vanilla.ts';
-import { plainRuName } from '../world/where.ts';
+import { plainName } from '../world/where.ts';
 import type { ModContext, RecordStatus } from './context.ts';
 import { enumValue, fieldEnum } from './enums.ts';
 import { formatFloat } from './present.ts';
@@ -57,7 +57,7 @@ export interface CompareCell {
 export interface CompareRow {
   sid: string;
   name: string;
-  ru?: string;
+  localized?: string;
   status: RecordStatus | undefined;
   /** Запись добавлена модом (не из ванили): первый слой, где она есть, или сам мод. */
   addedBy?: string;
@@ -155,8 +155,8 @@ export function compareTable(ctx: ModContext, typeName: string, options: { ids?:
     const lower = ctx.lower(sid);
     const delta = ctx.delta(sid);
     const van = vanilla.get(sid);
-    const ru = ctx.localizedName(sid);
-    const plain = ru === undefined ? undefined : plainRuName(ru);
+    const loc = ctx.localizedName(sid);
+    const plain = loc === undefined ? undefined : plainName(loc);
     const cells = new Map<string, CompareCell>();
     for (const col of columns.values()) {
       const value = scalarMap(rec, col.dict).get(col.key);
@@ -177,7 +177,7 @@ export function compareTable(ctx: ModContext, typeName: string, options: { ids?:
       cells.set(col.key, cell);
     }
     const row: CompareRow = { sid, name: decodeText(rec.name) || sid, status, cells };
-    if (plain !== undefined && plain !== '') row.ru = plain;
+    if (plain !== undefined && plain !== '') row.localized = plain;
     if (!van) row.addedBy = status === 'new' ? ctx.modName : (firstLayer.get(sid) ?? ctx.modName);
     return row;
   });

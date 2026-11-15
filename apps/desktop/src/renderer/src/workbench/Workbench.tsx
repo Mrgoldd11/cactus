@@ -16,7 +16,7 @@ import {
 import 'dockview-react/dist/styles/dockview.css';
 import { decodeText } from '@kenshi-editor/core';
 import type { WorkspaceSettings } from '../../../shared/api.ts';
-import { useLang, useT } from '../i18n.ts';
+import { useT } from '../i18n.ts';
 import { useProjectVersion } from '../hooks.ts';
 import { allPanels, panelDef, type PanelDef, type PanelParams } from './registry.ts';
 import { accepts, useWorkbench, WorkbenchContext, type Workbench as WorkbenchValue } from './context.ts';
@@ -47,12 +47,11 @@ function makeFrame(def: PanelDef): FunctionComponent<IDockviewPanelProps<PanelPa
   const Inner = def.component;
   function Frame({ params, api }: IDockviewPanelProps<PanelParams>): ReactNode {
     const t = useT();
-    const lang = useLang();
     const { project } = useWorkbench();
     useProjectVersion(project);
     const p = params;
     const rec = p.sid === undefined ? undefined : project.record(p.sid);
-    const name = p.sid === undefined ? undefined : ((lang === 'ru' ? project.ctx.localizedName(p.sid) : undefined) ?? (rec ? decodeText(rec.name) : p.sid));
+    const name = p.sid === undefined ? undefined : (project.ctx.localizedName(p.sid) ?? (rec ? decodeText(rec.name) : p.sid));
     const title = panelTitle(def, t, name);
     useEffect(() => {
       if (api.title !== title) api.setTitle(title);

@@ -288,8 +288,8 @@ describe('kenshi-mcp: граф диалога и история', () => {
     expect(bad.isError).toBe(true);
 
     const hist = (await call('history')).text;
-    expect(hist).toContain('#1 Добавлен ответ игрока „Да“');
-    expect(hist).toContain('#2 Вставлен ответ игрока „Подожди“ между репликами');
+    expect(hist).toContain('#1 Added player answer „Да“');
+    expect(hist).toContain('#2 Inserted player answer „Подожди“ between lines');
     expect(hist).toContain('#0 the mod as it was opened');
     expect(hist).toMatch(/#4 .*← you are here/);
     expect(hist).not.toMatch(/правок$/m);

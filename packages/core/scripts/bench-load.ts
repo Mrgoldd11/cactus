@@ -25,7 +25,7 @@ const bytes = vanillaFilePaths(game as never).map((p) => readFileSync(p));
 const fcsDef = readFileSync(join(game.kenshi, SCHEMA_FILES.fcsDef), 'utf8');
 const fcsEnums = readFileSync(join(game.kenshi, SCHEMA_FILES.fcsEnums), 'utf8');
 const fcsLayout = existsSync(join(game.kenshi, SCHEMA_FILES.fcsLayout)) ? readFileSync(join(game.kenshi, SCHEMA_FILES.fcsLayout), 'utf8') : undefined;
-const po = readFileSync(gamedataPoPath(game as never), 'utf8');
+const po = readFileSync(gamedataPoPath(game as never, 'ru_RU'), 'utf8');
 t0 = t('чтение файлов', t0);
 const layers: Layer[] = bytes.map((b, i) => ({ name: VANILLA_FILES[i]!, file: readDataFile(b) }));
 t0 = t('разбор 4 файлов ванили', t0);

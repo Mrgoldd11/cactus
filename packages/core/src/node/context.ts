@@ -14,6 +14,7 @@ import type { GameSchema } from '../schema/game-schema.ts';
 import { extensionsFor, type ExtensionChoice, type FoundExtension } from './extensions.ts';
 import { installedModFiles, VANILLA_FILES, vanillaFilePaths, type GamePaths } from './paths.ts';
 import { gamedataPoPath, loadGamedataPo, loadGameSchema } from './schema.ts';
+import { resolveDataLocale } from './locales.ts';
 
 export interface LoadContextOptions {
   paths: GamePaths;
@@ -39,8 +40,13 @@ export interface LoadContextOptions {
    * turns extensions off. Not used when `schema` is `false` or a ready schema.
    */
   extensions?: ExtensionChoice | false;
-  /** Загрузить русский gamedata.po для поиска (по умолчанию да, если файл есть) или взять уже прочитанный. */
+  /**
+   * Load `gamedata.po` of the data language for names and search (default: yes, if the file
+   * exists) or take one already read.
+   */
   po?: boolean | PoFile;
+  /** Data language: a locale code or `none`; default — the language of the game's `settings.cfg`. */
+  dataLocale?: string;
   /** Уже прочитанные ванильные слои (чтобы не читать их заново). */
   vanilla?: readonly Layer[];
 }
@@ -156,7 +162,8 @@ export function loadModContext(options: LoadContextOptions): LoadedContext {
   const layers: Layer[] = [...vanilla];
   for (const dep of plan.dependencies) layers.push({ name: dep.name, file: readDataFile(readFileSync(dep.path)) });
   const wantSchema = options.schema ?? existsSync(join(paths.kenshi, 'fcs.def'));
-  const wantPo = options.po ?? existsSync(gamedataPoPath(paths));
+  const dataLocale = typeof options.po === 'object' ? options.dataLocale : resolveDataLocale(paths, options.dataLocale);
+  const wantPo = options.po ?? (dataLocale !== undefined && existsSync(gamedataPoPath(paths, dataLocale)));
   const dependencyPaths = plan.dependencies.map((d) => d.path);
   let schema: GameSchema | undefined;
   let extensions: FoundExtension[] = [];
@@ -175,7 +182,8 @@ export function loadModContext(options: LoadContextOptions): LoadedContext {
     modName: plan.modName,
     ...(plan.mod ? { mod: plan.mod } : {}),
     ...(schema ? { schema } : {}),
-    ...(typeof wantPo === 'object' ? { po: wantPo } : wantPo ? { po: loadGamedataPo(paths) } : {}),
+    ...(typeof wantPo === 'object' ? { po: wantPo } : wantPo && dataLocale !== undefined ? { po: loadGamedataPo(paths, dataLocale) } : {}),
+    ...(dataLocale !== undefined ? { dataLocale } : {}),
   });
   return { ctx, missingDependencies: plan.missingDependencies, dependencyPaths, context: plan.context, extensions };
 }

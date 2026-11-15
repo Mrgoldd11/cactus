@@ -28,6 +28,7 @@ import {
   readWorldFiles,
   worldDirs,
   loadTranslation,
+  resolveDataLocale,
   liveDiscoveryPath,
   loadModLayers,
   type ModLayers,
@@ -66,6 +67,8 @@ function worldModFiles(cur: OpenResult | undefined): string[] {
 export class Session {
   readonly paths: GamePaths;
   readonly cwd: string;
+  /** Locale of translated names and texts (`ru_RU`); undefined — originals only. */
+  readonly dataLocale: string | undefined;
   private vanillaCache?: Layer[];
   private poCache?: PoFile | null;
   private translationCache?: TranslationIndex | null;
@@ -81,9 +84,11 @@ export class Session {
   /** Разобранные моды игрока для конфликтов: путь → размер/время и файл. */
   private readonly modFileCache = new Map<string, { stamp: string; file: DataFile }>();
 
-  constructor(paths: GamePaths, cwd: string) {
+  /** `dataLocale`: a locale code or `none`; default — KENSHI_DATA_LOCALE, then the game's settings.cfg. */
+  constructor(paths: GamePaths, cwd: string, dataLocale: string | undefined = process.env['KENSHI_DATA_LOCALE']) {
     this.paths = paths;
     this.cwd = cwd;
+    this.dataLocale = resolveDataLocale(paths, dataLocale);
   }
 
   private vanilla(): Layer[] {
@@ -101,14 +106,16 @@ export class Session {
     return this.current?.ctx.schema ?? loadGameSchema(this.paths);
   }
 
-  /** Русский перевод текстов игры (`ru_RU.translation`), если есть. */
+  /** Translation of the game texts (`<locale>.translation`) of the data language, if any. */
   translation(): TranslationIndex | undefined {
-    if (this.translationCache === undefined) this.translationCache = hasGame(this.paths) ? (loadTranslation(this.paths) ?? null) : null;
+    const locale = this.dataLocale;
+    if (this.translationCache === undefined) this.translationCache = hasGame(this.paths) && locale !== undefined ? (loadTranslation(this.paths, locale) ?? null) : null;
     return this.translationCache ?? undefined;
   }
 
   po(): PoFile | undefined {
-    if (this.poCache === undefined) this.poCache = existsSync(gamedataPoPath(this.paths)) ? loadGamedataPo(this.paths) : null;
+    const locale = this.dataLocale;
+    if (this.poCache === undefined) this.poCache = locale !== undefined && existsSync(gamedataPoPath(this.paths, locale)) ? loadGamedataPo(this.paths, locale) : null;
     return this.poCache ?? undefined;
   }
 
@@ -138,7 +145,7 @@ export class Session {
       // The schema depends on the mod (its schema extensions); core reads it from disk once
       // per state of the files. The translation is one for the session.
       schema: true,
-      ...(this.po() ? { po: this.po()! } : { po: false }),
+      ...(this.po() ? { po: this.po()!, ...(this.dataLocale !== undefined ? { dataLocale: this.dataLocale } : {}) } : { po: false }),
     });
     return { ...loaded, ...(path !== undefined ? { path } : {}) };
   }
@@ -362,7 +369,7 @@ export class Session {
       modName: snap.modName,
       mod: readDataFile(base64ToBytes(snap.mod)),
       schema: loadGameSchema(this.paths, { extensions }),
-      ...(po ? { po } : {}),
+      ...(po ? { po, ...(this.dataLocale !== undefined ? { dataLocale: this.dataLocale } : {}) } : {}),
     });
     return { ctx, ...(snap.modPath !== undefined ? { path: snap.modPath } : {}), missingDependencies: [], dependencyPaths, extensions };
   }

@@ -113,7 +113,7 @@ export function RecordPicker({ project, title, targetType, exclude, onPick, onCl
             }}
           >
             <span className="name">{e.name}</span>
-            <span className="ru">{e.ru}</span>
+            <span className="tr-name">{e.localized}</span>
             <span className="sid mono">{e.sid}</span>
             <span className="type">{e.type}</span>
           </div>

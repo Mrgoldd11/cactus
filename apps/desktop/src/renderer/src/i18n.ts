@@ -66,7 +66,7 @@ const en = {
   status_changed: 'changed',
   status_deleted: 'deleted',
   colName: 'Name',
-  colRu: 'Russian',
+  colTranslation: 'Translation',
   colId: 'String ID',
   colType: 'Type',
   records: 'Records',
@@ -90,7 +90,7 @@ const en = {
   dgChoices: 'player choices',
   dgLoops: 'loops',
   dgLoadingTr: 'loading the game translation…',
-  dgNoTr: 'no game translation (locale/ru_RU/ru_RU.translation)',
+  dgNoTr: 'no game translation for the data language (Settings → Data language)',
   dgNpc: 'NPC',
   dgPlayer: 'player',
   dgLegendLoop: 'dashed — back to a line shown earlier (loop)',
@@ -659,7 +659,7 @@ const ru: Strings = {
   status_changed: 'изменена',
   status_deleted: 'удалена',
   colName: 'Имя',
-  colRu: 'По-русски',
+  colTranslation: 'Перевод',
   colId: 'Строковый id',
   colType: 'Тип',
   records: 'Записей',
@@ -682,7 +682,7 @@ const ru: Strings = {
   dgChoices: 'вариантов игрока',
   dgLoops: 'петель',
   dgLoadingTr: 'читаю перевод игры…',
-  dgNoTr: 'нет перевода игры (locale/ru_RU/ru_RU.translation)',
+  dgNoTr: 'нет перевода игры на язык данных (Настройки → Язык данных)',
   dgNpc: 'NPC',
   dgPlayer: 'игрок',
   dgLegendLoop: 'пунктир — возврат к уже показанной реплике (петля)',
@@ -1200,10 +1200,14 @@ export const STRINGS: Record<Lang, Strings> = { en, ru, zh };
 
 /** Язык по набору строк: для заголовков панелей, которым в `title(t)` дают только `Strings`. */
 export function langOf(t: Strings): Lang {
-  return t === STRINGS.ru ? 'ru' : t === STRINGS.zh ? 'zh' : 'en';
+  return (Object.keys(STRINGS) as Lang[]).find((l) => STRINGS[l] === t) ?? 'en';
 }
 
-export const LangContext = createContext<{ lang: Lang; t: Strings }>({ lang: 'ru', t: ru });
+/**
+ * Interface language, its strings and the data language: the game locale (`ru_RU`) whose record
+ * names the window shows (undefined — originals only). See `dataLocaleFor`.
+ */
+export const LangContext = createContext<{ lang: Lang; t: Strings; dataLocale?: string | undefined }>({ lang: 'ru', t: ru });
 
 export function useT(): Strings {
   return useContext(LangContext).t;
@@ -1211,4 +1215,17 @@ export function useT(): Strings {
 
 export function useLang(): Lang {
   return useContext(LangContext).lang;
+}
+
+/**
+ * Text from a language-keyed dictionary (core step titles, bridge errors…); English when the
+ * interface language has no entry yet.
+ */
+export function inLang<T>(texts: Partial<Record<Lang, T>> & { en: T }, lang: Lang): T {
+  return texts[lang] ?? texts.en;
+}
+
+/** Data language (game locale code) or undefined — record names only in the original. */
+export function useDataLocale(): string | undefined {
+  return useContext(LangContext).dataLocale;
 }

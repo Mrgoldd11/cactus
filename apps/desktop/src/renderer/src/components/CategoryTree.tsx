@@ -4,7 +4,7 @@
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { OTHER_TYPES_ID, type CategoryNode } from '@kenshi-editor/core';
-import { CATEGORY_RU } from '../categoryNames.ts';
+import { categoryName } from '../categoryNames.ts';
 import { useLang, useT } from '../i18n.ts';
 import { MOD_CHANGES_ID, type Project } from '../project.ts';
 
@@ -42,7 +42,7 @@ export function CategoryTree({ project, version, selected, onSelect, modCount }:
   const label = (n: CategoryNode): string => {
     if (n.id === OTHER_TYPES_ID) return t.otherTypes;
     if (n.type === undefined) return t.everything;
-    return lang === 'ru' ? (CATEGORY_RU[n.label] ?? n.label) : n.label;
+    return categoryName(n.label, lang);
   };
 
   const renderNode = (n: CategoryNode, depth: number): ReactNode => {

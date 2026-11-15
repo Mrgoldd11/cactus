@@ -452,6 +452,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
       )}
       {modal === 'settings' && (
         <SettingsModal
+          game={project.bundle.game}
           settings={settings}
           onChange={onSettings}
           onClose={() => {

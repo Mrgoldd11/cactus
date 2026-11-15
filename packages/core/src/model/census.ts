@@ -13,7 +13,7 @@ import { townComposition, type TypeIndex } from './graphs.ts';
 export interface CensusChar {
   sid: string;
   name: string;
-  ru?: string;
+  localized?: string;
   /** Состояние записи в моде: new / changed — персонаж уже в моде. */
   status?: RecordStatus;
   unique: boolean;
@@ -37,7 +37,7 @@ export interface CensusGroup {
   /** sid фракции или города; '' — «без фракции» / «не в городах». */
   key: string;
   name: string;
-  ru?: string;
+  localized?: string;
   chars: string[];
   /** Сумма по персонажам: число городов (не меньше 1). Чем больше — тем чаще встречаются. */
   weight: number;
@@ -99,8 +99,8 @@ export function npcCensus(ctx: ModContext, options: CensusOptions = {}): Census 
       dialogues: (rec.refs.get('dialogue') ?? []).map((r) => r.target),
       talks: new Set(talkSources(ctx, rec, EVENT_TALK, sq).map((t) => t.dialog)).size,
     };
-    const ru = ctx.localizedName(sid);
-    if (ru !== undefined) c.ru = ru;
+    const loc = ctx.localizedName(sid);
+    if (loc !== undefined) c.localized = loc;
     const st = ctx.status(sid);
     if (st !== undefined && st !== 'base') c.status = st;
     chars.push(c);
@@ -115,8 +115,8 @@ export function npcCensus(ctx: ModContext, options: CensusOptions = {}): Census 
     const out: CensusGroup[] = [];
     for (const [key, list] of map) {
       const g: CensusGroup = { key, name: key === '' ? '' : (ctx.name(key) ?? key), chars: list.map((c) => c.sid), weight: list.reduce((s, c) => s + censusWeight(c), 0) };
-      const ru = key === '' ? undefined : ctx.localizedName(key);
-      if (ru !== undefined) g.ru = ru;
+      const loc = key === '' ? undefined : ctx.localizedName(key);
+      if (loc !== undefined) g.localized = loc;
       out.push(g);
     }
     return out.sort((a, b) => b.weight - a.weight || a.name.localeCompare(b.name));

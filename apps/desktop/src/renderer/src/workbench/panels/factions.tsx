@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { factionMatrix, setFactionRelation, type FactionInfo, type RelationCell } from '@kenshi-editor/core';
-import { useLang, useT, type Strings } from '../../i18n.ts';
+import { useT, type Strings } from '../../i18n.ts';
 import { tryEdit, useProjectVersion } from '../../hooks.ts';
 import { shortcut } from '../../keys.ts';
 import { registerPanel } from '../registry.ts';
@@ -65,7 +65,7 @@ function FactionCombo({ value, factions, label, alt, placeholder, title, testId,
     const terms = q.split(/\s+/).filter(Boolean);
     const out: FactionInfo[] = [];
     for (const f of factions) {
-      const hay = `${f.name}\n${f.ru ?? ''}\n${f.sid}`.toLowerCase();
+      const hay = `${f.name}\n${f.localized ?? ''}\n${f.sid}`.toLowerCase();
       if (terms.every((x) => hay.includes(x))) out.push(f);
     }
     // Названия, начинающиеся с введённого, — выше тех, где оно в середине.
@@ -158,7 +158,6 @@ function FactionCombo({ value, factions, label, alt, placeholder, title, testId,
 
 function FactionsPanel(): ReactNode {
   const t = useT();
-  const ru = useLang() === 'ru';
   const { project, go, report } = useWorkbench();
   const version = useProjectVersion(project);
   const ctx = project.ctx;
@@ -177,7 +176,7 @@ function FactionsPanel(): ReactNode {
   const [both, setBoth] = useState(false);
 
   const matrix = useMemo(() => factionMatrix(ctx, { ids: project.idsByType().get('FACTION') ?? [] }), [project, ctx, version]);
-  const label = (f: FactionInfo): string => (ru ? (f.ru ?? f.name) : f.name);
+  const label = (f: FactionInfo): string => (f.localized ?? f.name);
   const byId = useMemo(() => new Map(matrix.factions.map((f) => [f.sid, f])), [matrix]);
 
   const shown = useMemo(() => {
@@ -201,7 +200,7 @@ function FactionsPanel(): ReactNode {
       list = matrix.factions.filter((f) => keep.has(f.sid));
     }
     const q = query.trim().toLowerCase();
-    if (q !== '') list = list.filter((f) => `${f.sid}\n${f.name}\n${f.ru ?? ''}`.toLowerCase().includes(q));
+    if (q !== '') list = list.filter((f) => `${f.sid}\n${f.name}\n${f.localized ?? ''}`.toLowerCase().includes(q));
     return list;
   }, [matrix, onlyLinked, layer, query]);
   const visible = shown.slice(0, MAX_FACTIONS);
@@ -227,7 +226,7 @@ function FactionsPanel(): ReactNode {
 
   const fromF = fromSid !== undefined ? byId.get(fromSid) : undefined;
   const toF = toSid !== undefined ? byId.get(toSid) : undefined;
-  const alt = (f: FactionInfo): string | undefined => (ru ? f.name : f.ru);
+  const alt = (f: FactionInfo): string | undefined => (f.localized !== undefined ? f.name : undefined);
 
   return (
     <div className="mods-panel" data-testid="factions-panel">

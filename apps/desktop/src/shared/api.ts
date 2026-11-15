@@ -66,6 +66,8 @@ export interface ProjectRequest {
   extensionsOf?: string;
   /** Ключи файлов, уже разобранных в окне (`ParsedFileCache`): их байты не присылаются. */
   known?: string[];
+  /** Data language: `gamedata.po` of this game locale comes in the bundle. */
+  dataLocale?: string;
 }
 
 export interface NamedBytes {
@@ -116,8 +118,10 @@ export interface ProjectBundle {
    * files. The window applies them on top of `schema`. Absent when there are none.
    */
   extensions?: ExtensionLayer[];
-  /** Русский перевод `locale/ru_RU/gamedata.po`. */
+  /** `locale/<dataLocale>/gamedata.po` (translated record names), if requested and present. */
   po?: string;
+  /** Locale of `po`. */
+  dataLocale?: string;
   /** Путь сохранения по умолчанию для нового мода. */
   suggestedPath: string;
   /** Откуда открытый мод (мастерская, копия). */
@@ -161,21 +165,62 @@ export type SaveResult =
   | { ok: true; path: string; provenance?: ModProvenance; backupError?: string }
   | { ok: false; cancelled: boolean; error?: string; workshop?: boolean };
 
-export type Lang = 'en' | 'ru' | 'zh';
+/**
+ * Interface languages: code, name in the language itself (for the dropdown), locale for dates
+ * and numbers, and the game's translation folder (`locale/<gameLocale>`) whose record names
+ * follow this language by default. A new language needs one entry here plus its dictionary.
+ */
+export interface LangInfo {
+  code: string;
+  name: string;
+  locale: string;
+  gameLocale?: string;
+}
 
-/** Языки интерфейса: код и название на самом языке (для выпадающего списка). */
-export const LANGS: readonly { code: Lang; name: string }[] = [
-  { code: 'en', name: 'English' },
-  { code: 'ru', name: 'Русский' },
-  { code: 'zh', name: '简体中文' },
-];
+export const LANGS = [
+  { code: 'en', name: 'English', locale: 'en-GB' },
+  { code: 'ru', name: 'Русский', locale: 'ru-RU', gameLocale: 'ru_RU' },
+  { code: 'zh', name: '简体中文', locale: 'zh-CN', gameLocale: 'zh_CN' },
+] as const satisfies readonly LangInfo[];
+
+export type Lang = (typeof LANGS)[number]['code'];
 
 export const isLang = (v: unknown): v is Lang => LANGS.some((l) => l.code === v);
 /** Локаль для форматирования дат и чисел на языке интерфейса. */
-export const LOCALE: Record<Lang, string> = { en: 'en-GB', ru: 'ru-RU', zh: 'zh-CN' };
+export const LOCALE = Object.fromEntries(LANGS.map((l) => [l.code, l.locale])) as Record<Lang, string>;
+
+/** `Settings.dataLocale`: follow the interface language. */
+export const DATA_LOCALE_AUTO = 'auto';
+/** `Settings.dataLocale`: no translation, English originals only. */
+export const DATA_LOCALE_NONE = 'none';
+
+/**
+ * Data language: the game locale (`de_DE`) whose record names and texts are shown next to the
+ * originals; undefined — none. `choice` is `Settings.dataLocale`.
+ */
+export function dataLocaleFor(lang: Lang, choice: string | undefined): string | undefined {
+  if (choice === DATA_LOCALE_NONE) return undefined;
+  if (choice !== undefined && choice !== '' && choice !== DATA_LOCALE_AUTO) return choice;
+  const list: readonly LangInfo[] = LANGS;
+  return list.find((x) => x.code === lang)?.gameLocale;
+}
+
+/** A translation folder of the game (`locale/<code>`). */
+export interface GameLocaleInfo {
+  code: string;
+  /** `gamedata.po` exists (record names). */
+  names: boolean;
+  /** `<code>.translation` exists (dialogue lines and other texts). */
+  texts: boolean;
+}
 
 export interface Settings {
   lang: Lang;
+  /**
+   * Language of game data (record names, texts): `auto` (default) — follows `lang`, `none` —
+   * originals only, or a locale folder of the game (`de_DE`).
+   */
+  dataLocale?: string;
   /** Последняя выбранная папка игры. */
   gameDir?: string;
   /** Недавно открытые моды. */
@@ -328,8 +373,12 @@ export interface KeditApi {
   saveTextFile(defaultName: string, kind: TextFileKind, text: string): Promise<SaveTextResult>;
   /** Диалог «Открыть» для CSV/JSON/PO и текст файла; null — отменено. */
   openTextFile(): Promise<{ path: string; text: string } | { error: string } | null>;
-  /** Байты перевода текстов записей `locale/ru_RU/ru_RU.translation` (реплики); null — нет файла. */
-  readTranslation(game: GameInstallInfo): Promise<Uint8Array | null>;
+  /** Bytes of `locale/<locale>/<locale>.translation` (dialogue lines and other texts); null — no file. */
+  readTranslation(game: GameInstallInfo, locale: string): Promise<Uint8Array | null>;
+  /** Text of `locale/<locale>/gamedata.po`; null — no file. */
+  readGamedataPo(game: GameInstallInfo, locale: string): Promise<string | null>;
+  /** Translation folders of the game. */
+  listGameLocales(game: GameInstallInfo): Promise<GameLocaleInfo[]>;
   getSettings(): Promise<Settings>;
   setSettings(patch: Partial<Settings>): Promise<Settings>;
   /**
@@ -386,6 +435,8 @@ export const IPC = {
   readTerrainTile: 'kedit:read-terrain-tile',
   savePngFile: 'kedit:save-png-file',
   readTranslation: 'kedit:read-translation',
+  readGamedataPo: 'kedit:read-gamedata-po',
+  listGameLocales: 'kedit:list-game-locales',
   saveTextFile: 'kedit:save-text-file',
   openTextFile: 'kedit:open-text-file',
   getSettings: 'kedit:get-settings',

@@ -13,7 +13,7 @@ import {
   PLAY_NPC,
   playConversation,
   playStartList,
-  plainRuName,
+  plainName,
   refValueEnum,
   shortEnumLabel,
   type ModContext,
@@ -24,7 +24,7 @@ import {
   type PlayStep,
   type TranslationIndex,
 } from '@kenshi-editor/core';
-import { useLang, useT, type Strings } from '../i18n.ts';
+import { useT, type Strings } from '../i18n.ts';
 import type { Project } from '../project.ts';
 import { lineCaption, useTranslation } from './LineInspector.tsx';
 import { partsText } from './TalkTab.tsx';
@@ -53,7 +53,6 @@ function conditionsOf(ctx: ModContext, sid: string, tr: TranslationIndex | undef
 
 export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }: Props): ReactNode {
   const t = useT();
-  const ru = useLang() === 'ru';
   const ctx = project.ctx;
   const tr = useTranslation(project);
   const [event, setEvent] = useState(EVENT_TALK);
@@ -76,7 +75,7 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
     for (const r of ctx.records()) {
       if (ctx.typeName(r.type) !== 'CHARACTER') continue;
       if (!r.refs.get('dialogue')?.length && !r.refs.get('dialogue package')?.length) continue;
-      out.push({ sid: r.stringId, label: `${plainRuName(ctx.localizedName(r.stringId) ?? ctx.name(r.stringId) ?? r.stringId)} — ${r.stringId}` });
+      out.push({ sid: r.stringId, label: `${plainName(ctx.localizedName(r.stringId) ?? ctx.name(r.stringId) ?? r.stringId)} — ${r.stringId}` });
     }
     return out.slice(0, 5000);
   }, [ctx, version]);
@@ -94,8 +93,8 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
   };
 
   const name = (id: string): string => {
-    const r = ru ? ctx.localizedName(id) : undefined;
-    return r !== undefined ? plainRuName(r) : (ctx.name(id) ?? id);
+    const r = ctx.localizedName(id);
+    return r !== undefined ? plainName(r) : (ctx.name(id) ?? id);
   };
 
   return (
@@ -182,7 +181,6 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
               key={`${String(i)}:${s.from}`}
               ctx={ctx}
               tr={tr}
-              ru={ru}
               t={t}
               step={s}
               index={i}
@@ -217,7 +215,6 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
 interface StepProps {
   ctx: ModContext;
   tr: TranslationIndex | undefined;
-  ru: boolean;
   t: Strings;
   step: PlayStep;
   index: number;
@@ -235,8 +232,8 @@ interface StepProps {
 }
 
 function Step(p: StepProps): ReactNode {
-  const { ctx, tr, ru, t, step, index, dialog } = p;
-  const caption = (id: string): string => lineCaption(ctx, id, tr, ru);
+  const { ctx, tr, t, step, index, dialog } = p;
+  const caption = (id: string): string => lineCaption(ctx, id, tr);
   const speaker = (id: string): string => {
     const sp = ctx.get(id)?.ints.get('speaker') ?? 0;
     if (sp === 0) return p.npcName;
@@ -281,7 +278,7 @@ function Step(p: StepProps): ReactNode {
 }
 
 function Answers(p: StepProps & { answers: readonly PlayAnswer[] }): ReactNode {
-  const { t, step, ctx, tr, ru } = p;
+  const { t, step, ctx, tr } = p;
   const answered = step.answered;
   return (
     <div className="pl-answers">
@@ -299,7 +296,7 @@ function Answers(p: StepProps & { answers: readonly PlayAnswer[] }): ReactNode {
               onClick={() => { p.onAnswer(a.sid); }}
             >
               {chosen ? '▶ ' : '→ '}
-              {lineCaption(ctx, a.sid, tr, ru)}
+              {lineCaption(ctx, a.sid, tr)}
             </button>
             {!a.always && <AsIf {...p} sid={a.sid} passes={a.shown} />}
           </div>
@@ -339,7 +336,7 @@ function AsIf(p: StepProps & { sid: string; passes: boolean }): ReactNode {
 }
 
 function Choice(p: StepProps & { title: string; options: readonly PlayOption[]; keyOf: string; isDialog: boolean }): ReactNode {
-  const { t, ctx, tr, ru } = p;
+  const { t, ctx, tr } = p;
   return (
     <div className="pl-choice">
       <div className="small pl-choice-title">{p.title}</div>
@@ -359,7 +356,7 @@ function Choice(p: StepProps & { title: string; options: readonly PlayOption[]; 
                       else p.onSelectLine(o.sid, p.dialog);
                     }}
                   >
-                    {p.isDialog ? p.name(o.sid) : lineCaption(ctx, o.sid, tr, ru)}
+                    {p.isDialog ? p.name(o.sid) : lineCaption(ctx, o.sid, tr)}
                   </button>
                   {p.isDialog && o.sources && o.sources.length > 0 && (
                     <span className="muted small"> · {[...new Set(o.sources.map((s) => t[`talkVia_${s.via}`]))].join(', ')}</span>
@@ -411,7 +408,6 @@ function whyText(o: PlayOption, t: Strings): string {
 /** Пример к правилу выбора на выбранном персонаже: сколько диалогов, что выберет игра при условиях и без. */
 export function TalkExample({ project, sid, version }: { project: Project; sid: string | undefined; version: number }): ReactNode {
   const t = useT();
-  const ru = useLang() === 'ru';
   const ctx = project.ctx;
   const tr = useTranslation(project);
   const data = useMemo(() => {
@@ -430,8 +426,8 @@ export function TalkExample({ project, sid, version }: { project: Project; sid: 
     }
   }, [ctx, sid, version]);
   const name = (id: string): string => {
-    const r = ru ? ctx.localizedName(id) : undefined;
-    return r !== undefined ? plainRuName(r) : (ctx.name(id) ?? id);
+    const r = ctx.localizedName(id);
+    return r !== undefined ? plainName(r) : (ctx.name(id) ?? id);
   };
   if (!data) return <p className="muted small">{t.howtoPick}</p>;
   const line = (label: string, p: { dialog?: string; why?: PlayOption['why']; said?: string }): ReactNode => (
@@ -445,7 +441,7 @@ export function TalkExample({ project, sid, version }: { project: Project; sid: 
           {p.why === 'chosen-random' && <span className="muted"> ({t.plWhy_chosenRandom})</span>}
           {p.said !== undefined && (
             <>
-              ; {t.howtoSays}: <i>{lineCaption(ctx, p.said, tr, ru)}</i>
+              ; {t.howtoSays}: <i>{lineCaption(ctx, p.said, tr)}</i>
             </>
           )}
         </>

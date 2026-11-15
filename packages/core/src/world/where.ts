@@ -118,7 +118,7 @@ export interface WhereRecordInfo {
   type: string;
   name: string;
   /** Русское имя (из gamedata.po), если есть. */
-  nameRu?: string;
+  localizedName?: string;
 }
 
 export interface SquadInfo {
@@ -204,12 +204,17 @@ export interface WhereOptions {
 }
 
 /**
- * Русское имя без разметки рода: `Оружейни/кца1/` → `Оружейник`, `Главн/аяый1/` → `Главный`
- * (берём мужскую форму).
+ * Translated name without the gender markup of the game's translations, masculine form:
+ * ru `Оружейни/кца1/` → `Оружейник`, `Главн/аяый1/` → `Главный`; de `Bäcker/FEM-IN-ME/` →
+ * `Bäcker`; pt `Bandid/OA3/` → `Bandido`.
  */
-export function plainRuName(s: string): string {
+export function plainName(s: string): string {
   return s.replace(/\/([^/]*?)\d?\//g, (_, inner: string) => {
     for (const e of ['ец', 'ий', 'ый', 'ой', 'ин', 'к']) if (inner.startsWith(e) || inner.endsWith(e)) return e;
+    // Upper-case pair of endings (pt `OA`): the first one is masculine.
+    if (/^[A-Z]{2}$/.test(inner)) return inner[0]!.toLowerCase();
+    // A tag that marks only the feminine form (de `FEM-IN-ME`): the masculine has no suffix.
+    if (/^[A-Z]+(?:-[A-Z]+)+$/.test(inner)) return '';
     return inner;
   });
 }
@@ -218,7 +223,7 @@ function info(ctx: ModContext, id: string, rec?: GameRecord): WhereRecordInfo {
   const r = rec ?? ctx.get(id);
   const out: WhereRecordInfo = { id, type: r ? ctx.typeName(r.type) : '?', name: r ? decodeText(r.name) : id };
   const ru = ctx.localizedName(id);
-  if (ru) out.nameRu = ru;
+  if (ru) out.localizedName = ru;
   return out;
 }
 
@@ -496,7 +501,7 @@ function instancePlaces(ctx: ModContext, world: WorldIndex, inst: readonly Place
     if (!place) {
       place = t
         ? { ...info(ctx, t.target), kind: 'town', positions: [], path: [] }
-        : { id: '', type: 'WORLD', name: 'вне городов', nameRu: 'вне городов', kind: 'building', positions: [], path: [] };
+        : { id: '', type: 'WORLD', name: 'вне городов', localizedName: 'вне городов', kind: 'building', positions: [], path: [] };
       byTown.set(key, place);
     }
     place.positions.push({ position: p.position, ...(p.zone ? { zone: p.zone } : {}), ...(t ? { town: info(ctx, t.target) } : {}) });
@@ -547,7 +552,7 @@ export const WHERE_KIND_RU: Readonly<Record<WherePlace['kind'], string>> = {
 
 /** Короткое имя для людей: русское (без разметки рода), иначе английское. */
 export function displayName(r: WhereRecordInfo): string {
-  return r.nameRu ? plainRuName(r.nameRu) : r.name;
+  return r.localizedName ? plainName(r.localizedName) : r.name;
 }
 
 function nameList(names: string[], max = 10): string {
@@ -587,7 +592,7 @@ export function formatWhereFact(f: WhereFact): string {
 }
 
 function label(r: WhereRecordInfo): string {
-  return `«${r.name}»${r.nameRu && r.nameRu !== r.name ? ` (${plainRuName(r.nameRu)})` : ''} [${r.id}]`;
+  return `«${r.name}»${r.localizedName && r.localizedName !== r.name ? ` (${plainName(r.localizedName)})` : ''} [${r.id}]`;
 }
 
 /** Путь словами: `← VENDOR_LIST «…» [id] (weapons) ← SQUAD_TEMPLATE «…» [id] (vendors)`. */

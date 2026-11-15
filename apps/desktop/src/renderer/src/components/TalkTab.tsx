@@ -13,9 +13,9 @@ import {
   type TalkCandidate,
   type TalkLine,
   type TalkSimulation,
-  type TranslationIndex,
 } from '@kenshi-editor/core';
-import { useLang, useT, type Strings } from '../i18n.ts';
+import { useT, type Strings } from '../i18n.ts';
+import { recordName, useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
 
 interface Props {
@@ -27,24 +27,9 @@ interface Props {
 
 export function TalkTab({ project, sid, version, onGo }: Props): ReactNode {
   const t = useT();
-  const lang = useLang();
   const [event, setEvent] = useState(EVENT_TALK);
-  const [translation, setTranslation] = useState<TranslationIndex | undefined | null>(null);
+  const translation = useGameTexts(project);
 
-  useEffect(() => {
-    let alive = true;
-    project.translation().then(
-      (tr) => {
-        if (alive) setTranslation(tr);
-      },
-      () => {
-        if (alive) setTranslation(undefined);
-      },
-    );
-    return () => {
-      alive = false;
-    };
-  }, [project]);
 
   const result = useMemo((): TalkSimulation | string => {
     try {
@@ -55,7 +40,6 @@ export function TalkTab({ project, sid, version, onGo }: Props): ReactNode {
   }, [project, sid, event, version, translation]);
 
   const events = useMemo(() => refValueEnum(project.ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0)?.values ?? [], [project]);
-  const ru = lang === 'ru';
 
   return (
     <div className="talk" data-testid="talk" data-sid={sid}>
@@ -85,7 +69,7 @@ export function TalkTab({ project, sid, version, onGo }: Props): ReactNode {
       {typeof result === 'string' ? (
         <p className="error">{result}</p>
       ) : (
-        <TalkBody sim={result} ru={ru} nameOf={(id) => project.ctx.name(id) ?? id} onGo={onGo} />
+        <TalkBody sim={result} nameOf={(id) => recordName(project.ctx, id)} onGo={onGo} />
       )}
     </div>
   );
@@ -102,7 +86,7 @@ export function partsText(parts: readonly ScorePart[], t: Strings): string {
     .join(', ');
 }
 
-function TalkBody({ sim, ru, nameOf, onGo }: { sim: TalkSimulation; ru: boolean; nameOf: (sid: string) => string; onGo: (sid: string) => void }): ReactNode {
+function TalkBody({ sim, nameOf, onGo }: { sim: TalkSimulation; nameOf: (sid: string) => string; onGo: (sid: string) => void }): ReactNode {
   const t = useT();
   const byId = new Map(sim.candidates.map((c) => [c.dialog, c]));
   const winner = sim.winner !== undefined ? byId.get(sim.winner) : undefined;
@@ -111,7 +95,7 @@ function TalkBody({ sim, ru, nameOf, onGo }: { sim: TalkSimulation; ru: boolean;
   const overrides = sim.candidates.some((c) => c.verdict === 'if-conditions' || c.verdict === 'tie');
   const dialogName = (d: string): string => {
     const x = byId.get(d);
-    return x ? ((ru ? x.ru : undefined) ?? x.name) : nameOf(d);
+    return x ? (x.localized ?? x.name) : nameOf(d);
   };
   return (
     <>
@@ -120,7 +104,7 @@ function TalkBody({ sim, ru, nameOf, onGo }: { sim: TalkSimulation; ru: boolean;
           t.talkNone
         ) : winner ? (
           <>
-            {t.talkWinner}: <DialogLink c={winner} ru={ru} onGo={onGo} />
+            {t.talkWinner}: <DialogLink c={winner} onGo={onGo} />
           </>
         ) : pool.length > 0 ? (
           <>
@@ -128,7 +112,7 @@ function TalkBody({ sim, ru, nameOf, onGo }: { sim: TalkSimulation; ru: boolean;
             {pool.map((c, i) => (
               <span key={c.dialog}>
                 {i > 0 && ', '}
-                <DialogLink c={c} ru={ru} onGo={onGo} /> <span className="muted mono">{pct(c.odds ?? 0)}</span>
+                <DialogLink c={c} onGo={onGo} /> <span className="muted mono">{pct(c.odds ?? 0)}</span>
               </span>
             ))}
           </>
@@ -145,10 +129,10 @@ function TalkBody({ sim, ru, nameOf, onGo }: { sim: TalkSimulation; ru: boolean;
           </div>
           {sim.opening.map((l) => (
             <div key={l.id} className="talk-line-block">
-              <LineView l={l} ru={ru} onGo={onGo} />
+              <LineView l={l} onGo={onGo} />
               {l.choices.map((ch) => (
                 <div key={ch.id} className="talk-choice">
-                  → <LineView l={ch} ru={ru} onGo={onGo} />
+                  → <LineView l={ch} onGo={onGo} />
                 </div>
               ))}
             </div>
@@ -168,7 +152,7 @@ function TalkBody({ sim, ru, nameOf, onGo }: { sim: TalkSimulation; ru: boolean;
           </thead>
           <tbody>
             {sim.candidates.map((c) => (
-              <CandidateRow key={c.dialog} c={c} sim={sim} ru={ru} nameOf={nameOf} dialogName={dialogName} onGo={onGo} />
+              <CandidateRow key={c.dialog} c={c} sim={sim} nameOf={nameOf} dialogName={dialogName} onGo={onGo} />
             ))}
           </tbody>
         </table>
@@ -177,7 +161,7 @@ function TalkBody({ sim, ru, nameOf, onGo }: { sim: TalkSimulation; ru: boolean;
   );
 }
 
-function DialogLink({ c, ru, onGo }: { c: TalkCandidate; ru: boolean; onGo: (sid: string) => void }): ReactNode {
+function DialogLink({ c, onGo }: { c: TalkCandidate; onGo: (sid: string) => void }): ReactNode {
   return (
     <button
       className={`link ${c.verdict === 'missing' ? 'error' : ''}`}
@@ -186,7 +170,7 @@ function DialogLink({ c, ru, onGo }: { c: TalkCandidate; ru: boolean; onGo: (sid
         onGo(c.dialog);
       }}
     >
-      {(ru ? c.ru : undefined) ?? c.name}
+      {c.localized ?? c.name}
     </button>
   );
 }
@@ -194,14 +178,12 @@ function DialogLink({ c, ru, onGo }: { c: TalkCandidate; ru: boolean; onGo: (sid
 function CandidateRow({
   c,
   sim,
-  ru,
   nameOf,
   dialogName,
   onGo,
 }: {
   c: TalkCandidate;
   sim: TalkSimulation;
-  ru: boolean;
   nameOf: (sid: string) => string;
   dialogName: (sid: string) => string;
   onGo: (sid: string) => void;
@@ -224,7 +206,7 @@ function CandidateRow({
         </div>
       </td>
       <td>
-        <DialogLink c={c} ru={ru} onGo={onGo} />
+        <DialogLink c={c} onGo={onGo} />
         {c.origin !== undefined && <div className="muted small mono">{c.origin}</div>}
         {c.actions.length > 0 && (
           <div>
@@ -284,7 +266,7 @@ function CandidateRow({
   );
 }
 
-function LineView({ l, ru, onGo }: { l: TalkLine; ru: boolean; onGo: (sid: string) => void }): ReactNode {
+function LineView({ l, onGo }: { l: TalkLine; onGo: (sid: string) => void }): ReactNode {
   const t = useT();
   const first = l.texts[0];
   return (
@@ -297,7 +279,7 @@ function LineView({ l, ru, onGo }: { l: TalkLine; ru: boolean; onGo: (sid: strin
           onGo(l.id);
         }}
       >
-        {first ? `«${ru ? (first.ru ?? first.en) : first.en}»` : t.talkNoText}
+        {first ? `«${first.localized ?? first.en}»` : t.talkNoText}
       </button>
       {l.texts.length > 1 && (
         <span className="muted small">

@@ -7,7 +7,7 @@
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { applyOps, COMPARE_TYPES, compareTable, matchesFilter, parseFieldFilter, type CompareColumn, type CompareRow, type FieldFilter } from '@kenshi-editor/core';
-import { useLang, useT, type Strings } from '../../i18n.ts';
+import { useDataLocale, useT, type Strings } from '../../i18n.ts';
 import { tryEdit, useProjectVersion } from '../../hooks.ts';
 import { shortcut } from '../../keys.ts';
 import { registerPanel } from '../registry.ts';
@@ -101,7 +101,7 @@ function CompareCellView({ col, row, range, editing, onEdit, onCommit, onCancel 
 
 function ComparePanel(): ReactNode {
   const t = useT();
-  const ru = useLang() === 'ru';
+  const dataLocale = useDataLocale();
   const { project, go, report } = useWorkbench();
   const version = useProjectVersion(project);
   const ctx = project.ctx;
@@ -135,7 +135,7 @@ function ComparePanel(): ReactNode {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = table.rows;
-    if (q !== '') list = list.filter((r) => `${r.sid}\n${r.name}\n${r.ru ?? ''}`.toLowerCase().includes(q));
+    if (q !== '') list = list.filter((r) => `${r.sid}\n${r.name}\n${r.localized ?? ''}`.toLowerCase().includes(q));
     if (onlyChanged) list = list.filter((r) => r.addedBy !== undefined || r.status === 'changed' || [...r.cells.values()].some((c) => c.mark !== undefined));
     if (filters.length > 0) {
       list = list.filter((r) => {
@@ -146,7 +146,7 @@ function ComparePanel(): ReactNode {
     if (sort) {
       const col = table.columns.find((c) => c.key === sort.key);
       const val = (r: CompareRow): number | string => {
-        if (sort.key === '') return ru ? (r.ru ?? r.name) : r.name;
+        if (sort.key === '') return r.localized ?? r.name;
         const c = r.cells.get(sort.key);
         if (col?.kind === 'number') return typeof c?.value === 'number' ? c.value : -Infinity;
         if (col?.kind === 'bool') return c?.value === true ? 1 : 0;
@@ -160,7 +160,7 @@ function ComparePanel(): ReactNode {
       });
     }
     return list;
-  }, [table, query, onlyChanged, filters, sort, ru, ctx]);
+  }, [table, query, onlyChanged, filters, sort, dataLocale, ctx]);
 
   const toggleSort = (key: string): void => {
     setSort((s) => (s?.key === key ? (s.desc ? undefined : { key, desc: true }) : { key, desc: false }));
@@ -269,7 +269,7 @@ function ComparePanel(): ReactNode {
                 <tr key={r.sid} data-sid={r.sid}>
                   <td className="cmp-name">
                     <button className="link" onClick={() => { go(r.sid); }} title={`${r.sid}${r.addedBy ? `\n${t.cmpAdded(r.addedBy)}` : ''}`}>
-                      {ru ? (r.ru ?? r.name) : r.name}
+                      {r.localized ?? r.name}
                     </button>
                     {r.addedBy !== undefined && <span className="cmp-added">+</span>}
                   </td>

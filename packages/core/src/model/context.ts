@@ -100,8 +100,10 @@ export interface ModContextOptions {
   /** Имя файла мода (`Мой мод.mod`). */
   modName: string;
   schema?: GameSchema;
-  /** gamedata.po — для поиска по русским названиям. */
+  /** `gamedata.po` of the data language: translated record names (shown and searched). */
   po?: PoFile;
+  /** Locale code of `po` (`de_DE`), if known. */
+  dataLocale?: string;
 }
 
 export interface ChangeEvent {
@@ -143,7 +145,9 @@ function keepBytes(text: string, original: Uint8Array | undefined): Uint8Array {
 export class ModContext {
   readonly layers: readonly Layer[];
   readonly schema: GameSchema | undefined;
-  readonly translations: Map<string, RecordTranslation>;
+  private translations: Map<string, RecordTranslation>;
+  /** Locale of the loaded translation (`ru_RU`); undefined — names only in the original. */
+  dataLocale: string | undefined;
 
   /** sid → записи нижних слоёв (номер слоя, запись) по порядку. */
   private readonly lowerEntries = new Map<string, { layer: number; rec: GameRecord }[]>();
@@ -171,6 +175,7 @@ export class ModContext {
     this.layers = options.layers;
     this.schema = options.schema;
     this.translations = options.po ? indexPoByRecord(options.po) : new Map<string, RecordTranslation>();
+    this.dataLocale = options.po ? options.dataLocale : undefined;
     for (const [i, layer] of options.layers.entries()) {
       for (const rec of layer.file.records) {
         let list = this.lowerEntries.get(rec.stringId);
@@ -298,11 +303,20 @@ export class ModContext {
     return r ? decodeText(r.name) : undefined;
   }
 
-  /** Русское имя записи из gamedata.po. */
+  /** Name of the record in the data language (from its `gamedata.po`); undefined — no translation. */
   localizedName(stringId: string): string | undefined {
     const e = this.translations.get(stringId)?.name;
     const s = e?.msgstr[0];
     return s === undefined || s === '' ? undefined : s;
+  }
+
+  /**
+   * Switch the data language: `po` of another locale, or none. Does not touch records and does
+   * not notify subscribers (names are not record data); callers refresh their own views.
+   */
+  setTranslations(po: PoFile | undefined, dataLocale?: string): void {
+    this.translations = po ? indexPoByRecord(po) : new Map<string, RecordTranslation>();
+    this.dataLocale = po ? dataLocale : undefined;
   }
 
   /** Есть ли у мода несохранённые изменения. */

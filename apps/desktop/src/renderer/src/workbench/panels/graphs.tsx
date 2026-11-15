@@ -19,7 +19,7 @@ import {
   type ModContext,
   type ResearchNode,
 } from '@kenshi-editor/core';
-import { useLang, useT, type Strings } from '../../i18n.ts';
+import { useDataLocale, useT, type Strings } from '../../i18n.ts';
 import { tryEdit, useProjectVersion } from '../../hooks.ts';
 import { FlowGraph, type FlowCard, type FlowLink } from '../../components/FlowGraph.tsx';
 import { registerPanel } from '../registry.ts';
@@ -104,7 +104,7 @@ function researchFlow(nodes: readonly ResearchNode[], t: Strings, name: Namer, q
     if (n.blueprint || n.blueprintOnly) lines.push(`${t.grBlueprint}${n.soldBy.length ? ` · ${t.grSoldBy.toLowerCase()}: ${n.soldBy.length}` : ''}`);
     const sub = [n.category, t.grLevel(n.level), t.grHours(n.time), n.money ? t.grMoney(n.money) : ''].filter(Boolean).join(' · ');
     const c = card(name, n, 'research', lines, sub);
-    if (q !== '') c.matched = textMatch(q, n.name, n.ru, n.sid, ...n.unlocks.flatMap((u) => [u.name, u.ru]));
+    if (q !== '') c.matched = textMatch(q, n.name, n.localized, n.sid, ...n.unlocks.flatMap((u) => [u.name, u.localized]));
     if (!b.add(c)) break;
   }
   for (const n of nodes) for (const l of n.requires) b.link(l.target, n.sid, undefined, l);
@@ -241,12 +241,12 @@ function RefChips({ label, list, name, onGo }: { label: string; list: readonly G
 
 function GraphsPanel(): ReactNode {
   const t = useT();
-  const ru = useLang() === 'ru';
+  const dataLocale = useDataLocale();
   const { project, go, open, report } = useWorkbench();
   const version = useProjectVersion(project);
   const ctx = project.ctx;
   const index = project.idsByType();
-  const name: Namer = (r) => (r.missing ? `${r.sid} (${t.grMissing})` : ru ? (r.ru ?? r.name) : r.name);
+  const name: Namer = (r) => (r.missing ? `${r.sid} (${t.grMissing})` : r.localized ?? r.name);
 
   const [mode, setMode] = useState<Mode>('research');
   const [category, setCategory] = useState('');
@@ -259,12 +259,12 @@ function GraphsPanel(): ReactNode {
 
   const research = useMemo(() => (mode === 'research' ? researchGraph(ctx, { index }) : undefined), [mode, ctx, index, version]);
   const stations = useMemo(() => (mode === 'craft' ? craftingStations(ctx, { index }) : []), [mode, ctx, index, version]);
-  const sortedStations = useMemo(() => [...stations].sort((a, b) => name(a).localeCompare(name(b))), [stations, ru]);
+  const sortedStations = useMemo(() => [...stations].sort((a, b) => name(a).localeCompare(name(b))), [stations, dataLocale]);
   const focusIds = useMemo(() => {
     if (mode !== 'squads') return [];
-    const list = (index.get(focusKind) ?? []).map((sid) => ({ sid, label: ru ? (ctx.localizedName(sid) ?? ctx.name(sid) ?? sid) : (ctx.name(sid) ?? sid) }));
+    const list = (index.get(focusKind) ?? []).map((sid) => ({ sid, label: ctx.localizedName(sid) ?? ctx.name(sid) ?? sid }));
     return list.sort((a, b) => a.label.localeCompare(b.label));
-  }, [mode, focusKind, index, ctx, ru]);
+  }, [mode, focusKind, index, ctx, dataLocale]);
 
   const q = query.trim().toLowerCase();
   const stationId = station !== undefined && stations.some((s) => s.sid === station) ? station : sortedStations[0]?.sid;
@@ -285,7 +285,7 @@ function GraphsPanel(): ReactNode {
       return s ? craftFlow(ctx, s, t, name) : { cards: [], links: [], capped: false };
     }
     return focusId !== undefined ? compositionFlow(ctx, focusKind, focusId, t, name) : { cards: [], links: [], capped: false };
-  }, [mode, research, category, q, stations, stationId, focusKind, focusId, ctx, t, ru, version]);
+  }, [mode, research, category, q, stations, stationId, focusKind, focusId, ctx, t, dataLocale, version]);
 
   const pickedCard = flow.cards.find((c) => c.id === picked);
   const researchNode = pickedCard && research?.nodes.find((n) => n.sid === pickedCard.sid);
@@ -294,7 +294,7 @@ function GraphsPanel(): ReactNode {
   const found = q !== '' ? flow.cards.filter((c) => c.matched).length : undefined;
 
   // Списки выбора: по поиску (в режимах крафта и состава поиск фильтрует список).
-  const stationOptions = sortedStations.filter((s) => q === '' || mode !== 'craft' || textMatch(q, s.name, s.ru, s.sid, ...s.products.flatMap((p) => [p.name, p.ru]))).slice(0, MAX_OPTIONS);
+  const stationOptions = sortedStations.filter((s) => q === '' || mode !== 'craft' || textMatch(q, s.name, s.localized, s.sid, ...s.products.flatMap((p) => [p.name, p.localized]))).slice(0, MAX_OPTIONS);
   const focusOptions = focusIds.filter((f) => q === '' || textMatch(q, f.label, f.sid, ctx.name(f.sid))).slice(0, MAX_OPTIONS);
 
   const refocus = (c: FlowCard): void => {
@@ -413,7 +413,7 @@ function GraphsPanel(): ReactNode {
                     .join(' · ')}
                 </div>
                 <RefChips label={t.grRequires} list={researchNode.requires.map((l) => byId.get(l.target) ? { sid: l.target, type: 'RESEARCH', name: byId.get(l.target)!.title } : { sid: l.target, type: 'RESEARCH', name: l.target })} name={(r) => r.name} onGo={go} />
-                <RefChips label={t.grCost} list={researchNode.cost.map((c) => ({ ...c, name: `${name(c)} ×${c.amount}`, ru: `${name(c)} ×${c.amount}` }))} name={(r) => r.name} onGo={go} />
+                <RefChips label={t.grCost} list={researchNode.cost.map((c) => ({ ...c, name: `${name(c)} ×${c.amount}`, localized: `${name(c)} ×${c.amount}` }))} name={(r) => r.name} onGo={go} />
                 <RefChips label={t.grUnlocks} list={researchNode.unlocks} name={name} onGo={go} />
                 <RefChips label={t.grBlueprint} list={researchNode.blueprint ? [researchNode.blueprint] : []} name={name} onGo={go} />
                 <RefChips label={t.grSoldBy} list={researchNode.soldBy} name={name} onGo={go} />

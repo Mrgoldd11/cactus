@@ -321,7 +321,7 @@ export interface MergeChange {
   /** Имя записи (в версии источника; у удаляемой — у вас). */
   name: string;
   /** Русское название из gamedata.po, если есть. */
-  ruName?: string;
+  localizedName?: string;
   /** Для `changed`: поля «было → станет». У `new` и `deleted` пусто. */
   fields: MergeFieldView[];
   conflict?: MergeConflictReason;
@@ -592,7 +592,7 @@ function compute(ctx: ModContext, source: MergeSource, state: MergeSourceState, 
       fingerprint,
     };
     const ru = ctx.localizedName(sid);
-    if (ru !== undefined) change.ruName = ru;
+    if (ru !== undefined) change.localizedName = ru;
     if (conflict) change.conflict = conflict;
     if (isRejected && rejectedFp !== fingerprint) change.rejectedStale = true;
     if (blocked) change.blocked = blocked;
@@ -921,7 +921,7 @@ export function formatMergePlan(plan: MergePlan, limit = Infinity): string[] {
     }
     shown++;
     const flags = [ch.conflict ? `КОНФЛИКТ (${ch.conflict})` : '', ch.rejected ? 'отклонена' : '', ch.blocked ? `нельзя: ${ch.blocked}` : ''].filter((x) => x !== '');
-    lines.push(`${KIND_MARK[ch.kind]} ${ch.typeName} ${ch.sid} «${ch.name}»${ch.ruName ? ` (${ch.ruName})` : ''}${flags.length ? `  [${flags.join('; ')}]` : ''}`);
+    lines.push(`${KIND_MARK[ch.kind]} ${ch.typeName} ${ch.sid} «${ch.name}»${ch.localizedName ? ` (${ch.localizedName})` : ''}${flags.length ? `  [${flags.join('; ')}]` : ''}`);
     for (const f of ch.fields) lines.push(`    ${f.conflict ? '! ' : ''}${f.text}${f.conflict ? '   (у вас иначе: источник → ' + (f.after ?? 'нет') + ')' : ''}`);
   }
   if (plan.levelData) lines.push(`данные уровня: ${plan.levelData.files.length} файлов в ${plan.levelData.dir} — ${MERGE_LEVEL_DATA_NOTE}`);

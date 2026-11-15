@@ -43,7 +43,8 @@ export interface IndexEntry {
   sid: string;
   type: string;
   name: string;
-  ru: string;
+  /** Name in the data language ('' — none). */
+  localized: string;
   /** Имя, русское имя и id в нижнем регистре через перевод строки. */
   hay: string;
 }
@@ -182,6 +183,8 @@ export class Project {
   /** Номер правки интерьеров (мир от них не пересобирается). */
   interiorVersion = 0;
   private translationPromise: Promise<TranslationIndex | undefined> | undefined;
+  /** Data language last asked for (the names may still be loading). */
+  requestedLocale: string | undefined;
   private readonly icons = new Map<string, Promise<string | null>>();
 
   constructor(bundle: ProjectBundle, options: { mod?: DataFile; path?: string; carriedDirty?: boolean; provenance?: ModProvenance | undefined; ledger?: MergeLedger } = {}) {
@@ -195,8 +198,9 @@ export class Project {
       modName: bundle.modName,
       schema,
       ...(mod ? { mod } : {}),
-      ...(bundle.po !== undefined ? { po: parsePo(bundle.po) } : {}),
+      ...(bundle.po !== undefined ? { po: parsePo(bundle.po), ...(bundle.dataLocale !== undefined ? { dataLocale: bundle.dataLocale } : {}) } : {}),
     });
+    this.requestedLocale = bundle.dataLocale;
     this.path = options.path ?? bundle.mod?.path;
     this.provenance = 'provenance' in options ? options.provenance : bundle.provenance;
     this.carriedDirty = options.carriedDirty ?? false;
@@ -229,8 +233,28 @@ export class Project {
       return;
     }
     const name = decodeText(rec.name);
-    const ru = this.ctx.localizedName(sid) ?? '';
-    this.index.set(sid, { sid, type: this.ctx.typeName(rec.type), name, ru, hay: `${name}\n${ru}\n${sid}`.toLowerCase() });
+    const localized = this.ctx.localizedName(sid) ?? '';
+    this.index.set(sid, { sid, type: this.ctx.typeName(rec.type), name, localized, hay: `${name}\n${localized}\n${sid}`.toLowerCase() });
+  }
+
+  /** Data language of the loaded names (game locale code); undefined — originals only. */
+  get dataLocale(): string | undefined {
+    return this.ctx.dataLocale;
+  }
+
+  /**
+   * Switch the data language: read `gamedata.po` of `locale` (or drop the names), rebuild the
+   * search index and the text translation, redraw. Later calls win over earlier ones still running.
+   */
+  async setDataLocale(locale: string | undefined): Promise<void> {
+    if (locale === this.requestedLocale) return;
+    this.requestedLocale = locale;
+    const text = locale !== undefined ? await window.kedit.readGamedataPo(this.bundle.game, locale) : null;
+    if (this.requestedLocale !== locale) return;
+    this.ctx.setTranslations(text !== null ? parsePo(text) : undefined, locale);
+    this.translationPromise = undefined;
+    for (const sid of this.ids) this.reindex(sid);
+    this.bump();
   }
 
   entry(sid: string): IndexEntry | undefined {
@@ -396,9 +420,14 @@ export class Project {
     return this.worldCache.index;
   }
 
-  /** Перевод реплик игры (`ru_RU.translation`), читается один раз; undefined — нет файла. */
+  /**
+   * Translation of the game texts (`<locale>.translation`: dialogue lines and others) of the data
+   * language, read once per language; undefined — no data language or no file.
+   */
   translation(): Promise<TranslationIndex | undefined> {
-    this.translationPromise ??= window.kedit.readTranslation(this.bundle.game).then((b) => (b ? indexTranslation(readDataFile(b)) : undefined));
+    const locale = this.requestedLocale;
+    this.translationPromise ??=
+      locale === undefined ? Promise.resolve(undefined) : window.kedit.readTranslation(this.bundle.game, locale).then((b) => (b ? indexTranslation(readDataFile(b)) : undefined));
     return this.translationPromise;
   }
 
@@ -480,6 +509,7 @@ export async function reloadProject(p: Project, change: { dependencies?: string[
     dependencies: [...p.ctx.info.dependencies, ...p.ctx.info.references],
     ...(contextMods.length ? { contextMods } : {}),
     ...(p.path !== undefined ? { extensionsOf: p.path } : {}),
+    ...(p.requestedLocale !== undefined ? { dataLocale: p.requestedLocale } : {}),
   };
   let bundle = await window.kedit.openProject({ ...req, known: parsedFiles.keys() });
   if ([...bundle.vanilla, ...bundle.dependencies].some((f) => f.key !== undefined && f.bytes.length === 0 && !parsedFiles.has(f.key))) {
@@ -523,6 +553,7 @@ export async function restoreProject(p: Project, bytes: Uint8Array): Promise<Pro
     dependencies: headerDependencies(mod),
     ...(contextMods.length ? { contextMods } : {}),
     ...(p.path !== undefined ? { extensionsOf: p.path } : {}),
+    ...(p.requestedLocale !== undefined ? { dataLocale: p.requestedLocale } : {}),
   };
   let bundle = await window.kedit.openProject({ ...req, known: parsedFiles.keys() });
   if ([...bundle.vanilla, ...bundle.dependencies].some((f) => f.key !== undefined && f.bytes.length === 0 && !parsedFiles.has(f.key))) {

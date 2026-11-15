@@ -29,7 +29,7 @@ describe.skipIf(!game)('специальные редакторы на вани�
     expect(t.rows.length).toBeGreaterThan(40);
     expect(t.defaultColumns).toContain('cut damage multiplier');
     const katana = t.rows.find((r) => r.sid === '476-gamedata.base')!;
-    expect(katana.ru).toBeDefined();
+    expect(katana.localized).toBeDefined();
     expect(katana.cells.get('cut damage multiplier')!.value).toBeGreaterThan(0);
     const r = t.range('cut damage multiplier')!;
     expect(r.max).toBeGreaterThan(r.min);

@@ -94,7 +94,7 @@ describe('граф диалога', () => {
     const byId = new Map(g.nodes.map((n) => [n.id, n]));
     expect(byId.get('P1')!.choice).toBe(true);
     expect(byId.get('G1')!.choice).toBe(false);
-    expect(byId.get('G1')!.texts).toEqual([{ en: 'Hello', ru: 'Привет' }]);
+    expect(byId.get('G1')!.texts).toEqual([{ en: 'Hello', localized: 'Привет' }]);
     // Перевод сделан с другого английского текста — не подходит.
     expect(byId.get('P2')!.texts).toEqual([{ en: 'Bye' }]);
     expect(byId.get('P1')!.effects).toEqual(['DA_TRADE']);

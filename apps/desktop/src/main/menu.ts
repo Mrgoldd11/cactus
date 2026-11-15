@@ -16,14 +16,14 @@ function about(lang: Lang): void {
   const v = process.versions;
   const options = {
     type: 'info' as const,
-    title: pick(lang, 'О программе', 'About', '关于'),
+    title: pick(lang, { en: 'About', ru: 'О программе', zh: '关于' }),
     message: `${APP_TITLE} ${app.getVersion()}`,
     detail: [
-      pick(lang, 'Редактор модов Kenshi. Бета-версия для проверки.', 'Kenshi mod editor. Beta for testing.', 'Kenshi Mod 编辑器。测试版。'),
-      pick(lang, 'Лицензия: MIT (предварительно).', 'License: MIT (preliminary).', '许可证：MIT（暂定）。'),
+      pick(lang, { en: 'Kenshi mod editor. Beta for testing.', ru: 'Редактор модов Kenshi. Бета-версия для проверки.', zh: 'Kenshi Mod 编辑器。测试版。' }),
+      pick(lang, { en: 'License: MIT (preliminary).', ru: 'Лицензия: MIT (предварительно).', zh: '许可证：MIT（暂定）。' }),
       '',
       `Electron ${v.electron}, Chromium ${v.chrome}, Node ${v.node}`,
-      `${pick(lang, 'Журнал', 'Log', '日志')}: ${logFile() ?? '—'}`,
+      `${pick(lang, { en: 'Log', ru: 'Журнал', zh: '日志' })}: ${logFile() ?? '—'}`,
     ].join('\n'),
     buttons: ['OK'],
   };
@@ -50,38 +50,28 @@ function connectAi(lang: Lang): void {
   const codeCmd = `claude mcp add kenshi --scope user ${env}-- ${[m.command, ...m.args].map(quoteArg).join(' ')}`;
   const options = {
     type: 'info' as const,
-    title: pick(lang, 'Подключить ИИ (MCP)', 'Connect AI (MCP)', '连接 AI (MCP)'),
-    message: pick(lang, 'Настройка MCP-сервера для Claude', 'MCP server setup for Claude', '为 Claude 配置 MCP 服务器'),
-    detail: pick(
-      lang,
-      [
-        'Claude Desktop: Настройки → Developer → Edit Config, вставьте в claude_desktop_config.json (если там уже есть mcpServers — добавьте только блок "kenshi"):',
-        desktopJson,
-        'Claude Code (в терминале):',
-        codeCmd,
-        'Потом перезапустите Claude.',
-      ],
-      [
+    title: pick(lang, { en: 'Connect AI (MCP)', ru: 'Подключить ИИ (MCP)', zh: '连接 AI (MCP)' }),
+    message: pick(lang, { en: 'MCP server setup for Claude', ru: 'Настройка MCP-сервера для Claude', zh: '为 Claude 配置 MCP 服务器' }),
+    detail: pick(lang, { en: [
         'Claude Desktop: Settings → Developer → Edit Config, paste into claude_desktop_config.json (if mcpServers already exists, add only the "kenshi" block):',
         desktopJson,
         'Claude Code (in a terminal):',
         codeCmd,
         'Then restart Claude.',
-      ],
-      [
+      ], ru: [
+        'Claude Desktop: Настройки → Developer → Edit Config, вставьте в claude_desktop_config.json (если там уже есть mcpServers — добавьте только блок "kenshi"):',
+        desktopJson,
+        'Claude Code (в терминале):',
+        codeCmd,
+        'Потом перезапустите Claude.',
+      ], zh: [
         'Claude Desktop：设置 → Developer → Edit Config，粘贴到 claude_desktop_config.json 中（如果其中已有 mcpServers，只需添加 "kenshi" 这一块）：',
         desktopJson,
         'Claude Code（在终端中）：',
         codeCmd,
         '然后重启 Claude。',
-      ],
-    ).join('\n\n'),
-    buttons: pick(
-      lang,
-      ['Копировать для Claude Desktop', 'Копировать для Claude Code', 'Закрыть'],
-      ['Copy for Claude Desktop', 'Copy for Claude Code', 'Close'],
-      ['复制给 Claude Desktop', '复制给 Claude Code', '关闭'],
-    ),
+      ] }).join('\n\n'),
+    buttons: pick(lang, { en: ['Copy for Claude Desktop', 'Copy for Claude Code', 'Close'], ru: ['Копировать для Claude Desktop', 'Копировать для Claude Code', 'Закрыть'], zh: ['复制给 Claude Desktop', '复制给 Claude Code', '关闭'] }),
     defaultId: 0,
     cancelId: 2,
   };
@@ -93,7 +83,7 @@ function connectAi(lang: Lang): void {
 }
 
 export function buildMenu(lang: Lang): void {
-  const t = (ru: string, en: string, zh: string): string => pick(lang, ru, en, zh);
+  const t = (ru: string, en: string, zh: string): string => pick(lang, { en: en, ru: ru, zh: zh });
   const template: MenuItemConstructorOptions[] = [
     {
       label: t('Файл', 'File', '文件'),

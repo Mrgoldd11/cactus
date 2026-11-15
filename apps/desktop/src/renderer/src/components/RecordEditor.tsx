@@ -73,7 +73,7 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
       </div>
     );
   }
-  const ru = ctx.localizedName(sid);
+  const localized = ctx.localizedName(sid);
   const hasGraph = DIALOGUE_GRAPH_TYPES.has(ctx.typeName(rec.type));
   const hasTalk = ctx.typeName(rec.type) === 'CHARACTER';
   const tab: Tab = (chosenTab === 'graph' && !hasGraph) || (chosenTab === 'talk' && !hasTalk) ? 'fields' : chosenTab;
@@ -103,7 +103,7 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
           </span>
         </div>
         <div className="record-meta">
-          {ru !== undefined && <span className="ru">{ru}</span>}
+          {localized !== undefined && <span className="tr-name">{localized}</span>}
           <span className="mono selectable" data-testid="record-sid">
             {sid}
           </span>

@@ -5,6 +5,7 @@ import type { DataFile } from '../format/types.ts';
 
 export * from './paths.ts';
 export * from './schema.ts';
+export * from './locales.ts';
 export * from './extensions.ts';
 export * from './context.ts';
 export * from './detect.ts';

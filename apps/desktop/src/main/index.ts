@@ -41,6 +41,8 @@ import { pick } from './tr.ts';
 import {
   IPC,
   isLang,
+  DATA_LOCALE_AUTO,
+  DATA_LOCALE_NONE,
   type GameInstallInfo,
   type LiveReply,
   type AutosaveResult,
@@ -76,6 +78,8 @@ import {
   readMergeSourceBytes,
   readModOrder,
   readTranslationBytes,
+  readGamedataPoText,
+  listLocales,
   saveDialogDefaultPath,
   writeMod,
   writeModOrder,
@@ -87,11 +91,17 @@ if (process.env['KEDIT_USER_DATA']) app.setPath('userData', process.env['KEDIT_U
 const settingsPath = (): string => join(app.getPath('userData'), 'settings.json');
 const DEFAULT_SETTINGS: Settings = { lang: 'ru', recent: [], autosaveMinutes: DEFAULT_AUTOSAVE_MINUTES, backupCount: DEFAULT_BACKUP_COUNT };
 
+/** A locale folder name from the window: no path separators or dots. */
+function isLocaleCode(v: unknown): v is string {
+  return typeof v === 'string' && /^[A-Za-z]{2,3}(?:[_-][A-Za-z0-9]{2,8})*$/.test(v);
+}
+
 /** Настройки автосохранения и копий приводятся к допустимым значениям (файл могли править руками). */
 function sanitizeSettings(s: Settings): Settings {
   const minutes = Number.isFinite(s.autosaveMinutes) && s.autosaveMinutes >= 0 ? Math.min(s.autosaveMinutes, 1440) : DEFAULT_AUTOSAVE_MINUTES;
   const count = Number.isFinite(s.backupCount) && s.backupCount >= 0 ? Math.min(Math.floor(s.backupCount), MAX_BACKUP_COUNT) : DEFAULT_BACKUP_COUNT;
-  return { ...s, lang: isLang(s.lang) ? s.lang : DEFAULT_SETTINGS.lang, autosaveMinutes: minutes, backupCount: count };
+  const dataLocale = s.dataLocale === DATA_LOCALE_AUTO || s.dataLocale === DATA_LOCALE_NONE || isLocaleCode(s.dataLocale) ? s.dataLocale : DATA_LOCALE_AUTO;
+  return { ...s, lang: isLang(s.lang) ? s.lang : DEFAULT_SETTINGS.lang, dataLocale, autosaveMinutes: minutes, backupCount: count };
 }
 
 function loadSettings(): Settings {
@@ -191,11 +201,11 @@ async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<Sav
     const lg = settings.lang;
     const options = {
       type: 'warning' as const,
-      buttons: pick(lg, ['Записать', 'Отмена'], ['Write', 'Cancel'], ['写入', '取消']),
+      buttons: pick(lg, { en: ['Write', 'Cancel'], ru: ['Записать', 'Отмена'], zh: ['写入', '取消'] }),
       defaultId: 1,
       cancelId: 1,
-      title: pick(lg, 'Запись в папку игры', 'Writing to the game folder', '写入游戏文件夹'),
-      message: pick(lg, 'Файл будет записан в папку игры или мастерской:', 'The file will be written into the game or workshop folder:', '文件将被写入游戏或创意工坊文件夹：'),
+      title: pick(lg, { en: 'Writing to the game folder', ru: 'Запись в папку игры', zh: '写入游戏文件夹' }),
+      message: pick(lg, { en: 'The file will be written into the game or workshop folder:', ru: 'Файл будет записан в папку игры или мастерской:', zh: '文件将被写入游戏或创意工坊文件夹：' }),
       detail: req.world?.length ? [req.path, ...req.world.map((f) => `leveldata/${f.path}`)].join('\n') : req.path,
     };
     const r = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
@@ -252,17 +262,12 @@ async function copyModForEditing(e: IpcMainInvokeEvent, game: GameInstallInfo, p
   ];
   const options = {
     type: 'warning' as const,
-    buttons: pick(lg, ['Скопировать', 'Отмена'], ['Copy', 'Cancel'], ['复制', '取消']),
+    buttons: pick(lg, { en: ['Copy', 'Cancel'], ru: ['Скопировать', 'Отмена'], zh: ['复制', '取消'] }),
     defaultId: 1,
     cancelId: 1,
-    title: pick(lg, 'Копия мода для правки', 'Copy the mod for editing', '复制 Mod 以便编辑'),
-    message: pick(
-      lg,
-      'Мод из мастерской не меняем: Steam перезапишет его при обновлении. Скопировать мод в папку игры и править копию?',
-      'Workshop mods are never changed: Steam overwrites them on update. Copy the mod into the game folder and edit the copy?',
-      '创意工坊的 Mod 不会被修改：Steam 在更新时会覆盖它。要把 Mod 复制到游戏文件夹并编辑副本吗？',
-    ),
-    detail: [`${pick(lg, 'Откуда', 'From', '来源')}: ${plan.source}`, `${pick(lg, 'Куда', 'To', '目标')}: ${plan.dest}`, '', ...pick(lg, plan.warnings, enWarnings, zhWarnings)].join('\n'),
+    title: pick(lg, { en: 'Copy the mod for editing', ru: 'Копия мода для правки', zh: '复制 Mod 以便编辑' }),
+    message: pick(lg, { en: 'Workshop mods are never changed: Steam overwrites them on update. Copy the mod into the game folder and edit the copy?', ru: 'Мод из мастерской не меняем: Steam перезапишет его при обновлении. Скопировать мод в папку игры и править копию?', zh: '创意工坊的 Mod 不会被修改：Steam 在更新时会覆盖它。要把 Mod 复制到游戏文件夹并编辑副本吗？' }),
+    detail: [`${pick(lg, { en: 'From', ru: 'Откуда', zh: '来源' })}: ${plan.source}`, `${pick(lg, { en: 'To', ru: 'Куда', zh: '目标' })}: ${plan.dest}`, '', ...pick(lg, { en: enWarnings, ru: plan.warnings, zh: zhWarnings })].join('\n'),
   };
   const win = windowOf(e);
   const r = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
@@ -284,16 +289,11 @@ async function saveModOrder(e: IpcMainInvokeEvent, game: GameInstallInfo, names:
   const lg = settings.lang;
   const options = {
     type: 'warning' as const,
-    buttons: pick(lg, ['Записать', 'Отмена'], ['Write', 'Cancel'], ['写入', '取消']),
+    buttons: pick(lg, { en: ['Write', 'Cancel'], ru: ['Записать', 'Отмена'], zh: ['写入', '取消'] }),
     defaultId: 1,
     cancelId: 1,
-    title: pick(lg, 'Порядок загрузки модов', 'Mod load order', 'Mod 加载顺序'),
-    message: pick(
-      lg,
-      'Записать новый порядок в файл игры mods.cfg? Игра и лаунчер должны быть закрыты; рядом останется копия прежнего файла.',
-      'Write the new order into the game file mods.cfg? The game and launcher must be closed; a copy of the old file is kept next to it.',
-      '要把新的顺序写入游戏文件 mods.cfg 吗？游戏和启动器必须处于关闭状态；旧文件的副本会保留在旁边。',
-    ),
+    title: pick(lg, { en: 'Mod load order', ru: 'Порядок загрузки модов', zh: 'Mod 加载顺序' }),
+    message: pick(lg, { en: 'Write the new order into the game file mods.cfg? The game and launcher must be closed; a copy of the old file is kept next to it.', ru: 'Записать новый порядок в файл игры mods.cfg? Игра и лаунчер должны быть закрыты; рядом останется копия прежнего файла.', zh: '要把新的顺序写入游戏文件 mods.cfg 吗？游戏和启动器必须处于关闭状态；旧文件的副本会保留在旁边。' }),
     detail: [join(game.kenshi, 'data', 'mods.cfg'), '', ...changes.slice(0, 30), ...(changes.length > 30 ? [`… +${changes.length - 30}`] : [])].join('\n'),
   };
   const win = windowOf(e);
@@ -400,11 +400,11 @@ async function exportBackup(e: IpcMainInvokeEvent, ref: ModRef, id: string): Pro
     const lg = settings.lang;
     const options = {
       type: 'warning' as const,
-      buttons: pick(lg, ['Записать', 'Отмена'], ['Write', 'Cancel'], ['写入', '取消']),
+      buttons: pick(lg, { en: ['Write', 'Cancel'], ru: ['Записать', 'Отмена'], zh: ['写入', '取消'] }),
       defaultId: 1,
       cancelId: 1,
-      title: pick(lg, 'Запись в папку игры', 'Writing to the game folder', '写入游戏文件夹'),
-      message: pick(lg, 'Файл будет записан в папку игры:', 'The file will be written into the game folder:', '文件将被写入游戏文件夹：'),
+      title: pick(lg, { en: 'Writing to the game folder', ru: 'Запись в папку игры', zh: '写入游戏文件夹' }),
+      message: pick(lg, { en: 'The file will be written into the game folder:', ru: 'Файл будет записан в папку игры:', zh: '文件将被写入游戏文件夹：' }),
       detail: path,
     };
     const c = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
@@ -499,7 +499,9 @@ function registerIpc(): void {
   );
   ipcMain.handle(IPC.readTerrainTile, (_e, game: GameInstallInfo, level: number, tx: number, ty: number) => readTerrainTile(game, level, tx, ty));
   ipcMain.handle(IPC.savePngFile, savePngFile);
-  ipcMain.handle(IPC.readTranslation, (_e, game: GameInstallInfo) => readTranslationBytes(game));
+  ipcMain.handle(IPC.readTranslation, (_e, game: GameInstallInfo, locale: unknown) => (isLocaleCode(locale) ? readTranslationBytes(game, locale) : null));
+  ipcMain.handle(IPC.readGamedataPo, (_e, game: GameInstallInfo, locale: unknown) => (isLocaleCode(locale) ? readGamedataPoText(game, locale) : null));
+  ipcMain.handle(IPC.listGameLocales, (_e, game: GameInstallInfo) => listLocales(game));
   ipcMain.handle(IPC.saveTextFile, saveTextFile);
   ipcMain.handle(IPC.openTextFile, openTextFile);
   ipcMain.handle(IPC.getSettings, () => settings);
@@ -557,10 +559,10 @@ function createWindow(): void {
     const choice = dialog.showMessageBoxSync(win, {
       type: 'question',
       title: 'Cactus',
-      buttons: pick(lg, ['Закрыть без сохранения', 'Отмена'], ['Close without saving', 'Cancel'], ['不保存并关闭', '取消']),
+      buttons: pick(lg, { en: ['Close without saving', 'Cancel'], ru: ['Закрыть без сохранения', 'Отмена'], zh: ['不保存并关闭', '取消'] }),
       defaultId: 1,
       cancelId: 1,
-      message: pick(lg, `В «${title}» есть несохранённые изменения.`, `“${title}” has unsaved changes.`, `“${title}”有未保存的更改。`),
+      message: pick(lg, { en: `“${title}” has unsaved changes.`, ru: `В «${title}» есть несохранённые изменения.`, zh: `“${title}”有未保存的更改。` }),
     });
     if (choice !== 0) e.preventDefault();
     else {

@@ -10,7 +10,7 @@ export interface InsideLink {
   sid: string;
   /** Имя записи; нет — записи нет в данных (ссылка в пустоту). */
   name?: string;
-  nameRu?: string;
+  localizedName?: string;
   type?: string;
   /** Числа ссылки (v0, v1, v2) или координаты размещённого объекта. */
   values?: number[];
@@ -26,7 +26,7 @@ export interface RecordInside {
   sid: string;
   exists: boolean;
   name?: string;
-  nameRu?: string;
+  localizedName?: string;
   type?: string;
   status?: RecordStatus;
   /** Слой, где запись появилась (gamedata.base, мод…). */
@@ -48,7 +48,7 @@ function link(ctx: ModContext, sid: string, values?: number[]): InsideLink {
     out.name = ctx.name(sid) ?? '';
     out.type = ctx.typeName(h.type);
     const ru = ctx.localizedName(sid);
-    if (ru) out.nameRu = ru;
+    if (ru) out.localizedName = ru;
   }
   if (values && values.length > 0) out.values = values;
   return out;
@@ -64,7 +64,7 @@ export function inspectRecord(ctx: ModContext, sid: string, options: { limit?: n
     out.name = ctx.name(sid) ?? '';
     out.type = ctx.typeName(rec.type);
     const ru = ctx.localizedName(sid);
-    if (ru) out.nameRu = ru;
+    if (ru) out.localizedName = ru;
   }
   if (origin) {
     out.status = origin.status;
@@ -92,13 +92,13 @@ export function inspectRecord(ctx: ModContext, sid: string, options: { limit?: n
 
 function linkText(l: InsideLink): string {
   if (l.name === undefined) return `${l.sid} — записи нет`;
-  return `${l.type ?? ''} «${l.name}»${l.nameRu ? ` (${l.nameRu})` : ''} [${l.sid}]`;
+  return `${l.type ?? ''} «${l.name}»${l.localizedName ? ` (${l.localizedName})` : ''} [${l.sid}]`;
 }
 
 /** Карточка текстом (для ИИ): шапка, «внутри» по категориям, «кто ссылается». */
 export function formatInside(card: RecordInside): string {
   if (!card.exists) return `${card.sid}: записи нет в данных`;
-  const lines = [`${card.type ?? ''} «${card.name ?? ''}»${card.nameRu ? ` (${card.nameRu})` : ''} [${card.sid}]`];
+  const lines = [`${card.type ?? ''} «${card.name ?? ''}»${card.localizedName ? ` (${card.localizedName})` : ''} [${card.sid}]`];
   const changed = card.layers.slice(1);
   lines.push(`из: ${card.origin ?? '?'}${changed.length > 0 ? `; меняют: ${changed.join(', ')}` : ''}${card.status && card.status !== 'base' ? `; в моде: ${card.status}` : ''}`);
   lines.push('внутри / ссылки:');

@@ -5,7 +5,7 @@
  */
 import { useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import type { RecordStatus } from '@kenshi-editor/core';
-import { useT } from '../i18n.ts';
+import { useDataLocale, useT } from '../i18n.ts';
 import { tryEdit } from '../hooks.ts';
 import type { IndexEntry, Project } from '../project.ts';
 import { VirtualList } from './VirtualList.tsx';
@@ -29,6 +29,10 @@ const ROW_HEIGHT = 24;
 
 export function RecordList({ project, version, ids, selected, onSelect, searchRef, onNew, onDuplicate, onReport }: Props): ReactNode {
   const t = useT();
+  const dataLocale = useDataLocale();
+  // The translation column exists only when names come in a data language.
+  const hasTr = dataLocale !== undefined;
+  const grid = hasTr ? '' : ' no-tr';
   const ctx = project.ctx;
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -142,9 +146,13 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
           {t.records}: {items.length}
         </span>
       </div>
-      <div className="list-header list-grid" style={{ paddingRight: 8 + gutter }}>
+      <div className={`list-header list-grid${grid}`} style={{ paddingRight: 8 + gutter }} data-testid="list-header">
         <span title={t.colName}>{t.colName}</span>
-        <span title={t.colRu}>{t.colRu}</span>
+        {hasTr && (
+          <span title={`${t.colTranslation} (${dataLocale})`} data-testid="col-translation">
+            {t.colTranslation}
+          </span>
+        )}
         <span title={t.colId}>{t.colId}</span>
         <span title={t.colType}>{t.colType}</span>
       </div>
@@ -159,7 +167,7 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
           const st = ctx.status(e.sid) ?? 'base';
           return (
             <div
-              className={`list-row list-grid st-${st} ${e.sid === selected ? 'selected' : ''}`}
+              className={`list-row list-grid${grid} st-${st} ${e.sid === selected ? 'selected' : ''}`}
               data-sid={e.sid}
               tabIndex={-1}
               onClick={() => {
@@ -170,9 +178,11 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
                 {ctx.isDirty(e.sid) && <span className="dirty-dot">● </span>}
                 {e.name}
               </span>
-              <span className="ru" title={e.ru}>
-                {e.ru}
-              </span>
+              {hasTr && (
+                <span className="tr-name" title={e.localized}>
+                  {e.localized}
+                </span>
+              )}
               <span className="sid mono" title={e.sid}>
                 {e.sid}
               </span>

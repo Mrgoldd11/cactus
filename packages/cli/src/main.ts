@@ -116,6 +116,7 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
 
 Общие:
   --game <папка Kenshi>   иначе KENSHI_DIR, kenshi-paths.json или найденная установка Steam/GOG
+  --data-locale <код>     язык перевода имён (de_DE, ru_RU…; none — без перевода); иначе KENSHI_DATA_LOCALE или язык игры (settings.cfg)
   --mod <путь|имя.mod>    мод поверх ванили (и его зависимостей)
   --deps a.mod,b.mod      зависимости вместо записанных в моде ("" — без зависимостей)
   --json  --offset N  --limit N (по умолчанию 50, 0 — все)
@@ -123,6 +124,7 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
 
 const OPTIONS = {
   game: { type: 'string' },
+  'data-locale': { type: 'string' },
   mod: { type: 'string' },
   deps: { type: 'string' },
   json: { type: 'boolean' },
@@ -205,7 +207,7 @@ class Command {
     this.io = io;
     this.values = values;
     this.args = args;
-    this.ws = new Workspace({ cwd: io.cwd, env: io.env, ...(values.game !== undefined ? { game: values.game } : {}) });
+    this.ws = new Workspace({ cwd: io.cwd, env: io.env, ...(values.game !== undefined ? { game: values.game } : {}), ...(values['data-locale'] !== undefined ? { dataLocale: values['data-locale'] } : {}) });
   }
 
   get deps(): string[] | undefined {
@@ -378,7 +380,7 @@ const COMMANDS: Record<string, Handler> = {
   talk(c) {
     const ctx = c.ctx();
     const sid = c.resolve(ctx, c.arg(0, '<персонаж>'), ['CHARACTER']);
-    const translation = loadTranslation(c.ws.paths);
+    const translation = c.ws.dataLocale !== undefined ? loadTranslation(c.ws.paths, c.ws.dataLocale) : undefined;
     const sim = simulateTalk(ctx, sid, int(c.values.event, 'event', 1), translation ? { translation } : {});
     if (c.values.json) c.io.out(JSON.stringify(sim, null, 1));
     else for (const l of formatTalk(sim)) c.io.out(l);

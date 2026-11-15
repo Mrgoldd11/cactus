@@ -13,7 +13,7 @@ import { decodeText } from '../text.ts';
 import { itemTypeId, itemTypeName } from '../format/item-types.ts';
 import type { GameRecord, Reference } from '../format/types.ts';
 import { isVanillaLayer } from '../vanilla.ts';
-import { plainRuName } from '../world/where.ts';
+import { plainName } from '../world/where.ts';
 import { EditError, type ModContext } from './context.ts';
 import { contextLayers } from './conflicts.ts';
 import { isRemovalMarker, isRemovedRef } from './record-ops.ts';
@@ -30,8 +30,8 @@ export type RelationKind = 'enemy' | 'neutral' | 'ally';
 export interface FactionInfo {
   sid: string;
   name: string;
-  /** Русское имя из gamedata.po (без служебных меток) или undefined. */
-  ru?: string;
+  /** Name in the data language without gender markup, or undefined. */
+  localized?: string;
   defaultRelation: number;
   enemyClassification: number;
   /** Число явно заданных отношений (без маркеров «убрать»). */
@@ -77,12 +77,12 @@ export function relationKind(value: number, enemyClassification = DEFAULT_ENEMY)
 }
 
 function info(ctx: ModContext, rec: GameRecord): FactionInfo {
-  const ru = ctx.localizedName(rec.stringId);
-  const plain = ru === undefined ? undefined : plainRuName(ru);
+  const loc = ctx.localizedName(rec.stringId);
+  const plain = loc === undefined ? undefined : plainName(loc);
   return {
     sid: rec.stringId,
     name: decodeText(rec.name) || rec.stringId,
-    ...(plain !== undefined && plain !== '' ? { ru: plain } : {}),
+    ...(plain !== undefined && plain !== '' ? { localized: plain } : {}),
     defaultRelation: rec.ints.get('default relation') ?? 0,
     enemyClassification: rec.ints.get('enemy classification') ?? DEFAULT_ENEMY,
     listed: (rec.refs.get(RELATIONS) ?? []).filter((r) => !isRemovedRef(r)).length,

@@ -444,10 +444,10 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
       }),
   );
 
-  /** Название шага понятными словами, как в окне редактора. */
+  /** Step title in plain words (English: MCP texts are English), as in the editor window. */
   const title = (ctx: ModContext, cs: Changeset): string => {
     const tr = session.translation();
-    return `#${String(cs.id)} ${describeChangeset(ctx, cs, tr ? { translation: tr } : {}).ru}`;
+    return `#${String(cs.id)} ${describeChangeset(ctx, cs, tr ? { translation: tr } : {}).en}`;
   };
   server.registerTool(
     'edit',

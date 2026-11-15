@@ -72,6 +72,8 @@ export function makeFixture(): Fixture {
     ['[CHARACTER]', 'general:', 'money: 0 "how much money"', 'vendors: ITEM (1,0,0)', '', '[ITEM]', 'weight: 1.0', 'kind: Kind.TOOL', ''].join('\n'),
   );
   writeFileSync(join(game, 'fcs_enums.def'), 'enum Kind { TOOL, FOOD }\n');
+  // The data language of the CLI and MCP follows the game's own language.
+  writeFileSync(join(game, 'settings.cfg'), 'language=ru_RU\n');
   mkdirSync(join(game, 'locale', 'ru_RU'), { recursive: true });
   writeFileSync(
     join(game, 'locale', 'ru_RU', 'gamedata.po'),

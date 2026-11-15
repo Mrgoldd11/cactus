@@ -16,7 +16,7 @@ const CHARS_PER_LINE = 42;
 /** Оценка высоты карточки узла (px). */
 export function nodeHeight(n: DialogueGraphNode, maxTexts: number): number {
   let lines = 1;
-  for (const t of n.texts.slice(0, maxTexts)) lines += Math.min(4, Math.ceil(Math.max(1, (t.ru ?? t.en).length) / CHARS_PER_LINE));
+  for (const t of n.texts.slice(0, maxTexts)) lines += Math.min(4, Math.ceil(Math.max(1, (t.localized ?? t.en).length) / CHARS_PER_LINE));
   if (n.texts.length > maxTexts) lines += 1;
   lines += n.conditions.length + n.filters.length + n.effects.length + n.issues.length;
   return 28 + lines * 17;

@@ -7,7 +7,7 @@
 import { decodeText } from '../text.ts';
 import { itemTypeId } from '../format/item-types.ts';
 import type { GameRecord, Reference } from '../format/types.ts';
-import { plainRuName } from '../world/where.ts';
+import { plainName } from '../world/where.ts';
 import { EditError, type ModContext, type RecordStatus } from './context.ts';
 
 /** Запись в графе: имя, русское имя, состояние в моде. */
@@ -15,7 +15,7 @@ export interface GraphRef {
   sid: string;
   type: string;
   name: string;
-  ru?: string;
+  localized?: string;
   status?: RecordStatus;
   /** Ссылка есть, а записи нет (удалена или из отсутствующего мода). */
   missing?: boolean;
@@ -49,9 +49,9 @@ function idsOf(ctx: ModContext, type: string, index: TypeIndex | undefined): rea
 
 export function graphRef(ctx: ModContext, sid: string): GraphRef {
   const rec = ctx.get(sid);
-  const ru = ctx.localizedName(sid);
+  const loc = ctx.localizedName(sid);
   const out: GraphRef = { sid, type: rec ? ctx.typeName(rec.type) : '?', name: rec ? decodeText(rec.name) : sid };
-  if (ru !== undefined) out.ru = plainRuName(ru);
+  if (loc !== undefined) out.localized = plainName(loc);
   const status = ctx.status(sid);
   if (status !== undefined) out.status = status;
   if (!rec) out.missing = true;

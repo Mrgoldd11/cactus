@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { MAP_FEATURES_PATH, parseMapFeatures, townBorderRadius, type ModContext, type Vec3, type Vec4, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
-import type { GameInstallInfo, Lang } from '../../../../shared/api.ts';
+import type { GameInstallInfo } from '../../../../shared/api.ts';
 import { WorkerPool } from './protocol.ts';
 import { TerrainLod, type TerrainQuality } from './terrain.ts';
 import { readBiomes } from './biomes.ts';
@@ -171,7 +171,7 @@ export class WorldView {
   /** Последний pointerdown пришёлся на гизмо — щелчок после него не выбирает. */
   private gizmoDown = false;
 
-  constructor(host: HTMLElement, game: GameInstallInfo, ctx: ModContext, world: WorldIndex, settings: WorldSettings, lang: Lang = 'ru') {
+  constructor(host: HTMLElement, game: GameInstallInfo, ctx: ModContext, world: WorldIndex, settings: WorldSettings) {
     this.host = host;
     this.settings = settings;
     const q = qualityOf(settings);
@@ -219,7 +219,7 @@ export class WorldView {
 
     this.towns = [];
     for (const t of world.allTowns()) {
-      const name = (lang === 'ru' ? ctx.localizedName(t.target) : undefined) ?? ctx.name(t.target) ?? t.target;
+      const name = ctx.localizedName(t.target) ?? ctx.name(t.target) ?? t.target;
       const rec = ctx.get(t.target);
       const radius = townBorderRadius(rec?.ints.get('type'), rec?.floats.get('town radius mult') ?? 1);
       this.towns.push({ sid: t.target, name: name || t.target, pos: new THREE.Vector3(t.position[0], t.position[1], t.position[2]), radius });

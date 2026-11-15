@@ -78,22 +78,22 @@ export function loadGameSchema(paths: GamePaths, options: LoadSchemaOptions = {}
   return cached(extendedCache, key, () => applyExtensionLayers(base, readExtensionLayers(extensions)));
 }
 
-export function gamedataPoPath(paths: GamePaths, language = 'ru_RU'): string {
+export function gamedataPoPath(paths: GamePaths, language: string): string {
   return join(paths.kenshi, 'locale', language, 'gamedata.po');
 }
 
 /** Прочитать перевод игры `locale/<язык>/gamedata.po`. */
-export function loadGamedataPo(paths: GamePaths, language = 'ru_RU'): PoFile {
+export function loadGamedataPo(paths: GamePaths, language: string): PoFile {
   return parsePo(readFileSync(gamedataPoPath(paths, language), 'utf8'));
 }
 
 /** Перевод текстов записей (реплик и др.) `locale/<язык>/<язык>.translation`. */
-export function translationFilePath(paths: GamePaths, language = 'ru_RU'): string {
+export function translationFilePath(paths: GamePaths, language: string): string {
   return join(paths.kenshi, 'locale', language, `${language}.translation`);
 }
 
 /** Прочитать перевод текстов записей; без файла — undefined. */
-export function loadTranslation(paths: GamePaths, language = 'ru_RU'): TranslationIndex | undefined {
+export function loadTranslation(paths: GamePaths, language: string): TranslationIndex | undefined {
   const path = translationFilePath(paths, language);
   return existsSync(path) ? indexTranslation(readDataFile(readFileSync(path))) : undefined;
 }

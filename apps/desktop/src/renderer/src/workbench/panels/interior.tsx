@@ -286,7 +286,7 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
   /** Новый объект: выбрать, когда окно получит его со списком. */
   const pendingSelect = useRef<string | undefined>(undefined);
 
-  const name = (id: string): string => ((lang === 'ru' ? project.ctx.localizedName(id) : undefined) ?? project.ctx.name(id)) || id;
+  const name = (id: string): string => (project.ctx.localizedName(id) ?? project.ctx.name(id)) || id;
 
   useEffect(() => {
     let cancelled = false;

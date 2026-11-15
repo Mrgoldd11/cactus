@@ -47,7 +47,8 @@ import {
   type Reference,
   type TranslationIndex,
 } from '@kenshi-editor/core';
-import { useLang, useT, type Strings } from '../i18n.ts';
+import { useDataLocale, useT, type Strings } from '../i18n.ts';
+import { useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
 import { tryEdit } from '../hooks.ts';
 import { CommitInput } from './widgets.tsx';
@@ -88,29 +89,17 @@ function enumUsage(ctx: ModContext): DialogEnumUsage {
   return u;
 }
 
+/** Game texts of the data language; undefined while loading or when there is none. */
 export function useTranslation(project: Project): TranslationIndex | undefined {
-  const [tr, setTr] = useState<TranslationIndex | undefined>(undefined);
-  useEffect(() => {
-    let alive = true;
-    project.translation().then(
-      (x) => {
-        if (alive) setTr(x);
-      },
-      () => undefined,
-    );
-    return () => {
-      alive = false;
-    };
-  }, [project]);
-  return tr;
+  return useGameTexts(project) ?? undefined;
 }
 
 /** Короткая подпись реплики: текст (рус., если есть) или имя. */
-export function lineCaption(ctx: ModContext, sid: string, tr: TranslationIndex | undefined, ru: boolean): string {
+export function lineCaption(ctx: ModContext, sid: string, tr: TranslationIndex | undefined): string {
   const r = ctx.get(sid) ?? ctx.lower(sid);
   if (!r) return sid;
   const en = r.strings.has('text0') ? decodeText(r.strings.get('text0')!) : '';
-  const s = (ru ? translatedText(tr, sid, 'text0', en) : undefined) ?? en;
+  const s = translatedText(tr, sid, 'text0', en) ?? en;
   const text = s === '' ? decodeText(r.name) : `«${s}»`;
   return text.length > 70 ? `${text.slice(0, 70)}…` : text;
 }
@@ -192,8 +181,6 @@ function NumberInput({ value, onCommit, testId, int }: { value: number; onCommit
 
 export function LineInspector({ project, sid, parent, version, onGo, onSelect, onReport }: Props): ReactNode {
   const t = useT();
-  const lang = useLang();
-  const ru = lang === 'ru';
   const ctx = project.ctx;
   const tr = useTranslation(project);
   const [asInGame, setAsInGame] = useState(false);
@@ -216,7 +203,7 @@ export function LineInspector({ project, sid, parent, version, onGo, onSelect, o
     onReport(tryEdit(fn));
   };
   const talker = getEnum(ctx.schema, 'TalkerEnum')!;
-  const name = (s: string): string => lineCaption(ctx, s, tr, ru);
+  const name = (s: string): string => lineCaption(ctx, s, tr);
 
   return (
     <div className="panel-scroll line-inspector" data-testid="line-inspector" data-sid={sid}>
@@ -296,7 +283,7 @@ export function LineInspector({ project, sid, parent, version, onGo, onSelect, o
         </div>
       )}
 
-      {asInGame && lower && <InGame ctx={ctx} rec={lower} tr={tr} ru={ru} t={t} />}
+      {asInGame && lower && <InGame ctx={ctx} rec={lower} tr={tr} t={t} />}
 
       {rec && isLine && (
         <>
@@ -393,6 +380,7 @@ interface Part {
 }
 
 function Texts({ ctx, sid, rec, lower, tr, t, edit }: Part & { lower: GameRecord | undefined; tr: TranslationIndex | undefined }): ReactNode {
+  const dataLocale = useDataLocale();
   const texts = lineTexts(rec);
   const lowerTexts = lower ? lineTexts(lower) : [];
   const set = (next: string[]): void => {
@@ -411,7 +399,7 @@ function Texts({ ctx, sid, rec, lower, tr, t, edit }: Part & { lower: GameRecord
     >
       {texts.length > 1 && <div className="small muted">{t.lnTextsHint}</div>}
       {texts.map((x, i) => {
-        const ruText = translatedText(tr, sid, `text${i}`, x);
+        const trText = translatedText(tr, sid, `text${i}`, x);
         const was = lowerTexts[i];
         return (
           <div key={i} className="ln-text">
@@ -423,8 +411,8 @@ function Texts({ ctx, sid, rec, lower, tr, t, edit }: Part & { lower: GameRecord
                 </button>
               )}
             </div>
-            {ruText !== undefined && <div className="ln-ru small">рус.: {ruText}</div>}
-            {ruText === undefined && was !== undefined && was !== x && tr?.get(sid)?.get(`text${i}`) && <div className="small muted">{t.lnTrStale}</div>}
+            {trText !== undefined && <div className="ln-ru small">{dataLocale}: {trText}</div>}
+            {trText === undefined && was !== undefined && was !== x && tr?.get(sid)?.get(`text${i}`) && <div className="small muted">{t.lnTrStale}</div>}
           </div>
         );
       })}
@@ -663,7 +651,7 @@ function Next({
 }
 
 /** Запись как в игре (нижние слои): только чтение. */
-function InGame({ ctx, rec, tr, ru, t }: { ctx: ModContext; rec: GameRecord; tr: TranslationIndex | undefined; ru: boolean; t: Strings }): ReactNode {
+function InGame({ ctx, rec, tr, t }: { ctx: ModContext; rec: GameRecord; tr: TranslationIndex | undefined; t: Strings }): ReactNode {
   const talker = getEnum(ctx.schema, 'TalkerEnum')!;
   const isLine = ctx.typeName(rec.type) === 'DIALOGUE_LINE';
   return (
@@ -677,7 +665,7 @@ function InGame({ ctx, rec, tr, ru, t }: { ctx: ModContext; rec: GameRecord; tr:
       {isLine &&
         lineTexts(rec).map((x, i) => (
           <div key={i} className="dg-text">
-            «{(ru ? translatedText(tr, rec.stringId, `text${i}`, x) : undefined) ?? x}»
+            «{translatedText(tr, rec.stringId, `text${i}`, x) ?? x}»
           </div>
         ))}
       {(rec.refs.get('conditions') ?? []).map((r) => (
@@ -692,7 +680,7 @@ function InGame({ ctx, rec, tr, ru, t }: { ctx: ModContext; rec: GameRecord; tr:
       ))}
       <ol className="ln-next">
         {(rec.refs.get('lines') ?? []).map((r) => (
-          <li key={r.target}>{lineCaption(ctx, r.target, tr, ru)}</li>
+          <li key={r.target}>{lineCaption(ctx, r.target, tr)}</li>
         ))}
       </ol>
     </div>

@@ -10,6 +10,7 @@ import {
   heightmapPath,
   detectGameInstalls,
   gamedataPoPath,
+  listGameLocales,
   copyModForEditing,
   isInGameFolders,
   isInWorkshop,
@@ -39,7 +40,7 @@ import {
   type ModCopyPlan,
   type SafeSaveResult,
 } from '@kenshi-editor/core/node';
-import type { GameInstallInfo, MergeSourceResult, ModEntry, ModOrderResult, ModProvenance, NamedBytes, ProjectBundle, ProjectRequest, WorldFileBytes, WorldRequest } from '../shared/api.ts';
+import type { GameInstallInfo, GameLocaleInfo, MergeSourceResult, ModEntry, ModOrderResult, ModProvenance, NamedBytes, ProjectBundle, ProjectRequest, WorldFileBytes, WorldRequest } from '../shared/api.ts';
 
 export function detectGames(cwd?: string): GameInstallInfo[] {
   return detectGameInstalls(cwd).map((g) => ({ kenshi: g.kenshi, workshop: g.workshop, source: g.source }));
@@ -128,7 +129,7 @@ export function loadProject(req: ProjectRequest): ProjectBundle {
   const vanilla = vanillaFilePaths(game).map((p, i) => readCached(VANILLA_FILES[i]!, p, known));
   const fcsEnums = readOptional(join(game.kenshi, SCHEMA_FILES.fcsEnums));
   const fcsLayout = readOptional(join(game.kenshi, SCHEMA_FILES.fcsLayout));
-  const po = readOptional(gamedataPoPath(game));
+  const po = req.dataLocale !== undefined ? readOptional(gamedataPoPath(game, req.dataLocale)) : undefined;
   // Schema extensions of the mod folder and of the folders of its dependencies, the same set
   // the MCP session takes for a mod opened in the window. The folder counts even when the mod
   // file itself comes from the window (`extensionsOf`) or does not exist yet.
@@ -156,7 +157,10 @@ export function loadProject(req: ProjectRequest): ProjectBundle {
     const mergeStore = readOptional(mergeStorePath(plan.modPath));
     if (mergeStore !== undefined) bundle.mergeStore = mergeStore;
   }
-  if (po !== undefined) bundle.po = po;
+  if (po !== undefined) {
+    bundle.po = po;
+    bundle.dataLocale = req.dataLocale!;
+  }
   return bundle;
 }
 
@@ -387,7 +391,17 @@ export async function readTerrainTile(game: GameInstallInfo, level: number, tx: 
 }
 
 /** Перевод текстов записей (реплик) игры; null — файла нет. */
-export function readTranslationBytes(game: GameInstallInfo): Uint8Array | null {
-  const path = translationFilePath(game);
+export function readTranslationBytes(game: GameInstallInfo, locale: string): Uint8Array | null {
+  const path = translationFilePath(game, locale);
   return existsSync(path) ? readFileSync(path) : null;
+}
+
+/** `gamedata.po` of a game locale; null — no file. */
+export function readGamedataPoText(game: GameInstallInfo, locale: string): string | null {
+  return readOptional(gamedataPoPath(game, locale)) ?? null;
+}
+
+/** Translation folders of the game. */
+export function listLocales(game: GameInstallInfo): GameLocaleInfo[] {
+  return listGameLocales(game);
 }

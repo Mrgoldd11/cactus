@@ -203,7 +203,6 @@ function ChangeDetail({ change, session, project, onPick, onOpen }: {
 function MergePanel(): ReactNode {
   const t = useT();
   const lang = useLang();
-  const ru = lang === 'ru';
   const { project, go, report, status } = useWorkbench();
   const version = useProjectVersion(project);
   const ctx = project.ctx;
@@ -305,7 +304,7 @@ function MergePanel(): ReactNode {
       if (!kinds[c.kind]) return false;
       if (type !== '' && c.typeName !== type) return false;
       if (onlyConflicts && !c.conflict) return false;
-      if (q !== '' && !`${c.sid}\n${c.name}\n${c.ruName ?? ''}`.toLowerCase().includes(q)) return false;
+      if (q !== '' && !`${c.sid}\n${c.name}\n${c.localizedName ?? ''}`.toLowerCase().includes(q)) return false;
       return true;
     });
   }, [plan, kinds, type, onlyConflicts, query]);
@@ -565,7 +564,7 @@ function MergePanel(): ReactNode {
                             title={c.sid}
                             data-testid="merge-expand"
                           >
-                            {open ? '▾' : '▸'} {ru ? (c.ruName ?? c.name) : c.name}
+                            {open ? '▾' : '▸'} {c.localizedName ?? c.name}
                           </button>
                         </td>
                         <td className="muted">

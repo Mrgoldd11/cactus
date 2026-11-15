@@ -56,7 +56,7 @@ export function PlaceBox({ project, types, placeholder, title, emptyText, countT
         if (e) out.push(e);
       }
     }
-    const label = (e: IndexEntry): string => (e.ru || e.name || e.sid).toLowerCase();
+    const label = (e: IndexEntry): string => (e.localized || e.name || e.sid).toLowerCase();
     return out.sort((a, b) => label(a).localeCompare(label(b)));
   }, [open, project, types]);
 
@@ -153,7 +153,7 @@ export function PlaceBox({ project, types, placeholder, title, emptyText, countT
                     onMouseEnter={() => { setCursor(i); }}
                     onClick={() => { pick(e); }}
                   >
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{e.ru || e.name || e.sid}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{e.localized || e.name || e.sid}</span>
                     <span className="muted" style={{ fontSize: '0.85em' }}>{detail ? detail(e) : e.sid}</span>
                   </div>
                 )}

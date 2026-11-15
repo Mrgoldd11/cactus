@@ -10,6 +10,7 @@ import {
   loadVanillaLayers,
   readDataFileSync,
   resolveGamePaths,
+  resolveDataLocale,
   resolveModPath,
   type GamePaths,
   type LoadedContext,
@@ -24,6 +25,8 @@ export interface WorkspaceOptions {
   env: NodeJS.ProcessEnv;
   /** Папка игры вместо найденной по KENSHI_DIR / kenshi-paths.json. */
   game?: string;
+  /** Data language (locale code or `none`) instead of KENSHI_DATA_LOCALE / the game's settings.cfg. */
+  dataLocale?: string;
 }
 
 export interface OpenOptions {
@@ -42,12 +45,15 @@ export interface OpenOptions {
 export class Workspace {
   readonly paths: GamePaths;
   readonly cwd: string;
+  /** Locale of translated names and texts; undefined — originals only. */
+  readonly dataLocale: string | undefined;
   private vanillaCache?: Layer[];
 
   constructor(options: WorkspaceOptions) {
     this.cwd = options.cwd;
     const found = resolveGamePaths(options.cwd, options.env);
     this.paths = options.game ? { kenshi: options.game, workshop: defaultWorkshopDir(options.game) } : found;
+    this.dataLocale = resolveDataLocale(this.paths, options.dataLocale ?? options.env['KENSHI_DATA_LOCALE']);
   }
 
   get hasGame(): boolean {
@@ -82,6 +88,7 @@ export class Workspace {
       ...(options.dependencies ? { dependencies: options.dependencies } : {}),
       ...(options.schema !== undefined ? { schema: options.schema } : {}),
       ...(options.po !== undefined ? { po: options.po } : {}),
+      dataLocale: this.dataLocale ?? 'none',
     });
   }
 

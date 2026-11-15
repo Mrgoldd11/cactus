@@ -2,7 +2,7 @@
  * Корень окна: язык и настройки, поиск игры, стартовый экран или открытый проект.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { LANGS, type GameInstallInfo, type Lang, type ModRef, type ProjectRequest, type RecoveryInfo, type Settings } from '../../shared/api.ts';
+import { dataLocaleFor, LANGS, type GameInstallInfo, type Lang, type ModRef, type ProjectRequest, type RecoveryInfo, type Settings } from '../../shared/api.ts';
 import { LangContext, STRINGS } from './i18n.ts';
 import { openProject, openRecovered, prefetchVanilla, type Project } from './project.ts';
 import { setLiveProject } from './live.ts';
@@ -46,7 +46,13 @@ export function App(): ReactNode {
     };
   }, [game, project, loading]);
 
-  const lang = useMemo(() => ({ lang: settings.lang, t: STRINGS[settings.lang] }), [settings.lang]);
+  const dataLocale = dataLocaleFor(settings.lang, settings.dataLocale);
+  const lang = useMemo(() => ({ lang: settings.lang, t: STRINGS[settings.lang], dataLocale }), [settings.lang, dataLocale]);
+
+  // The data language changed while a project is open: load the names of the new locale.
+  useEffect(() => {
+    if (project) void project.setDataLocale(dataLocale);
+  }, [project, dataLocale]);
 
   const updateSettings = (patch: Partial<Settings>): void => {
     void window.kedit.setSettings(patch).then(setSettings);
@@ -71,9 +77,10 @@ export function App(): ReactNode {
   };
 
   /** Открыть проект; `recovered` — байты автосохранения, из которых восстановить правки. */
-  const load = (req: ProjectRequest, recovered?: Uint8Array): void => {
+  const load = (request: ProjectRequest, recovered?: Uint8Array): void => {
     setLoading(true);
     setError(undefined);
+    const req: ProjectRequest = { ...request, ...(dataLocale !== undefined ? { dataLocale } : {}) };
     void (async () => {
       try {
         const p = recovered ? await openRecovered(req, recovered) : await openProject(req);
@@ -189,6 +196,7 @@ export function App(): ReactNode {
       {recovery && <RecoveryModal name={recovery.ref.modName} info={recovery.info} onChoose={chooseRecovery} />}
       {settingsOpen && !project && (
         <SettingsModal
+          game={game}
           settings={settings}
           onChange={updateSettings}
           onClose={() => {
@@ -219,7 +227,7 @@ export function LangSwitch({ lang, onLang }: { lang: Lang; onLang: (l: Lang) => 
       document.removeEventListener('keydown', esc);
     };
   }, [open]);
-  const current = LANGS.find((l) => l.code === lang) ?? LANGS[0]!;
+  const current = LANGS.find((l) => l.code === lang) ?? LANGS[0];
   return (
     <span className="lang-switch" data-testid="lang-switch" ref={root}>
       <button

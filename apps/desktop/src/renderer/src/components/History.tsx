@@ -6,29 +6,19 @@
 import type { Lang } from '../../../shared/api.ts';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { describeChangeset, type Changeset, type TranslationIndex } from '@kenshi-editor/core';
-import { useLang, useT, type Strings } from '../i18n.ts';
+import { inLang, useLang, useT, type Strings } from '../i18n.ts';
 import { tryEdit, useProjectVersion } from '../hooks.ts';
+import { useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
 import type { StatusMessage } from '../workbench/context.ts';
 
 const translations = new WeakMap<Project, TranslationIndex | undefined>();
 
-/** Перевод реплик игры для названий шагов (читается один раз; до загрузки — без перевода). */
+/** Game texts of the data language for step titles (until loaded — untranslated). */
 export function useStepTranslation(project: Project): TranslationIndex | undefined {
-  const [tr, setTr] = useState(() => translations.get(project));
-  useEffect(() => {
-    let alive = true;
-    project.translation().then(
-      (x) => {
-        translations.set(project, x);
-        if (alive) setTr(x);
-      },
-      () => undefined,
-    );
-    return () => {
-      alive = false;
-    };
-  }, [project]);
+  const tr = useGameTexts(project) ?? undefined;
+  // Idempotent cache write: stepOf() outside React reads the latest texts.
+  translations.set(project, tr);
   return tr;
 }
 
@@ -43,7 +33,7 @@ export interface Step {
 export function stepOf(project: Project, cs: Changeset, lang: Lang): Step {
   const tr = translations.get(project);
   const d = describeChangeset(project.ctx, cs, tr ? { translation: tr } : {});
-  return { cs, text: lang === 'ru' ? d.ru : d.en, ai: d.ai, rollback: d.rollback };
+  return { cs, text: inLang(d, lang), ai: d.ai, rollback: d.rollback };
 }
 
 function StepMarks({ step, t }: { step: Step; t: Strings }): ReactNode {
