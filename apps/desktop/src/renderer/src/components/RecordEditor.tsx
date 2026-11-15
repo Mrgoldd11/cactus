@@ -17,7 +17,6 @@ import {
   formatRefValues,
   formatScalar,
   isRemovedRef,
-  itemTypeName,
   modRecordDiff,
   refGroups,
   refLabel,
@@ -75,8 +74,8 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
     );
   }
   const ru = ctx.localizedName(sid);
-  const hasGraph = DIALOGUE_GRAPH_TYPES.has(itemTypeName(rec.type));
-  const hasTalk = itemTypeName(rec.type) === 'CHARACTER';
+  const hasGraph = DIALOGUE_GRAPH_TYPES.has(ctx.typeName(rec.type));
+  const hasTalk = ctx.typeName(rec.type) === 'CHARACTER';
   const tab: Tab = (chosenTab === 'graph' && !hasGraph) || (chosenTab === 'talk' && !hasTalk) ? 'fields' : chosenTab;
   const edit = (fn: () => void): void => {
     onReport(tryEdit(fn));
@@ -108,7 +107,7 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
           <span className="mono selectable" data-testid="record-sid">
             {sid}
           </span>
-          <span className="badge">{itemTypeName(rec.type)}</span>
+          <span className="badge">{ctx.typeName(rec.type)}</span>
           {origin && (
             <span className="muted" title={t.layers}>
               {origin.layers.join(' → ')}
@@ -688,7 +687,7 @@ function changeCells(ctx: ModContext, rec: GameRecord, c: FieldChange): [string,
     case 'name':
       return ['name', decodeText(c.before), decodeText(c.after)];
     case 'type':
-      return ['type', itemTypeName(c.before), itemTypeName(c.after)];
+      return ['type', ctx.typeName(c.before), ctx.typeName(c.after)];
     case 'flags':
       return ['flags', `0x${c.before.toString(16)}`, `0x${c.after.toString(16)}`];
     case 'field': {

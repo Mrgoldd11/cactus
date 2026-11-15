@@ -24,7 +24,6 @@ import {
   fieldEnum,
   formatScoreParts,
   getEnum,
-  itemTypeName,
   lineParents,
   lineTexts,
   linkLine,
@@ -211,7 +210,7 @@ export function LineInspector({ project, sid, parent, version, onGo, onSelect, o
   const shown = rec ?? lower;
   const parents = useMemo(() => lineParents(ctx, sid), [ctx, sid, version]);
   if (!shown) return <div className="panel-empty muted">{t.nothingToShow}</div>;
-  const type = itemTypeName(shown.type);
+  const type = ctx.typeName(shown.type);
   const isLine = type === 'DIALOGUE_LINE';
   const edit = (fn: () => void): void => {
     onReport(tryEdit(fn));
@@ -582,7 +581,7 @@ function Next({
   const refs = rec.refs.get('lines') ?? [];
   const removed = removedLinks(ctx, sid);
   const changed = ctx.lower(sid) !== undefined && linksChanged(ctx, sid);
-  const isLine = itemTypeName(rec.type) === 'DIALOGUE_LINE';
+  const isLine = ctx.typeName(rec.type) === 'DIALOGUE_LINE';
   const after = (speaker: number): void => { edit(() => {
       onSelect(addLine(ctx, sid, { speaker, text: '' }), sid);
     }); };
@@ -666,7 +665,7 @@ function Next({
 /** Запись как в игре (нижние слои): только чтение. */
 function InGame({ ctx, rec, tr, ru, t }: { ctx: ModContext; rec: GameRecord; tr: TranslationIndex | undefined; ru: boolean; t: Strings }): ReactNode {
   const talker = getEnum(ctx.schema, 'TalkerEnum')!;
-  const isLine = itemTypeName(rec.type) === 'DIALOGUE_LINE';
+  const isLine = ctx.typeName(rec.type) === 'DIALOGUE_LINE';
   return (
     <div className="ln-ingame" data-testid="ln-ingame">
       <div className="ln-section-title">{t.lnInGameTitle}</div>

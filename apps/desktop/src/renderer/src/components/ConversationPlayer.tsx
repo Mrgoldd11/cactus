@@ -10,7 +10,6 @@ import {
   dialogueScore,
   EVENT_TALK,
   getEnum,
-  itemTypeName,
   PLAY_NPC,
   playConversation,
   playStartList,
@@ -75,7 +74,7 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
   const characters = useMemo(() => {
     const out: { sid: string; label: string }[] = [];
     for (const r of ctx.records()) {
-      if (itemTypeName(r.type) !== 'CHARACTER') continue;
+      if (ctx.typeName(r.type) !== 'CHARACTER') continue;
       if (!r.refs.get('dialogue')?.length && !r.refs.get('dialogue package')?.length) continue;
       out.push({ sid: r.stringId, label: `${plainRuName(ctx.localizedName(r.stringId) ?? ctx.name(r.stringId) ?? r.stringId)} — ${r.stringId}` });
     }
@@ -417,7 +416,7 @@ export function TalkExample({ project, sid, version }: { project: Project; sid: 
   const tr = useTranslation(project);
   const data = useMemo(() => {
     const rec = sid === undefined ? undefined : ctx.get(sid);
-    if (sid === undefined || !rec || itemTypeName(rec.type) !== 'CHARACTER') return undefined;
+    if (sid === undefined || !rec || ctx.typeName(rec.type) !== 'CHARACTER') return undefined;
     try {
       const count = playStartList(ctx, sid, EVENT_TALK).size;
       const pick = (mode: PlayMode): { dialog?: string; why?: PlayOption['why']; said?: string } => {

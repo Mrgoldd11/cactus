@@ -14,7 +14,7 @@
  * с правилами (размер, склон, высота, кучки). Мест в файлах нет — игра раскладывает сама.
  */
 import * as THREE from 'three';
-import { decodeText, gamePath, itemTypeName, type ModContext } from '@kenshi-editor/core';
+import { decodeText, gamePath, type ModContext } from '@kenshi-editor/core';
 
 export const BIOME_MAP_PATH = 'data/newland/land/biomemap.png';
 /** Повторы текстуры считаются на столько единиц мира (зона). */
@@ -91,7 +91,7 @@ function foliageRules(ctx: ModContext, layers: readonly { target: string }[]): F
 export function readBiomes(ctx: ModContext): Map<number, Biome> {
   const out = new Map<number, Biome>();
   for (const r of ctx.records()) {
-    if (itemTypeName(r.type) !== 'BIOMES') continue;
+    if (ctx.typeName(r.type) !== 'BIOMES') continue;
     const index = r.ints.get('index');
     if (index === undefined) continue;
     const f = (k: string, d: number): number => r.floats.get(k) ?? d;

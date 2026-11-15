@@ -3,7 +3,7 @@
  * Объекты сцены выбираются через общий сервис выбора как `{ kind: 'scene', id, sid }`.
  */
 import type { ReactNode } from 'react';
-import { decodeText, itemTypeName } from '@kenshi-editor/core';
+import { decodeText } from '@kenshi-editor/core';
 import { useT } from '../../i18n.ts';
 import { registerPanel, type PanelProps } from '../registry.ts';
 import { useFollowed, useWorkbench } from '../context.ts';
@@ -32,7 +32,7 @@ function ComponentsPanel({ def, params }: PanelProps): ReactNode {
       {item?.kind === 'scene' && <div className="mono">{item.id}</div>}
       {rec && (
         <div>
-          <b>{decodeText(rec.name)}</b> <span className="badge">{itemTypeName(rec.type)}</span>
+          <b>{decodeText(rec.name)}</b> <span className="badge">{project.ctx.typeName(rec.type)}</span>
         </div>
       )}
     </div>

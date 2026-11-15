@@ -18,6 +18,7 @@ import {
   listWorldFiles,
   manualInstall,
   detectLevelData,
+  extensionsFor,
   mergeStorePath,
   modsCfgPath,
   originChanged,
@@ -26,6 +27,7 @@ import {
   readModOrigin,
   readIfUnknown,
   readModSummary,
+  readExtensionLayers,
   safeSaveMod,
   readModsCfgText,
   SCHEMA_FILES,
@@ -127,6 +129,11 @@ export function loadProject(req: ProjectRequest): ProjectBundle {
   const fcsEnums = readOptional(join(game.kenshi, SCHEMA_FILES.fcsEnums));
   const fcsLayout = readOptional(join(game.kenshi, SCHEMA_FILES.fcsLayout));
   const po = readOptional(gamedataPoPath(game));
+  // Schema extensions of the mod folder and of the folders of its dependencies, the same set
+  // the MCP session takes for a mod opened in the window. The folder counts even when the mod
+  // file itself comes from the window (`extensionsOf`) or does not exist yet.
+  const modFile = req.modPath ?? req.extensionsOf;
+  const extensions = extensionsFor(game, [...(modFile !== undefined ? [modFile] : []), ...plan.dependencies.map((d) => d.path)]);
   const bundle: ProjectBundle = {
     game,
     modName: plan.modName,
@@ -139,6 +146,7 @@ export function loadProject(req: ProjectRequest): ProjectBundle {
       ...(fcsEnums !== undefined ? { fcsEnums } : {}),
       ...(fcsLayout !== undefined ? { fcsLayout } : {}),
     },
+    ...(extensions.length ? { extensions: readExtensionLayers(extensions) } : {}),
     suggestedPath: plan.modPath ?? join(game.kenshi, 'mods', plan.modName.replace(/\.mod$/i, ''), plan.modName),
   };
   if (plan.modPath !== undefined) {

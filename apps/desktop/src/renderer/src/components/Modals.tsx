@@ -2,11 +2,11 @@
  * Окна: зависимости мода, сведения о моде, проверка мода, новая запись.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { itemTypeId, validateMod, formatIssue, type ValidationIssue } from '@kenshi-editor/core';
+import { validateMod, formatIssue, type ValidationIssue } from '@kenshi-editor/core';
 import type { ModEntry } from '../../../shared/api.ts';
-import { useT } from '../i18n.ts';
+import { useT, type Strings } from '../i18n.ts';
 import { tryEdit } from '../hooks.ts';
-import type { Project } from '../project.ts';
+import type { AppliedExtension, Project } from '../project.ts';
 import { Modal } from './widgets.tsx';
 
 export function DependenciesModal({ project, onApply, onClose }: { project: Project; onApply: (deps: string[]) => void; onClose: () => void }): ReactNode {
@@ -169,8 +169,73 @@ export function ModInfoModal({ project, onReport, onClose }: { project: Project;
         />
         <label>{t.dependencies}</label>
         <span className="mono">{info.dependencies.join(', ')}</span>
+        <ExtensionNote project={project} />
       </div>
     </Modal>
+  );
+}
+
+/** How many names of one kind the note lists before it says "+N more". */
+const EXT_LIST_MAX = 6;
+
+/** What one schema extension adds, in one line: `types VARIABLE=900; fields DIALOGUE.x, …`. */
+function extensionLine(e: AppliedExtension, t: Strings): string {
+  const s = e.summary;
+  if (!s) return t.extNothing;
+  const list = (label: string, items: readonly string[]): string[] => {
+    if (items.length === 0) return [];
+    const shown = items.slice(0, EXT_LIST_MAX).join(', ');
+    return [`${label} ${items.length > EXT_LIST_MAX ? `${shown}, ${t.extMore(items.length - EXT_LIST_MAX)}` : shown}`];
+  };
+  const parts = [
+    ...list(t.extTypes, s.types.map((x) => (x.id !== undefined ? `${x.name}=${String(x.id)}` : `${x.name} (${t.extNoNumber})`))),
+    ...list(t.extFields, s.fields),
+    ...list(t.extEnums, s.enums),
+    ...list(t.extEnumValues, s.enumValues),
+  ];
+  return parts.length > 0 ? parts.join('; ') : t.extNothing;
+}
+
+/** File name of a path: warnings name the file of the extension, not the whole path. */
+const fileName = (path: string): string => path.split(/[\\/]/).pop() ?? path;
+
+/**
+ * Rows of the "Mod info" form about the schema extensions (FCS Extended files) applied to the
+ * mod: what each adds, how many warnings its files gave, its DLL plugins. Nothing when the mod
+ * and its dependencies have no such files.
+ */
+function ExtensionNote({ project }: { project: Project }): ReactNode {
+  const t = useT();
+  const list = useMemo(() => project.extensions, [project]);
+  if (list.length === 0) return null;
+  return (
+    <>
+      <label>{t.extTitle}</label>
+      <div data-testid="ext-note">
+        {list.map((e, n) => {
+          const warnings = e.summary?.warnings ?? [];
+          return (
+            <div key={n} data-testid="ext-item">
+              <b>{e.name}</b>: {extensionLine(e, t)}
+              {e.plugins.length > 0 && <div className="small muted">{t.extPlugins(e.plugins.join(', '))}</div>}
+              {warnings.length > 0 && (
+                <details className="small warn" data-testid="ext-warnings">
+                  <summary>{t.extWarnings(warnings.length)}</summary>
+                  <ul className="issues">
+                    {warnings.map((w, i) => (
+                      <li key={i}>
+                        {fileName(w.source)}:{w.line}: {w.message}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          );
+        })}
+        <div className="small muted">{t.extNote}</div>
+      </div>
+    </>
   );
 }
 
@@ -215,12 +280,12 @@ export function NewRecordModal({ project, defaultType, onCreate, onClose }: { pr
   const t = useT();
   const types = useMemo(() => {
     const s = new Set([...project.idsByType().keys(), ...(project.ctx.schema?.types.keys() ?? [])]);
-    return [...s].filter((x) => itemTypeId(x) !== undefined).sort();
+    return [...s].filter((x) => project.ctx.typeId(x) !== undefined).sort();
   }, [project]);
   const [type, setType] = useState(defaultType ?? types[0] ?? 'ITEM');
   const [name, setName] = useState('');
   const create = (): void => {
-    const id = itemTypeId(type);
+    const id = project.ctx.typeId(type);
     if (id !== undefined && name.trim()) onCreate(id, name.trim());
   };
   return (

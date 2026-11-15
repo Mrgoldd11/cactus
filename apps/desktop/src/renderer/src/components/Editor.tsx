@@ -47,6 +47,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
   const version = useProjectVersion(project);
   const ctx = project.ctx;
   const selection = useMemo(() => new SelectionService(), [project]);
+  const extensionCount = project.bundle.extensions?.length ?? 0;
   const category = useMemo(() => new ValueStore(initialCategory(project)), [project]);
   useSelectionVersion(selection);
   const nodeId = useStore(category);
@@ -300,11 +301,18 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
           {t.dependencies} ({ctx.info.dependencies.length})
         </button>
         <button
+          data-testid="mod-info"
+          title={extensionCount > 0 ? t.extBadgeTip : undefined}
           onClick={() => {
             setModal('info');
           }}
         >
           {t.modInfo}
+          {extensionCount > 0 && (
+            <span className="badge tiny" data-testid="ext-badge">
+              {t.extBadge(extensionCount)}
+            </span>
+          )}
         </button>
         <button
           data-testid="validate"

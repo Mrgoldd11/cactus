@@ -4,32 +4,36 @@
  * которая растёт при каждой правке, отмене и сохранении.
  */
 import {
+  applyExtensionLayers,
   buildCategoryTree,
   decodeText,
   indexTranslation,
   INTERIORS,
-  itemTypeName,
   matchesLayoutFilters,
   MergeLedger,
   ModContext,
   ParsedFileCache,
   OTHER_TYPES_ID,
-  parseGameSchema,
   parseMergeStore,
   parsePo,
+  prepareSchemaBase,
   readDataFile,
   serializeMergeStore,
   splitModList,
+  summarizeExtensions,
   withInferredFields,
   WorldEdits,
   WorldIndex,
   writeDataFile,
   type CategoryNode,
   type DataFile,
+  type ExtensionLayer,
+  type ExtensionSummary,
   type GameRecord,
   type GameSchema,
   type Layer,
   type RecordStatus,
+  type SchemaBase,
   type TranslationIndex,
   type WorldFile,
 } from '@kenshi-editor/core';
@@ -42,6 +46,16 @@ export interface IndexEntry {
   ru: string;
   /** Имя, русское имя и id в нижнем регистре через перевод строки. */
   hay: string;
+}
+
+/** A schema extension applied to the project: what it adds to the schema and its DLL plugins. */
+export interface AppliedExtension {
+  /** Name of the mod folder the files come from. */
+  name: string;
+  /** What the extension adds; absent for a folder with DLL plugins alone. */
+  summary?: ExtensionSummary;
+  /** DLL plugins for FCS named in `FCS_extended.json`. Cactus never runs them. */
+  plugins: readonly string[];
 }
 
 /** Псевдо-узел дерева «Изменения мода». */
@@ -102,12 +116,32 @@ export function prefetchVanilla(game: GameInstallInfo): Promise<void> {
   return prefetching;
 }
 
+/** The game's own schema files, parsed once: they do not depend on the mod. */
+let schemaBase: SchemaBase | undefined;
+
+/** Whether the layer has files that change the schema (a folder with DLL plugins alone does not). */
+function changesSchema(layer: ExtensionLayer): boolean {
+  return layer.def !== undefined || layer.preload !== undefined || (layer.patches?.length ?? 0) > 0;
+}
+
+/**
+ * The schema of the game with the schema extensions of the bundle applied (FCS Extended files of
+ * the mod and of its dependencies). Without extensions it is the game's schema as it always was.
+ */
+function gameSchema(bundle: ProjectBundle): GameSchema {
+  const { fcsDef, fcsEnums, fcsLayout } = bundle.schema;
+  const s = schemaBase?.sources;
+  const base = schemaBase !== undefined && s?.fcsDef === fcsDef && s.fcsEnums === fcsEnums && s.fcsLayout === fcsLayout ? schemaBase : prepareSchemaBase(bundle.schema);
+  schemaBase = base;
+  return applyExtensionLayers(base, (bundle.extensions ?? []).filter(changesSchema));
+}
+
 function inferredSchema(bundle: ProjectBundle, files: DataFile[], mod: DataFile | undefined): GameSchema {
-  const build = (): GameSchema => withInferredFields(parseGameSchema(bundle.schema), mod ? [...files, mod] : files);
+  const build = (): GameSchema => withInferredFields(gameSchema(bundle), mod ? [...files, mod] : files);
   const keys = [...bundle.vanilla, ...bundle.dependencies].map((f) => f.key);
   if (mod || keys.some((k) => k === undefined)) return build();
   const { fcsDef, fcsEnums = '', fcsLayout = '' } = bundle.schema;
-  const key = JSON.stringify([fcsDef, fcsEnums, fcsLayout, ...keys]);
+  const key = JSON.stringify([fcsDef, fcsEnums, fcsLayout, bundle.extensions ?? [], ...keys]);
   if (inferredCache?.key !== key) inferredCache = { key, schema: build() };
   return inferredCache.schema;
 }
@@ -196,7 +230,7 @@ export class Project {
     }
     const name = decodeText(rec.name);
     const ru = this.ctx.localizedName(sid) ?? '';
-    this.index.set(sid, { sid, type: itemTypeName(rec.type), name, ru, hay: `${name}\n${ru}\n${sid}`.toLowerCase() });
+    this.index.set(sid, { sid, type: this.ctx.typeName(rec.type), name, ru, hay: `${name}\n${ru}\n${sid}`.toLowerCase() });
   }
 
   entry(sid: string): IndexEntry | undefined {
@@ -264,6 +298,20 @@ export class Project {
   /** Текущее состояние мода в байтах .mod (для автосохранения и точки возврата). */
   currentBytes(): Uint8Array {
     return writeDataFile(this.ctx.buildModFile());
+  }
+
+  /**
+   * Schema extensions (FCS Extended files) of the mod and of its dependencies that this project
+   * was built with, in load order.
+   */
+  get extensions(): AppliedExtension[] {
+    const layers = this.bundle.extensions ?? [];
+    if (layers.length === 0) return [];
+    const summaries = this.ctx.schema ? summarizeExtensions(this.ctx.schema) : [];
+    return layers.map((l) => {
+      const summary = summaries.find((s) => s.name === l.name);
+      return { name: l.name, ...(summary ? { summary } : {}), plugins: l.plugins ?? [] };
+    });
   }
 
   /** Моды контекста: лежат слоями под модом, но не записаны в его заголовке. */
@@ -431,6 +479,7 @@ export async function reloadProject(p: Project, change: { dependencies?: string[
     modName: p.ctx.modName,
     dependencies: [...p.ctx.info.dependencies, ...p.ctx.info.references],
     ...(contextMods.length ? { contextMods } : {}),
+    ...(p.path !== undefined ? { extensionsOf: p.path } : {}),
   };
   let bundle = await window.kedit.openProject({ ...req, known: parsedFiles.keys() });
   if ([...bundle.vanilla, ...bundle.dependencies].some((f) => f.key !== undefined && f.bytes.length === 0 && !parsedFiles.has(f.key))) {
@@ -473,6 +522,7 @@ export async function restoreProject(p: Project, bytes: Uint8Array): Promise<Pro
     modName: p.ctx.modName,
     dependencies: headerDependencies(mod),
     ...(contextMods.length ? { contextMods } : {}),
+    ...(p.path !== undefined ? { extensionsOf: p.path } : {}),
   };
   let bundle = await window.kedit.openProject({ ...req, known: parsedFiles.keys() });
   if ([...bundle.vanilla, ...bundle.dependencies].some((f) => f.key !== undefined && f.bytes.length === 0 && !parsedFiles.has(f.key))) {

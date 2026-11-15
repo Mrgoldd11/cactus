@@ -3,7 +3,6 @@
  * состояния. Панель берёт это через `useWorkbench()`, а свою запись — через `useFollowed()`.
  */
 import { createContext, useContext, type RefObject } from 'react';
-import { itemTypeName } from '@kenshi-editor/core';
 import type { Strings } from '../i18n.ts';
 import type { Project } from '../project.ts';
 import type { PanelDef, PanelParams } from './registry.ts';
@@ -53,7 +52,7 @@ export function accepts(project: Project, def: PanelDef, s: Selection): boolean 
   if (!shows.types) return true;
   const sid = s.kind === 'scene' ? s.sid : s.sid;
   const rec = sid === undefined ? undefined : project.record(sid);
-  return rec !== undefined && shows.types.includes(itemTypeName(rec.type));
+  return rec !== undefined && shows.types.includes(project.ctx.typeName(rec.type));
 }
 
 export interface Followed {

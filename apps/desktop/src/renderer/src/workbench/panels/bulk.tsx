@@ -4,7 +4,7 @@
  * пересчитывается сразу; «Применить» — одна правка (одна отмена на всю пачку).
  */
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { applyBulk, bulkFieldValue, bulkSelect, BULK_KINDS, BULK_REF_KINDS, restrictBulk, enumValue, fieldEnum, itemTypeId, COMPARE_TYPES, DICT_FOR_KIND, BULK_NAME_FIELD, parseFieldFilter, previewBulk, type BulkKind, type BulkPreview, type FieldDef, type FieldFilter, type ModContext } from '@kenshi-editor/core';
+import { applyBulk, bulkFieldValue, bulkSelect, BULK_KINDS, BULK_REF_KINDS, restrictBulk, enumValue, fieldEnum, COMPARE_TYPES, DICT_FOR_KIND, BULK_NAME_FIELD, parseFieldFilter, previewBulk, type BulkKind, type BulkPreview, type FieldDef, type FieldFilter, type ModContext } from '@kenshi-editor/core';
 import { useT, type Strings } from '../../i18n.ts';
 import { tryEdit, useProjectVersion } from '../../hooks.ts';
 import { registerPanel } from '../registry.ts';
@@ -144,7 +144,7 @@ function BulkPanel(): ReactNode {
   const valueGroups = useMemo((): ValueGroup[] => {
     const enumFields = fieldDefs.filter((f) => f.kind === 'enum');
     if (enumFields.length === 0) return [];
-    const typeNo = itemTypeId(type);
+    const typeNo = ctx.typeId(type);
     const acc = new Map<string, Map<number, { count: number; names: string[] }>>(enumFields.map((f) => [f.name, new Map()]));
     for (const sid of (byType.get(type) ?? []).slice(0, SCAN_LIMIT)) {
       const rec = ctx.get(sid);

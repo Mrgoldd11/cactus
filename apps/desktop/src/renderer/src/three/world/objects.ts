@@ -11,7 +11,7 @@
  * Разбор `.mesh` и `.dds` — в фоновом потоке (`WorkerPool`).
  */
 import * as THREE from 'three';
-import { decodeText, itemTypeName, modelOfRecord, zoneOfPath, WORLD_HALF, ZONE_COUNT, ZONE_SIZE, type BuildingPlacement, type Instance, type ModContext, type Placement, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
+import { decodeText, modelOfRecord, zoneOfPath, WORLD_HALF, ZONE_COUNT, ZONE_SIZE, type BuildingPlacement, type Instance, type ModContext, type Placement, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
 import type { GameInstallInfo } from '../../../../shared/api.ts';
 import type { SubmeshArrays, WorkerPool } from './protocol.ts';
 import { averageColour } from './biomes.ts';
@@ -175,7 +175,7 @@ export class WorldObjects {
       const zone = zoneOfPath(path);
       if (!zone) continue;
       const rec = edits.record(path, sid);
-      if (!sid.endsWith('buildinglist') || (rec && itemTypeName(rec.type) !== 'INSTANCE_COLLECTION')) {
+      if (!sid.endsWith('buildinglist') || (rec && this.ctx.typeName(rec.type) !== 'INSTANCE_COLLECTION')) {
         const set = states.get(path.toLowerCase()) ?? new Set<string>();
         set.add(sid);
         states.set(path.toLowerCase(), set);
