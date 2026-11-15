@@ -110,9 +110,25 @@ describe('kenshi-mcp: чтение', () => {
     expect((await call('schema', { type: 'counter' })).isError).toBe(true);
     expect((await call('schema', { type: 'item' })).text).not.toContain('charges');
 
-    await call('open_mod', { mod: 'My' });
+    expect((await call('schema')).text).not.toContain('extension');
+
+    // open_mod says what the extension adds; a DLL plugin is named but not run.
+    writeFileSync(join(fx.game, 'mods', 'My', 'FCS_extended.json'), '{ "FCS_Plugins": ["My_FCS.dll"] }');
+    const opened = (await call('open_mod', { mod: 'My' })).text;
+    expect(opened).toContain('schema extension My: types COUNTER=900; fields ITEM.charges');
+    expect(opened).toContain('DLL plugins of FCS Extended, not run here: My_FCS.dll');
+    expect((await call('schema', { type: 'counter' })).text).toContain('[COUNTER] — полей 1 [extension My]');
     expect((await call('schema', { type: 'counter' })).text).toContain('amount: int = 0 — how much');
-    expect((await call('schema', { type: 'item' })).text).toContain('charges: int = 3 — from the extension');
+    expect((await call('schema', { type: 'item' })).text).toContain('charges: int = 3 [extension My] — from the extension');
+    // The type list starts with the extensions and marks their types and fields.
+    const list = (await call('schema')).text;
+    expect(list.split('\n')[0]).toBe('schema extension My: types COUNTER=900; fields ITEM.charges');
+    expect(list).toContain('COUNTER  fields 1, references 0 [extension My]');
+    expect(list).toMatch(/ITEM {2}fields \d+, references \d+ \[1 from extensions\]/);
+    expect((await call('schema', { extension: 'my' })).text).toBe('schema extension My: types COUNTER=900; fields ITEM.charges');
+    const none = await call('schema', { extension: 'Nope' });
+    expect(none.isError).toBe(true);
+    expect(none.text).toContain('No schema extension Nope; applied: My');
     const type = await client.readResource({ uri: 'kenshi://schema/type/COUNTER' });
     expect((type.contents[0] as { text: string }).text).toContain('amount: int = 0');
     const edit = await call('edit', { ops: [{ op: 'create', type: 'COUNTER', name: 'Days passed' }] });
@@ -120,8 +136,10 @@ describe('kenshi-mcp: чтение', () => {
     expect((await call('find', { type: 'COUNTER' })).text).toContain('COUNTER  «Days passed»');
 
     // Another mod has no extension: its schema is the game's again.
-    await call('open_mod', { name: 'Other.mod' });
+    const other = await call('open_mod', { name: 'Other.mod' });
+    expect(other.text).not.toContain('schema extension');
     expect((await call('schema', { type: 'counter' })).isError).toBe(true);
+    expect((await call('schema', { extension: 'My' })).text).toContain('the opened mod has no schema extensions');
   });
 });
 

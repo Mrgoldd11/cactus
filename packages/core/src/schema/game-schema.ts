@@ -202,7 +202,8 @@ export function buildGameSchemaFromParts(parts: readonly SchemaPart[], preWarnin
         let t = types.get(typeName);
         if (!t) {
           t = { name: typeName, fields: new Map(), conditions: [], owned: [], translate: [], sectionLines: [] };
-          if (ext !== undefined) t.extension = ext;
+          // A type of the game stays the game's even when a preload file names it first.
+          if (ext !== undefined && !isItemTypeName(typeName)) t.extension = ext;
           types.set(typeName, t);
         }
         if (ext === undefined) t.sectionLines.push(section.line);

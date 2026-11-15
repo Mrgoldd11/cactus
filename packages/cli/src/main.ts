@@ -19,6 +19,9 @@ import {
   simulateTalk,
   whereInGame,
   formatTypeSchema,
+  formatExtensionDetail,
+  summarizeExtensions,
+  typeOriginNote,
   listTypes,
   modRecordDiff,
   page,
@@ -86,6 +89,7 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
   diff <a.mod> <b.mod>    разница двух файлов
   validate                битые ссылки, поля вне схемы, не тот вид; код выхода 1 при ошибках
   schema [ТИП]            типы записей / поля типа с описаниями из fcs.def  --enum ИМЯ
+      --mod M  with the schema extensions of the mod and its dependencies (FCS Extended files), marked [extension NAME]
   bulk <ТИП> [текст]      массовая правка записей типа (текст — подстрока имени или id), условия --field, --mod-only
       --set|--mul|--add ПОЛЕ=ЗНАЧ  или  --replace ПОЛЕ --find ТЕКСТ --with ТЕКСТ [--regex] [--case] (ПОЛЕ name — имя записи)
       по умолчанию только предпросмотр «было → станет»; --apply — записать в --out или в --mod (одна правка)
@@ -422,7 +426,12 @@ const COMMANDS: Record<string, Handler> = {
   },
 
   schema(c) {
-    const { ctx } = c.ws.open({ dependencies: [], po: false, schema: true });
+    // With --mod the schema carries the schema extensions of the mod and of its dependencies.
+    const deps = c.deps;
+    const { ctx } =
+      c.values.mod !== undefined
+        ? c.ws.open({ mod: c.ws.modPath(c.values.mod), po: false, schema: true, ...(deps ? { dependencies: deps } : {}) })
+        : c.ws.open({ dependencies: [], po: false, schema: true });
     const schema = ctx.schema;
     if (!schema) throw new UsageError('Нет fcs.def в папке игры');
     if (c.values.enum !== undefined) {
@@ -433,7 +442,8 @@ const COMMANDS: Record<string, Handler> = {
       return 0;
     }
     if (c.args[0] === undefined) {
-      c.paged(listTypes(schema), (t) => [`${t.name}  полей ${t.fields}, ссылок ${t.references}${t.inferred ? ' (из данных)' : ''}`]);
+      if (!c.values.json) for (const s of summarizeExtensions(schema)) for (const l of formatExtensionDetail(s)) c.io.out(l);
+      c.paged(listTypes(schema), (t) => [`${t.name}  полей ${t.fields}, ссылок ${t.references}${t.inferred ? ' (из данных)' : ''}${typeOriginNote(t)}`]);
       return 0;
     }
     const t = findTypeSchema(schema, c.args[0]);

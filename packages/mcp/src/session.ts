@@ -10,6 +10,7 @@ import { base64ToBytes, type DataFile, MergeLedger, type MergeSource, type Level
 import {
   detectLevelData,
   extensionsFor,
+  type FoundExtension,
   gamedataPoPath,
   loadMergeLedger,
   readMergeSource,
@@ -53,6 +54,8 @@ export interface OpenResult {
   path?: string;
   missingDependencies: string[];
   dependencyPaths: string[];
+  /** Schema extensions (FCS Extended files of the mod and of its dependencies) applied to the schema. */
+  extensions: FoundExtension[];
 }
 
 /** Файлы .mod, чьи `leveldata` накладываются на ваниль: зависимости, затем сам мод. */
@@ -352,16 +355,16 @@ export class Session {
       return layer;
     });
     const po = this.po();
+    const dependencyPaths = snap.dependencies.map((d) => d.path);
+    const extensions = extensionsFor(this.paths, [...(snap.modPath !== undefined ? [snap.modPath] : []), ...dependencyPaths]);
     const ctx = new ModContext({
       layers: [...this.vanilla(), ...deps],
       modName: snap.modName,
       mod: readDataFile(base64ToBytes(snap.mod)),
-      schema: loadGameSchema(this.paths, {
-        extensions: extensionsFor(this.paths, [...(snap.modPath !== undefined ? [snap.modPath] : []), ...snap.dependencies.map((d) => d.path)]),
-      }),
+      schema: loadGameSchema(this.paths, { extensions }),
       ...(po ? { po } : {}),
     });
-    return { ctx, ...(snap.modPath !== undefined ? { path: snap.modPath } : {}), missingDependencies: [], dependencyPaths: snap.dependencies.map((d) => d.path) };
+    return { ctx, ...(snap.modPath !== undefined ? { path: snap.modPath } : {}), missingDependencies: [], dependencyPaths, extensions };
   }
 
   /** Отправить правки в окно редактора набором изменений ИИ. */

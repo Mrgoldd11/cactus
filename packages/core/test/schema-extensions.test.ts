@@ -6,10 +6,17 @@ import { describe, expect, it } from 'vitest';
 import {
   applyExtensionLayers,
   compileDotnetRegex,
+  formatEnum,
+  formatExtensionDetail,
+  formatExtensionSummary,
+  formatTypeSchema,
+  listTypes,
   parseExtendedSchema,
   parsePatchFile,
   prepareSchemaBase,
   splitDefText,
+  summarizeExtensions,
+  typeOriginNote,
   type ExtensionLayer,
   type SchemaSources,
 } from '../src/index.ts';
@@ -418,5 +425,90 @@ describe('.NET regular expressions', () => {
     expect(reason('(')).not.toBe('ok');
     expect(reason('a{2,1}')).not.toBe('ok');
     expect(reason('\\y')).toContain('unknown escape');
+  });
+});
+
+describe('schema as text: what comes from which extension', () => {
+  const def = [
+    '// enum itemType { COUNTER=900 }', // 1
+    'enum Fruit { PLUM=10, FIG }', // 2
+    'enum Mood { CALM, ANGRY }', // 3
+    '[COUNTER]', // 4
+    'amount:          0 "how much"', // 5
+    'mood:            Mood.CALM', // 6
+    '', // 7
+    '[DIALOGUE,DIALOGUE_LINE] ', // 8
+    'counter equals:  COUNTER (0) "checks a counter"', // 9
+    '[GHOST]', // 10
+    'x: 1', // 11
+  ].join('\r\n');
+  const preload = ['[ITEM]', 'early:  2 "from preload"'].join('\r\n');
+  const base = prepareSchemaBase(BASE);
+  const schema = applyExtensionLayers(base, [
+    { name: 'Counters', def: { path: 'mods/Counters/fcs.def', text: def } },
+    { name: 'Early', preload: { path: 'mods/Early/fcs_preload.def', text: preload } },
+  ]);
+
+  it('the type list marks the types of an extension and counts fields added to other types', () => {
+    const lines = listTypes(schema).map((t) => `${t.name} ${String(t.fields)}${typeOriginNote(t)}`);
+    expect(lines).toContain('COUNTER 2 [extension Counters]');
+    expect(lines).toContain('GHOST 1 [extension Counters]');
+    expect(lines).toContain('DIALOGUE 2 [1 from extensions]');
+    // A type of the game stays the game's even though a preload file names it first.
+    expect(lines).toContain('ITEM 3 [1 from extensions]');
+    expect(schema.types.get('ITEM')!.extension).toBeUndefined();
+    expect(listTypes(base.schema).map(typeOriginNote).join('')).toBe('');
+  });
+
+  it('a type and an enumeration mark only what another extension added', () => {
+    expect(formatTypeSchema(schema.types.get('COUNTER')!)).toEqual([
+      '[COUNTER] — полей 2 [extension Counters]',
+      '  amount: int = 0 — how much',
+      '  mood: enum Mood = CALM',
+    ]);
+    expect(formatTypeSchema(schema.types.get('ITEM')!)).toEqual([
+      '[ITEM] — полей 3',
+      '  early: int = 2 [extension Early] — from preload',
+      '  value: int = 1 — price',
+      '  kind: enum Fruit = APPLE',
+    ]);
+    expect(formatTypeSchema(schema.types.get('DIALOGUE')!)[2]).toBe('  counter equals: ref → COUNTER (0) [extension Counters] — checks a counter');
+    expect(formatEnum(schema, 'Fruit')).toEqual([
+      'Fruit — значений 4',
+      '  APPLE = 0',
+      '  PEAR = 1',
+      '  PLUM = 10 [extension Counters]',
+      '  FIG = 11 [extension Counters]',
+    ]);
+    expect(formatEnum(schema, 'Mood')).toEqual(['Mood — значений 2 [extension Counters]', '  CALM = 0', '  ANGRY = 1']);
+  });
+
+  it('summarizeExtensions: what each extension adds, in load order', () => {
+    const [counters, early, ...rest] = summarizeExtensions(schema);
+    expect(rest).toEqual([]);
+    expect({ ...counters, warnings: counters!.warnings.map((w) => [w.source, w.line]) }).toEqual({
+      name: 'Counters',
+      types: [{ name: 'COUNTER', id: 900 }, { name: 'GHOST' }],
+      fields: ['DIALOGUE.counter equals', 'DIALOGUE_LINE.counter equals'],
+      enums: ['Mood'],
+      enumValues: ['Fruit.PLUM', 'Fruit.FIG'],
+      warnings: [['mods/Counters/fcs.def', 10]],
+    });
+    expect(early).toEqual({ name: 'Early', types: [], fields: ['ITEM.early'], enums: [], enumValues: [], warnings: [] });
+    expect(summarizeExtensions(base.schema)).toEqual([]);
+  });
+
+  it('one line per extension, long lists cut; the detail has every name and the warnings', () => {
+    const [counters, early] = summarizeExtensions(schema);
+    expect(formatExtensionSummary(counters!)).toBe(
+      'schema extension Counters: types COUNTER=900, GHOST (no number); fields DIALOGUE.counter equals, DIALOGUE_LINE.counter equals; ' +
+        'enums Mood; enum values Fruit.PLUM, Fruit.FIG; warnings 1',
+    );
+    expect(formatExtensionSummary(counters!, 1)).toContain('fields DIALOGUE.counter equals, +1 more;');
+    expect(formatExtensionSummary(early!)).toBe('schema extension Early: fields ITEM.early');
+    expect(formatExtensionSummary({ name: 'Empty', types: [], fields: [], enums: [], enumValues: [], warnings: [] })).toBe('schema extension Empty: adds nothing');
+    const detail = formatExtensionDetail(counters!);
+    expect(detail).toHaveLength(2);
+    expect(detail[1]).toContain('warning: mods/Counters/fcs.def:10: record type GHOST has no number');
   });
 });

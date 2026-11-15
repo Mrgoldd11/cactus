@@ -136,6 +136,21 @@ describe('kedit: разница, проверка, схема', () => {
     expect((await run('schema', '--enum', 'Kind')).out).toContain('FOOD = 1');
   });
 
+  it('schema --mod: with the schema extension of the mod, marked in the output', async () => {
+    writeFileSync(
+      join(fx.game, 'mods', 'My', 'fcs.def'),
+      ['// enum itemType { COUNTER=900 }', '[COUNTER]', 'amount:  0 "how much"', '', '[ITEM]', 'charges:  3 "from the extension"', '[GHOST]', 'x: 1'].join(EOL),
+    );
+    // Without --mod: the schema of the game alone.
+    expect((await run('schema')).out).not.toContain('COUNTER');
+    const list = (await run('schema', '--mod', 'My')).out.split('\n');
+    expect(list[0]).toBe('schema extension My: types COUNTER=900, GHOST (no number); fields ITEM.charges; warnings 1');
+    expect(list[1]).toContain('fcs.def:7: record type GHOST has no number');
+    expect(list).toContain('COUNTER  полей 1, ссылок 0 [extension My]');
+    expect((await run('schema', 'item', '--mod', 'My')).out).toContain('charges: int = 3 [extension My] — from the extension');
+    expect((await run('schema', 'counter', '--mod', 'My')).out).toContain('[COUNTER] — полей 1 [extension My]');
+  });
+
   it('ошибки использования — код 2', async () => {
     expect((await run('bogus')).code).toBe(2);
     expect((await run('find', '--nope')).code).toBe(2);

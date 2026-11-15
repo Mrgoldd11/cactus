@@ -10,6 +10,7 @@ import {
   applyExtensionLayers,
   fieldRows,
   firstDifference,
+  formatTypeSchema,
   ModContext,
   parseDefFile,
   parseFcsDef,
@@ -19,6 +20,7 @@ import {
   prepareSchemaBase,
   readDataFile,
   refGroups,
+  summarizeExtensions,
   writeDataFile,
   type ExtensionLayer,
   type SchemaSources,
@@ -147,6 +149,13 @@ describe.skipIf(!game || !examples)('schema extensions: real extensions', () => 
     const { ctx } = loaded;
     expect(ctx.schema!.extensions).toEqual(['WorldStates']);
     expect(ctx.typeName(900)).toBe('VARIABLE');
+    // What the extension adds, as MCP and CLI show it.
+    const [summary, ...others] = summarizeExtensions(ctx.schema!);
+    expect(others).toEqual([]);
+    expect(summary).toMatchObject({ name: 'WorldStates', types: [{ name: 'VARIABLE', id: 900 }], enums: [], warnings: [] });
+    expect(summary!.fields).toContain('DIALOGUE_LINE.variable equals');
+    expect(formatTypeSchema(ctx.schema!.types.get('VARIABLE')!)[0]).toContain('[VARIABLE]');
+    expect(formatTypeSchema(ctx.schema!.types.get('VARIABLE')!)[0]).toContain('[extension WorldStates]');
     expect(ctx.schema!.types.get('VARIABLE')!.fields.get('value')).toMatchObject({ kind: 'int', extension: 'WorldStates' });
     expect(ctx.schema!.types.get('DIALOGUE_LINE')!.fields.get('variable equals')).toMatchObject({
       targetType: 'VARIABLE',

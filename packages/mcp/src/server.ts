@@ -27,6 +27,10 @@ import {
   formatRecordDiff,
   formatRefValues,
   formatTypeSchema,
+  formatExtensionDetail,
+  formatExtensionSummary,
+  summarizeExtensions,
+  typeOriginNote,
   filterDiffs,
   formatDiffSummary,
   listTypes,
@@ -57,7 +61,7 @@ import {
   touchedBy,
   isVanillaLayer,
 } from '@kenshi-editor/core';
-import { SessionError, type Session } from './session.ts';
+import { SessionError, type OpenResult, type Session } from './session.ts';
 import { GameBridge } from '@kenshi-editor/core/node';
 import { registerGameTools } from './game-tools.ts';
 import { registerWorldTools } from './world-tools.ts';
@@ -182,6 +186,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         'Call open_mod first (or work on vanilla without it). Address records by string id or name (show, tree, refs, diff); find searches English and Russian names.',
         'Edits (edit) go in batches of operations, one undo per batch; save writes only the changes. save writes into the game folder only with force: true.',
         'Schema of types and fields with descriptions from fcs.def: the schema tool and kenshi://schema/… resources.',
+        'A mod can extend the schema with FCS Extended files in its folder (fcs.def, fcs_preload.def, *.def.patch): open_mod applies those of the mod and of its dependencies and lists what they add; schema marks such types, fields and enum values with [extension NAME], and schema with extension shows the warnings about those files. DLL plugins of FCS Extended are not run.',
         'Dialogues: tree shows the tree, talk shows which dialogue the game picks for a character, play runs a conversation step by step with player answers; graph edits are the edit operations addLine, insertLine, link, unlink, setText, duplicateLine, deleteLines, addCondition, addEffect.',
         'Bulk edits: bulk shows a was → will be preview first and applies only with apply: true.',
         'history lists steps in plain words; undo/redo with `to` go back or forward to a given step.',
@@ -210,6 +215,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         const lines = [`${r.ctx.modName}${r.path ? ` — ${r.path}` : ' — new, give a path in save'}`, statusSummary(r.ctx)];
         if (r.dependencyPaths.length) lines.push(`dependencies: ${r.dependencyPaths.join(', ')}`);
         if (r.missingDependencies.length) lines.push(`missing dependencies: ${r.missingDependencies.join(', ')}`);
+        lines.push(...extensionLines(r));
         if (r.ctx.dirty) lines.push('there are unsaved changes');
         return lines;
       }),
@@ -822,8 +828,16 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
     'schema',
     {
       title: 'Schema',
-      description: 'Without arguments: the record types; type: the fields of a type with descriptions from fcs.def; enum: the values of an enumeration.',
-      inputSchema: { type: z.string().optional(), enum: z.string().optional(), offset, limit: limit(100) },
+      description:
+        'Without arguments: the record types; type: the fields of a type with descriptions from fcs.def; enum: the values of an enumeration; ' +
+        'extension: what a schema extension of the opened mod adds, with its warnings. Whatever comes from a schema extension is marked [extension NAME].',
+      inputSchema: {
+        type: z.string().optional(),
+        enum: z.string().optional(),
+        extension: z.string().optional().describe('Name of a schema extension (FCS Extended files in a mod folder), as open_mod lists it'),
+        offset,
+        limit: limit(100),
+      },
       annotations: { ...READ, title: 'Schema' },
     },
     (a) =>
@@ -839,7 +853,17 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
           if (!t) throw new SessionError(`No type ${a.type}`);
           return formatTypeSchema(t);
         }
-        return paged(listTypes(schema), a.offset ?? 0, a.limit ?? 100, (t) => [typeLine(t)]);
+        const extensions = summarizeExtensions(schema);
+        if (a.extension !== undefined) {
+          const wanted = a.extension.toLowerCase();
+          const found = extensions.filter((s) => s.name.toLowerCase() === wanted);
+          if (found.length === 0) {
+            const have = extensions.length ? `; applied: ${extensions.map((s) => s.name).join(', ')}` : '; the opened mod has no schema extensions';
+            throw new SessionError(`No schema extension ${a.extension}${have}`);
+          }
+          return found.flatMap(formatExtensionDetail);
+        }
+        return [...extensions.map((s) => formatExtensionSummary(s)), ...paged(listTypes(schema), a.offset ?? 0, a.limit ?? 100, (t) => [typeLine(t)])];
       }),
   );
 
@@ -892,5 +916,21 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
 }
 
 function typeLine(t: ReturnType<typeof listTypes>[number]): string {
-  return `${t.name}  fields ${t.fields}, references ${t.references}${t.inferred ? ' (from data)' : ''}`;
+  return `${t.name}  fields ${t.fields}, references ${t.references}${t.inferred ? ' (from data)' : ''}${typeOriginNote(t)}`;
+}
+
+/** Lines of open_mod about the schema extensions of the mod: what each adds, its DLL plugins, its warnings. */
+function extensionLines(r: OpenResult): string[] {
+  const out: string[] = [];
+  const summaries = r.ctx.schema ? summarizeExtensions(r.ctx.schema) : [];
+  for (const s of summaries) {
+    out.push(formatExtensionSummary(s));
+    if (s.warnings.length) out.push(`  details: schema with extension: ${JSON.stringify(s.name)}`);
+  }
+  for (const e of r.extensions) {
+    if (!summaries.some((s) => s.name === e.name)) out.push(`schema extension ${e.name}: no schema files, only FCS_extended.json`);
+    if (e.plugins.length) out.push(`  DLL plugins of FCS Extended, not run here: ${e.plugins.join(', ')}`);
+    if (e.configError !== undefined) out.push(`  ${e.configError}`);
+  }
+  return out;
 }
