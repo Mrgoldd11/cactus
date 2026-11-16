@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { MAP_FEATURES_PATH, parseMapFeatures, townBorderRadius, type ModContext, type Vec3, type Vec4, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
+import { MAP_FEATURES_PATH, parseMapFeatures, TOWN_DEFAULT_TYPE, townBorderRadius, type ModContext, type Vec3, type Vec4, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
 import type { GameInstallInfo } from '../../../../shared/api.ts';
 import { WorkerPool } from './protocol.ts';
 import { TerrainLod, type TerrainQuality } from './terrain.ts';
@@ -39,12 +39,19 @@ const QUALITY: Record<QualityLevel, { terrain: TerrainQuality; foliage: FoliageQ
   high: { terrain: { split: 3.4, maxLevel: 7, cache: 1000, fullColour: 8 }, foliage: { radius: 6500, maxInstances: 10000 }, models: 4000, modelDist: 10000, protos: 400, markers: 15000, pixelRatio: 2 },
 };
 
+/** Town type of a big town (`type` of a TOWN record, the game's townType). */
+const TOWN_TYPE_CITY = 2;
+/** Height of a town label box in pixels, for the overlap check. */
+const LABEL_HEIGHT = 16;
+
 export interface TownLabel {
   sid: string;
   name: string;
   pos: THREE.Vector3;
   /** Радиус границы города (0 — границы нет). */
   radius: number;
+  /** A big town (town type 2): its label is always shown, even over others. */
+  major: boolean;
 }
 
 export interface WorldStatsView {
@@ -222,7 +229,8 @@ export class WorldView {
       const name = ctx.localizedName(t.target) ?? ctx.name(t.target) ?? t.target;
       const rec = ctx.get(t.target);
       const radius = townBorderRadius(rec?.ints.get('type'), rec?.floats.get('town radius mult') ?? 1);
-      this.towns.push({ sid: t.target, name: name || t.target, pos: new THREE.Vector3(t.position[0], t.position[1], t.position[2]), radius });
+      const major = (rec?.ints.get('type') ?? TOWN_DEFAULT_TYPE) === TOWN_TYPE_CITY;
+      this.towns.push({ sid: t.target, name: name || t.target, pos: new THREE.Vector3(t.position[0], t.position[1], t.position[2]), radius, major });
     }
     this.buildBorders();
     this.foliage = new FoliageScatter(biomes, this.terrain, this.towns.map((t) => t.pos), this.objects.list.map((o) => o.pos), q.foliage);
@@ -622,6 +630,21 @@ export class WorldView {
     if (this.firstFrame === undefined && this.terrain.ready) this.firstFrame = now - this.started;
   };
 
+  private readonly labelWidths = new Map<string, number>();
+  private measureCtx: CanvasRenderingContext2D | null | undefined;
+
+  /** Width of a town label in pixels (12px font, as the label is drawn), cached per name. */
+  private labelWidth(name: string): number {
+    let wd = this.labelWidths.get(name);
+    if (wd === undefined) {
+      this.measureCtx ??= document.createElement('canvas').getContext('2d');
+      if (this.measureCtx) this.measureCtx.font = `12px ${getComputedStyle(this.labels).fontFamily}`;
+      wd = this.measureCtx?.measureText(name).width ?? name.length * 7;
+      this.labelWidths.set(name, wd);
+    }
+    return wd;
+  }
+
   private updateLabels(): void {
     const w = this.host.clientWidth;
     const h = this.host.clientHeight;
@@ -635,11 +658,23 @@ export class WorldView {
       .slice(0, 60);
     const keep = new Set<string>();
     const v = new THREE.Vector3();
-    for (const { t } of shown) {
+    // Declutter: big towns first, then by border size and distance; a smaller settlement whose label
+    // would overlap one already placed waits until the camera comes closer and they spread apart.
+    const onScreen: { t: TownLabel; d: number; x: number; y: number }[] = [];
+    for (const { t, d } of shown) {
       v.copy(t.pos);
       v.y += 300;
       v.project(this.camera);
       if (v.z > 1 || v.x < -1.1 || v.x > 1.1 || v.y < -1.1 || v.y > 1.1) continue;
+      onScreen.push({ t, d, x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h });
+    }
+    onScreen.sort((a, b) => Number(b.t.major) - Number(a.t.major) || b.t.radius - a.t.radius || a.d - b.d);
+    const placed: [number, number, number, number][] = [];
+    for (const { t, x, y } of onScreen) {
+      const half = this.labelWidth(t.name) / 2 + 4;
+      const box: [number, number, number, number] = [x - half, y - LABEL_HEIGHT, x + half, y];
+      if (!t.major && placed.some((p) => box[0] < p[2] && box[2] > p[0] && box[1] < p[3] && box[3] > p[1])) continue;
+      placed.push(box);
       const key = `${t.sid}@${Math.round(t.pos.x)}`;
       keep.add(key);
       let el = this.labelEls.get(key);
@@ -654,8 +689,8 @@ export class WorldView {
         this.labels.appendChild(el);
         this.labelEls.set(key, el);
       }
-      el.style.left = `${((v.x + 1) / 2) * w}px`;
-      el.style.top = `${((1 - v.y) / 2) * h}px`;
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
     }
     for (const [k, el] of this.labelEls)
       if (!keep.has(k)) {
