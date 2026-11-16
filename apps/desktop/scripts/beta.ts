@@ -8,6 +8,8 @@
  *   locales only English and Russian are kept;
  * - `resources/app` — the built app (`out/` of electron-vite) and package.json named
  *   «Cactus» (data folder: `%APPDATA%\Cactus`);
+ * - `resources/app/node_modules/steamworks.js` — only its JS entry, licence and the Windows x64
+ *   native files, for the Workshop uploader child process (`out/main/uploader.js`);
  * - `resources/mcp/kenshi-mcp.mjs` — the MCP server as a single file (core, SDK and zod inside).
  *   It runs with the same exe and `ELECTRON_RUN_AS_NODE=1`: no separate Node needed;
  * - `_ИНСТРУКЦИЯ.txt` — a short guide for friends (from `beta/README_RU.txt`; «_» so that in
@@ -122,6 +124,18 @@ writeFileSync(
     2,
   )}\n`,
 );
+// steamworks.js for the Workshop uploader (out/main/uploader.js resolves it from
+// resources/app/node_modules). Only the Windows x64 binaries, its JS entry and licence.
+{
+  const swSrc = dirname(createRequire(join(app, 'package.json')).resolve('steamworks.js/package.json'));
+  const swDst = join(appDir, 'node_modules', 'steamworks.js');
+  for (const f of ['package.json', 'index.js', 'LICENSE', 'dist/win64/steamworksjs.win32-x64-msvc.node', 'dist/win64/steam_api64.dll']) {
+    const from = join(swSrc, f);
+    if (!existsSync(from)) fail(`steamworks.js: нет ${f}`);
+    mkdirSync(dirname(join(swDst, f)), { recursive: true });
+    cpSync(from, join(swDst, f));
+  }
+}
 mkdirSync(join(stage, 'resources', 'mcp'), { recursive: true });
 cpSync(mcpFile, join(stage, 'resources', 'mcp', 'kenshi-mcp.mjs'));
 rmSync(mcpOut, { recursive: true, force: true });
@@ -143,7 +157,12 @@ step('Проверка: нет личных данных и игровых фа�
     for (const name of readdirSync(d)) {
       const p = join(d, name);
       if (statSync(p).isDirectory()) {
-        if (['node_modules', '.git', 'src', 'test'].includes(name)) problems.push(`лишняя папка ${relative(stage, p)}`);
+        const rel = relative(stage, p);
+        const allowedModules = rel === join('resources', 'app', 'node_modules');
+        if (name === 'node_modules' && allowedModules) {
+          const inside = readdirSync(p);
+          if (inside.join() !== 'steamworks.js') problems.push(`лишнее в ${rel}: ${inside.join(', ')}`);
+        } else if (['node_modules', '.git', 'src', 'test'].includes(name)) problems.push(`лишняя папка ${rel}`);
         walk(p);
         continue;
       }

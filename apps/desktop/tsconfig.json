@@ -8,5 +8,5 @@
     "moduleResolution": "bundler",
     "noEmit": true
   },
-  "include": ["src", "e2e", "scripts", "electron.vite.config.ts", "playwright.config.ts"]
+  "include": ["src", "e2e", "smoke", "scripts", "electron.vite.config.ts", "playwright.config.ts", "playwright.smoke.config.ts"]
 }
