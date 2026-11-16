@@ -97,7 +97,7 @@ function Inner({ cards, links, picked, onPick, onOpen }: Props): ReactNode {
     (): CardNode[] =>
       cards.map((c) => {
         const p = placed.get(c.id) ?? { x: 0, y: 0, height: 0 };
-        return { id: c.id, type: 'card', position: { x: p.x, y: p.y }, data: { card: c, picked: c.id === picked }, width: CARD_WIDTH, draggable: false, connectable: false };
+        return { id: c.id, type: 'card', position: { x: p.x, y: p.y }, data: { card: c, picked: c.id === picked }, width: CARD_WIDTH, initialHeight: p.height, draggable: false, connectable: false };
       }),
     [cards, placed, picked],
   );
@@ -148,7 +148,9 @@ function Inner({ cards, links, picked, onPick, onOpen }: Props): ReactNode {
       >
         <Background gap={24} />
         <Controls showInteractive={false} />
-        <MiniMap pannable zoomable />
+        {/* Off-screen cards are not rendered, so the minimap sizes them by initialHeight; the default
+            dark node colour is nearly invisible on the dark minimap, hence an explicit one. */}
+        <MiniMap pannable zoomable nodeColor="#5d6168" />
       </ReactFlow>
     </div>
   );
