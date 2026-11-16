@@ -4,7 +4,7 @@
  * strings, clipped or overflowing elements). Uses the build in `out/` like the e2e tests; works on
  * a new in-memory mod, nothing is written to the game folder.
  *
- *   node apps/desktop/scripts/ui-audit-shots.ts [out-dir] [lang,lang] [size,size] [shot-filter]
+ *   node apps/desktop/scripts/ui-audit-shots.ts [out-dir] [lang,lang] [size,size] [filter|filter]
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -101,7 +101,8 @@ let cur = '';
 
 async function shot(name: string, fn: () => Promise<void>, wait = 500): Promise<void> {
   const full = `${cur}-${name}`;
-  if (filter && !full.includes(filter)) return;
+  // Several filters: `a|b|c` (any of them).
+  if (filter && !filter.split('|').some((f) => full.includes(f))) return;
   try {
     await fn();
     await page.waitForTimeout(wait);
@@ -137,7 +138,8 @@ async function select(query: string, sid: string): Promise<void> {
 }
 
 async function closeModal(): Promise<void> {
-  await page.locator('.modal-title button').first().click().catch(() => undefined);
+  // Short timeout: with a shot filter the modal may not have been opened at all.
+  await page.locator('.modal-title button').first().click({ timeout: 2000 }).catch(() => undefined);
   await page.waitForTimeout(200);
 }
 
