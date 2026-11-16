@@ -3,12 +3,12 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
 import type { Plugin } from 'vite';
 
-// Ядро (`@kenshi-editor/core`) — исходники TypeScript в рабочей области: его не выносим во
-// внешние зависимости, а собираем в main и renderer.
+// The core (`@kenshi-editor/core`) is TypeScript sources in the workspace: it is not made
+// an external dependency, it is bundled into main and renderer.
 const workspace = { exclude: ['@kenshi-editor/core'] };
 
-// В режиме разработки react-refresh вставляет встроенный скрипт — CSP для него ослабляется
-// только на dev-сервере; собранное приложение остаётся со строгим `script-src 'self'`.
+// In dev mode react-refresh injects an inline script — CSP is relaxed for it
+// only on the dev server; the built app keeps the strict `script-src 'self'`.
 const devCsp: Plugin = {
   name: 'kedit-dev-csp',
   apply: 'serve',
@@ -20,7 +20,7 @@ export default defineConfig({
     build: { externalizeDeps: workspace },
   },
   preload: {
-    // Окно в песочнице: preload должен быть CommonJS одним файлом.
+    // Sandboxed window: preload must be a single CommonJS file.
     build: {
       externalizeDeps: false,
       rollupOptions: { output: { format: 'cjs', entryFileNames: '[name].cjs' } },
@@ -30,8 +30,8 @@ export default defineConfig({
     root: resolve(import.meta.dirname, 'src/renderer'),
     build: { rollupOptions: { input: resolve(import.meta.dirname, 'src/renderer/index.html') } },
     plugins: [react(), devCsp],
-    // Явный IPv4: по умолчанию Vite слушает только [::1], а подключение к нему в Windows бывает
-    // запрещено — окно разработки тогда остаётся пустым.
+    // Explicit IPv4: by default Vite listens only on [::1], and connecting to it on Windows can be
+    // blocked — the dev window then stays blank.
     server: { host: '127.0.0.1' },
   },
 });

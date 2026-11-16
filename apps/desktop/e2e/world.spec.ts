@@ -1,6 +1,6 @@
 /**
- * E2E: панель «Мир» — рельеф всей карты, полёт к городу, движение WASD, замеры скорости,
- * клик по зданию — подсветка и карточка, растительность вблизи. Снимки — `out/screenshots/53-*`…`57-*`.
+ * E2E: the «Мир» panel — terrain of the whole map, flight to a town, WASD movement, speed measurements,
+ * click on a building — highlight and card, foliage up close. Screenshots: `out/screenshots/53-*`…`57-*`.
  */
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,7 +17,7 @@ async function stat(page: Page, name: string): Promise<number> {
   return Number(await page.getByTestId('world-stats').getAttribute(`data-${name}`));
 }
 
-test('панель «Мир»: рельеф, полёт, клик по зданию — карточка', async () => {
+test('World panel: terrain, flight, click on a building shows a card', async () => {
   test.setTimeout(240_000);
   const userData = mkdtempSync(join(tmpdir(), 'kedit-e2e-'));
   const env: Record<string, string> = {};
@@ -32,19 +32,19 @@ test('панель «Мир»: рельеф, полёт, клик по здан�
     await page.getByTestId('open-vanilla').click();
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
 
-    // Раскладка «Сцена»: «Мир» — первая вкладка в центре.
+    // «Сцена» layout: «Мир» is the first tab in the centre.
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-scene').click();
     const view = page.getByTestId('world-view');
     await expect(view).toBeVisible();
     await expect(view).toHaveAttribute('data-ready', 'yes', { timeout: 90_000 });
     const firstMs = await stat(page, 'first-ms');
-    // Цвет земли догружается — ждём обзор целиком.
+    // Ground colour loads later — wait for the whole overview.
     await expect.poll(() => stat(page, 'overview'), { timeout: 120_000 }).toBe(100);
     await page.waitForTimeout(500);
     await page.screenshot({ path: join(shots, '53-world-overview.png') });
 
-    // Полёт к городу через поиск.
+    // Flight to a town via search.
     await page.getByTestId('world-search').fill('Хаб');
     await page.getByTestId('world-search').press('Enter');
     await page.waitForTimeout(2500);
@@ -52,7 +52,7 @@ test('панель «Мир»: рельеф, полёт, клик по здан�
     await page.waitForTimeout(3000);
     await page.screenshot({ path: join(shots, '54-world-town.png') });
 
-    // Полёт вперёд с W — замер кадров в движении.
+    // Flying forward with W — frame measurement while moving.
     const canvas = page.getByTestId('world-canvas');
     await canvas.focus();
     await page.keyboard.down('KeyW');
@@ -65,13 +65,13 @@ test('панель «Мир»: рельеф, полёт, клик по здан�
     writeFileSync(join(out, 'world-perf.json'), JSON.stringify(perf, null, 2));
     expect(fps).toBeGreaterThan(20);
 
-    // Назад к городу — кликом по его названию на карте; потом клик по зданию в центре экрана.
+    // Back to the town by clicking its name on the map; then a click on a building in the screen centre.
     await page.locator('[data-town="Хаб"]').first().click();
     await page.waitForTimeout(3500);
     expect(Math.abs(Number((await page.getByTestId('world-stats').getAttribute('data-camera'))!.split(',')[0]) + 50979)).toBeLessThan(3000);
     const box = (await canvas.boundingBox())!;
     let card = page.getByTestId('world-card');
-    // Ищем здание: щёлкаем по сетке точек вокруг центра, пока не появится карточка.
+    // Find a building: click a grid of points around the centre until a card appears.
     outer: for (let r = 0; r < 6; r++)
       for (let a = 0; a < Math.max(1, r * 6); a++) {
         const x = box.x + box.width / 2 + Math.cos((a / Math.max(1, r * 6)) * Math.PI * 2) * r * 40;
@@ -85,7 +85,7 @@ test('панель «Мир»: рельеф, полёт, клик по здан�
     await expect(card.getByTestId('inside-card')).toBeVisible();
     await page.screenshot({ path: join(shots, '55-world-card.png') });
 
-    // Правка мира: сдвиг гизмо по стрелке X, отмена и повтор (Ctrl+Z / Ctrl+Y), G / R, удаление.
+    // World edit: gizmo move along the X arrow, undo and redo (Ctrl+Z / Ctrl+Y), G / R, deletion.
     await expect(page.getByTestId('world-edit-bar')).toBeVisible();
     await page.getByTestId('world-mode-move').click();
     await page.getByTestId('world-grid').selectOption('0');
@@ -112,7 +112,7 @@ test('панель «Мир»: рельеф, полёт, клик по здан�
     await expect(lastStep).toHaveText('');
     await page.keyboard.press('Control+y');
     await expect(posText).toHaveText(after!);
-    // Сохранение пишет файл зоны в leveldata рядом с модом — без потерь, с новой позицией.
+    // Save writes the zone file into leveldata next to the mod — lossless, with the new position.
     const saveDir = mkdtempSync(join(tmpdir(), 'kedit-world-save-'));
     const modPath = join(saveDir, 'e2e-world.mod');
     await app.evaluate(({ dialog }, p) => {
@@ -143,7 +143,7 @@ test('панель «Мир»: рельеф, полёт, клик по здан�
     await expect(lastStep).toHaveText('');
     await expect(page.getByTestId('world-undo')).toBeDisabled();
 
-    // «Поставить…»: клик по полю раскрывает весь список (его можно листать), текст сужает его, Esc закрывает.
+    // «Поставить…»: clicking the field opens the whole list (it can be scrolled), text narrows it, Esc closes.
     const placeBox = page.getByTestId('world-place');
     const placeHits = page.getByTestId('world-place-hits');
     await placeBox.click();
@@ -162,12 +162,12 @@ test('панель «Мир»: рельеф, полёт, клик по здан�
     await expect(placeBox).toHaveValue('');
     while (await page.getByTestId('world-undo').isEnabled()) await page.getByTestId('world-undo').click();
 
-    // Esc снимает выбор.
+    // Esc clears the selection.
     await canvas.focus();
     await page.keyboard.press('Escape');
     await expect(card).toBeHidden();
 
-    // Растительность вблизи: Адмаг, двойной клик по земле — подлёт, взгляд к горизонту, полёт вбок.
+    // Foliage up close: Admag, double-click on the ground — fly in, look at the horizon, fly sideways.
     await page.getByTestId('world-search').fill('Адмаг');
     await page.getByTestId('world-search').press('Enter');
     await page.waitForTimeout(4000);

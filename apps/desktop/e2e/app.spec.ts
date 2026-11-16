@@ -1,7 +1,7 @@
 /**
- * E2E: собранное приложение в Electron с настоящей игрой (только чтение). Сохранение — во
- * временную папку и в `editor/out/` (диалоги выбора файла подменяются в main).
- * Скриншоты — в `editor/out/screenshots/`.
+ * E2E: the built app in Electron with the real game (read-only). Saving goes to a
+ * temp folder and to `editor/out/` (file-picker dialogs are stubbed in main).
+ * Screenshots go to `editor/out/screenshots/`.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -21,11 +21,11 @@ const KATANA = '476-gamedata.base';
 const WEAPON_VENDOR = '2235-gamedata.base';
 const CUT = 'cut damage multiplier';
 
-/** Запустить приложение; `userData` — продолжить с настройками прошлого запуска. */
+/** Launch the app; `userData` continues with the settings of the previous run. */
 async function launch(userData = mkdtempSync(join(tmpdir(), 'kedit-e2e-'))): Promise<{ app: ElectronApplication; page: Page; liveFile: string; userData: string }> {
   const env: Record<string, string> = { KEDIT_USER_DATA: userData };
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && k !== 'ELECTRON_RENDERER_URL') env[k] = v;
-  // Свой файл обнаружения живой связи: не трогать файл открытого у пользователя редактора.
+  // Own live-link discovery file: do not touch the file of the editor the user has open.
   const liveFile = join(userData, 'live.json');
   env['KEDIT_LIVE_FILE'] = liveFile;
   const app = await electron.launch({ args: ['.'], cwd: appDir, env });
@@ -35,8 +35,8 @@ async function launch(userData = mkdtempSync(join(tmpdir(), 'kedit-e2e-'))): Pro
 }
 
 /**
- * Закрыть приложение теста. Окна уничтожаются без события close: иначе у несохранённого мода
- * всплывает «Закрыть без сохранения?» прямо на экране и тест ждёт, пока Playwright убьёт процесс.
+ * Close the test app. Windows are destroyed without a close event: otherwise an unsaved mod
+ * pops up «Закрыть без сохранения?» right on screen and the test waits until Playwright kills the process.
  */
 async function closeApp(app: ElectronApplication): Promise<void> {
   await app
@@ -53,7 +53,7 @@ interface Stubs {
   saveDefaultPath?: string;
 }
 
-/** Подменить диалог «Сохранить как» в main: вернуть заданный путь, запомнить предложенный. */
+/** Stub the «Save as» dialog in main: return the given path, remember the suggested one. */
 async function stubSaveDialog(app: ElectronApplication, path: string): Promise<void> {
   await app.evaluate(({ dialog }, p) => {
     const g = globalThis as unknown as Stubs;
@@ -64,7 +64,7 @@ async function stubSaveDialog(app: ElectronApplication, path: string): Promise<v
   }, path);
 }
 
-/** Подменить окно подтверждения в main: нажать кнопку `response`, запомнить вызов. */
+/** Stub the confirmation box in main: press button `response`, remember the call. */
 async function stubMessageBox(app: ElectronApplication, response: number): Promise<void> {
   await app.evaluate(({ dialog }, r) => {
     const g = globalThis as unknown as Stubs;
@@ -103,7 +103,7 @@ function recordsOf(path: string): GameRecord[] {
   return readDataFile(readFileSync(path)).records;
 }
 
-test('ваниль: поиск, правка поля, отмена, сохранение во временную папку', async () => {
+test('vanilla: search, field edit, undo, save to a temp folder', async () => {
   const { app, page } = await launch();
   try {
     await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
@@ -114,7 +114,7 @@ test('ваниль: поиск, правка поля, отмена, сохра�
     await waitEditor(page);
     await page.screenshot({ path: join(shots, '02-vanilla.png') });
 
-    // Поиск по-русски тоже работает: «Катана».
+    // Search in Russian works too: «Катана».
     await page.getByTestId('search').fill('катана');
     await expect(page.getByTestId('record-list').locator(`[data-sid="${KATANA}"]`)).toBeVisible();
     await selectRecord(page, 'katana', KATANA);
@@ -148,7 +148,7 @@ test('ваниль: поиск, правка поля, отмена, сохра�
     expect(recs[0]!.stringId).toBe(KATANA);
     expect(recs[0]!.floats.get(CUT)).toBeCloseTo(1.7, 5);
 
-    // Запись в папку игры — только после подтверждения; «Отмена» ничего не пишет.
+    // Writing to the game folder only after confirmation; «Отмена» writes nothing.
     const games = await page.evaluate(() => window.kedit.detectGames());
     const kenshi = games[0]!.kenshi;
     const gamePath = join(kenshi, 'mods', '__kedit_e2e_never_written__', 'x.mod');
@@ -159,7 +159,7 @@ test('ваниль: поиск, правка поля, отмена, сохра�
     expect((await stubs(app)).messageBoxCalls).toBe(1);
     expect(existsSync(gamePath)).toBe(false);
 
-    // Файл прямо в `mods/` лаунчер не видит — редактор кладёт его в `mods/<имя>/<имя>.mod`.
+    // The launcher does not see a file directly in `mods/`: the editor puts it into `mods/<name>/<name>.mod`.
     const flat = join(kenshi, 'mods', '__kedit_e2e_flat__.mod');
     const nested = join(kenshi, 'mods', '__kedit_e2e_flat__', '__kedit_e2e_flat__.mod');
     await stubMessageBox(app, 1);
@@ -174,7 +174,7 @@ test('ваниль: поиск, правка поля, отмена, сохра�
   }
 });
 
-test('сценарий: копия катаны, имя и урон, в ассортимент торговца, сохранение в out/', async () => {
+test('scenario: katana copy, name and damage, into the trader stock, save to out/', async () => {
   const { app, page } = await launch();
   const modName = 'KeditE2E Trader Katana';
   const out = join(outDir, `${modName}.mod`);
@@ -228,7 +228,7 @@ test('сценарий: копия катаны, имя и урон, в ассо
     await stubSaveDialog(app, out);
     await page.getByTestId('save').click();
     await expect(page.getByTestId('status-msg')).toContainText('Сохранено');
-    // Папки нового мода ещё нет — окно сохранения открывается в `Kenshi/mods`, а не в «Документах».
+    // The new mod folder does not exist yet: the save dialog opens in `Kenshi/mods`, not in «Documents».
     const games = await page.evaluate(() => window.kedit.detectGames());
     expect((await stubs(app)).saveDefaultPath).toBe(join(games[0]!.kenshi, 'mods', `${modName}.mod`));
 
@@ -249,14 +249,14 @@ test('сценарий: копия катаны, имя и урон, в ассо
     await page.getByTestId('tab-fields').click();
     await page.getByTestId('field-filter').fill('');
     await page.screenshot({ path: join(shots, '09-english-fields.png') });
-    // Китайский: выпадающий список показывает текущий язык, список открывается под кнопкой.
+    // Chinese: the dropdown shows the current language, the list opens under the button.
     await page.getByTestId('lang-current').click();
     await expect(page.getByTestId('lang-menu')).toBeVisible();
     await page.getByTestId('lang-zh').click();
     await expect(page.getByTestId('lang-menu')).toHaveCount(0);
     await expect(page.getByTestId('lang-current')).toContainText('简体中文');
     await expect(page.getByTestId('save')).toHaveText('保存');
-    // Заголовки панелей «Игра», «Модель», «Мир», «Внутри» в меню «Окно» — тоже по-китайски.
+    // Panel titles «Игра», «Модель», «Мир», «Внутри» in the «Окно» menu are in Chinese too.
     await page.getByTestId('window-menu').click();
     await expect(page.getByTestId('window-panel-game')).toContainText('游戏');
     await expect(page.getByTestId('window-panel-model')).toContainText('模型');
@@ -271,7 +271,7 @@ test('сценарий: копия катаны, имя и урон, в ассо
   }
 });
 
-test('где в игре: катана → торговец оружием → Груз и Хэн; иконка предмета', async () => {
+test('where in game: katana → weaponsmith → Heft and Heng; item icon', async () => {
   const { app, page } = await launch();
   try {
     await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
@@ -281,7 +281,7 @@ test('где в игре: катана → торговец оружием → �
     await page.getByTestId('tab-where').click();
     const where = page.getByTestId('where');
     await expect(where).toBeVisible();
-    // Мир читается при первом открытии вкладки.
+    // The world is read when the tab is first opened.
     await expect(where).toContainText('Мир: городов', { timeout: 60_000 });
     const fact = where.locator('[data-testid="where-fact"][data-holder="56131-rebirth.mod"]');
     await expect(fact).toContainText('Продаётся у');
@@ -294,7 +294,7 @@ test('где в игре: катана → торговец оружием → �
     await fact.scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(shots, '10-where-katana.png') });
 
-    // Щелчок по шагу пути открывает запись.
+    // Clicking a path step opens the record.
     await fact.getByRole('button', { name: 'weapon vendor UC big city' }).click();
     await expect(page.getByTestId('record-sid')).toHaveText('52318-rebirth.mod');
 
@@ -308,39 +308,39 @@ test('где в игре: катана → торговец оружием → �
   }
 });
 
-test('граф диалога: реплики по-русски, выбор игрока, петли; реплика, которую игра не выберет', async () => {
+test('dialogue graph: lines in Russian, player choice, loops; a line the game will not pick', async () => {
   const { app, page } = await launch();
   try {
     await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
     await page.getByTestId('open-vanilla').click();
     await waitEditor(page);
-    // «mercenary shop»: 18 узлов, 11 вариантов игрока, 9 возвратов к меню.
+    // «mercenary shop»: 18 nodes, 11 player choices, 9 returns to the menu.
     await selectRecord(page, '5464-gamedata.base', '5464-gamedata.base');
     await page.getByTestId('tab-graph').click();
     const graph = page.getByTestId('dialogue-graph');
     await expect(graph.getByTestId('dg-stats')).toContainText('узлов 18, вариантов игрока 11, петель 9', { timeout: 60_000 });
     await expect(graph.getByTestId('dg-stats')).not.toContainText('читаю перевод');
     await expect(graph.locator('.dg-node.dg-choice').first()).toBeVisible();
-    // Тексты реплик — из перевода игры.
+    // Line texts come from the game translation.
     await expect(graph.locator('.dg-text').first()).toHaveText(/[а-яё]/i);
     await expect(graph.locator('.react-flow__edge.dg-edge-back').first()).toBeAttached();
     await expect(graph.locator('.react-flow__minimap-node')).toHaveCount(18);
-    // Стартовый вид — читаемый масштаб, корень виден.
+    // Initial view: readable zoom, root visible.
     await expect(graph.locator('.react-flow__viewport')).toHaveAttribute('style', /scale\(0\.85\)/);
     await expect(graph.locator('[data-testid="dg-node"][data-id="5464-gamedata.base"]')).toBeInViewport();
     await page.screenshot({ path: join(shots, '12-dialogue-graph.png') });
 
-    // Узкое окно: стартовый вид от корня, а не пустая середина широкого дерева.
+    // Narrow window: initial view from the root, not the empty middle of a wide tree.
     await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1100, 640); });
     await selectRecord(page, '53976-Dialogue.mod', '53976-Dialogue.mod');
     await page.getByTestId('tab-graph').click();
     await expect(graph.getByTestId('dg-stats')).toContainText('узлов 25');
     await expect(graph.locator('[data-testid="dg-node"][data-id="53976-Dialogue.mod"]')).toBeInViewport();
     await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1400, 900); });
-    // По правилу игры реплика с условием на расу получает +2 и здесь не теряется.
+    // By the game rule a line with a race condition gets +2, and that is not lost here.
     await expect(graph.locator('[data-kind="shadowed"]')).toHaveCount(0);
-    // «Grim talks to new ally»: реплика с условием (очки 1) никогда не будет выбрана —
-    // соседняя без условий раньше в списке и с очками 5.
+    // «Grim talks to new ally»: the line with a condition (score 1) will never be picked —
+    // its sibling without conditions is earlier in the list and has score 5.
     await selectRecord(page, '61857-Dialogue.mod', '61857-Dialogue.mod');
     await page.getByTestId('tab-graph').click();
     await expect(graph.getByTestId('dg-stats')).toContainText('узлов 5');
@@ -348,12 +348,12 @@ test('граф диалога: реплики по-русски, выбор иг
     await expect(issue).toContainText('не будет выбрана');
     await expect(issue).toContainText(/реплика «[^»]*[а-яё]/i);
     await issue.getByRole('button').click();
-    // Клик по проблеме — вид переходит к реплике.
+    // Clicking a problem moves the view to the line.
     await expect(graph.locator('.react-flow__viewport')).toHaveAttribute('style', /scale\(1\)/);
     await expect(graph.locator('[data-testid="dg-node"][data-id="61859-Dialogue.mod"] .dg-warn')).toBeInViewport();
     await page.screenshot({ path: join(shots, '13-dialogue-shadowed.png') });
 
-    // Вкладки графа нет у записей не-диалогов: остаётся на месте прежняя вкладка «Поля».
+    // Non-dialogue records have no graph tab: the previous «Поля» tab stays in place.
     await selectRecord(page, 'katana', KATANA);
     await expect(page.getByTestId('tab-graph')).toHaveCount(0);
   } finally {
@@ -361,13 +361,13 @@ test('граф диалога: реплики по-русски, выбор иг
   }
 });
 
-test('разговор: какой диалог выберет игра у персонажа, начало разговора, другое событие', async () => {
+test('conversation: which dialogue the game picks for a character, conversation start, another event', async () => {
   const { app, page } = await launch();
   try {
     await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
     await page.getByTestId('open-vanilla').click();
     await waitEditor(page);
-    // Трактирщик болотников: торговый «Swamp Barman» без условий побеждает, остальные — при условиях.
+    // Swampers barman: the trading «Swamp Barman» without conditions wins, the others only under conditions.
     await selectRecord(page, '50638-rebirth.mod', '50638-rebirth.mod');
     await page.getByTestId('tab-talk').click();
     const talk = page.getByTestId('talk');
@@ -380,14 +380,14 @@ test('разговор: какой диалог выберет игра у пе�
     await expect(talk.getByTestId('talk-summary')).toContainText('перебивают это');
     await expect(win.getByTestId('talk-why')).toContainText('подходит всегда');
     await expect(talk.locator('[data-testid="talk-candidate"][data-verdict="if-conditions"]').first().getByTestId('talk-why')).toContainText('когда его условия выполнены');
-    // Начало разговора — по-русски из перевода игры, с вариантами игрока; у реплики с условиями — её шанс.
+    // Conversation start in Russian from the game translation, with player choices; a line with conditions shows its chance.
     const opening = talk.getByTestId('talk-opening');
     await expect(opening).toContainText('Пляшущий Скелет', { timeout: 60_000 });
     await expect(opening.locator('.talk-choice').first()).toContainText('Давай торговать');
     await expect(opening.getByTestId('talk-line-odds').first()).toContainText('при условиях шанс 100%');
     await page.screenshot({ path: join(shots, '16-talk.png') });
 
-    // «Как игра выбирает»: окошко с правилами; закрывается повторным кликом, кликом мимо и Esc.
+    // «Как игра выбирает»: popup with the rules; closes on a second click, a click outside and Esc.
     const rulesBtn = talk.getByTestId('talk-rules-btn');
     const rules = page.getByTestId('talk-rules');
     await rulesBtn.click();
@@ -401,7 +401,7 @@ test('разговор: какой диалог выберет игра у пе�
     await expect(rules).toHaveCount(0);
     await rulesBtn.click();
     await expect(rules).toBeVisible();
-    // Клик мимо окошка (левый край строки итога окошко не закрывает собой).
+    // Click outside the popup (the left edge of the summary row is not covered by the popup).
     await talk.getByTestId('talk-summary').click({ position: { x: 4, y: 4 } });
     await expect(rules).toHaveCount(0);
     await rulesBtn.click();
@@ -409,24 +409,24 @@ test('разговор: какой диалог выберет игра у пе�
     await page.keyboard.press('Escape');
     await expect(rules).toHaveCount(0);
 
-    // Другое событие: «объявление» — диалогов нет; «вижу нейтральный отряд» — драка с атакой.
+    // Another event: «announcement» has no dialogues; «see neutral squad» is a fight with an attack.
     await talk.getByTestId('talk-event').selectOption('2');
     await expect(talk.getByTestId('talk-summary')).toContainText('диалогов нет');
     await talk.getByTestId('talk-event').selectOption('3');
     await expect(talk.locator('[data-testid="talk-candidate"][data-dialog="49204-Dialogue.mod"]')).toContainText('атака');
 
-    // Переход к диалогу из таблицы.
+    // Jump to the dialogue from the table.
     await talk.getByTestId('talk-event').selectOption('1');
     await win.locator('td').nth(1).getByRole('button').first().click();
     await expect(page.getByTestId('record-sid')).toHaveText('48721-Dialogue.mod');
-    // У не-персонажей вкладки нет.
+    // Non-characters have no tab.
     await expect(page.getByTestId('tab-talk')).toHaveCount(0);
   } finally {
     await closeApp(app);
   }
 });
 
-test('живая связь с ИИ: MCP подключается к окну, правки — набором изменений, принять и откатить', async () => {
+test('live AI link: MCP connects to the window, edits as a change set, accept and revert', async () => {
   const { app, page, liveFile } = await launch();
   let session: Session | undefined;
   try {
@@ -438,7 +438,7 @@ test('живая связь с ИИ: MCP подключается к окну, �
     await expect(live).not.toHaveClass(/connected/);
     await expect.poll(() => existsSync(liveFile), { timeout: 10_000 }).toBe(true);
 
-    // MCP-сервер (его сессия) — по той же игре, что открыта в окне.
+    // The MCP server (its session) works on the same game that is open in the window.
     const [game] = await page.evaluate(() => window.kedit.detectGames());
     session = new Session({ kenshi: game!.kenshi, workshop: game!.workshop }, editorRoot);
     const state = await session.connectEditor(liveFile);
@@ -446,7 +446,7 @@ test('живая связь с ИИ: MCP подключается к окну, �
     await expect(live).toHaveClass(/connected/);
     expect(decodeText(session.ctx().get(KATANA)!.name)).toBe('Katana');
 
-    // Правка ИИ: сразу в окне, панель открывается сама.
+    // AI edit: shows up in the window at once, the panel opens by itself.
     const first = await session.propose('катана тяжелее и острее', [
       { op: 'set', id: KATANA, field: 'weight kg', value: 9 },
       { op: 'set', id: KATANA, field: CUT, value: 1.4 },
@@ -461,14 +461,14 @@ test('живая связь с ИИ: MCP подключается к окну, �
     const card = panel.locator(`[data-testid="ai-changeset"]`).first();
     await expect(card).toContainText('катана тяжелее и острее');
     await expect(card).toContainText('weight');
-    // Ссылка на запись — открывает её в редакторе с новым значением.
+    // The record link opens it in the editor with the new value.
     await card.locator(`[data-sid="${KATANA}"]`).click();
     await expect(page.getByTestId('record-sid')).toHaveText(KATANA);
     await page.getByTestId('field-filter').fill('weight kg');
     await expect(page.getByTestId('field-weight kg')).toHaveValue('9');
     await page.screenshot({ path: join(shots, '14-ai-changeset.png') });
 
-    // Вторая правка — переименование; пользователь её откатывает, первую принимает.
+    // Second edit is a rename; the user reverts it and accepts the first one.
     const second = await session.propose('новое имя', [{ op: 'rename', id: KATANA, name: 'AI Katana' }]);
     await expect(page.getByTestId('record-name')).toHaveValue('AI Katana');
     await expect(panel.getByTestId('ai-changeset')).toHaveCount(2);
@@ -482,7 +482,7 @@ test('живая связь с ИИ: MCP подключается к окну, �
     await expect(panel.locator('[data-testid="ai-changeset"][data-status="accepted"]')).toHaveCount(1);
     await expect(live.locator('.live-badge')).toHaveCount(0);
     await expect(page.getByTestId('field-weight kg')).toHaveValue('9');
-    // В списке шагов ↶ правки ИИ помечены отдельно, откат — тоже шаг.
+    // In the ↶ step list AI edits are marked separately, and a revert is a step too.
     await page.getByTestId('undo-menu').click();
     const steps = page.getByTestId('undo-list').getByTestId('undo-step');
     await expect(steps).toHaveCount(3);
@@ -491,7 +491,7 @@ test('живая связь с ИИ: MCP подключается к окну, �
     await expect(steps.nth(2).locator('.hist-ai')).toBeVisible();
     await page.keyboard.press('Escape');
 
-    // ИИ видит решения пользователя и состояние окна.
+    // The AI sees the user decisions and the window state.
     const list = await session.editorChangesets();
     expect(list.map((c) => c.status)).toEqual(['accepted', 'rolled-back']);
     await session.sync();
@@ -499,7 +499,7 @@ test('живая связь с ИИ: MCP подключается к окну, �
     expect(session.ctx().get(KATANA)!.floats.get('weight kg')).toBe(9);
     await page.screenshot({ path: join(shots, '15-ai-accept-rollback.png') });
 
-    // Пользователь сам поменял ту же запись — откат принятого набора запрещён с пояснением.
+    // The user changed the same record themselves: reverting the accepted set is refused with an explanation.
     const weight = page.getByTestId('field-weight kg');
     await weight.fill('11');
     await weight.press('Enter');
@@ -510,16 +510,16 @@ test('живая связь с ИИ: MCP подключается к окну, �
     session?.disconnectEditor();
     await closeApp(app);
   }
-  // Окно закрыто — файл обнаружения убран.
+  // Window closed: the discovery file is removed.
   expect(existsSync(liveFile)).toBe(false);
 });
 
-/** Группа dockview, в которой стоит вкладка с этим текстом. */
+/** The dockview group that holds the tab with this text. */
 function groupOfTab(page: Page, title: string) {
   return page.locator('.dv-groupview').filter({ has: page.locator('.dv-tab', { hasText: title }) });
 }
 
-test('рабочее пространство: перетащил панель, закрыл другую — после перезапуска раскладка та же', async () => {
+test('workspace: dragged a panel, closed another — same layout after restart', async () => {
   let userData: string;
   {
     const run = await launch();
@@ -532,12 +532,12 @@ test('рабочее пространство: перетащил панель, 
       await expect(page.locator('.dv-tab')).toHaveCount(3);
       await expect(groupOfTab(page, 'Записи').locator('.dv-tab')).toHaveCount(1);
 
-      // Вкладку «Записи» — в середину инспектора: одна группа с двумя вкладками.
+      // Move the «Записи» tab into the middle of the inspector: one group with two tabs.
       const target = groupOfTab(page, 'Инспектор').locator('.dv-content-container');
       await page.locator('.dv-tab', { hasText: 'Записи' }).dragTo(target);
       await expect(groupOfTab(page, 'Записи').locator('.dv-tab')).toHaveCount(2);
 
-      // «Категории» закрыть через меню «Окно», «Где в игре» открыть.
+      // Close «Категории» via the «Окно» menu, open «Где в игре».
       await page.getByTestId('window-menu').click();
       await page.getByTestId('window-panel-categories').click();
       await expect(page.locator('.dv-tab', { hasText: 'Категории' })).toHaveCount(0);
@@ -545,7 +545,7 @@ test('рабочее пространство: перетащил панель, 
       await page.getByTestId('window-panel-where').click();
       await expect(page.locator('.dv-tab', { hasText: 'Где в игре' })).toHaveCount(1);
       await page.screenshot({ path: join(shots, '17-workspace-moved.png') });
-      // Раскладка пишется с задержкой.
+      // The layout is written with a delay.
       await page.waitForTimeout(800);
     } finally {
       await closeApp(app);
@@ -561,7 +561,7 @@ test('рабочее пространство: перетащил панель, 
     await expect(page.locator('.dv-tab', { hasText: 'Категории' })).toHaveCount(0);
     await expect(page.locator('.dv-tab', { hasText: 'Где в игре' })).toHaveCount(1);
 
-    // «Сбросить раскладку» возвращает готовую раскладку «Данные».
+    // «Сбросить раскладку» brings back the preset «Данные» layout.
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-reset').click();
     await expect(page.locator('.dv-tab')).toHaveCount(3);
@@ -573,7 +573,7 @@ test('рабочее пространство: перетащил панель, 
   }
 });
 
-test('проигрыватель разговора: какой диалог выбран и почему, ответы, «как будто», пример в «Как игра выбирает»', async () => {
+test('conversation player: which dialogue is picked and why, answers, as if, example in How the game picks', async () => {
   const { app, page } = await launch();
   try {
     await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
@@ -581,17 +581,17 @@ test('проигрыватель разговора: какой диалог в�
     await waitEditor(page);
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-dialogue').click();
-    // Трактирщик болотников.
+    // Swampers barman.
     await page.getByTestId('search').fill('50638-rebirth.mod');
     await page.getByTestId('record-list').locator('[data-sid="50638-rebirth.mod"]').click();
     const player = page.getByTestId('player');
     await expect(player).toHaveAttribute('data-sid', '50638-rebirth.mod');
     const first = player.getByTestId('pl-step').first();
     const opt = (sid: string) => first.locator(`[data-testid="pl-option"][data-sid="${sid}"]`);
-    // «Как будто все условия выполнены»: побеждает реплика беглого бандита (у неё больше очков за условия).
+    // «As if all conditions are met»: the runaway bandit line wins (it gets more points for conditions).
     await expect(opt('14394-Dialogue (4).mod')).toHaveAttribute('data-why', 'chosen');
     await expect(opt('48721-Dialogue.mod')).toHaveAttribute('data-why', 'outscored');
-    // Только записи без условий: обычный «Swamp Barman», начало разговора по-русски, три ответа.
+    // Only records without conditions: the plain «Swamp Barman», conversation start in Russian, three answers.
     await player.getByTestId('pl-mode').selectOption('none');
     await expect(opt('48721-Dialogue.mod')).toHaveAttribute('data-why', 'chosen');
     await expect(opt('48721-Dialogue.mod').getByTestId('pl-why')).toContainText('больше всех очков');
@@ -601,7 +601,7 @@ test('проигрыватель разговора: какой диалог в�
     await expect(first.getByTestId('pl-answer')).toHaveCount(3);
     await page.screenshot({ path: join(shots, '18-player.png') });
 
-    // Ответ игрока → реплика трактирщика и шесть новых ответов; «вернуться» — назад.
+    // Player answer → barman line and six new answers; «go back» returns.
     await first.locator('[data-testid="pl-answer"][data-sid="48725-Dialogue.mod"]').click();
     await expect(player.getByTestId('pl-step')).toHaveCount(2);
     const second = player.getByTestId('pl-step').nth(1);
@@ -611,14 +611,14 @@ test('проигрыватель разговора: какой диалог в�
     await first.getByTestId('pl-back').click();
     await expect(player.getByTestId('pl-step')).toHaveCount(1);
 
-    // «Как будто условия бандита выполнены»: диалог проходит, но у его реплик свои условия — внутри
-    // ничего не подходит, игра его пропускает.
+    // «As if the bandit conditions are met»: the dialogue passes, but its lines have their own conditions — nothing
+    // inside matches, so the game skips it.
     const bandit = opt('14394-Dialogue (4).mod');
     await bandit.getByTestId('pl-asif').locator('input').check();
     await expect(bandit).toHaveAttribute('data-why', 'empty');
     await expect(bandit.getByTestId('pl-why')).toContainText('внутри ничего не подходит');
     await expect(opt('48721-Dialogue.mod')).toHaveAttribute('data-why', 'chosen');
-    // Обратно «как будто выполнены»; снять галочку у бандита — выбор переходит к следующему, сброс возвращает.
+    // Back to «as if met»; unticking the bandit moves the pick to the next one, reset brings it back.
     await player.getByTestId('pl-mode').selectOption('met');
     await expect(bandit).toHaveAttribute('data-why', 'chosen');
     await bandit.getByTestId('pl-asif').locator('input').uncheck();
@@ -629,14 +629,14 @@ test('проигрыватель разговора: какой диалог в�
     await player.getByTestId('pl-mode').selectOption('none');
     await expect(opt('48721-Dialogue.mod')).toHaveAttribute('data-why', 'chosen');
 
-    // Клик по реплике — её диалог открывается в графе, сама реплика — в инспекторе реплики.
+    // Clicking a line opens its dialogue in the graph and the line itself in the line inspector.
     await first.getByTestId('pl-said').getByRole('button').click();
     await expect(page.getByTestId('dialogue-graph')).toHaveAttribute('data-sid', '48721-Dialogue.mod');
     await expect(page.getByTestId('line-inspector')).toHaveAttribute('data-sid', '48722-Dialogue.mod');
     await expect(player).toHaveAttribute('data-sid', '50638-rebirth.mod');
     await page.screenshot({ path: join(shots, '18c-player-line.png') });
 
-    // «Как игра выбирает диалог»: правило и пример на этом персонаже.
+    // «Как игра выбирает диалог»: the rule and an example on this character.
     await page.locator('.dv-tab', { hasText: 'Как игра выбирает' }).click();
     const howto = page.getByTestId('howto');
     await expect(howto.getByTestId('howto-example')).toContainText('Трактирщик — диалогов на «разговор»: 5');
@@ -648,7 +648,7 @@ test('проигрыватель разговора: какой диалог в�
   }
 });
 
-test('ванильный диалог: новый ответ, связь перетаскиванием, отмена/повтор, сохранение, kedit validate без ошибок', async () => {
+test('vanilla dialogue: new answer, link by dragging, undo/redo, save, kedit validate without errors', async () => {
   const { app, page } = await launch();
   try {
     await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1600, 1000); });
@@ -657,7 +657,7 @@ test('ванильный диалог: новый ответ, связь пер�
     await waitEditor(page);
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-dialogue').click();
-    // «Grim talks to new ally»: 5 узлов. Последняя реплика Грима — «Grow me some hemp, got it?».
+    // «Grim talks to new ally»: 5 nodes. Grim last line is «Grow me some hemp, got it?».
     await page.getByTestId('search').fill('61857-Dialogue.mod');
     await page.getByTestId('record-list').locator('[data-sid="61857-Dialogue.mod"]').click();
     const graph = page.getByTestId('dialogue-graph');
@@ -667,7 +667,7 @@ test('ванильный диалог: новый ответ, связь пер�
     const insp = page.getByTestId('line-inspector');
     await expect(insp).toHaveAttribute('data-sid', '61861-Dialogue.mod');
 
-    // Новый ответ игрока под репликой: новая запись с новым id, текст.
+    // New player answer under a line: a new record with a new id, text.
     await insp.getByTestId('ln-add-answer').click();
     await expect(insp).not.toHaveAttribute('data-sid', '61861-Dialogue.mod');
     const answer = (await insp.getAttribute('data-sid'))!;
@@ -677,8 +677,8 @@ test('ванильный диалог: новый ответ, связь пер�
     await expect(graph.getByTestId('dg-stats')).toContainText('узлов 6');
     await expect(node(answer)).toContainText('Повтори-ка');
 
-    // Связь: перетащить с правого края нового ответа на реплику «Set up a base…» (петля назад).
-    // «Показать всё», затем уменьшить: у края графа при перетаскивании вид сам прокручивается.
+    // Link: drag from the right edge of the new answer onto the «Set up a base…» line (loop back).
+    // «Show all», then zoom out: near the graph edge the view scrolls by itself while dragging.
     await graph.getByRole('button', { name: /Показать всё/ }).click();
     await page.waitForTimeout(400);
     await graph.locator('.react-flow__controls-zoomout').click();
@@ -695,13 +695,13 @@ test('ванильный диалог: новый ответ, связь пер�
     await expect(insp.locator('[data-testid="ln-next-item"][data-sid="61860-Dialogue.mod"]')).toHaveCount(1);
     await page.screenshot({ path: join(shots, '20-dialog-edit.png') });
 
-    // Отмена снимает связь, повтор возвращает.
+    // Undo removes the link, redo brings it back.
     await page.getByTestId('undo').click();
     await expect(insp.getByTestId('ln-next-item')).toHaveCount(0);
     await page.getByTestId('redo').click();
     await expect(insp.getByTestId('ln-next-item')).toHaveCount(1);
 
-    // Сохранение во временную папку; kedit validate по сохранённому моду — без ошибок.
+    // Save to a temp folder; kedit validate on the saved mod — no errors.
     const dir = mkdtempSync(join(tmpdir(), 'kedit-dlg-'));
     const out = join(dir, 'GrimAnswer.mod');
     try {
@@ -716,7 +716,7 @@ test('ванильный диалог: новый ответ, связь пер�
       expect(added.refs.get('lines')?.map((r) => r.target)).toEqual(['61860-Dialogue.mod']);
       const parent = recs.find((r) => r.stringId === '61861-Dialogue.mod')!;
       expect(parent.refs.get('lines')?.map((r) => r.target)).toContain(answer);
-      // Ванильные записи, которые не трогали, в мод не попадают.
+      // Untouched vanilla records do not end up in the mod.
       expect(recs.some((r) => r.stringId === '61859-Dialogue.mod')).toBe(false);
       const cli = join(editorRoot, 'packages/cli/bin/kedit.js');
       const report = execFileSync(process.execPath, [cli, 'validate', '--mod', out], { cwd: editorRoot, encoding: 'utf8' });
@@ -729,7 +729,7 @@ test('ванильный диалог: новый ответ, связь пер�
   }
 });
 
-test('граф диалога: меню ПКМ, текст прямо в узле, F2, Ctrl+D, Delete, вставка между, отмена/повтор, сохранение', async () => {
+test('dialogue graph: right-click menu, text right in the node, F2, Ctrl+D, Delete, insert between, undo/redo, save', async () => {
   const { app, page } = await launch();
   try {
     await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1600, 1000); });
@@ -750,7 +750,7 @@ test('граф диалога: меню ПКМ, текст прямо в узл�
     const edit = graph.getByTestId('dg-edit');
     const editingId = async (): Promise<string> => (await graph.locator('.dg-node.dg-editing').getAttribute('data-id'))!;
 
-    // ПКМ по реплике — меню; «Добавить ответ игрока» — новый узел сразу с полем текста.
+    // Right-click on a line opens the menu; «Добавить ответ игрока» makes a new node with a text field at once.
     await node('61861-Dialogue.mod').locator('.dg-text').first().click({ button: 'right' });
     await expect(menu).toBeVisible();
     await expect(menu.getByTestId('dg-menu-delete')).toBeVisible();
@@ -768,13 +768,13 @@ test('граф диалога: меню ПКМ, текст прямо в узл�
     await expect(node(answer)).toContainText('Где ставить базу?');
     await expect(node(answer)).toHaveAttribute('data-status', 'new');
 
-    // Ctrl+Z снимает текст, Ctrl+Y возвращает.
+    // Ctrl+Z removes the text, Ctrl+Y brings it back.
     await page.keyboard.press('Control+z');
     await expect(node(answer)).not.toContainText('Где ставить базу?');
     await page.keyboard.press('Control+y');
     await expect(node(answer)).toContainText('Где ставить базу?');
 
-    // Двойной клик — правка; Esc — отмена без изменений.
+    // Double-click edits; Esc cancels without changes.
     await node(answer).locator('.dg-text').first().dblclick();
     await expect(edit).toBeFocused();
     await edit.fill('Не то');
@@ -782,7 +782,7 @@ test('граф диалога: меню ПКМ, текст прямо в узл�
     await expect(edit).toHaveCount(0);
     await expect(node(answer)).toContainText('Где ставить базу?');
 
-    // F2 — правка; Enter сохраняет.
+    // F2 edits; Enter saves.
     await node(answer).locator('.dg-text').first().click();
     await page.keyboard.press('F2');
     await expect(edit).toBeFocused();
@@ -791,7 +791,7 @@ test('граф диалога: меню ПКМ, текст прямо в узл�
     await edit.press('Enter');
     await expect(node(answer)).toContainText('Повтори, где ставить базу?');
 
-    // Ctrl+D — копия рядом; Delete — удалить её (новая, без вопроса).
+    // Ctrl+D makes a copy next to it; Delete removes it (new, no prompt).
     await page.keyboard.press('Control+d');
     await expect(stats).toContainText('узлов 7');
     const copyId = (await graph.locator('.dg-node.dg-selected').getAttribute('data-id'))!;
@@ -801,7 +801,7 @@ test('граф диалога: меню ПКМ, текст прямо в узл�
     await expect(stats).toContainText('узлов 6');
     await expect(node(copyId)).toHaveCount(0);
 
-    // ПКМ по связи — «Вставить реплику между»: новая встаёт посередине, сразу с полем текста.
+    // Right-click on a link — «Вставить реплику между»: the new line goes in the middle, with a text field at once.
     await edge('61861-Dialogue.mod', answer).dispatchEvent('contextmenu');
     await expect(menu).toHaveAttribute('data-kind', 'edge');
     await menu.getByTestId('dg-menu-insert').click();
@@ -813,7 +813,7 @@ test('граф диалога: меню ПКМ, текст прямо в узл�
     await expect(node(mid)).toContainText('Погоди.');
     await expect(edge(mid, answer)).toHaveCount(1);
     await expect(edge('61861-Dialogue.mod', answer)).toHaveCount(0);
-    // Две отмены: текст, затем вставку; два повтора — обратно.
+    // Two undos: text, then the insert; two redos bring them back.
     await page.keyboard.press('Control+z');
     await page.keyboard.press('Control+z');
     await expect(stats).toContainText('узлов 6');
@@ -822,7 +822,7 @@ test('граф диалога: меню ПКМ, текст прямо в узл�
     await page.keyboard.press('Control+y');
     await expect(node(mid)).toContainText('Погоди.');
 
-    // Реплика из игры: ПКМ → «Удалить» спрашивает; удаление снимается отменой.
+    // A line from the game: right-click → «Удалить» asks; undo reverts the deletion.
     await graph.getByRole('button', { name: /Показать всё/ }).click();
     await page.waitForTimeout(400);
     await node('61860-Dialogue.mod').locator('.dg-text').first().click({ button: 'right' });
@@ -836,12 +836,12 @@ test('граф диалога: меню ПКМ, текст прямо в узл�
     await page.keyboard.press('Control+z');
     await expect(node('61860-Dialogue.mod')).toBeVisible();
 
-    // «Открыть реплику» показывает выбранную реплику в панели «Реплика».
+    // «Открыть реплику» shows the selected line in the «Реплика» panel.
     await node(mid).locator('.dg-text').first().click();
     await graph.getByTestId('dg-open-line').click();
     await expect(page.getByTestId('line-inspector')).toHaveAttribute('data-sid', mid);
 
-    // Сохранение во временную папку; kedit validate — без ошибок.
+    // Save to a temp folder; kedit validate — no errors.
     const dir = mkdtempSync(join(tmpdir(), 'kedit-dg-'));
     const out = join(dir, 'GraphEdit.mod');
     try {
@@ -870,7 +870,7 @@ test('граф диалога: меню ПКМ, текст прямо в узл�
   }
 });
 
-test('история правок: кружочки ↶ ↷ со списком шагов, панель «История», переход к шагу и обратно', async () => {
+test('edit history: ↶ ↷ circles with step list, History panel, jump to a step and back', async () => {
   const { app, page } = await launch();
   try {
     await expect(page.getByTestId('open-vanilla')).toBeVisible({ timeout: 60_000 });
@@ -880,7 +880,7 @@ test('история правок: кружочки ↶ ↷ со списком 
     await page.getByTestId('field-filter').fill('cut damage');
     const input = page.getByTestId(`field-${CUT}`);
     const original = await input.inputValue();
-    // Три правки — три шага.
+    // Three edits, three steps.
     for (const v of ['1.1', '1.2', '1.3']) {
       await input.fill(v);
       await input.press('Enter');
@@ -889,7 +889,7 @@ test('история правок: кружочки ↶ ↷ со списком 
     await expect(page.getByTestId('undo')).toHaveAttribute('title', /Ctrl\+Z/);
     await expect(page.getByTestId('undo')).toHaveAttribute('title', new RegExp(`Изменено «${CUT}»`));
 
-    // ▾ у кружочка назад: последние шаги, новые сверху, с понятными названиями.
+    // ▾ on the back circle: recent steps, newest on top, with readable names.
     await page.getByTestId('undo-menu').click();
     const undoSteps = page.getByTestId('undo-list').getByTestId('undo-step');
     await expect(undoSteps).toHaveCount(3);
@@ -897,11 +897,11 @@ test('история правок: кружочки ↶ ↷ со списком 
     await undoSteps.nth(1).hover();
     await expect(page.getByTestId('undo-list')).toContainText('Отменить 2 шага');
     await page.screenshot({ path: join(shots, '24-history-menu.png') });
-    // Щелчок по второму сверху — отменены два последних шага.
+    // Clicking the second from the top undoes the last two steps.
     await undoSteps.nth(1).click();
     await expect(page.getByTestId('undo-list')).toHaveCount(0);
     await expect(input).toHaveValue('1.1');
-    // ↷ по одному шагу и правым щелчком — список повтора.
+    // ↷ one step at a time and by right-click: the redo list.
     await page.getByTestId('redo').click();
     await expect(input).toHaveValue('1.2');
     await page.getByTestId('redo').click({ button: 'right' });
@@ -911,22 +911,22 @@ test('история правок: кружочки ↶ ↷ со списком 
     await page.getByTestId('redo').click();
     await expect(input).toHaveValue('1.3');
 
-    // Панель «История» (из списка «Вся история…»): все шаги, где вы сейчас.
+    // «История» panel (from the «Вся история…» list): all steps, where you are now.
     await page.getByTestId('undo-menu').click();
     await page.getByTestId('history-all').click();
     const panel = page.getByTestId('history-panel');
     await expect(panel).toBeVisible();
     const rows = panel.getByTestId('history-step');
-    await expect(rows).toHaveCount(4); // «Мод как при открытии» + 3 шага
+    await expect(rows).toHaveCount(4); // «Мод как при открытии» + 3 steps
     await expect(rows.nth(3)).toHaveAttribute('data-state', 'current');
     await expect(rows.nth(1)).toContainText(`Изменено «${CUT}»`);
-    // Щелчок по первому шагу — два последних отменены и стали серыми.
+    // Clicking the first step: the last two are undone and greyed out.
     await rows.nth(1).click();
     await expect(input).toHaveValue('1.1');
     await expect(rows.nth(1)).toHaveAttribute('data-state', 'current');
     await expect(panel.locator('[data-state="future"]')).toHaveCount(2);
     await page.screenshot({ path: join(shots, '25-history-panel.png') });
-    // ↷ возвращает: список повтора, последний шаг — всё вернулось.
+    // ↷ brings back: redo list, last step, everything is back.
     await page.getByTestId('redo-menu').click();
     const redoSteps = page.getByTestId('redo-list').getByTestId('redo-step');
     await expect(redoSteps).toHaveCount(2);
@@ -934,11 +934,11 @@ test('история правок: кружочки ↶ ↷ со списком 
     await expect(input).toHaveValue('1.3');
     await expect(panel.locator('[data-state="future"]')).toHaveCount(0);
     await expect(rows.nth(3)).toHaveAttribute('data-state', 'current');
-    // «Мод как при открытии» — отменить всё.
+    // «Мод как при открытии» undoes everything.
     await rows.first().click();
     await expect(input).toHaveValue(original);
     await expect(page.getByTestId('undo')).toBeDisabled();
-    // Ctrl+Y вне поля ввода — повтор.
+    // Ctrl+Y outside an input field is redo.
     await panel.click({ position: { x: 5, y: 5 } });
     await page.keyboard.press('Control+y');
     await expect(input).toHaveValue('1.1');
@@ -947,13 +947,13 @@ test('история правок: кружочки ↶ ↷ со списком 
   }
 });
 
-/** Буквы русской раскладки на месте латинских (ЙЦУКЕН): что приходит в `e.key`. */
+/** Russian layout letters in place of Latin ones (ЙЦУКЕН): what arrives in `e.key`. */
 const RU: Record<string, string> = { z: 'я', y: 'н', d: 'в', s: 'ы', c: 'с', v: 'м', f: 'а' };
 
 /**
- * Нажать Ctrl(+Shift)+буква так, как это делает Windows на русской раскладке: `key` — русская
- * буква, `code` и код клавиши — латинские. Через CDP событие идёт по настоящему пути ввода
- * (страница → меню окна), поэтому заодно видно, что меню не срабатывает второй раз.
+ * Press Ctrl(+Shift)+letter the way Windows does on the Russian layout: `key` is the Russian
+ * letter, `code` and the key code are Latin. Through CDP the event takes the real input path
+ * (page → window menu), so it also shows that the menu does not fire a second time.
  */
 async function pressRu(cdp: CDPSession, letter: string, shift = false): Promise<void> {
   const key = shift ? RU[letter]!.toUpperCase() : RU[letter]!;
@@ -964,7 +964,7 @@ async function pressRu(cdp: CDPSession, letter: string, shift = false): Promise<
   await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', modifiers, key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
 }
 
-test('клавиши на русской раскладке: Ctrl+Z/Y/Shift+Z/D/S по физической клавише, в поле ввода — правка поля', async () => {
+test('keys on the Russian layout: Ctrl+Z/Y/Shift+Z/D/S by physical key, field edit inside an input', async () => {
   const { app, page } = await launch();
   try {
     await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1600, 1000); });
@@ -983,7 +983,7 @@ test('клавиши на русской раскладке: Ctrl+Z/Y/Shift+Z/D/
     const menu = graph.getByTestId('dg-menu');
     const edit = graph.getByTestId('dg-edit');
 
-    // Две правки текста: «Раз», затем «Два».
+    // Two text edits: «Раз», then «Два».
     await node('61861-Dialogue.mod').locator('.dg-text').first().click({ button: 'right' });
     await menu.getByTestId('dg-menu-add-answer').click();
     await expect(edit).toBeFocused();
@@ -996,7 +996,7 @@ test('клавиши на русской раскладке: Ctrl+Z/Y/Shift+Z/D/
     await edit.press('Enter');
     await expect(node(answer)).toContainText('Два');
 
-    // Ctrl+Я — ровно одна отмена (не две: меню окна не срабатывает следом), Ctrl+Н — повтор.
+    // Ctrl+Я is exactly one undo (not two: the window menu does not fire after it), Ctrl+Н is redo.
     await pressRu(cdp, 'z');
     await expect(node(answer)).toContainText('Раз');
     await page.waitForTimeout(200);
@@ -1005,17 +1005,17 @@ test('клавиши на русской раскладке: Ctrl+Z/Y/Shift+Z/D/
     await expect(node(answer)).toContainText('Два');
     await pressRu(cdp, 'z');
     await expect(node(answer)).toContainText('Раз');
-    await pressRu(cdp, 'z', true); // Ctrl+Shift+Я — тоже повтор
+    await pressRu(cdp, 'z', true); // Ctrl+Shift+Я is redo too
     await expect(node(answer)).toContainText('Два');
 
-    // Ctrl+В — копия выделенной реплики; Ctrl+Я убирает её.
+    // Ctrl+В copies the selected line; Ctrl+Я removes it.
     await node(answer).locator('.dg-text').first().click();
     await pressRu(cdp, 'd');
     await expect(stats).toContainText('узлов 7');
     await pressRu(cdp, 'z');
     await expect(stats).toContainText('узлов 6');
 
-    // В поле ввода Ctrl+Я отменяет набор в поле, а не правку мода.
+    // In an input field Ctrl+Я undoes typing in the field, not the mod edit.
     const search = page.getByTestId('search');
     await search.fill('');
     await search.click();
@@ -1025,7 +1025,7 @@ test('клавиши на русской раскладке: Ctrl+Z/Y/Shift+Z/D/
     await expect(stats).toContainText('узлов 6');
     await expect(node(answer)).toContainText('Два');
 
-    // Ctrl+Ы — сохранить.
+    // Ctrl+Ы saves.
     const dir = mkdtempSync(join(tmpdir(), 'kedit-ru-keys-'));
     const out = join(dir, 'RuKeys.mod');
     try {

@@ -1,6 +1,6 @@
 /**
- * E2E: панель «Модель» — 3D-модель записи из файлов игры (катана, дом), снимки окна и
- * сохранение иконки (диалог сохранения подменён).
+ * E2E: the «Модель» panel — the 3D model of a record from the game files (katana, house), window screenshots and
+ * saving the icon (the save dialog is stubbed).
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,7 +14,7 @@ mkdirSync(shots, { recursive: true });
 const KATANA = '476-gamedata.base';
 const HOUSE = '620-gamedata.base';
 
-test('панель «Модель»: катана и дом из файлов игры, иконка', async () => {
+test('Model panel: katana and house from the game files, icon', async () => {
   const userData = mkdtempSync(join(tmpdir(), 'kedit-e2e-'));
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && k !== 'ELECTRON_RENDERER_URL') env[k] = v;
@@ -31,7 +31,7 @@ test('панель «Модель»: катана и дом из файлов и
     await page.getByTestId('open-vanilla').click();
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
 
-    // Раскладка «Сцена»: «Модель» — вкладка в центре рядом с «Миром».
+    // «Сцена» layout: «Модель» is a tab in the centre next to «Мир».
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-scene').click();
     await page.locator('.dv-tab', { hasText: '◈ Модель' }).click();
@@ -46,13 +46,13 @@ test('панель «Модель»: катана и дом из файлов и
     expect(Number(await view.getAttribute('data-triangles'))).toBeGreaterThan(100);
     await page.screenshot({ path: join(shots, '50-model-katana.png') });
 
-    // Иконка: PNG с подписью формата.
+    // Icon: PNG with a format caption.
     await view.getByTestId('model-icon').click();
     await expect(view.getByTestId('model-icon-saved')).toBeVisible();
     expect(existsSync(iconPath)).toBe(true);
     expect([...readFileSync(iconPath).subarray(1, 4)].map((c) => String.fromCharCode(c)).join('')).toBe('PNG');
 
-    // Здание из частей с текстурами материалов.
+    // A building made of parts with material textures.
     await page.getByTestId('search').fill('Raised House');
     await page.getByTestId('record-list').locator(`[data-sid="${HOUSE}"]`).click();
     await expect(view).toHaveAttribute('data-sid', HOUSE);
@@ -60,7 +60,7 @@ test('панель «Модель»: катана и дом из файлов и
     await expect(view.getByTestId('model-stats')).toContainText('частей');
     await page.screenshot({ path: join(shots, '51-model-house.png') });
 
-    // Клик по дому: часть подсвечивается, рядом — карточка «Что внутри» с переходами к записям.
+    // Click on the house: a part is highlighted, next to it a «Что внутри» card with jumps to records.
     const canvas = view.getByTestId('model-canvas');
     const box = (await canvas.boundingBox())!;
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
@@ -70,7 +70,7 @@ test('панель «Модель»: катана и дом из файлов и
     await expect(card).toHaveAttribute('data-sid', picked!);
     await expect(card).toContainText('BUILDING_PART');
     await page.screenshot({ path: join(shots, '52-model-inside.png') });
-    // Клик мимо модели снимает выбор.
+    // Clicking outside the model clears the selection.
     await page.mouse.click(box.x + 8, box.y + 8);
     await expect(card).toBeHidden();
   } finally {

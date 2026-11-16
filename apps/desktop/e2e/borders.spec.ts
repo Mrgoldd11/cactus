@@ -1,5 +1,5 @@
 /**
- * E2E: границы городов в панели «Мир» — галка включает кольца вокруг Хаба. Снимок — `out/screenshots/58-*`.
+ * E2E: town borders in the «Мир» panel — a checkbox turns on rings around The Hub. Screenshot: `out/screenshots/58-*`.
  */
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,7 +10,7 @@ const appDir = resolve(import.meta.dirname, '..');
 const shots = join(resolve(appDir, '../..'), 'out', 'screenshots');
 mkdirSync(shots, { recursive: true });
 
-test('панель «Мир»: границы городов включаются галкой', async () => {
+test('World panel: town borders are turned on by a checkbox', async () => {
   test.setTimeout(240_000);
   const userData = mkdtempSync(join(tmpdir(), 'kedit-e2e-'));
   const env: Record<string, string> = {};

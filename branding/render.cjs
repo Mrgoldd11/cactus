@@ -1,4 +1,4 @@
-// Рисует SVG в PNG через Electron: electron render.cjs <svg> <png> <w> <h> [transparent|dark]
+// Renders SVG to PNG via Electron: electron render.cjs <svg> <png> <w> <h> [transparent|dark]
 const { app, BrowserWindow } = require('electron');
 const fs = require('fs');
 const [svg, out, w, h] = process.argv.slice(process.argv.indexOf('--') + 1);

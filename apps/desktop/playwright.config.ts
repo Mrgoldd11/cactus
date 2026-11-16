@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 
-// Тесты запускают собранное приложение (out/) через Electron; игра нужна настоящая (только чтение).
+// Tests run the built app (out/) through Electron; the real game is needed (read-only).
 export default defineConfig({
   testDir: 'e2e',
   timeout: 180_000,

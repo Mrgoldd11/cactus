@@ -1,7 +1,7 @@
 /**
- * Простой zip-архив (deflate) без внешних пакетов. Имена — UTF-8 с флагом 0x800, чтобы
- * проводник Windows и 7-Zip показывали русские имена правильно. ZIP64 не нужен: файлы и
- * архив меньше 4 ГБ (иначе — ошибка).
+ * A simple zip archive (deflate) without external packages. Names are UTF-8 with flag 0x800 so
+ * Windows Explorer and 7-Zip show Russian names correctly. ZIP64 is not needed: files and the
+ * archive are under 4 GB (otherwise an error).
  */
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -29,7 +29,7 @@ function listFiles(dir: string): string[] {
   return out;
 }
 
-/** Упаковать папку `dir` в `zipPath`; внутри архива всё лежит в папке `rootName`. */
+/** Pack folder `dir` into `zipPath`; inside the archive everything is in folder `rootName`. */
 export function zipDir(dir: string, zipPath: string, rootName: string): { files: number; bytes: number } {
   const chunks: Buffer[] = [];
   const central: Buffer[] = [];
@@ -47,7 +47,7 @@ export function zipDir(dir: string, zipPath: string, rootName: string): { files:
 
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
-    local.writeUInt16LE(20, 4); // нужна версия 2.0
+    local.writeUInt16LE(20, 4); // version 2.0 needed
     local.writeUInt16LE(UTF8, 6);
     local.writeUInt16LE(stored ? 0 : 8, 8);
     local.writeUInt16LE(time, 10);
@@ -61,7 +61,7 @@ export function zipDir(dir: string, zipPath: string, rootName: string): { files:
 
     const c = Buffer.alloc(46);
     c.writeUInt32LE(0x02014b50, 0);
-    c.writeUInt16LE(20, 4); // создано: MS-DOS, версия 2.0
+    c.writeUInt16LE(20, 4); // made by: MS-DOS, version 2.0
     c.writeUInt16LE(20, 6);
     c.writeUInt16LE(UTF8, 8);
     c.writeUInt16LE(stored ? 0 : 8, 10);

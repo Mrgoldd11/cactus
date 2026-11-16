@@ -1,7 +1,7 @@
 /**
- * E2E: панель «Внутри» — интерьер здания из файлов игры (Outpost, раскладка «Noble House»):
- * объекты, карточка, точные координаты, гизмо, отмена, новый объект из списка записей,
- * удаление, запись `leveldata/interiors.level` при сохранении. Снимки — `out/screenshots/60-*`…
+ * E2E: the «Внутри» panel — a building interior from the game files (Outpost, layout «Noble House»):
+ * objects, card, exact coordinates, gizmo, undo, a new object from the record list,
+ * deletion, writing `leveldata/interiors.level` on save. Screenshots: `out/screenshots/60-*`…
  */
 import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,7 +16,7 @@ mkdirSync(shots, { recursive: true });
 const BUILDING = '727-gamedata.base';
 const LAYOUT = '727-gamedata.base-Noble House';
 
-test('панель «Внутри»: раскладка, сдвиг, новый объект, удаление, запись', async () => {
+test('Inside panel: layout, move, new object, delete, write', async () => {
   test.setTimeout(240_000);
   const userData = mkdtempSync(join(tmpdir(), 'kedit-e2e-'));
   const env: Record<string, string> = {};
@@ -49,7 +49,7 @@ test('панель «Внутри»: раскладка, сдвиг, новый 
     await page.waitForTimeout(500);
     await page.screenshot({ path: join(shots, '60-interior.png') });
 
-    // Выбор из списка — карточка с этажом и ключом.
+    // Picking from the list: a card with floor and key.
     const first = page.getByTestId('interior-list').locator('[data-key]').first();
     const key = (await first.getAttribute('data-key'))!;
     await first.click();
@@ -57,7 +57,7 @@ test('панель «Внутри»: раскладка, сдвиг, новый 
     await expect(card).toHaveAttribute('data-key', key);
     await page.screenshot({ path: join(shots, '61-interior-card.png') });
 
-    // Точная координата: x + 10 — шаг «Сдвиг в интерьере», отметка «изменено в моде».
+    // Exact coordinate: x + 10 — step «Сдвиг в интерьере», mark «изменено в моде».
     const lastStep = page.getByTestId('interior-last-step');
     const xField = page.getByTestId('interior-pos-x');
     const x0 = Number(await xField.inputValue());
@@ -67,7 +67,7 @@ test('панель «Внутри»: раскладка, сдвиг, новый 
     await expect(page.getByTestId('interior-card-edited')).toBeVisible();
     await expect(xField).toHaveValue(String(Math.round((x0 + 10) * 10) / 10));
 
-    // Гизмо: перетаскивание за центр двигает объект; Ctrl+Z на окне отменяет.
+    // Gizmo: dragging by the centre moves the object; Ctrl+Z on the window undoes.
     const view = page.getByTestId('interior-view');
     const box = (await view.boundingBox())!;
     await expect.poll(async () => (await view.getAttribute('data-gizmo')) ?? '').not.toBe('');
@@ -84,7 +84,7 @@ test('панель «Внутри»: раскладка, сдвиг, новый 
     await page.keyboard.press('Control+z');
     await expect(xField).toHaveValue(before);
 
-    // Новый объект из списка записей (рус. имя), потом удаление клавишей Del и отмена.
+    // A new object from the record list (Russian name), then deletion with Del and undo.
     await page.getByTestId('interior-place').fill('кровать');
     const hits = page.getByTestId('interior-place-hits');
     await expect(hits).toBeVisible();
@@ -102,7 +102,7 @@ test('панель «Внутри»: раскладка, сдвиг, новый 
     await page.getByTestId('interior-undo').click();
     await expect(lastStep).toContainText('В интерьер');
 
-    // Сохранение: `leveldata/interiors.level` рядом с модом — сдвиг и новый объект с состоянием.
+    // Save: `leveldata/interiors.level` next to the mod — the move and the new object with its state.
     const saveDir = mkdtempSync(join(tmpdir(), 'kedit-interior-save-'));
     await app.evaluate(({ dialog }, p) => {
       dialog.showSaveDialog = () => Promise.resolve({ canceled: false, filePath: p });

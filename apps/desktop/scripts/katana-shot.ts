@@ -1,5 +1,5 @@
 /**
- * Скриншот катаны в панели «Модель» для галереи Steam (с собранной беты, пустые настройки):
+ * Screenshot of the katana in the «Модель» panel for the Steam gallery (from the built beta, empty settings):
  *
  *   node apps/desktop/scripts/katana-shot.ts [out.jpg] [Cactus.exe]
  */
@@ -32,7 +32,7 @@ try {
   await page.getByTestId('window-menu').click();
   await page.getByTestId('window-preset-scene').click();
   await page.locator('.dv-tab', { hasText: '◈' }).click();
-  // «Модель» стоит в узкой правой группе — закрыть вкладку «Мир», чтобы группа заняла центр.
+  // «Модель» sits in the narrow right group — close the «Мир» tab so the group takes the centre.
   await page.locator('.dv-tab', { hasText: 'World' }).locator('.dv-default-tab-action').click();
   await page.waitForTimeout(400);
   const view = page.getByTestId('model-view');
@@ -40,7 +40,7 @@ try {
   await page.getByTestId('record-list').locator('[data-sid="476-gamedata.base"]').click();
   await page.waitForFunction(() => document.querySelector('[data-testid="model-view"]')?.getAttribute('data-state') === 'ready', undefined, { timeout: 60_000 });
 
-  // Чуть повернуть вид мышью — видно, что модель крутится.
+  // Rotate the view a little with the mouse — shows that the model turns.
   const box = (await view.getByTestId('model-canvas').boundingBox())!;
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;

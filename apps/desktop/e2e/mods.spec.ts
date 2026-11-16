@@ -1,8 +1,8 @@
 /**
- * E2E этапа 4 (существующие моды) на временной «папке игры»: ванильные файлы — жёсткие
- * ссылки на файлы настоящей игры (только чтение, место не тратится), два своих мода
- * (один в `mods/`, другой в «мастерской»), свой `mods.cfg`. Настоящий `mods.cfg` и папки
- * игры не трогаются: приложению передаётся KENSHI_DIR / KENSHI_WORKSHOP_DIR.
+ * E2E of stage 4 (existing mods) on a temp «game folder»: vanilla files are hard
+ * links to the real game files (read-only, no disk space used), two own mods
+ * (one in `mods/`, the other in the «Workshop»), an own `mods.cfg`. The real `mods.cfg` and game
+ * folders are not touched: the app gets KENSHI_DIR / KENSHI_WORKSHOP_DIR.
  */
 import { copyFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -27,7 +27,7 @@ interface FakeGame {
   cfg: string;
 }
 
-/** Файлы игры, которые нужны редактору: ваниль, схема, перевод. */
+/** Game files the editor needs: vanilla, schema, translation. */
 const GAME_FILES = [
   'data/gamedata.base',
   'data/Newwworld.mod',
@@ -51,7 +51,7 @@ function modFile(records: GameRecord[], deps: string[] = []): Uint8Array {
   return writeDataFile(f);
 }
 
-/** Катана с другим уроном: «изменённая» запись мода. */
+/** Katana with different damage: a «changed» mod record. */
 function katana(cut: number, extra: (r: GameRecord) => void = () => undefined): GameRecord {
   const r = emptyRecord(WEAPON, KATANA, encodeText('Katana'));
   r.changeFlags = 0x80000001;
@@ -62,7 +62,7 @@ function katana(cut: number, extra: (r: GameRecord) => void = () => undefined): 
 
 function makeGame(): FakeGame {
   const real = resolveGamePaths(editorRoot);
-  // На том же диске, что игра: жёсткие ссылки работают только в пределах одного тома.
+  // On the same drive as the game: hard links only work within one volume.
   const base = join(outDir, 'tmp-game');
   mkdirSync(base, { recursive: true });
   const root = mkdtempSync(join(base, 'g-'));
@@ -92,7 +92,7 @@ function makeGame(): FakeGame {
       }),
     ]),
   );
-  // Свой mods.cfg — обычный файл (не ссылка на настоящий).
+  // Own mods.cfg is a regular file (not a link to the real one).
   const cfg = join(kenshi, 'data', 'mods.cfg');
   writeFileSync(cfg, 'Sharp Katana.mod\r\nKatana Rebalance.mod\r\n');
   return { kenshi, workshop, cfg };
@@ -106,7 +106,7 @@ async function launch(game: FakeGame): Promise<{ app: ElectronApplication; page:
   env['KEDIT_LIVE_FILE'] = join(userData, 'live.json');
   env['KENSHI_DIR'] = game.kenshi;
   env['KENSHI_WORKSHOP_DIR'] = game.workshop;
-  // Папка игры временная: проверка «игра закрыта» перед записью mods.cfg не нужна.
+  // The game folder is temporary: the «game is closed» check before writing mods.cfg is not needed.
   env['KEDIT_SKIP_GAME_CHECK'] = '1';
   const app = await electron.launch({ args: ['.'], cwd: appDir, env });
   const page = await app.firstWindow();
@@ -123,7 +123,7 @@ async function closeApp(app: ElectronApplication): Promise<void> {
   await app.close();
 }
 
-/** Подменить окно подтверждения в main: нажать кнопку `response`, запомнить вызовы. */
+/** Stub the confirmation box in main: press button `response`, remember the calls. */
 async function stubMessageBox(app: ElectronApplication, response: number): Promise<void> {
   await app.evaluate(({ dialog }, r) => {
     const g = globalThis as unknown as { boxCalls: number; boxDetail?: string };
@@ -154,7 +154,7 @@ async function selectRecord(page: Page, query: string, sid: string): Promise<voi
   await expect(page.getByTestId('record-sid')).toHaveText(sid);
 }
 
-test('моды слоями: панель «Моды», два мода под ванилью, побеждает поздний', async () => {
+test('mods as layers: Mods panel, two mods under vanilla, the later one wins', async () => {
   const game = makeGame();
   const { app, page } = await launch(game);
   try {
@@ -175,30 +175,30 @@ test('моды слоями: панель «Моды», два мода под �
     await expect(page.getByTestId('mods-panel')).toContainText('других модов 2', { timeout: 60_000 });
     await page.screenshot({ path: join(shots, '28-mods-panel.png') });
 
-    // Катана: Katana Rebalance ниже в mods.cfg — его урон.
+    // Katana: Katana Rebalance is lower in mods.cfg — its damage.
     await page.locator('.dv-tab', { hasText: 'Инспектор' }).click();
     await selectRecord(page, 'katana', KATANA);
     await page.getByTestId('field-filter').fill('cut damage');
     await expect(page.getByTestId(`field-${CUT}`)).toHaveValue('2');
-    // Инспектор: кто ещё меняет запись и сколько полей в конфликте.
+    // Inspector: who else changes the record and how many fields conflict.
     await expect(page.getByTestId('record-others')).toContainText('Sharp Katana.mod, Katana Rebalance.mod');
     await expect(page.getByTestId('record-conflicts')).toContainText('полей в конфликте: 1');
 
-    // Панель «Конфликты»: урон катаны, победит Katana Rebalance (ниже в mods.cfg).
+    // «Конфликты» panel: katana damage, Katana Rebalance wins (lower in mods.cfg).
     await openPanel(page, 'conflicts');
     const row = page.getByTestId('conflicts-table').locator(`tr[data-sid="${KATANA}"][data-field="floats:${CUT}"]`);
     await expect(row).toBeVisible();
     await expect(row.getByTestId('conflict-winner')).toHaveText('Katana Rebalance.mod');
     await expect(row).toContainText('1.5 — Sharp Katana.mod');
     await expect(row).toContainText('2 — Katana Rebalance.mod');
-    // weight mult меняет только один мод — не конфликт.
+    // weight mult is changed by one mod only — not a conflict.
     await expect(page.getByTestId('conflicts-table').locator('tr[data-field="floats:weight mult"]')).toHaveCount(0);
     await page.screenshot({ path: join(shots, '29-conflicts.png') });
 
-    // mods.cfg пока не менялся.
+    // mods.cfg has not changed yet.
     expect(readFileSync(game.cfg, 'utf-8')).toBe('Sharp Katana.mod\r\nKatana Rebalance.mod\r\n');
 
-    // Порядок загрузки: перетащить Katana Rebalance выше Sharp Katana (черновик).
+    // Load order: drag Katana Rebalance above Sharp Katana (draft).
     await page.locator('.dv-tab', { hasText: 'Моды' }).click();
     await expect(page.getByTestId('order-Katana Rebalance.mod')).toContainText('2');
     await page.getByTestId('mod-row-Katana Rebalance.mod').dragTo(page.getByTestId('mod-row-Sharp Katana.mod'));
@@ -207,14 +207,14 @@ test('моды слоями: панель «Моды», два мода под �
     await expect(page.getByTestId('mods-order-changed')).toContainText('модов 2');
     await page.screenshot({ path: join(shots, '30-load-order.png') });
 
-    // «Отмена» в окне подтверждения — файл не трогается.
+    // «Отмена» in the confirmation box: the file is not touched.
     await stubMessageBox(app, 1);
     await page.getByTestId('mods-order-save').click();
     await expect.poll(async () => (await messageBox(app)).calls).toBe(1);
     expect(readFileSync(game.cfg, 'utf-8')).toBe('Sharp Katana.mod\r\nKatana Rebalance.mod\r\n');
     await expect(page.getByTestId('mods-order-save')).toBeEnabled();
 
-    // «Записать»: mods.cfg с CRLF, копия рядом, слои пересобраны — теперь побеждает Sharp Katana.
+    // «Записать»: mods.cfg with CRLF, a backup next to it, layers rebuilt — now Sharp Katana wins.
     await stubMessageBox(app, 0);
     await page.getByTestId('mods-order-save').click();
     await expect(page.getByTestId('mods-order-msg')).toContainText('mods.cfg записан', { timeout: 60_000 });
@@ -240,7 +240,7 @@ test('моды слоями: панель «Моды», два мода под �
   }
 });
 
-test('чужой мод из мастерской: сохранить в оригинал нельзя, копия для правки в mods/', async () => {
+test('foreign Workshop mod: cannot save into the original, a copy for editing in mods/', async () => {
   const game = makeGame();
   const original = join(game.workshop, '900001', 'Katana Rebalance.mod');
   const before = readFileSync(original);
@@ -264,20 +264,20 @@ test('чужой мод из мастерской: сохранить в ори�
     await expect(input).toHaveValue('3');
     await page.screenshot({ path: join(shots, '31-workshop-copy.png') });
 
-    // Ctrl+S в файл мастерской — отказ без окна подтверждения, файл не тронут.
+    // Ctrl+S into a Workshop file is refused without a confirmation box, the file is untouched.
     await stubMessageBox(app, 0);
     await page.getByTestId('save').click();
     await expect(page.getByTestId('status-msg')).toContainText('мастерской Steam');
     expect((await messageBox(app)).calls).toBe(0);
     expect(Buffer.compare(readFileSync(original), before)).toBe(0);
 
-    // «Отмена» в окне копии — ничего не создаётся.
+    // «Отмена» in the copy box: nothing is created.
     await stubMessageBox(app, 1);
     await page.getByTestId('copy-for-editing').click();
     await expect.poll(async () => (await messageBox(app)).calls).toBe(1);
     expect(existsSync(copy)).toBe(false);
 
-    // «Скопировать»: копия байт в байт + файл происхождения; правки остаются, сохраняются в копию.
+    // «Скопировать»: a byte-for-byte copy + an origin file; edits stay and are saved into the copy.
     await stubMessageBox(app, 0);
     await page.getByTestId('copy-for-editing').click();
     await expect(page.getByTestId('copy-banner')).toContainText('900001', { timeout: 30_000 });
@@ -303,7 +303,7 @@ test('чужой мод из мастерской: сохранить в ори�
   }
 });
 
-test('перевод: панель «Перевод» — оригинал и перевод рядом, выгрузка CSV и загрузка обратно', async () => {
+test('translation: Translation panel, original and translation side by side, CSV export and import back', async () => {
   const game = makeGame();
   const ARMOUR = itemTypeId('ARMOUR')!;
   const hat = (sid: string, name: string, desc: string): GameRecord => {
@@ -328,7 +328,7 @@ test('перевод: панель «Перевод» — оригинал и п
     await expect(page.getByTestId('tr-summary')).toHaveText('Переведено: 0 из 4', { timeout: 60_000 });
     await expect(page.getByTestId('tr-source')).toHaveValue('Hats.mod');
 
-    // Перевод в поле — в мод: статус «есть», запись в моде, зависимость от оригинала.
+    // Translation in a field goes into the mod: status «есть», record in the mod, dependency on the original.
     const row = (sid: string, field: string) => page.getByTestId('tr-table').locator(`tr[data-sid="${sid}"][data-field="${field}"]`);
     const input = row('1-Hats.mod', 'name').getByTestId('tr-input');
     await input.fill('Соломенная шляпа');
@@ -341,7 +341,7 @@ test('перевод: панель «Перевод» — оригинал и п
     await expect(page.getByTestId('tr-table').locator('tbody tr')).toHaveCount(3);
     await page.getByTestId('tr-filter-all').check();
 
-    // Выгрузка CSV во временную папку (окно «Сохранить» подменено).
+    // CSV export to a temp folder (the «Save» dialog is stubbed).
     await app.evaluate(({ dialog }, p) => {
       dialog.showSaveDialog = () => Promise.resolve({ canceled: false, filePath: p });
       dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [p] });
@@ -352,7 +352,7 @@ test('перевод: панель «Перевод» — оригинал и п
     expect(text).toContain('Straw hat');
     expect(text).toContain('Соломенная шляпа');
 
-    // Переводчик заполнил файл (в Excel) — загрузка: одна отмена, отчёт.
+    // The translator filled the file (in Excel), import: one undo, a report.
     const filled = text
       .replace('"Heavy, ""very"" heavy.",', '"Heavy, ""very"" heavy.","Тяжёлая, ""очень"" тяжёлая."')
       .replace('Iron hat,Iron hat,', 'Iron hat,Iron hat,Железная шляпа')
@@ -371,7 +371,7 @@ test('перевод: панель «Перевод» — оригинал и п
     await page.keyboard.press('Control+KeyY');
     await expect(page.getByTestId('tr-summary')).toHaveText('Переведено: 4 из 4');
 
-    // Выгрузка в папку игры — отказ.
+    // Export into the game folder is refused.
     await app.evaluate(({ dialog }, p) => {
       dialog.showSaveDialog = () => Promise.resolve({ canceled: false, filePath: p });
     }, join(game.kenshi, 'mods', 'x.csv'));

@@ -1,7 +1,7 @@
 /**
- * E2E: автосохранение, безопасное сохранение с резервными копиями и восстановление после сбоя.
- * Как `mods.spec.ts`: временная «папка игры» (ванильные файлы — жёсткие ссылки на настоящие, только
- * чтение), свой мод в `mods/`, свой `userData`. Настоящие папки игры и мастерской не трогаются.
+ * E2E: autosave, safe save with backups and recovery after a crash.
+ * Like `mods.spec.ts`: a temp «game folder» (vanilla files are hard links to the real ones, read-only),
+ * an own mod in `mods/`, an own `userData`. The real game and Workshop folders are not touched.
  */
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -85,7 +85,7 @@ function makeGame(): FakeGame {
   return { kenshi, workshop, root, modPath };
 }
 
-/** Папка данных приложения; настройки заранее (в e2e автосохранение раз в ~2 с). */
+/** App data folder; settings set up in advance (in e2e autosave runs every ~2 s). */
 function makeUserData(settings: { autosaveMinutes?: number; backupCount?: number } = {}): string {
   const dir = mkdtempSync(join(tmpdir(), 'kedit-e2e-bk-'));
   writeFileSync(join(dir, 'settings.json'), JSON.stringify({ lang: 'ru', recent: [], autosaveMinutes: 0.03, backupCount: 5, ...settings }));
@@ -115,7 +115,7 @@ async function closeApp(app: ElectronApplication): Promise<void> {
   await app.close().catch(() => undefined);
 }
 
-/** «Сбой»: процесс убит без закрытия окон — ни вопроса о правках, ни чистки автосохранения. */
+/** «Crash»: the process is killed without closing windows — no prompt about edits, no autosave cleanup. */
 async function crash(app: ElectronApplication): Promise<void> {
   const proc = app.process();
   const exited = new Promise<void>((r) => {
@@ -123,7 +123,7 @@ async function crash(app: ElectronApplication): Promise<void> {
       r();
     });
   });
-  // Вместе с дочерними процессами Chromium: иначе они держат каналы, и Playwright не завершает воркер.
+  // Together with the Chromium child processes: otherwise they hold the pipes and Playwright does not finish the worker.
   if (process.platform === 'win32' && proc.pid !== undefined) execFileSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' });
   else proc.kill('SIGKILL');
   await exited;
@@ -159,7 +159,7 @@ function filesIn(dir: string, ext = ''): string[] {
 
 const autosaveFiles = (userData: string): string[] => filesIn(join(userData, 'autosave'), '.mod');
 
-/** Файлы всех копий (`backups/<ключ>/*.mod`). */
+/** Files of all backups (`backups/<key>/*.mod`). */
 function backupFiles(userData: string): string[] {
   const root = join(userData, 'backups');
   return existsSync(root) ? readdirSync(root).flatMap((d) => filesIn(join(root, d), '.mod')) : [];
@@ -192,17 +192,17 @@ async function cutValue(page: Page): Promise<string> {
 }
 
 function cleanup(game: FakeGame, userData: string): void {
-  // После «сбоя» остатки убитого процесса могут ещё держать файлы: чистка best-effort.
+  // After the «crash» leftovers of the killed process may still hold files: cleanup is best-effort.
   for (const dir of [game.root, userData]) {
     try {
       rmSync(dir, { recursive: true, force: true });
     } catch {
-      // временная папка останется до очистки системой
+      // the temp folder stays until the system cleans it up
     }
   }
 }
 
-test('сбой: правка → автосохранение → аварийное закрытие → восстановление → сохранение → kedit validate', async () => {
+test('crash: edit → autosave → hard close → recovery → save → kedit validate', async () => {
   const game = makeGame();
   const userData = makeUserData();
   const original = readFileSync(game.modPath);
@@ -212,13 +212,13 @@ test('сбой: правка → автосохранение → аварийн
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
     await setCut(page, '9');
 
-    // Автосохранение: тихое сообщение в строке состояния, отдельный файл в папке данных, мод не тронут.
+    // Autosave: a quiet message in the status bar, a separate file in the data folder, the mod untouched.
     await expect(page.getByTestId('status-msg')).toContainText('Автосохранено в', { timeout: 30_000 });
     await expect.poll(() => autosaveFiles(userData).length).toBe(1);
     expect(Buffer.compare(readFileSync(game.modPath), original)).toBe(0);
     await page.screenshot({ path: join(shots, '40-autosaved.png') });
 
-    // «Сбой»: окно не закрывается по-хорошему.
+    // «Crash»: the window is not closed gracefully.
     await crash(app);
 
     ({ app, page } = await launch(game, userData));
@@ -232,10 +232,10 @@ test('сбой: правка → автосохранение → аварийн
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
     await expect(page.getByTestId('save')).toHaveClass(/primary/);
     expect(await cutValue(page)).toBe('9');
-    // Восстановление ничего не пишет в сам мод.
+    // Recovery writes nothing into the mod itself.
     expect(Buffer.compare(readFileSync(game.modPath), original)).toBe(0);
 
-    // Сохранить: файл в папке игры — с подтверждением; прежняя версия уходит в копии, автосохранение удалено.
+    // Save: a file in the game folder needs confirmation; the previous version goes to backups, autosave is deleted.
     await stubMessageBox(app, 0);
     await page.getByTestId('save').click();
     await expect(page.getByTestId('status-msg')).toContainText('Сохранено', { timeout: 30_000 });
@@ -247,7 +247,7 @@ test('сбой: правка → автосохранение → аварийн
     const report = execFileSync(process.execPath, [cli, 'validate', '--mod', game.modPath], { cwd: editorRoot, encoding: 'utf8' });
     expect(report).toContain('errors 0');
 
-    // Резервные копии: версия до сохранения (1.5) — восстановить как правку и выгрузить отдельным файлом.
+    // Backups: the version before saving (1.5) — restore as an edit and export as a separate file.
     await page.getByTestId('backups-btn').click();
     const list = page.getByTestId('backup-list');
     await expect(list).toContainText('до сохранения');
@@ -263,7 +263,7 @@ test('сбой: правка → автосохранение → аварийн
     await expect(page.getByTestId('status-msg')).toContainText('Восстановлена версия', { timeout: 60_000 });
     await expect(page.getByTestId('save')).toHaveClass(/primary/);
     expect(await cutValue(page)).toBe('1.5');
-    // Текущее состояние (9) не потеряно: точка возврата в копиях.
+    // The current state (9) is not lost: a restore point in backups.
     expect(backupFiles(userData).length).toBe(2);
   } finally {
     await closeApp(app);
@@ -271,7 +271,7 @@ test('сбой: правка → автосохранение → аварийн
   }
 });
 
-test('автосохранение 0 — выключено; настройки пишутся в settings.json', async () => {
+test('autosave 0 means off; settings are written to settings.json', async () => {
   const game = makeGame();
   const userData = makeUserData({ autosaveMinutes: 5 });
   const { app, page } = await launch(game, userData);
@@ -300,7 +300,7 @@ test('автосохранение 0 — выключено; настройки 
   }
 });
 
-test('найдена копия: «Открыть как есть» оставляет её в копиях, «Удалить копию» стирает', async () => {
+test('backup found: Open as is keeps it in backups, Delete backup erases it', async () => {
   const game = makeGame();
   const userData = makeUserData({ autosaveMinutes: 0 });
   const original = readFileSync(game.modPath);
@@ -313,7 +313,7 @@ test('найдена копия: «Открыть как есть» оставл
     await expect(page.getByTestId('recovery-modal')).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('recovery-as-is').click();
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
-    // Мод как есть: без правок, копия лежит в резервных.
+    // Mod as is: no edits, the copy stays in backups.
     await expect(page.getByTestId('save')).not.toHaveClass(/primary/);
     expect(await cutValue(page)).toBe('1.5');
     expect(autosaveFiles(userData)).toHaveLength(0);
@@ -322,14 +322,14 @@ test('найдена копия: «Открыть как есть» оставл
     await expect(page.getByTestId('backup-list')).toContainText('автосохранение');
     await page.getByTestId('backups-modal').getByText('✕').click();
 
-    // Заново — окна уже нет.
+    // Again: the window is gone now.
     await page.getByTestId('home').click();
     await openSharpKatana(page);
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
     await expect(page.getByTestId('recovery-modal')).toHaveCount(0);
     await page.getByTestId('home').click();
 
-    // Новая копия; «Удалить» — ни копии, ни окна.
+    // A new copy; «Удалить» — neither the copy nor the window remain.
     await new Promise((r) => setTimeout(r, 50));
     writeAutosave(userData, ref, modFile([katana(8)]));
     await openSharpKatana(page);

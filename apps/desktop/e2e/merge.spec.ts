@@ -1,8 +1,8 @@
 /**
- * E2E «Слияние модов»: панель «Слияние» в окне. Временная «папка игры» (см. mods.spec.ts):
- * ваниль — жёсткие ссылки на файлы настоящей игры, чужой мод — в «мастерской».
- * Сценарий: выбрать источник → принять все записи → слить → отмена → повтор → сохранить;
- * рядом с модом появляется файл-спутник, после перезагрузки слитое не предлагается снова.
+ * E2E «Mod merge»: the «Слияние» panel in the window. A temp «game folder» (see mods.spec.ts):
+ * vanilla is hard links to the real game files, a foreign mod is in the «Workshop».
+ * Scenario: pick a source → accept all records → merge → undo → redo → save;
+ * a companion file appears next to the mod, after a reload merged records are not offered again.
  */
 import { copyFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -122,7 +122,7 @@ async function openPanel(page: Page, id: string): Promise<void> {
   await page.getByTestId(`window-panel-${id}`).click();
 }
 
-test('слияние: выбрать мод → слить → отмена → повтор → сохранить; файл-спутник рядом с модом', async () => {
+test('merge: pick a mod → merge → undo → redo → save; companion file next to the mod', async () => {
   const game = makeGame();
   const target = join(game.kenshi, 'mods', 'Merge Target', 'Merge Target.mod');
   const { app, page } = await launch(game);
@@ -140,18 +140,18 @@ test('слияние: выбрать мод → слить → отмена → 
 
     const rows = page.getByTestId('merge-row');
     await expect(rows).toHaveCount(3, { timeout: 30_000 });
-    // Всё «игнор» по умолчанию; катана — изменённая, две другие — новые.
+    // Everything is «ignore» by default; the katana is changed, the two others are new.
     await expect(page.locator('[data-testid="merge-row"][data-state="ignore"]')).toHaveCount(3);
     await expect(page.locator(`[data-testid="merge-row"][data-sid="${KATANA}"]`)).toHaveAttribute('data-kind', 'changed');
     await expect(page.locator(`[data-testid="merge-row"][data-sid="${NEW_A}"]`)).toHaveAttribute('data-kind', 'new');
     await expect(page.getByTestId('merge-apply')).toBeDisabled();
 
-    // Подробности изменённой записи: было → станет по полям.
+    // Details of the changed record: was → will be per field.
     await page.locator(`[data-testid="merge-row"][data-sid="${KATANA}"]`).getByTestId('merge-expand').click();
     await expect(page.getByTestId('merge-detail')).toContainText(CUT);
     await page.screenshot({ path: join(shots, '40-merge-list.png') });
 
-    // Принять все показанные и слить.
+    // Accept all shown and merge.
     await page.getByTestId('merge-select-shown').click();
     await expect(page.locator('[data-testid="merge-row"][data-state="accept"]')).toHaveCount(3);
     await expect(page.getByTestId('merge-apply')).toBeEnabled();
@@ -161,13 +161,13 @@ test('слияние: выбрать мод → слить → отмена → 
     await expect(page.getByTestId('save')).toHaveClass(/primary/);
     await page.screenshot({ path: join(shots, '41-merge-done.png') });
 
-    // Отмена — одним шагом возвращает всё; повтор — снова слито.
+    // Undo brings everything back in one step; redo merges again.
     await page.getByTestId('undo').click();
     await expect(rows).toHaveCount(3);
     await page.getByTestId('redo').click();
     await expect(rows).toHaveCount(0);
 
-    // Сохранить: файл мода и файл-спутник рядом.
+    // Save: the mod file and the companion file next to it.
     await page.getByTestId('save').click();
     await expect(page.getByTestId('status-msg')).toContainText('Сохранено', { timeout: 30_000 });
     await expect(page.getByTestId('save')).not.toHaveClass(/primary/);
@@ -188,7 +188,7 @@ test('слияние: выбрать мод → слить → отмена → 
     await closeApp(app);
   }
 
-  // Новый запуск: мод открыт с диска — слитое повторно не предлагается.
+  // New launch: the mod is opened from disk — merged records are not offered again.
   const second = await launch(game);
   try {
     const row = second.page.getByTestId('mods-table').locator('tr', { hasText: 'Merge Target.mod' });

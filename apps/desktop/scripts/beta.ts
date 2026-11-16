@@ -1,20 +1,20 @@
 /**
- * Бета для Windows x64: папка «распаковал — запустил» и zip-архив.
+ * Beta for Windows x64: an «unpack and run» folder and a zip archive.
  *
  *   pnpm beta            (= node apps/desktop/scripts/beta.ts)
  *
- * Что внутри `out/beta/Cactus-<версия>-win-x64.zip` (одна папка Cactus):
- * - Electron из node_modules, `electron.exe` переименован в `Cactus.exe`; из языков
- *   Chromium оставлены английский и русский;
- * - `resources/app` — собранное приложение (`out/` electron-vite) и package.json с именем
- *   «Cactus» (папка данных: `%APPDATA%\Cactus`);
- * - `resources/mcp/kenshi-mcp.mjs` — MCP-сервер одним файлом (ядро, SDK и zod внутри).
- *   Запускается тем же exe с `ELECTRON_RUN_AS_NODE=1`: отдельный Node не нужен;
- * - `_ИНСТРУКЦИЯ.txt` — короткая инструкция для друзей (из `beta/README_RU.txt`; «_» — чтобы в
- *   проводнике она стояла первой среди файлов) и LICENSE.txt.
+ * What is inside `out/beta/Cactus-<version>-win-x64.zip` (a single Cactus folder):
+ * - Electron from node_modules, `electron.exe` renamed to `Cactus.exe`; of the Chromium
+ *   locales only English and Russian are kept;
+ * - `resources/app` — the built app (`out/` of electron-vite) and package.json named
+ *   «Cactus» (data folder: `%APPDATA%\Cactus`);
+ * - `resources/mcp/kenshi-mcp.mjs` — the MCP server as a single file (core, SDK and zod inside).
+ *   It runs with the same exe and `ELECTRON_RUN_AS_NODE=1`: no separate Node needed;
+ * - `_ИНСТРУКЦИЯ.txt` — a short guide for friends (from `beta/README_RU.txt`; «_» so that in
+ *   Explorer it comes first among the files) and LICENSE.txt.
  *
- * Игровых файлов, модов, кэшей и исходников в архиве нет. Перед упаковкой текстовые файлы
- * проверяются на личные пути и имя пользователя — найдено что-то — сборка останавливается.
+ * No game files, mods, caches or sources in the archive. Before packing, text files
+ * are checked for personal paths and the user name — if anything is found the build stops.
  */
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';

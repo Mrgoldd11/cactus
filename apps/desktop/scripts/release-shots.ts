@@ -1,7 +1,7 @@
 /**
- * Скриншоты для релиза (docs/release/screenshots) с собранной беты, 1920x1080, русский интерфейс.
- *   node apps/desktop/scripts/release-shots.ts [путь к Cactus.exe] [номера шотов: 01 02 ...]
- * В папку игры ничего не пишет: временная папка данных, правки только в памяти.
+ * Release screenshots (docs/release/screenshots) from the built beta, 1920x1080, Russian UI.
+ *   node apps/desktop/scripts/release-shots.ts [path to Cactus.exe] [shot numbers: 01 02 ...]
+ * Writes nothing into the game folder: a temp data folder, edits only in memory.
  */
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -35,7 +35,7 @@ async function hidePaths(page: Page): Promise<void> {
   }, GENERIC);
 }
 
-// SDK лежит только в packages/mcp — подключаем по абсолютному пути.
+// The SDK lives only in packages/mcp — load it by absolute path.
 const sdk = createRequire(join(root, 'packages/mcp/package.json'));
 const { Client } = await import(pathToFileURL(sdk.resolve('@modelcontextprotocol/sdk/client/index.js')).href);
 const { StdioClientTransport } = await import(pathToFileURL(sdk.resolve('@modelcontextprotocol/sdk/client/stdio.js')).href);
@@ -68,7 +68,7 @@ try {
     w.setContentSize(1920, 1080);
     w.center();
   });
-  // Окно упирается в высоту экрана — задаём ровно 1920x1080 через эмуляцию размера страницы.
+  // The window is capped by the screen height — set exactly 1920x1080 via page size emulation.
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
   await page.getByTestId('open-vanilla').waitFor({ timeout: 60_000 });
@@ -80,7 +80,7 @@ try {
   await page.waitForTimeout(500);
   log(`viewport ${JSON.stringify(await page.evaluate(() => [innerWidth, innerHeight]))}`);
 
-  // Новый временный мод: правки остаются в памяти, не сохраняются.
+  // A new temp mod: edits stay in memory, not saved.
   await page.getByTestId('new-mod-name').fill('Katana Demo');
   await page.getByTestId('create-mod').click();
   await page.getByTestId('editor').waitFor({ timeout: 120_000 });

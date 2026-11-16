@@ -1,11 +1,11 @@
 /**
- * Скриншоты для инструкции беты (`apps/desktop/beta/screenshots/`) — снимаются с собранной
- * беты, с пустыми настройками:
+ * Screenshots for the beta guide (`apps/desktop/beta/screenshots/`), taken from the built
+ * beta with empty settings:
  *
- *   pnpm beta && node apps/desktop/scripts/beta-shots.ts [путь к Cactus.exe]
+ *   pnpm beta && node apps/desktop/scripts/beta-shots.ts [path to Cactus.exe]
  *
- * Личного на снимках нет: путь к игре заменяется на обычный путь Steam, список установленных
- * модов не попадает в кадр.
+ * Nothing personal in the shots: the game path is replaced with the usual Steam path, the list of installed
+ * mods stays out of the frame.
  */
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -25,7 +25,7 @@ env['KEDIT_LIVE_FILE'] = join(userData, 'live.json');
 
 const GENERIC_GAME_DIR = 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Kenshi';
 
-/** Заменить на странице путь к игре на обычный путь Steam. */
+/** Replace the game path on the page with the usual Steam path. */
 async function hideGamePath(page: Page): Promise<void> {
   await page.evaluate((generic) => {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -45,13 +45,13 @@ try {
   await page.getByTestId('mods-table').waitFor();
   await page.waitForTimeout(300);
 
-  // 1. Стартовый экран: папка игры и кнопки, без списка модов.
+  // 1. Start screen: game folder and buttons, without the mod list.
   await hideGamePath(page);
   const mods = await page.getByText('Установленные моды').boundingBox();
   const width = await page.evaluate(() => window.innerWidth);
   await page.screenshot({ path: join(shots, '1-start.png'), clip: { x: 0, y: 0, width, height: Math.round((mods?.y ?? 260) - 18) } });
 
-  // 2. Ваниль, «Катана», вкладка «Где в игре».
+  // 2. Vanilla, «Катана», the «Где в игре» tab.
   await page.getByTestId('open-vanilla').click();
   await page.getByTestId('editor').waitFor({ timeout: 120_000 });
   await page.getByTestId('search').fill('катана');
@@ -61,7 +61,7 @@ try {
   await page.waitForTimeout(300);
   await page.screenshot({ path: join(shots, '2-katana-where.png') });
 
-  // 3. Раскладка «Диалоги»: Бип в проигрывателе, его диалог в графе, меню правой кнопки.
+  // 3. «Диалоги» layout: Beep in the player, his dialogue in the graph, the right-click menu.
   await page.getByTestId('window-menu').click();
   await page.getByTestId('window-preset-dialogue').click();
   await page.getByTestId('search').fill('Бип');

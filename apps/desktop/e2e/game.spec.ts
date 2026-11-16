@@ -1,7 +1,7 @@
 /**
- * E2E: связь с игрой на поддельном плагине Kenshi Bridge (TCP на свободном порту,
- * `KENSHI_BRIDGE_PORT`). Значок в строке состояния, «Показать в игре» в «Где в игре»,
- * панель «Игра» и «Как было в игре» в проигрывателе разговора.
+ * E2E: game link on a fake Kenshi Bridge plugin (TCP on a free port,
+ * `KENSHI_BRIDGE_PORT`). Status bar icon, «Показать в игре» in «Где в игре»,
+ * the «Игра» panel and «Как было в игре» in the conversation player.
  */
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
@@ -46,7 +46,7 @@ function fakeGame(): Promise<Fake> {
         return { on: traceOn, all: false };
       case 'trace_get':
         return {
-          // Как у плагина: номер последней записи (до включения записей нет).
+          // Like the plugin: number of the last entry (no entries before it is turned on).
           next: traceOn ? 1 : 0,
           items:
             traceOn && Number(args['since']) < 1
@@ -93,7 +93,7 @@ function fakeGame(): Promise<Fake> {
   });
 }
 
-test('связь с игрой: значок, «Показать в игре», панель «Игра», «Как было в игре»', async () => {
+test('game link: icon, Show in game, Game panel, How it was in game', async () => {
   const fake = await fakeGame();
   const userData = mkdtempSync(join(tmpdir(), 'kedit-e2e-'));
   const env: Record<string, string> = {};
@@ -109,13 +109,13 @@ test('связь с игрой: значок, «Показать в игре», 
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
     await expect(page.getByTestId('game-link')).toHaveAttribute('data-state', 'game', { timeout: 10_000 });
 
-    // «Где в игре»: камера игры — в точку торговца.
+    // «Где в игре»: the game camera goes to the trader point.
     await page.getByTestId('search').fill('katana');
     await page.getByTestId('record-list').locator('[data-sid="476-gamedata.base"]').click();
     await page.getByTestId('tab-where').click();
     const place = page.locator('[data-testid="where-place"][data-place="1078-gamedata.base"]').first();
     await expect(place).toBeAttached({ timeout: 60_000 });
-    // Список точек свёрнут, если их много.
+    // The point list is collapsed if there are many.
     await place.evaluate((tr) => {
       const d = tr.closest('details');
       if (d) d.open = true;
@@ -127,7 +127,7 @@ test('связь с игрой: значок, «Показать в игре», 
     expect(Array.isArray(cam?.args['pos'])).toBe(true);
     expect(fake.seen.some((s) => s.cmd === 'teleport')).toBe(false);
 
-    // Панель «Игра»: выбранный персонаж, его шаблон — ссылка, трассировка.
+    // «Игра» panel: the selected character, its template as a link, the trace.
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-panel-game').click();
     const panel = page.getByTestId('game-panel');
@@ -138,7 +138,7 @@ test('связь с игрой: значок, «Показать в игре», 
     await expect(panel.getByTestId('game-trace-record')).toBeVisible();
     await page.screenshot({ path: join(shots, '40-game-panel.png') });
 
-    // Проигрыватель: «как было в игре» рядом с расчётом редактора.
+    // Player: «как было в игре» next to the editor calculation.
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-dialogue').click();
     await page.getByTestId('search').fill(BARMAN);
@@ -148,7 +148,7 @@ test('связь с игрой: значок, «Показать в игре», 
     const asIn = player.getByTestId('as-in-game');
     await expect(asIn.locator('[data-cand="48721-Dialogue.mod"]')).toHaveAttribute('data-status', 'chosen');
     await expect(asIn.locator('[data-cand="14394-Dialogue (4).mod"]')).toHaveAttribute('data-status', 'fail');
-    // По умолчанию редактор считает условия выполненными и выбирает бандита — расхождение видно.
+    // By default the editor treats conditions as met and picks the bandit — the mismatch is visible.
     await expect(asIn.getByTestId('as-in-game-verdict')).toContainText('другой диалог');
     await player.getByTestId('pl-mode').selectOption('none');
     await expect(asIn.getByTestId('as-in-game-verdict')).toContainText('совпадает');

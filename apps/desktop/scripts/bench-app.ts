@@ -1,7 +1,7 @@
 /**
- * Замер запуска собранного приложения (out/): окно, стартовый экран, «Ваниль» первый
- * и второй раз (через «⌂» на стартовый экран). Запуск: node scripts/bench-app.ts [раз=3]
- * Нужна сборка: pnpm --filter @kenshi-editor/desktop build.
+ * Startup benchmark of the built app (out/): window, start screen, «Ваниль» the first
+ * and second time (via «⌂» back to the start screen). Run: node scripts/bench-app.ts [runs=3]
+ * Needs a build: pnpm --filter @kenshi-editor/desktop build.
  */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -42,7 +42,7 @@ for (let i = 0; i < runs; i++) {
     for (const w of BrowserWindow.getAllWindows()) w.destroy();
   });
   await app.close();
-  // Второй запуск с тем же userData — как у пользователя (кэш, настройки).
+  // Second launch with the same userData, as for the user (cache, settings).
   const t1 = performance.now();
   const app2 = await electron.launch({ args: ['.'], cwd: appDir, env });
   const page2 = await app2.firstWindow();

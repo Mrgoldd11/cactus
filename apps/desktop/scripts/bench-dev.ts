@@ -1,6 +1,6 @@
 /**
- * Замер запуска так, как работал ярлык до ускорения: `pnpm desktop` (режим разработки,
- * dev-сервер Vite). Окно подключается по CDP. Запуск: node scripts/bench-dev.ts [команда]
+ * Startup benchmark the way the shortcut worked before the speed-up: `pnpm desktop` (dev mode,
+ * Vite dev server). The window is attached via CDP. Run: node scripts/bench-dev.ts [command]
  */
 import { spawn, execSync } from 'node:child_process';
 import { resolve } from 'node:path';
@@ -18,7 +18,7 @@ for (;;) {
     page = browser.contexts().flatMap((c) => c.pages())[0];
     if (page) break;
   } catch {
-    // ещё не поднялся
+    // not up yet
   }
   await new Promise((r) => setTimeout(r, 100));
   if (performance.now() - t0 > 120_000) throw new Error('окно не появилось');
@@ -38,20 +38,20 @@ const tVan2 = performance.now() - t;
 console.log(`от команды до кнопки «Ваниль»  ${tStart.toFixed(0)} мс`);
 console.log(`«Ваниль» 1-й раз               ${tVan.toFixed(0)} мс`);
 console.log(`«Ваниль» 2-й раз               ${tVan2.toFixed(0)} мс`);
-// Закрыть запущенное: и дерево команды, и окно, которое могло отделиться (ярлык запускает
-// Electron отдельно) — его находим по порту отладки.
+// Close what was started: both the command tree and the window that may have detached (the shortcut starts
+// Electron separately) — it is found by the debug port.
 const pids = new Set([String(child.pid)]);
 try {
   const m = execSync('netstat -ano', { encoding: 'utf8' }).match(new RegExp(String.raw`127\.0\.0\.1:${port}\s+\S+\s+LISTENING\s+(\d+)`));
   if (m) pids.add(m[1]!);
 } catch {
-  // нет netstat
+  // no netstat
 }
 for (const pid of pids) {
   try {
     execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'ignore' });
   } catch {
-    // уже закрыт
+    // already closed
   }
 }
 process.exit(0);

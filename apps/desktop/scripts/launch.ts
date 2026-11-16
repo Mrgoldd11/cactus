@@ -1,8 +1,8 @@
 /**
- * Запуск собранного редактора (для ярлыка «Запустить редактор.cmd»): без dev-сервера Vite.
- * Собирает приложение заново, только если исходники новее сборки в `out/`, затем запускает
- * Electron отдельно от консоли. Лишние аргументы передаются Electron
- * (например `--remote-debugging-port=9333`).
+ * Launch the built editor (for the «Запустить редактор.cmd» shortcut) without the Vite dev server.
+ * Rebuilds the app only if the sources are newer than the build in `out/`, then starts
+ * Electron detached from the console. Extra arguments are passed to Electron
+ * (for example `--remote-debugging-port=9333`).
  *
  *   node apps/desktop/scripts/launch.ts
  */
@@ -14,7 +14,7 @@ import { join, resolve } from 'node:path';
 const app = resolve(import.meta.dirname, '..');
 const root = resolve(app, '../..');
 
-/** Самое позднее время изменения среди файлов (папки — рекурсивно). */
+/** The latest modification time among the files (folders recursively). */
 function newest(paths: readonly string[]): number {
   let max = 0;
   const walk = (p: string): void => {

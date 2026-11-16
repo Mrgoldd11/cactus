@@ -2,9 +2,9 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
-# отчёты, которые генерируются из файлов игры
+# reports generated from the game files
 reports/
-# локальный конфиг с путями к игре
+# local config with paths to the game
 kenshi-paths.json
 out/
 test-results/

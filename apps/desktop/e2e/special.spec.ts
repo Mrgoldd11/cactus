@@ -1,7 +1,7 @@
 /**
- * E2E специальных редакторов (этап 5) на ванили настоящей игры (только чтение): правка →
- * отмена → повтор → сохранение во временную папку → `kedit validate` без ошибок.
- * Скриншоты — в `editor/out/screenshots/` (33 и дальше).
+ * E2E of the special editors (stage 5) on the real game vanilla (read-only): edit →
+ * undo → redo → save to a temp folder → `kedit validate` without errors.
+ * Screenshots go to `editor/out/screenshots/` (33 and up).
  */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -54,7 +54,7 @@ async function openPanel(page: Page, id: string): Promise<void> {
   await page.getByTestId(`window-panel-${id}`).click();
 }
 
-/** Сохранить мод в `dir/<file>`, проверить `kedit validate`, вернуть записи. */
+/** Save the mod to `dir/<file>`, check `kedit validate`, return the records. */
 async function saveAndValidate(app: ElectronApplication, page: Page, out: string): Promise<GameRecord[]> {
   await stubSaveDialog(app, out);
   await page.getByTestId('save').click();
@@ -65,12 +65,12 @@ async function saveAndValidate(app: ElectronApplication, page: Page, out: string
   return readDataFile(readFileSync(out)).records;
 }
 
-test('матрица отношений фракций: правка в обе стороны, отмена, сохранение', async () => {
+test('faction relations matrix: edit both ways, undo, save', async () => {
   const { app, page } = await launch();
   const dir = mkdtempSync(join(tmpdir(), 'kedit-special-'));
   try {
     await newMod(page, 'KeditE2E Factions');
-    // Шапка списка записей не съезжает: заголовок «id» над id первой строки (полоса прокрутки учтена).
+    // The record list header does not shift: the «id» header is above the first row id (scrollbar accounted for).
     const headId = await page.locator('.list-header span').nth(2).boundingBox();
     const rowId = await page.locator('.list-row .sid').first().boundingBox();
     expect(Math.abs(headId!.x - rowId!.x)).toBeLessThanOrEqual(1);
@@ -81,7 +81,7 @@ test('матрица отношений фракций: правка в обе �
     await expect(cell(HOLY_NATION, UNITED_CITIES)).toHaveAttribute('data-value', '-100');
     const back = await cell(UNITED_CITIES, HOLY_NATION).getAttribute('data-value');
 
-    // Фильтр по имени (и по-русски).
+    // Filter by name (Russian too).
     await page.getByTestId('fac-search').fill('нация');
     await expect(cell(HOLY_NATION, HOLY_NATION)).toBeVisible();
     await expect(cell(UNITED_CITIES, UNITED_CITIES)).toHaveCount(0);
@@ -97,14 +97,14 @@ test('матрица отношений фракций: правка в обе �
     await expect(page.getByTestId('save')).toHaveClass(/primary/);
     await page.screenshot({ path: join(shots, '33-factions.png') });
 
-    // Одна отмена — обе стороны назад.
+    // One undo reverts both sides.
     await page.getByTestId('undo').click();
     await expect(cell(HOLY_NATION, UNITED_CITIES)).toHaveAttribute('data-value', '-100');
     await expect(cell(UNITED_CITIES, HOLY_NATION)).toHaveAttribute('data-value', back!);
     await page.getByTestId('redo').click();
     await expect(cell(UNITED_CITIES, HOLY_NATION)).toHaveAttribute('data-value', '20');
 
-    // Пара — вводом названий (рус.) с быстрым списком, без клика по таблице.
+    // A pair by typing names (Russian) with a quick list, without clicking the table.
     await page.getByTestId('fac-value').press('Escape');
     await expect(page.getByTestId('fac-set')).toBeDisabled();
     await page.getByTestId('fac-from').fill('святая');
@@ -116,7 +116,7 @@ test('матрица отношений фракций: правка в обе �
     await expect(page.getByTestId('fac-value')).toHaveValue('20');
     await expect(cell(HOLY_NATION, UNITED_CITIES)).toHaveClass(/fac-sel/);
 
-    // Справка «?»: при наведении — таблица «значение → что значит».
+    // «?» help: on hover, a «value → what it means» table.
     await expect(panel.locator('.fac-help-pop')).toBeHidden();
     await page.getByTestId('fac-help').getByRole('button').hover();
     await expect(panel.locator('.fac-help-pop')).toBeVisible();
@@ -134,7 +134,7 @@ test('матрица отношений фракций: правка в обе �
   }
 });
 
-test('сравнение предметов: сортировка, столбцы, правка в ячейке, отмена, сохранение', async () => {
+test('item comparison: sort, columns, edit in a cell, undo, save', async () => {
   const { app, page } = await launch();
   const dir = mkdtempSync(join(tmpdir(), 'kedit-special-'));
   const KATANA = '476-gamedata.base';
@@ -147,17 +147,17 @@ test('сравнение предметов: сортировка, столбц�
     const cell = (sid: string, key: string) => panel.locator(`[data-testid="cmp-cell"][data-sid="${sid}"][data-field="${key}"]`);
     const original = (await cell(KATANA, CUT).getAttribute('data-value'))!;
 
-    // Сортировка по убыванию: первая строка — наибольшее значение (▲).
+    // Descending sort: the first row is the largest value (▲).
     await panel.locator(`[data-testid="cmp-head"][data-field="${CUT}"]`).click();
     await panel.locator(`[data-testid="cmp-head"][data-field="${CUT}"]`).click();
     await expect(panel.locator('tbody tr').first().locator(`[data-field="${CUT}"]`)).toHaveClass(/cmp-max/);
 
-    // Выбор столбцов.
+    // Column choice.
     await page.getByTestId('cmp-columns').click();
     await page.getByTestId('cmp-col-weight mult').check();
     await expect(panel.locator('[data-testid="cmp-head"][data-field="weight mult"]')).toBeVisible();
 
-    // Фильтр по полю и правка в ячейке.
+    // Filter by field and edit in a cell.
     await page.getByTestId('cmp-filter').fill(`${CUT}>0`);
     await page.getByTestId('cmp-search').fill('katana');
     await cell(KATANA, CUT).click();
@@ -182,7 +182,7 @@ test('сравнение предметов: сортировка, столбц�
   }
 });
 
-test('массовые правки: предпросмотр, применение одной отменой, замена имени, сохранение', async () => {
+test('bulk edits: preview, apply with one undo, name replace, save', async () => {
   const { app, page } = await launch();
   const dir = mkdtempSync(join(tmpdir(), 'kedit-special-'));
   const KATANA = '476-gamedata.base';
@@ -194,20 +194,20 @@ test('массовые правки: предпросмотр, применен�
     await page.getByTestId('bulk-filter').fill('value>=300');
     await page.getByTestId('bulk-op').selectOption('mul');
     await page.getByTestId('bulk-field').selectOption('value');
-    // Пока значение не введено — объяснение, чего не хватает, и сколько записей подходит.
+    // Until a value is entered: an explanation of what is missing and how many records match.
     await expect(page.getByTestId('bulk-need-what')).toContainText('Заполните «Значение»');
     await expect(page.getByTestId('bulk-need')).toContainText('подходит записей');
     await expect(page.getByTestId('bulk-help')).toBeVisible();
-    // Поиск по русскому имени работает, и подходящие записи видны ещё до ввода значения.
+    // Search by Russian name works, and matching records are visible even before a value is entered.
     await page.getByTestId('bulk-search').fill('катана');
     await expect(page.getByTestId('bulk-sample')).toBeVisible();
     await page.getByTestId('bulk-search').fill('');
-    // Пример одним кликом заполняет форму: катаны × 2 по cut damage multiplier.
+    // An example fills the form in one click: katanas × 2 by cut damage multiplier.
     await page.getByTestId('bulk-examples').getByRole('button').first().click();
     await expect(page.getByTestId('bulk-filter')).toHaveValue('skill category=0');
     await expect(page.getByTestId('bulk-row').first()).toBeVisible();
     await page.screenshot({ path: join(shots, '35c-bulk-example.png') });
-    // Конструктор условия: поле из списка → сравнение → значение из списка → в фильтр.
+    // Condition builder: field from a list → comparison → value from a list → into the filter.
     await page.getByTestId('bulk-filter').fill('');
     await page.getByTestId('bulk-cond-field').selectOption('skill category');
     await page.getByTestId('bulk-cond-value').selectOption('0');
@@ -231,22 +231,22 @@ test('массовые правки: предпросмотр, применен�
     const rows = await panel.getByTestId('bulk-row').count();
     expect(rows).toBeGreaterThan(5);
     await expect(page.getByTestId('bulk-summary')).toContainText(`изменится ${rows}`);
-    // Предпросмотр ничего не меняет.
+    // Preview changes nothing.
     await expect(page.getByTestId('save')).not.toHaveClass(/primary/);
     await page.screenshot({ path: join(shots, '35-bulk.png') });
 
     await page.getByTestId('bulk-apply').click();
     await expect(page.getByTestId('save')).toHaveClass(/primary/);
-    // После применения при тех же условиях — 1000 → 2000 (данные уже новые).
+    // After applying, with the same conditions: 1000 → 2000 (the data is already new).
     await expect(katana).toHaveAttribute('data-before', '1000');
 
-    // Одна отмена — вся пачка назад.
+    // One undo reverts the whole batch.
     await page.getByTestId('undo').click();
     await expect(katana).toHaveAttribute('data-before', '500');
     await page.getByTestId('redo').click();
     await expect(katana).toHaveAttribute('data-before', '1000');
 
-    // Неверный regex — понятная ошибка, кнопка выключена.
+    // Bad regex: a clear error, the button is disabled.
     await page.getByTestId('bulk-op').selectOption('replace');
     await page.getByTestId('bulk-field').selectOption('name');
     await page.getByTestId('bulk-regex').check();
@@ -264,7 +264,7 @@ test('массовые правки: предпросмотр, применен�
   }
 });
 
-test('массовые правки: галочки строк, сортировка, ссылки в списках, новые операторы', async () => {
+test('bulk edits: row checkboxes, sort, references in lists, new operators', async () => {
   const { app, page } = await launch();
   const dir = mkdtempSync(join(tmpdir(), 'kedit-special-'));
   const KATANA = '476-gamedata.base';
@@ -275,7 +275,7 @@ test('массовые правки: галочки строк, сортиров
     await page.getByTestId('bulk-type').selectOption('WEAPON');
     await page.getByTestId('bulk-filter').fill('value>=300');
     await page.getByTestId('bulk-field').selectOption('value');
-    // До ввода значения таблица подходящих записей уже с колонкой цены и сортировкой по клику.
+    // Before a value is entered the table of matching records already has a price column and sorts on click.
     await expect(page.getByTestId('bulk-sample')).toBeVisible();
     await page.getByTestId('bulk-sort-value').click();
     const first = panel.getByTestId('bulk-sample-row').first();
@@ -286,7 +286,7 @@ test('массовые правки: галочки строк, сортиров
     expect(await num(first)).toBeGreaterThanOrEqual(await num(last));
     await page.screenshot({ path: join(shots, '35e-bulk-sample-columns.png') });
 
-    // Галочки: снимаем катану — она не попадёт в применение.
+    // Checkboxes: untick the katana — it will not be included when applying.
     await page.getByTestId('bulk-op').selectOption('mul');
     await page.getByTestId('bulk-value').fill('2');
     const rows = await panel.getByTestId('bulk-row').count();
@@ -297,12 +297,12 @@ test('массовые правки: галочки строк, сортиров
     await expect(page.getByTestId('bulk-chosen')).toContainText(`${rows - 1} из ${rows}`);
     await expect(page.getByTestId('bulk-apply')).toContainText(String(rows - 1));
     await page.screenshot({ path: join(shots, '35f-bulk-unticked.png') });
-    // Сортировка по «станет»: первая строка не больше последней.
+    // Sort by «станет»: the first row is not greater than the last.
     await page.getByTestId('bulk-sort-after').click();
     const a1 = Number(await panel.getByTestId('bulk-row').first().getAttribute('data-after'));
     const a2 = Number(await panel.getByTestId('bulk-row').last().getAttribute('data-after'));
     expect(a1).toBeLessThanOrEqual(a2);
-    // Выбрать все / снять все.
+    // Select all / clear all.
     await page.getByTestId('bulk-pick-all').click();
     await expect(page.getByTestId('bulk-chosen')).toContainText(`0 из ${rows}`);
     await expect(page.getByTestId('bulk-apply')).toBeDisabled();
@@ -312,7 +312,7 @@ test('массовые правки: галочки строк, сортиров
     await page.getByTestId('bulk-apply').click();
     await expect(page.getByTestId('save')).toHaveClass(/primary/);
 
-    // Ссылки: «продавать катану в каждом магазине».
+    // References: «sell the katana in every shop».
     await page.getByTestId('bulk-type').selectOption('VENDOR_LIST');
     await page.getByTestId('bulk-filter').fill('');
     await page.getByTestId('bulk-op').selectOption('refAdd');
@@ -324,9 +324,9 @@ test('массовые правки: галочки строк, сортиров
     expect(shops).toBeGreaterThan(5);
     await page.screenshot({ path: join(shots, '35g-bulk-refs.png') });
     await page.getByTestId('bulk-apply').click();
-    // Повторно ничего не добавится: ссылка уже есть.
+    // Nothing is added a second time: the reference already exists.
     await expect(page.getByTestId('bulk-row')).toHaveCount(0);
-    // Убрать ссылку тем же способом: те же магазины.
+    // Remove the reference the same way: the same shops.
     await page.getByTestId('bulk-op').selectOption('refRemove');
     await page.getByTestId('bulk-field').selectOption('weapons');
     await expect(panel.getByTestId('bulk-row').first()).toBeVisible();
@@ -334,7 +334,7 @@ test('массовые правки: галочки строк, сортиров
     await page.getByTestId('bulk-op').selectOption('refAdd');
     await page.getByTestId('bulk-field').selectOption('weapons');
 
-    // Конструктор: Ref (входящие ссылки) и новые операторы.
+    // Builder: Ref (incoming references) and new operators.
     await page.getByTestId('bulk-type').selectOption('WEAPON');
     await page.getByTestId('bulk-cond-field').selectOption('Ref');
     await page.getByTestId('bulk-cond-op').selectOption('>');
@@ -359,7 +359,7 @@ test('массовые правки: галочки строк, сортиров
   }
 });
 
-test('графы: исследования, крафт, состав города; правка числа в ссылке, отмена, сохранение', async () => {
+test('graphs: research, crafting, town makeup; edit a number in a reference, undo, save', async () => {
   const { app, page } = await launch();
   const dir = mkdtempSync(join(tmpdir(), 'kedit-special-'));
   const BARK = '1076-gamedata.base';
@@ -370,7 +370,7 @@ test('графы: исследования, крафт, состав город�
     const panel = page.getByTestId('graphs-panel');
     const canvas = page.getByTestId('graph-canvas');
 
-    // Исследования: все узлы, требования — связи, поиск подсвечивает.
+    // Research: all nodes, requirements as links, search highlights.
     expect(Number(await canvas.getAttribute('data-nodes'))).toBeGreaterThan(100);
     expect(Number(await canvas.getAttribute('data-links'))).toBeGreaterThan(50);
     await page.getByTestId('graphs-search').fill('wall');
@@ -381,13 +381,13 @@ test('графы: исследования, крафт, состав город�
     expect(defence).toBeLessThan(100);
     await page.screenshot({ path: join(shots, '36-graphs.png') });
 
-    // Крафт: станок → вещи → из чего.
+    // Crafting: bench → items → made from what.
     await page.getByTestId('graphs-mode').selectOption('craft');
     await page.getByTestId('graphs-focus').selectOption('2929-gamedata.base');
     expect(Number(await canvas.getAttribute('data-nodes'))).toBeGreaterThan(50);
     await expect(panel.locator('[data-testid="graph-node"][data-kind="station"]')).toHaveCount(1);
 
-    // Состав города: Bark → отряды (свои и от фракции) → люди.
+    // Town makeup: Bark → squads (own and from the faction) → people.
     await page.getByTestId('graphs-mode').selectOption('squads');
     await page.getByTestId('graphs-kind').selectOption('TOWN');
     await page.getByTestId('graphs-search').fill(BARK);
@@ -418,7 +418,7 @@ test('графы: исследования, крафт, состав город�
   }
 });
 
-test('перепись NPC: группы с весом, фильтры, пакет диалогов выбранным, отмена, проигрыватель, сохранение', async () => {
+test('NPC census: groups with weight, filters, dialogue package for selected, undo, player, save', async () => {
   const { app, page } = await launch();
   const dir = mkdtempSync(join(tmpdir(), 'kedit-special-'));
   const PACKAGE = '5463-gamedata.base';
@@ -430,7 +430,7 @@ test('перепись NPC: группы с весом, фильтры, паке
     const all = Number(await page.getByTestId('census-summary').getAttribute('data-rows'));
     expect(all).toBeGreaterThan(300);
 
-    // Группы по фракциям отсортированы по весу; Объединённые города — среди них.
+    // Faction groups are sorted by weight; United Cities is among them.
     const weights = await panel.locator('[data-testid="census-group"][data-weight]').evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-weight'))));
     expect(weights.length).toBeGreaterThan(20);
     expect([...weights].sort((a, b) => b - a)).toEqual(weights);
@@ -439,7 +439,7 @@ test('перепись NPC: группы с весом, фильтры, паке
     expect(inFaction).toBeGreaterThan(10);
     expect(inFaction).toBeLessThan(all);
 
-    // Шаблоны без пакета диалогов.
+    // Templates without a dialogue package.
     await page.getByTestId('census-filter').selectOption('nopkg');
     const rows = panel.getByTestId('census-row');
     await expect(rows.first()).toHaveAttribute('data-packages', '0');
@@ -462,7 +462,7 @@ test('перепись NPC: группы с весом, фильтры, паке
     await page.getByTestId('redo').click();
     await expect(rows).toHaveCount(2);
 
-    // Переход в проигрыватель разговора.
+    // Jump to the conversation player.
     await rows.first().getByTestId('census-player').click();
     await expect(page.locator('[data-testid="player"]').first()).toBeVisible();
 
