@@ -1,4 +1,4 @@
-CACTUS BETA — END USER LICENSE AGREEMENT (v0.1.0 Beta)
+CACTUS BETA — END USER LICENSE AGREEMENT (v0.2.0 Beta)
 Copyright (c) 2026 Mrgoldd11. All rights reserved.
 
 1. What this is. Cactus is a free, closed-source mod editor for the game Kenshi. This is a

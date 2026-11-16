@@ -20,6 +20,16 @@ THINGS TO TRY
 - Your own mod: type a name on the start screen -> "New mod" -> edit -> Ctrl+S.
   It is saved to <game folder>\mods\<Name>\; tick it in the Kenshi launcher.
 
+NEW IN 0.2
+- Search with conditions: type "type=WEAPON; weight kg>10" in the record list search;
+  the "?" button next to it shows examples.
+- "Diagnostics" (toolbar) lists problems of your mod with fix buttons;
+  "Window" -> "Mod cleanup" removes leftovers (obsolete fields, no-op changes, dead references).
+- "Mod" menu (toolbar): mod info, dependencies, backups and "Publish..." to the Steam
+  Workshop (Steam must be running). Publishing is unofficial, like the FCS: try it first with
+  a Private test item.
+- Chinese interface; the language of game texts is set separately (Settings -> Data language).
+
 AI (any MCP client: Claude Desktop, Claude Code and others)
 1. In Cactus: "Help" -> "Connect AI (MCP)..." -> "Copy".
 2. Claude Desktop: Settings -> Developer -> Edit Config, paste into claude_desktop_config.json,

@@ -20,7 +20,7 @@ function about(lang: Lang): void {
     message: `${APP_TITLE} ${app.getVersion()}`,
     detail: [
       pick(lang, { en: 'Kenshi mod editor. Beta for testing.', ru: 'Редактор модов Kenshi. Бета-версия для проверки.', zh: 'Kenshi Mod 编辑器。测试版。' }),
-      pick(lang, { en: 'License: MIT (preliminary).', ru: 'Лицензия: MIT (предварительно).', zh: '许可证：MIT（暂定）。' }),
+      pick(lang, { en: 'Free to use, closed source: see LICENSE.txt next to Cactus.exe.', ru: 'Бесплатная программа с закрытым кодом: условия в LICENSE.txt рядом с Cactus.exe.', zh: '免费软件，闭源：条款见 Cactus.exe 旁的 LICENSE.txt。' }),
       '',
       `Electron ${v.electron}, Chromium ${v.chrome}, Node ${v.node}`,
       `${pick(lang, { en: 'Log', ru: 'Журнал', zh: '日志' })}: ${logFile() ?? '—'}`,
