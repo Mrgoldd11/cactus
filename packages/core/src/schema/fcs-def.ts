@@ -15,7 +15,7 @@
  * with a filter), `TEXTURE_DDS`/`TEXTURE_ANY` (texture file), `#RRGGBB` (color), `Enum.VALUE`,
  * `TYPE` or `TYPE (v0, v1, v2)` (reference with default values), `TYPE (x,y,z) (w,x,y,z)`
  * (instances), `null`. Modifiers: `looped` (the field repeats: text0, text1, …),
- * `multiline`, `bitset`.
+ * `multiline`, `bitset`, `SINGLE` (a reference list of at most one entry), `REQUIRED`.
  */
 
 import type { UiText } from '../ui-text.ts';
@@ -57,6 +57,13 @@ export interface FieldDef {
   looped?: boolean;
   multiline?: boolean;
   bitset?: boolean;
+  /**
+   * Reference list limit (`SINGLE` modifier = 1). FCS reports a list with more entries as an error;
+   * the vanilla fcs.def uses none, FCS Extended files may.
+   */
+  limit?: number;
+  /** `REQUIRED` modifier: FCS treats the reference as mandatory. Kept for display only. */
+  required?: boolean;
   /** The field is not described in fcs.def but inferred from data (`withInferredFields`). */
   inferred?: boolean;
   /** The field is not described in fcs.def but known from FCS (`builtin-enums.ts`). */
@@ -126,7 +133,7 @@ const FLOAT_RE = /^-?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?$/;
 const ENUM_RE = /^[A-Za-z_]\w*\.[A-Za-z_]\w*$/;
 const TYPE_RE = /^[A-Z][A-Z0-9_]*$/;
 const TEXTURE_KINDS = new Set(['TEXTURE_DDS', 'TEXTURE_ANY']);
-const MODIFIERS = new Set(['looped', 'multiline', 'bitset']);
+const MODIFIERS = new Set(['looped', 'multiline', 'bitset', 'single', 'required']);
 
 export function unescapeDescription(s: string): string {
   return s.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
@@ -171,9 +178,12 @@ function parseFieldValue(raw: string, name: string, line: number): FieldDef | Ui
 
   // 3. Modifiers before the description.
   for (;;) {
-    const m = /^\s*([a-z]+)\b/.exec(rest);
-    if (!m || !MODIFIERS.has(m[1]!)) break;
-    def[m[1] as 'looped' | 'multiline' | 'bitset'] = true;
+    // FCS compares modifiers case-insensitively (`SINGLE`, `REQUIRED` are written in capitals).
+    const m = /^\s*([A-Za-z]+)\b/.exec(rest);
+    const mod = m?.[1]?.toLowerCase();
+    if (!m || mod === undefined || !MODIFIERS.has(mod)) break;
+    if (mod === 'single') def.limit = 1;
+    else def[mod as 'looped' | 'multiline' | 'bitset' | 'required'] = true;
     rest = rest.slice(m[0].length);
   }
 

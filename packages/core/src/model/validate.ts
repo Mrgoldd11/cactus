@@ -7,9 +7,11 @@
  * to records deleted by a dependency (not vanilla) or by a mod above the layer where the reference appeared;
  * dialogues without lines; own dialogues that score no lower than vanilla ones with an effect (arrest,
  * attack, trade, recruit).
+ * As in FCS: a record whose type differs from the lower layer's; a record saved as new whose string id
+ * a lower layer already defines; a reference list longer than the schema limit (`SINGLE`).
  */
 import { itemTypeName } from '../format/item-types.ts';
-import type { GameRecord } from '../format/types.ts';
+import { FileType, type GameRecord } from '../format/types.ts';
 import { DICT_FOR_KIND, findField, type GameSchema, type TypeSchema } from '../schema/game-schema.ts';
 import { withInferredFields } from '../schema/infer.ts';
 import type { ModContext } from './context.ts';
@@ -30,7 +32,10 @@ export type IssueCode =
   | 'remove-missing'
   | 'empty-dialogue'
   | 'dangling-ref'
-  | 'overrides-action';
+  | 'overrides-action'
+  | 'type-changed'
+  | 'id-taken'
+  | 'too-many-refs';
 
 export interface ValidationIssue {
   severity: 'error' | 'warning';
@@ -39,6 +44,8 @@ export interface ValidationIssue {
   /** Field key or reference category. */
   key?: string;
   target?: string;
+  /** For scalar-field issues: the dictionary the key is written to (`ints`, `floats`, …). */
+  dict?: string;
   /** English text (logs, MCP, JSON). */
   message: string;
   /** The text in every interface language. */
@@ -59,7 +66,8 @@ export interface ValidateOptions {
 
 const inferredCache = new WeakMap<ModContext, WeakMap<GameSchema, GameSchema>>();
 
-function effectiveSchema(ctx: ModContext, options: ValidateOptions): GameSchema | undefined {
+/** The schema validation uses: the context schema extended with fields found in the lower layers. */
+export function effectiveSchema(ctx: ModContext, options: ValidateOptions = {}): GameSchema | undefined {
   const schema = options.schema ?? ctx.schema;
   if (!schema || options.inferFromLayers === false) return schema;
   let byCtx = inferredCache.get(ctx);
@@ -85,6 +93,7 @@ export function validateMod(ctx: ModContext, options: ValidateOptions = {}): Val
     }
     const rec = ctx.get(sid);
     if (!rec) continue;
+    checkLayerClash(ctx, delta, issues);
     checkRefs(ctx, delta, issues);
     if (schema) checkSchema(ctx, schema, delta, rec, issues);
   }
@@ -225,6 +234,51 @@ function checkActionOverrides(ctx: ModContext, issues: ValidationIssue[]): void 
   }
 }
 
+/** The mod file marks the record as new (not as a change). Records created in the editor have no flags yet. */
+export function savedAsNew(ctx: ModContext, delta: GameRecord): boolean {
+  if (ctx.info.fileType === FileType.MergeMod) return delta.lead !== 0 && (delta.changeFlags & 15) === 0;
+  return (delta.changeFlags & 0x7fffffff) === 2;
+}
+
+/** The topmost lower layer that has the record. */
+function definingLayer(ctx: ModContext, sid: string): string | undefined {
+  for (let i = ctx.layers.length - 1; i >= 0; i--) {
+    const l = ctx.layers[i]!;
+    if (l.file.records.some((r) => r.stringId === sid && !isRemovalMarker(r))) return l.name;
+  }
+  return undefined;
+}
+
+/** Type changed between layers; string id already defined by a lower layer although the mod creates the record. */
+function checkLayerClash(ctx: ModContext, delta: GameRecord, issues: ValidationIssue[]): void {
+  const sid = delta.stringId;
+  const lower = ctx.lower(sid);
+  if (!lower) return;
+  if (savedAsNew(ctx, delta)) {
+    const by = definingLayer(ctx, sid) ?? '?';
+    issues.push({
+      severity: 'error',
+      code: 'id-taken',
+      stringId: sid,
+      ...msg({
+        en: `the mod creates this record, but ${by} already defines id ${sid} (“${decodeText(lower.name)}”): on save it becomes a change of that record`,
+        ru: `мод создаёт эту запись, но id ${sid} уже есть в ${by} («${decodeText(lower.name)}»): при сохранении она станет правкой той записи`,
+        zh: `本 Mod 创建了这条记录，但 ${by} 已定义 ID ${sid}（“${decodeText(lower.name)}”）：保存时它会变成对那条记录的修改`,
+      }),
+    });
+  }
+  if (delta.type !== lower.type) {
+    const from = ctx.typeName(lower.type);
+    const to = ctx.typeName(delta.type);
+    issues.push({
+      severity: 'error',
+      code: 'type-changed',
+      stringId: sid,
+      ...msg({ en: `record type changed: ${from} → ${to}`, ru: `тип записи изменён: ${from} → ${to}`, zh: `记录类型已更改：${from} → ${to}` }),
+    });
+  }
+}
+
 function dedupe(issues: ValidationIssue[]): ValidationIssue[] {
   const seen = new Set<string>();
   return issues.filter((i) => {
@@ -263,20 +317,20 @@ function checkSchema(ctx: ModContext, schema: GameSchema, delta: GameRecord, rec
     for (const [key, value] of scalarMap(delta, dict)) {
       const f = findField(ts, key);
       if (!f) {
-        issues.push({ severity: 'warning', code: 'unknown-field', stringId: sid, key, ...msg({ en: `type ${typeName} has no field ${key}`, ru: `поля ${key} нет у типа ${typeName}`, zh: `类型 ${typeName} 没有字段 ${key}` }) });
+        issues.push({ severity: 'warning', code: 'unknown-field', stringId: sid, key, dict, ...msg({ en: `type ${typeName} has no field ${key}`, ru: `поля ${key} нет у типа ${typeName}`, zh: `类型 ${typeName} 没有字段 ${key}` }) });
         continue;
       }
       const want = DICT_FOR_KIND[f.kind];
       // Kind is not checked for derived fields and null-kind fields (FCS draws them specially).
       if (f.inferred || want === undefined) continue;
       if (want !== dict) {
-        issues.push({ severity: 'error', code: 'wrong-kind', stringId: sid, key, ...msg({ en: `field ${key} must be ${f.kind} but is written to ${dict}`, ru: `поле ${key} должно быть ${f.kind}, а записано в ${dict}`, zh: `字段 ${key} 应为 ${f.kind}，却写入了 ${dict}` }) });
+        issues.push({ severity: 'error', code: 'wrong-kind', stringId: sid, key, dict, ...msg({ en: `field ${key} must be ${f.kind} but is written to ${dict}`, ru: `поле ${key} должно быть ${f.kind}, а записано в ${dict}`, zh: `字段 ${key} 应为 ${f.kind}，却写入了 ${dict}` }) });
         continue;
       }
       if (f.kind === 'enum' && f.enumName && !f.bitset) {
         const e = schema.enums.get(f.enumName);
         if (e && !e.values.some((v) => v.value === value)) {
-          issues.push({ severity: 'warning', code: 'enum-value', stringId: sid, key, ...msg({ en: `value ${String(value)} is not in ${f.enumName}`, ru: `значение ${String(value)} не входит в ${f.enumName}`, zh: `值 ${String(value)} 不在 ${f.enumName} 中` }) });
+          issues.push({ severity: 'warning', code: 'enum-value', stringId: sid, key, dict, ...msg({ en: `value ${String(value)} is not in ${f.enumName}`, ru: `значение ${String(value)} не входит в ${f.enumName}`, zh: `值 ${String(value)} 不在 ${f.enumName} 中` }) });
         }
       }
     }
@@ -290,6 +344,18 @@ function checkSchema(ctx: ModContext, schema: GameSchema, delta: GameRecord, rec
     if (f.kind !== 'reference') {
       if (!f.inferred) issues.push({ severity: 'error', code: 'wrong-kind', stringId: sid, key: cat, ...msg({ en: `field ${cat} is ${f.kind}, not a reference`, ru: `поле ${cat} — ${f.kind}, а не ссылка`, zh: `字段 ${cat} 是 ${f.kind}，不是引用` }) });
       continue;
+    }
+    if (f.limit !== undefined && f.limit > 0) {
+      const count = (rec.refs.get(cat) ?? []).filter((r) => !isRemovedRef(r)).length;
+      if (count > f.limit) {
+        issues.push({
+          severity: 'error',
+          code: 'too-many-refs',
+          stringId: sid,
+          key: cat,
+          ...msg({ en: `reference list ${cat} has ${count} entries, the limit is ${f.limit}`, ru: `в списке ссылок ${cat} ${count} шт., предел — ${f.limit}`, zh: `引用列表 ${cat} 有 ${count} 项，上限为 ${f.limit}` }),
+        });
+      }
     }
     if (!f.targetType || f.targetType === 'NULL_ITEM' || f.inferred) continue;
     for (const r of list) {

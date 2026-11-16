@@ -22,3 +22,5 @@ export * from './bulk.ts';
 export * from './graphs.ts';
 export * from './census.ts';
 export * from './merge.ts';
+export * from './fixes.ts';
+export * from './cleanup.ts';

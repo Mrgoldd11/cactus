@@ -793,6 +793,15 @@ export class ModContext {
     }, `${stringId}: − ${category} → ${target}`);
   }
 
+  /** Return a reference category to its lower-layer list (for a new record, or one the lower layers lack, drop it). */
+  resetReferences(stringId: string, category: string): void {
+    const lower = this.lower(stringId)?.refs.get(category);
+    this.editRecord(stringId, (d) => {
+      if (lower === undefined) d.refs.delete(category);
+      else d.refs.set(category, lower.filter((r) => !isRemovedRef(r)).map((r) => ({ ...r })));
+    }, `${stringId}: сброс ${category}`);
+  }
+
   clearReferences(stringId: string, category: string): void {
     this.setReferences(stringId, category, []);
   }

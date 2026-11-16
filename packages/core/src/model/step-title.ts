@@ -284,6 +284,10 @@ class Describer {
         zh: `关系 ${a} ${arrow} ${b}：${reset ? '默认' : v}`,
       };
     }
+    const fix = /^исправление: (\d+)$/.exec(label);
+    if (fix) return { ru: `Исправлены ошибки проверки: ${fix[1]!}`, en: `Fixed validation problems: ${fix[1]!}`, zh: `修复了检查问题：${fix[1]!}` };
+    const clean = /^очистка: (\d+)$/.exec(label);
+    if (clean) return { ru: `Очистка мода: убрано пунктов ${clean[1]!}`, en: `Mod cleanup: removed ${clean[1]!} items`, zh: `Mod 清理：移除了 ${clean[1]!} 项` };
     const bulk = /^массово: (\S+) (.*) \((\d+) записей\)$/s.exec(label);
     if (bulk) {
       const [, field, what, n] = bulk;

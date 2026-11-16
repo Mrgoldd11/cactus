@@ -26,3 +26,4 @@ export * from './game-bridge.ts';
 export * from './game-dump.ts';
 export * from './merge-store.ts';
 export * from './backup.ts';
+export * from './validation-store.ts';

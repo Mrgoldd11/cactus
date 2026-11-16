@@ -43,6 +43,10 @@ export type EditOp =
   | { op: 'addRef'; id: string; category: string; target: string; values?: number[] }
   | { op: 'removeRef'; id: string; category: string; target: string }
   | { op: 'setRefs'; id: string; category: string; refs: { target: string; values?: number[] }[] }
+  /** Return a reference category to the lower layers (for a new record, drop the category). */
+  | { op: 'resetRefs'; id: string; category: string }
+  /** Remove a placed object the mod added. */
+  | { op: 'removeInstance'; id: string; key: string }
   | ({ op: 'info' } & Partial<Omit<ModInfo, 'fileName'>>)
   // ── dialogue graph (the same core commands the editor uses) ──
   | { op: 'addLine'; parent: string; speaker?: EnumInput; text?: string; texts?: string[]; as?: string }
@@ -280,6 +284,12 @@ export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = defaul
         );
         break;
       }
+      case 'resetRefs':
+        ctx.resetReferences(id(op.id), op.category);
+        break;
+      case 'removeInstance':
+        ctx.removeInstance(id(op.id), op.key);
+        break;
       case 'info': {
         const patch: Partial<Omit<ModInfo, 'fileName'>> & { op?: string } = { ...op };
         delete patch.op;
