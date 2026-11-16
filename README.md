@@ -1,70 +1,73 @@
-# Редактор модов Kenshi
+# Cactus — mod editor for Kenshi
 
-Замена FCS (Forgotten Construction Set). Сейчас готово:
+A replacement for the FCS (Forgotten Construction Set). What is in this repository:
 
-- `packages/core` — формат `.base`/`.mod` без потерь, схема из `fcs*.def`, перевод из
-  `gamedata.po`; модель редактирования: слои ваниль → зависимости → мод, индекс ссылок,
-  команды с undo/redo, сохранение только отличий, поиск, валидация;
-- `packages/cli` — `kedit`: поиск, просмотр, проверка и сборка модов из командной строки
-  (замена `tools/kdata.py`);
-- `packages/mcp` — MCP-сервер с теми же операциями и правкой мода для ИИ-ассистентов;
-- `apps/desktop` — редактор с окном (Electron + React), см. [Редактор](#редактор-appsdesktop).
+- `packages/core` — lossless `.base`/`.mod` format, schema from `fcs*.def`, translations from
+  `gamedata.po`; editing model: layers vanilla → dependencies → mod, reference index,
+  commands with undo/redo, saving only the differences, search, validation;
+- `packages/cli` — `kedit`: search, view, check and build mods from the command line
+  (replaces the older Python tool `tools/kdata.py`);
+- `packages/mcp` — an MCP server with the same operations plus mod editing, for AI assistants;
+- `apps/desktop` — the editor window (Electron + React), see [Editor](#editor-appsdesktop).
 
-План — в [ROADMAP.md](ROADMAP.md).
+The plan is in [ROADMAP.md](ROADMAP.md) (internal notes, in Russian).
 
-## Установка
+## Installation
 
-Нужен Node.js 22.18 или новее (проверено на 24): `kedit` и MCP-сервер запускают `.ts` без
-сборки. pnpm подключается через corepack:
+You need Node.js 22.18 or newer (tested on 24): `kedit` and the MCP server run `.ts` files
+without a build step. pnpm comes through corepack:
 
 ```bash
 corepack enable pnpm
 ```
 
-Если `corepack enable` падает с EPERM (Node стоит в Program Files), поставьте pnpm в
-пользовательскую папку npm, она обычно уже есть в PATH:
+If `corepack enable` fails with EPERM (Node is installed in Program Files), install pnpm into
+the user npm folder, which is usually already on PATH:
 
 ```bash
 corepack enable pnpm --install-directory "$APPDATA/npm"
 ```
 
-Потом в папке `editor/`:
+Then, in the `editor/` folder:
 
 ```bash
 pnpm install
 ```
 
-## Путь к игре
+## Game path
 
-Тесты на реальных данных и отчёт читают файлы установленной игры (в репозиторий они не
-копируются). По умолчанию — `D:/SteamLibrary/steamapps/common/Kenshi`, мастерская —
-`<библиотека Steam>/steamapps/workshop/content/233860`. Другой путь можно задать так:
+Tests on real data and the report read the files of the installed game (they are not copied
+into the repository). The game folder is looked up in this order:
 
-- переменные окружения `KENSHI_DIR` и `KENSHI_WORKSHOP_DIR`;
-- или файл `kenshi-paths.json` в `editor/` (или в любой папке выше), он в `.gitignore`:
+- the environment variables `KENSHI_DIR` and `KENSHI_WORKSHOP_DIR`;
+- a `kenshi-paths.json` file in `editor/` (or in any folder above it); it is in `.gitignore`:
 
 ```json
 { "kenshi": "C:/Games/Kenshi", "workshop": "C:/Steam/steamapps/workshop/content/233860" }
 ```
 
-Если игра не найдена, тесты на её файлах пропускаются, остальные выполняются.
+- otherwise the Steam install is found automatically, then GOG; if nothing is found, the
+  fallback is `D:/SteamLibrary/steamapps/common/Kenshi`. The workshop folder defaults to
+  `<Steam library>/steamapps/workshop/content/233860`.
 
-## Команды
+If the game is not found, the tests on its files are skipped and the rest still run.
+
+## Commands
 
 ```bash
 pnpm test
 ```
 
-Все тесты: синтетические (формат, кодировки, парсеры) и на файлах игры — 4 ванильных файла
-и все установленные моды пишутся обратно байт в байт, схема загружается и покрывает все
-типы записей ванили.
+All tests: synthetic ones (format, encodings, parsers) and ones on the game files — the 4
+vanilla files and all installed mods are written back byte for byte, the schema loads and
+covers every record type of vanilla.
 
-Тесты на файлах игры называются `*.game.test.ts` и идут отдельным проектом vitest `game`:
-после остальных и по одному файлу за раз (`vitest.config.ts`). Каждый такой файл держит в
-памяти всю ваниль; раньше они шли параллельно с остальными, и однажды первый прогон дал
-«Test Files 9 passed (10)» без строки `failed`. Такая сводка означает, что процесс-воркер
-умер посреди файла (vitest пишет это отдельной строкой `Errors 1 error` выше сводки), а не
-что тест не прошёл: смотрите вывод целиком, а не `grep failed`.
+Tests on the game files are named `*.game.test.ts` and run as a separate vitest project `game`:
+after the others and one file at a time (`vitest.config.ts`). Each such file holds all of
+vanilla in memory; they used to run in parallel with the rest, and once the first run printed
+"Test Files 9 passed (10)" with no `failed` line. Such a summary means a worker process died
+in the middle of a file (vitest reports it on a separate `Errors 1 error` line above the
+summary), not that a test failed: read the whole output rather than `grep failed`.
 
 ```bash
 pnpm typecheck
@@ -78,94 +81,113 @@ pnpm lint
 pnpm report
 ```
 
-Отчёт о расхождениях `fcs.def` с данными: какие типы и поля есть в файлах, но не описаны
-в схеме, и наоборот. Пишется в `reports/schema-report.md` и `.json` (в `.gitignore`).
+A report on how `fcs.def` differs from the data: which types and fields exist in the files but
+are not described in the schema, and the other way round. It is written to
+`reports/schema-report.md` and `.json` (both in `.gitignore`).
 
-## Редактор (`apps/desktop`)
+## Editor (`apps/desktop`)
 
 ```bash
 pnpm desktop
 ```
 
-Запускает редактор в режиме разработки (electron-vite: окно Electron и dev-сервер на
-`127.0.0.1:5173`). Без командной строки — двойной щелчок по `Запустить редактор.cmd` в папке
-`editor/` (можно сделать на него ярлык на рабочем столе). В PowerShell, где выполнение
-сценариев отключено, `pnpm` не запускается — вызывайте `pnpm.cmd desktop`. Если окно не появляется и в выводе `Electron failed to install correctly`,
-значит pnpm не скачал сам Electron — один раз выполните в папке пакета `electron`:
+Starts the editor in development mode (electron-vite: an Electron window and a dev server on
+`127.0.0.1:5173`). Without the command line, double-click `Запустить редактор.cmd` ("start the
+editor") in the `editor/` folder (you can put a desktop shortcut to it); it runs
+`apps/desktop/scripts/launch.ts`, the same as `pnpm desktop:start`, which rebuilds first if the
+sources changed. In PowerShell with script execution disabled, `pnpm` does not start — call
+`pnpm.cmd desktop`. If no window appears and the output says `Electron failed to install
+correctly`, pnpm did not download Electron itself — run this once in the `electron` package
+folder:
 
 ```bash
 cd node_modules/.pnpm/electron@*/node_modules/electron && node install.js
 ```
 
-Что умеет:
+What it can do:
 
-- папка игры находится сама (Steam, GOG, `KENSHI_DIR`/`kenshi-paths.json`) или выбирается
-  вручную; на стартовом экране — ваниль, новый мод, открытие `.mod` и список модов из `mods/`
-  и мастерской с порядком загрузки из `data/mods.cfg`;
-- зависимости мода выбираются галочками (кнопка «Зависимости»), мод при этом перечитывается;
-- слева дерево категорий как в FCS (`fcs_layout.def`) плюс «Изменения мода», «Всё»,
-  «Прочие типы»; список записей виртуальный, поиск по англ. и рус. имени и id, фильтр статуса;
-  цвета статусов как в FCS: новая — зелёная, изменённая — жёлтая, удалённая — красная
-  зачёркнутая, `●` — изменено после сохранения;
-- поля по схеме `fcs.def`: подсказки из описаний, списки для перечислений, отметка «из данных»
-  для полей, которых нет в `fcs.def`, столбец «Ваниль» и сброс поля к нижнему слою;
-- ссылки: добавление через поиск записи нужного типа, значения v0–v2 с подписями из схемы,
-  переход к цели, вкладка «Кто ссылается», вкладка «Изменения» — отличия от ванили по полям;
-- вкладка «Где в игре»: цепочка обратных ссылок от записи до места в мире (катана ← список
-  торговца оружием ← отряд ← города Груз и Хэн) с координатами из файлов уровня и иконкой
-  предмета, если она есть; каждый шаг пути открывается щелчком;
-- вкладка «Граф» у пакетов диалогов, диалогов и реплик: реплики узлами (кто говорит, тексты
-  по-русски из перевода игры `ru_RU.translation`, условия, действия, очки и шанс), варианты
-  игрока выделены, петли меню — пунктиром; сверху — проблемы: нет записи, диалог без реплик,
-  реплика, которую игра никогда не выберет (соседняя без условий со 100% шансом и бо́льшими
-  очками); щелчок по проблеме показывает реплику на графе; колесо мыши листает граф,
-  Ctrl+колесо — масштаб;
-- вкладка «Разговор» у персонажей: какие диалоги игра рассматривает на событие (по клику —
-  «разговор», остальные — списком), откуда каждый (сам персонаж, его пакет, пакеты отряда,
-  пакет фракции), очки, условия и действия (арест, атака, торговля, найм), какой выберет игра
-  и с чего начнётся разговор — реплики по-русски с вариантами игрока. Правило выбора — точное,
-  прочитано из кода игры (Kenshi 1.0.65): очки с надбавками за условия, розыгрыш поровну между
-  лучшими, шансы в процентах; у каждого диалога — объяснение простыми словами, кнопка
-  «Как игра выбирает» открывает окошко с правилами;
-- панель «Изменения ИИ» (кнопка «ИИ»): к открытому окну подключается MCP-сервер, и правки
-  нейросети сразу появляются в редакторе набором изменений — что поменялось по полям,
-  ссылка на запись, кнопки «Принять» и «Откатить» (подробнее — в разделе MCP-сервера);
-- панель «Моды» (меню «Окно»): установленные моды из `mods/` и мастерской в порядке
-  `data/mods.cfg`, галочки — какие моды загрузить слоями под ваш мод, перетаскивание и ▲▼ —
-  порядок загрузки (запись `mods.cfg` — после подтверждения, с копией прежнего файла);
-- панель «Конфликты»: какие моды меняют одно и то же поле по-разному и чьё значение победит
-  (поздний в порядке загрузки);
-- чужой мод из мастерской открывается только для чтения; кнопка «Скопировать для правки»
-  кладёт копию в `mods/<имя>/<имя>.mod` и дальше сохраняет в копию;
-- панель «Перевод» (как режим перевода в FCS): выберите мод, который переводите, — он станет
-  зависимостью вашего мода; слева текст оригинала, справа поле перевода (Ctrl+Enter или
-  щелчок мимо — применить), фильтр «не переведено», поиск, итог «переведено N из M».
-  Ваш мод хранит только переведённые имена и тексты. Выгрузка в CSV (Excel), PO (Poedit) или
-  JSON и загрузка обратно одной отменой; строки, у которых оригинал изменился после выгрузки,
-  не применяются без отдельной кнопки. «Проверка мода-перевода» показывает тексты сверх
-  оригинала и правки, которые не тексты;
-- отмена и повтор (Ctrl+Z / Ctrl+Y), сохранение (Ctrl+S, Ctrl+Shift+S — «как»), назад и вперёд
-  по истории переходов (Alt+← / Alt+→), поиск (Ctrl+F), проверка мода, язык EN/RU.
+- the game folder is found automatically (Steam, GOG, `KENSHI_DIR`/`kenshi-paths.json`) or
+  chosen by hand; the start screen offers vanilla, a new mod, opening a `.mod` and the list of
+  mods from `mods/` and the workshop, with the load order from `data/mods.cfg`;
+- the mod's dependencies are picked with checkboxes (the **Dependencies** button); the mod is
+  reloaded when they change;
+- on the left, a category tree as in the FCS (`fcs_layout.def`) plus **Changes in this mod**,
+  **All** and **Other types**; the record list is virtual, search works by English or
+  translated name and by id, with a status filter; status colours as in the FCS: new — green,
+  changed — yellow, deleted — red and struck out, `●` — changed since the last save;
+- fields follow the `fcs.def` schema: hints from its descriptions, drop-down lists for enums,
+  an **inferred** mark for fields that `fcs.def` does not describe, a **Vanilla** column and
+  **Reset to vanilla** for a field;
+- references: add them by searching for a record of the right type, values v0–v2 labelled from
+  the schema, jump to the target, a **Referenced by** tab, and a **Changes** tab with the
+  per-field differences from vanilla;
+- the **Where in game** tab: the chain of back-references from a record to a place in the world
+  (katana ← weapon trader's list ← squad ← towns) with coordinates from the level files and the
+  item icon if there is one; every step of the chain opens with a click;
+- the **Graph** tab for dialogue packages, dialogues and lines: lines as nodes (speaker, texts —
+  in the data language, from the game's translation file such as `ru_RU.translation`,
+  conditions, actions, score and chance), player choices highlighted, menu loops dashed; on top,
+  the problems: missing record, dialogue without lines, a line the game will never pick (a
+  sibling without conditions at 100% chance and a higher score); clicking a problem shows the
+  line on the graph; the mouse wheel scrolls the graph, Ctrl+wheel zooms;
+- the **Talk** tab for characters: which dialogues the game considers for an event (player
+  click and the rest as a list), where each comes from (the character itself, its package,
+  squad packages, the faction package), score, conditions and actions (arrest, attack, trade,
+  recruit), which one the game picks and how the conversation starts — lines with the player's
+  choices. The selection rule is exact, read from the game's code (Kenshi 1.0.65): score with
+  bonuses for conditions, a fair draw among the best, chances in percent; each dialogue gets a
+  plain-words explanation, and the **How the game picks** button opens a window with the rules;
+- the **AI changes** panel: the MCP server connects to the open window, and the AI's edits show
+  up in the editor at once as a change set — what changed per field, a link to the record,
+  **Accept** and **Roll back** buttons (more in the MCP server section);
+- the **Mods** panel (**Window** menu): installed mods from `mods/` and the workshop in
+  `data/mods.cfg` order; checkboxes pick which mods are loaded as layers under your mod;
+  drag-and-drop and ▲▼ change the load order (`mods.cfg` is written only after you confirm,
+  with a copy of the previous file);
+- the **Conflicts** panel: which mods change the same field differently and whose value wins
+  (the later one in the load order);
+- someone else's workshop mod opens read-only; the **Copy for editing** button puts a copy into
+  `mods/<name>/<name>.mod`, and from then on edits are saved into the copy;
+- the **Translation** panel (like the FCS translation mode): choose the mod you are translating
+  and it becomes a dependency of your mod; original text on the left, translation field on the
+  right (Ctrl+Enter or clicking away applies it), a **Not translated** filter, search, a
+  "translated N of M" total. Your mod keeps only the translated names and texts. **Export** to
+  CSV (Excel), PO (Poedit) or JSON and **Import…** back as one undo step; lines whose original
+  changed after the export are not applied without a separate button. **Check of the
+  translation mod** shows texts beyond the original and edits that are not texts;
+- other panels from the **Window** menu: **History**, **Bulk edits**, **Merge mods**,
+  **Compare items**, **Faction relations**, **NPC census**, **Graphs**, **Dialogue graph**,
+  **Conversation player**, **Diagnostics**, the 3D **World**, **Building interior** and
+  **Model** views, and **Game** (the running game through the optional Kenshi Bridge plugin);
+  autosave and **Mod backups**;
+- undo and redo (Ctrl+Z / Ctrl+Y), save (Ctrl+S, Ctrl+Shift+S — "Save as…"), back and forward
+  through the navigation history (Alt+← / Alt+→), search (Ctrl+F), mod validation, interface
+  language English / Russian / Chinese.
 
-Запись в папку игры или мастерской — только после отдельного подтверждения; по умолчанию
-выбрана «Отмена». Настройки (язык, папка игры, недавние файлы) хранятся в
-`%APPDATA%/@kenshi-editor/desktop/settings.json`.
+Writing into the game or workshop folder happens only after a separate confirmation; **Cancel**
+is the default choice. Settings (language, game folder, recent files) are kept in
+`settings.json` in Electron's `userData` folder: `%APPDATA%/@kenshi-editor/desktop/` in
+development mode, `%APPDATA%/Cactus/` in the packaged build (`KEDIT_USER_DATA` overrides it).
 
-Устройство. Ядро (`ModContext`) работает в окне (renderer): список на 55 тыс. записей,
-поиск, отмена и подписка на изменения нужны синхронно, а через IPC каждое действие было бы
-асинхронным и с копированием данных. Файлы читает и пишет только main-процесс: renderer
-получает байты ванили, зависимостей и мода через preload (`window.kedit`) и отдаёт обратно
-байты сохранённого мода. Окно изолировано: `contextIsolation`, `sandbox`, без
-`nodeIntegration`, CSP без встроенных скриптов (кроме dev-сервера).
+How it is built. The core (`ModContext`) runs in the window (renderer): a list of 55 thousand
+records, search, undo and change subscriptions have to be synchronous, while over IPC every
+action would be asynchronous and copy data. Only the main process reads and writes files: the
+renderer receives the bytes of vanilla, dependencies and the mod through preload
+(`window.kedit`) and hands back the bytes of the saved mod. The window is isolated:
+`contextIsolation`, `sandbox`, no `nodeIntegration`, a CSP without inline scripts (except for
+the dev server).
 
 ```bash
 pnpm desktop:e2e
 ```
 
-Сборка и e2e-тесты Playwright на настоящей игре (только чтение): открыть ваниль, найти катану,
-поменять поле, отменить, сохранить во временную папку; отказ от записи в папку игры ничего не
-пишет; сценарий «копия катаны → имя и урон → в ассортимент торговца оружием → сохранение в
-`out/KeditE2E Trader Katana.mod`»; граф диалога; разговор с трактирщиком; живая связь с MCP; на временной «папке игры» — моды слоями, конфликты, порядок загрузки, копия мода из мастерской и панель «Перевод» (ввод перевода, выгрузка CSV, загрузка обратно, отмена). Скриншоты — в `out/screenshots/`.
+Build plus Playwright e2e tests on the real game (read-only): open vanilla, find the katana,
+change a field, undo, save into a temporary folder; refusing to write into the game folder
+writes nothing; the scenario "copy of the katana → name and damage → into the weapon trader's
+stock → save to `out/KeditE2E Trader Katana.mod`"; the dialogue graph; a talk with the
+barman; the live MCP link; on a temporary "game folder" — mods as layers, conflicts, load
+order, copying a workshop mod and the **Translation** panel (typing a translation, CSV export,
+import back, undo). Screenshots go to `out/screenshots/`.
 
 ## kedit (CLI)
 
@@ -174,44 +196,63 @@ node packages/cli/bin/kedit.js --help
 ```
 
 ```text
-find [текст] [ТИП]      записи по имени (англ. или рус.) или id; ТИП — имя или номер
-    --type ТИП  --field ключ=знач (~ подстрока, != < > <= >=, ключ? — поле есть)
-    --status new,changed,deleted,base  --anywhere текст  --exact  --mod-only
-show <id|имя>...        поля и ссылки (с именами целей)  --layers  --max-refs N
-tree <id|имя>           дерево диалога (dialogs/lines)  --full  --depth N  --max-nodes N
-mod <файл.mod> [текст]  записи файла мода со статусом  --brief
-refs <id|имя>           ссылки из записи и на неё  --from  --to
-where <id|имя>          где запись в игре: цепочка обратных ссылок до города и координаты
-                        из файлов уровня (ваниль и leveldata модов)  --tree  --limit N
-diff                    что мод (--mod) меняет относительно нижних слоёв; итог «новых N, изменённых M»
-    --status added,changed,removed  только записи с такими изменениями
-diff <a.mod> <b.mod>    разница двух файлов
-validate                битые ссылки, поля вне схемы, не тот вид, диалоги без реплик,
-                        висячие ссылки на записи, удалённые зависимостями, добавленный
-                        диалог, который перебивает ванильный с арестом, атакой, торговлей
-                        или наймом (очков не меньше); код 1 при ошибках
-talk <персонаж>         какой диалог выберет игра: кандидаты по источникам, очки, условия,
-                        действия, итог и начало разговора  --event N (по умолчанию 1 — клик)
-                        --mods (поверх модов игрока из data/mods.cfg)
-schema [ТИП]            типы записей / поля типа с описаниями из fcs.def  --enum ИМЯ
-build <скрипт.ts|план.json> --out <файл.mod> [--name Имя.mod] [--mod исходный] [-- аргументы]
-mods [list]             установленные моды: порядок mods.cfg, откуда (mods/мастерская)  --full  --json
-mods move <мод>         переставить в mods.cfg:  --top (раньше всех) | --bottom (побеждает) | --after X | --before X
-mods enable|disable <мод>  включить (в конец или --top/--after X…) / выключить
-    без --force только показывает, что изменится; --force — записать mods.cfg (копия рядом, игра закрыта)
-mods copy <мод|путь>    чужой мод → копия для правки в mods/<имя>/<имя>.mod (+ откуда копия)  --name Имя  --force
-    оригинал из мастерской не меняется; без --force только показывает, что будет
-touched <id|имя>        какие моды из mods.cfg меняют запись и что именно  --all  все установленные
-conflicts               моды, которые меняют одно поле по-разному, и кто победит (поздний в mods.cfg)
-    --mod <путь|имя.mod>  только конфликты этого мода;  --all  все установленные, не только mods.cfg
-strings <оригинал.mod>  тексты мода для перевода: оригинал, перевод, статус; итог «переведено N из M»
-    --mod <перевод.mod>  статусы в этом моде-переводе (+ проверка: лишние тексты, правки не текстов)
-    --todo  только непереведённое;  --out тексты.csv|.json|.po — выгрузить (PO — для Poedit)
-    --import <файл> --out <перевод.mod> [--name Имя.mod]  собрать мод-перевод из файла (CSV/JSON/PO)
+Commands:
+  find [text] [TYPE]      records by name (English or translated) or id; TYPE — name or number
+      --type TYPE  --field key=value (~ substring, != < > <= >=, key? — field is set; may repeat)
+      --status new,changed,deleted,base  --anywhere text  --exact  --mod-only
+  show <id|name>...       fields and references (with target names)  --layers  --max-refs N
+  tree <id|name>          dialogue tree (dialogs/lines)  --full  --depth N  --max-nodes N
+  mod <file.mod> [text]   records of a mod file with status; text — substring anywhere  --brief
+  refs <id|name>          references from the record and to it  --from  --to
+  where <id|name>         where the record is in the game: back-reference chain to towns/buildings with coordinates
+      --tree  the whole back-reference tree;  --limit N — facts (default 20)
+  talk <character>        which dialogues a character has for an event, from where, which one the game picks, how the talk starts
+      --event N  event (default 1 — player click);  --mods  with the player's mods from mods.cfg
+  diff                    what the mod (--mod) changes over the lower layers; total «new N, changed M»
+      --status added,changed,removed  only records with these changes
+  diff <a.mod> <b.mod>    difference of two files
+  validate                broken references, fields outside the schema, wrong kind; exit code 1 on errors
+  schema [TYPE]           record types / fields of a type with descriptions from fcs.def  --enum NAME
+      --mod M  with the schema extensions of the mod and its dependencies (FCS Extended files), marked [extension NAME]
+  bulk <TYPE> [text]      bulk edit of records of a type (text — substring of name or id), conditions --field, --mod-only
+      --set|--mul|--add FIELD=VALUE  or  --replace FIELD --find TEXT --with TEXT [--regex] [--case] (FIELD name — record name)
+      preview «was → will be» by default; --apply — write into --out or --mod (one edit)
+  merge <source>          merge: what the source mod (name or path) changes over --mod; new / changed / deleted, conflicts
+      preview by default; --apply + choice --only id,id | --type TYPE,… | --kind new,changed,deleted | --all — merge in one edit
+      --recursive  with the records they reference;  --fix-refs  also add new records the accepted ones reference
+      --conflicts source|mine  which side wins conflicts (default mine — your values);  --levels  level data (detected, not merged)
+      --reject id,id  reject and do not show again;  --unreject id,id  restore;  --show-rejected  show rejected ones
+      writes into --out or --mod, with the decisions file <mod>.kedit-merge.json next to it; never into the workshop, into the game folder with --force
+  build <script.ts|plan.json> --out <file.mod> [--name Name.mod] [--mod source] [-- arguments]
+  mods [list]             installed mods: mods.cfg order, where from (mods/workshop)  --full  --json
+  mods move <mod>         move in mods.cfg:  --top (first) | --bottom (wins) | --after X | --before X
+  mods enable|disable <mod>  enable (at the end or --top/--after X…) / disable
+      without --force only shows what changes; --force — write mods.cfg (copy next to it, game closed)
+  mods copy <mod|path>    someone else's mod → copy for editing in mods/<name>/<name>.mod (+ where the copy came from)  --name Name  --force
+      the workshop original is not changed; without --force only shows what will happen
+  touched <id|name>       which mods from mods.cfg change the record and what exactly  --all  all installed
+  conflicts               mods that change one field differently, and who wins (the later one in mods.cfg)
+      --mod <path|name.mod>  only conflicts of this mod;  --all  all installed, not only mods.cfg
+  strings <original.mod>  mod texts for translation: original, translation, status; total «translated N of M»
+      --mod <translation.mod>  statuses in this translation mod (+ check: extra texts, non-text edits)
+      --todo  untranslated only;  --out texts.csv|.json|.po — export (PO — for Poedit)
+      --import <file> --out <translation.mod> [--name Name.mod]  build a translation mod from a file (CSV/JSON/PO)
+
+Common:
+  --game <Kenshi folder>  otherwise KENSHI_DIR, kenshi-paths.json or the found Steam/GOG install
+  --data-locale <code>    language of translated names (de_DE, ru_RU…; none — no translation); otherwise KENSHI_DATA_LOCALE or the game language (settings.cfg)
+  --lang <en|ru|zh>       language of the output; otherwise KEDIT_LANG, otherwise English
+  --mod <path|name.mod>   mod over vanilla (and its dependencies)
+  --deps a.mod,b.mod      dependencies instead of those written in the mod ("" — none)
+  --json  --offset N  --limit N (default 50, 0 — all)
 ```
 
-Перевод чужого мода из командной строки: выгрузить тексты, перевести файл в Excel или Poedit,
-собрать мод-перевод (он зависит от оригинала и хранит только тексты):
+Besides what the help line says, `validate` also reports dialogues without lines, dangling
+references to records removed by dependencies, and an added dialogue that overrides a vanilla
+one with arrest, attack, trade or recruit (at an equal or higher score).
+
+Translating someone else's mod from the command line: export the texts, translate the file in
+Excel or Poedit, build the translation mod (it depends on the original and keeps only texts):
 
 ```bash
 node packages/cli/bin/kedit.js strings "GusokuArmorV1.0" --out gusoku.po
@@ -221,101 +262,118 @@ node packages/cli/bin/kedit.js strings "GusokuArmorV1.0" --out gusoku.po
 node packages/cli/bin/kedit.js strings "GusokuArmorV1.0" --import gusoku.po --out "out/Gusoku RUS.mod"
 ```
 
-Общие флаги: `--game`, `--mod <путь|имя.mod>` (мод поверх ванили и его зависимостей),
-`--deps a.mod,b.mod`, `--json`, `--offset`, `--limit`. Соответствие `tools/kdata.py`:
-`find`, `show`, `tree`, `mod` — те же команды (тип можно номером, как там), только данные
-берутся наложением слоёв, как в игре, а не слиянием файлов.
+Compared with `tools/kdata.py`: `find`, `show`, `tree`, `mod` are the same commands (the type
+can be given as a number, as there), only the data comes from layering, as in the game, rather
+than from merging files.
 
-Записи можно называть именем (англ. или рус.): если подходит несколько, команда выводит
-список с id и просит уточнить. Значения enum показываются именами (`DR_ONCE_ONLY «один раз» (5)`),
-в том числе поля `DIALOG_ACTION`, которых нет в `fcs.def` (условие, кто, сравнение, действие,
-`tag` по условию), и событие в `DIALOGUE_PACKAGE.dialogs`; в `tree` условия читаются строкой
-(`? собеседник: DC_RELATIONS < 20`). Операция `set` принимает имя значения enum вместо числа.
+Records can be named by name (English or translated): if several match, the command prints a
+list with ids and asks you to be more specific. Enum values are shown by name
+(`DR_ONCE_ONLY “once only” (5)`), including the `DIALOG_ACTION` fields that `fcs.def` lacks
+(condition, who, comparison, action, `tag` per condition) and the event in
+`DIALOGUE_PACKAGE.dialogs`; in `tree` conditions read as a line (`? me: DC_IN_COMBAT = 0`).
+The `set` operation accepts an enum value name instead of a number.
 
 ```bash
-node packages/cli/bin/kedit.js find людоед CHARACTER --mod "Skeleton Cannibal Friend"
+node packages/cli/bin/kedit.js find cannibal CHARACTER --mod "Skeleton Cannibal Friend"
 ```
 
 ```bash
 node packages/cli/bin/kedit.js show 2604-gamedata.base --layers
 ```
 
-`build` пишет только отличия от нижних слоёв и не пишет в папку игры или мастерской без
-`--force`. Скрипт экспортирует по умолчанию `(env: BuildEnv) => ModContext`; JSON-план —
-`{ mod?, name?, dependencies?, info?, ops: [...] }`, операции: `create`, `duplicate`, `delete`,
-`restore`, `revert`, `rename`, `set`, `reset`, `addRef`, `removeRef`, `setRefs`, `info`.
+`build` writes only the differences from the lower layers and does not write into the game or
+workshop folder without `--force`. A script default-exports `(env: BuildEnv) => ModContext`; a
+JSON plan is `{ mod?, name?, dependencies?, info?, ops: [...] }`, with the operations `create`,
+`duplicate`, `delete`, `restore`, `revert`, `rename`, `set`, `reset`, `addRef`, `removeRef`,
+`setRefs`, `info`.
 
-Постоянные id новых записей: `env.stableId('уникальное имя')` даёт `номер-Имя.mod`; таблица
-имя → номер — `ids.json` рядом со скриптом (`{ next, ids }`, как у Vanilla Talk). Новые имена
-дописываются после удачной сборки, номер не меняется и не переиспользуется; имена, которые
-больше не собираются, выводятся предупреждением.
+Stable ids for new records: `env.stableId('unique name')` gives `number-Name.mod`; the
+name → number table is `ids.json` next to the script (`{ next, ids }`, as in Vanilla Talk). New
+names are appended after a successful build, a number never changes and is never reused; names
+that are no longer built are reported as a warning.
 
-Диалоги в скрипте — `DialogBuilder` из ядра (обобщение сборки Vanilla Talk): реплики с
-вариантами текста, условия и действия без ручных `DIALOG_ACTION`, привязка к персонажу
-(клик) или к пакетам, которые он слушает (свой пакет → пакеты отрядов → пакет фракции):
+Dialogues in a script use `DialogBuilder` from the core (a generalisation of the Vanilla Talk
+build): lines with text variants, conditions and actions without hand-written `DIALOG_ACTION`,
+attaching to a character (click) or to the packages it listens to (its own package → squad
+packages → faction package):
 
 ```ts
 import { DialogBuilder, SPEAKER } from '@kenshi-editor/core';
 
 const b = new DialogBuilder(ctx, env.stableIds());
-const hi = b.line('Мой привет', SPEAKER.ME, ['Hello.', 'Hi there.']);
-const dlg = b.dialogue('Мой разговор', [hi], [{ cond: 7, who: 1, v: 0 }], { score: -100 });
+const hi = b.line('My greeting', SPEAKER.ME, ['Hello.', 'Hi there.']);
+const dlg = b.dialogue('My conversation', [hi], [{ cond: 7, who: 1, v: 0 }], { score: -100 });
 b.attachToCharacter('1187-gamedata.base', dlg);
 ```
 
-### Пример: Skeleton Cannibal Friend
+### Example: Skeleton Cannibal Friend
 
-`packages/cli/examples/skeleton-cannibal-friend/` — перенос `tools/build_skeleton_cannibal.py`
-на команды ядра. Сборка в `editor/out/` (в `.gitignore`):
+`packages/cli/examples/skeleton-cannibal-friend/` is a port of `tools/build_skeleton_cannibal.py`
+to core commands. It builds into `editor/out/` (in `.gitignore`):
 
 ```bash
 node packages/cli/bin/kedit.js build packages/cli/examples/skeleton-cannibal-friend/build.ts --out "out/Skeleton Cannibal Friend.mod"
 ```
 
-По умолчанию ваниль берётся так, как её видел `kdata.py` (файлы слиты в одну запись), и
-результат совпадает с установленным модом байт в байт. С `-- --layered` — настоящим
-наложением слоёв; единственное отличие разобрано в `packages/cli/test/scf.game.test.ts`. Тест
-сравнивает обе сборки с установленным модом (без игры пропускается).
+By default vanilla is taken the way `kdata.py` saw it (files merged into one record), and the
+result matches the installed mod byte for byte. With `-- --layered` it uses real layering; the
+only difference is explained in `packages/cli/test/scf.game.test.ts`. The test compares both
+builds with the installed mod (skipped without the game).
 
-## MCP-сервер
+## MCP server
 
-stdio-сервер `kenshi-mod-editor` на `@modelcontextprotocol/sdk`:
+A stdio server `kenshi-mod-editor` on `@modelcontextprotocol/sdk`. The tool names,
+descriptions and parameters are in English.
 
-- инструменты: `open_mod`, `find`, `show`, `tree`, `refs`, `where`, `talk`, `diff`, `validate`, `schema` —
-  как в CLI; `connect_editor` и `editor_changes` — живая связь с окном (ниже);
-  `edit` (пачка операций, как в JSON-плане, одним набором изменений, `$псевдонимы`
-  для новых записей; для графа диалога — `addLine`, `insertLine`, `link`, `unlink`,
-  `setText`, `duplicateLine`, `deleteLines`, `revertLine`, `addCondition`, `addEffect`,
-  `removeAction`, значения перечислений можно давать именами), `play` (разговор по шагам,
-  как проигрыватель в окне), `undo`/`redo` (с `to` — до шага #N), `history` (шаги
-  понятными словами, как в окне, с отметкой «вы здесь»), `save`;
-- ресурсы: `kenshi://schema/types`, `kenshi://schema/type/{ТИП}` (поля с описаниями из
-  `fcs.def`), `kenshi://schema/enum/{ИМЯ}`;
-- ответы короткие: ссылки с именами целей, длинные списки — страницами (`offset`, `limit`).
+- data tools: `open_mod`, `find`, `show`, `inspect`, `tree`, `refs`, `where`, `talk`, `diff`,
+  `validate`, `touched`, `conflicts`, `schema` — as in the CLI;
+- editing: `edit` (a batch of operations, as in a JSON plan, as one change set, `$aliases` for
+  new records; for the dialogue graph — `addLine`, `insertLine`, `link`, `unlink`, `setText`,
+  `duplicateLine`, `deleteLines`, `revertLine`, `addCondition`, `addEffect`, `removeAction`;
+  enum values can be given by name), `bulk` (preview "was → will be", applied only with
+  `apply: true`), `merge`, `play` (a conversation step by step, like the player in the window),
+  `undo`/`redo` (with `to` — up to step #N), `history` (steps in plain words, as in the window,
+  with a "you are here" mark), `save`;
+- live link to the window: `connect_editor` and `editor_changes` (below);
+- world: `list_in_area`, `place`, `move`, `remove`, `world_history`, `world_undo`; building
+  interiors: `interior`, `interior_place`, `interior_move`, `interior_remove`;
+- the running game through the optional [Kenshi Bridge](https://github.com/Mrgoldd11/Kenshi-Bridge)
+  plugin: `game_state`, `game_trace`, `game_towns`, `game_dump`, `game_flyover`,
+  `game_command` (the last two only with `confirm: true`);
+- resources: `kenshi://schema/types`, `kenshi://schema/type/{name}` (fields with descriptions
+  from `fcs.def`), `kenshi://schema/enum/{name}`;
+- answers are short: references with target names, long lists in pages (`offset`, `limit`).
 
-`save` без `path` пишет в файл открытого мода; в папку игры или мастерской — только с
-`force: true`.
+`save` without `path` writes into the file of the open mod; into the game or workshop folder
+only with `force: true`.
 
-### Живая связь с открытым редактором
+### Live link with the open editor
 
-Если открыт Kenshi Mod Editor, попросите ИИ вызвать `connect_editor`. Дальше MCP-сервер
-работает с модом в окне редактора, а не со своей копией:
+If Cactus is open, ask the AI to call `connect_editor`. From then on the MCP server works with
+the mod in the editor window, not with its own copy:
 
-- перед каждой командой берёт свежее состояние окна — ИИ видит и ваши ручные правки;
-- `edit` не пишет сам, а отправляет пачку правок в окно: она сразу применяется одной
-  правкой истории «ИИ: …» и ждёт решения в панели «Изменения ИИ» — «Принять» или
-  «Откатить» (откат запрещён, если ту же запись потом меняли, — с пояснением, что мешает);
-  Ctrl+Z в окне тоже отменяет набор;
-- `editor_changes` — состояние наборов: ждёт решения, принят, откачен, отменён в окне;
-- `save`, `undo`, `redo`, `open_mod` в этом режиме недоступны — это делает пользователь в окне;
-- `connect_editor` с `disconnect: true` — отключиться и работать по-прежнему.
+- before every command it takes the fresh state of the window — the AI sees your manual edits
+  too;
+- `edit` does not write by itself but sends the batch of edits to the window: it is applied at
+  once as one history step "AI: …" and waits for your decision in the **AI changes** panel —
+  **Accept** or **Roll back** (roll back is refused if the same record was changed afterwards,
+  with an explanation of what is in the way); Ctrl+Z in the window also undoes the set;
+- `editor_changes` — the state of the sets: waiting for a decision, accepted, rolled back,
+  undone in the window;
+- `save`, `undo`, `redo`, `open_mod` are not available in this mode — the user does that in the
+  window;
+- `connect_editor` with `disconnect: true` — disconnect and work as before.
 
-Устройство: окно поднимает WebSocket-сервер только на `127.0.0.1` со случайным портом и
-токеном; порт и токен — в файле обнаружения `%TEMP%/kenshi-mod-editor/live.json` (другой путь —
-`KEDIT_LIVE_FILE`, выключить связь — `KEDIT_LIVE=0`). Подключения со страниц браузера
-(с заголовком `Origin`) и без токена отклоняются. Файл удаляется при закрытии редактора.
+How it works: the window starts a WebSocket server on `127.0.0.1` only, with a random port and
+token; the port and token are in the discovery file `%TEMP%/kenshi-mod-editor/live.json`
+(another path — `KEDIT_LIVE_FILE`; turn the link off — `KEDIT_LIVE=0`). Connections from
+browser pages (with an `Origin` header) and without the token are rejected. The file is deleted
+when the editor closes.
 
-`.mcp.json` (Claude Code и другие клиенты):
+### Setup
+
+In Cactus, **Help → Connect AI (MCP)…** shows a ready snippet to copy. By hand, `.mcp.json`
+(Claude Code and other clients):
 
 ```json
 {
@@ -329,10 +387,11 @@ stdio-сервер `kenshi-mod-editor` на `@modelcontextprotocol/sdk`:
 }
 ```
 
-Флаги сервера: `--game <папка Kenshi>`, `--mod <путь|имя.mod>` (открыть сразу; иначе —
-`open_mod`), `--deps a.mod,b.mod`.
+Server flags: `--game <Kenshi folder>`, `--mod <path|name.mod>` (open it right away; otherwise
+use `open_mod`), `--deps a.mod,b.mod`. Without `--game` the server uses `KENSHI_DIR`,
+`kenshi-paths.json`, the game folder chosen in the Cactus settings, then the Steam/GOG install.
 
-## Пример: ядро в коде
+## Example: the core in code
 
 ```ts
 import { readFileSync } from 'node:fs';
@@ -341,21 +400,21 @@ import { resolveGamePaths, loadGameSchema } from '@kenshi-editor/core/node';
 
 const file = readDataFile(readFileSync('mymod.mod'));
 for (const rec of file.records) console.log(recordTypeName(rec), rec.stringId, recordName(rec));
-const bytes = writeDataFile(file); // те же байты, что были
+const bytes = writeDataFile(file); // the same bytes as before
 
 const schema = loadGameSchema(resolveGamePaths());
 console.log(schema.types.get('WEAPON')?.fields.get('blunt damage multiplier')?.description);
 ```
 
-### Ядро в своих скриптах: пакет `@kedit/core`
+### The core in your own scripts: the `@kedit/core` package
 
-Внутри рабочей области ядро — `@kenshi-editor/core` (исходники TypeScript). Для скриптов
-вне неё (свой мод в другой папке) есть пакет `@kedit/core` — тот же код, собранный в
-JavaScript с типами, без зависимостей:
+Inside the workspace the core is `@kenshi-editor/core` (TypeScript sources). For scripts
+outside it (your own mod in another folder) there is the `@kedit/core` package — the same code
+compiled to JavaScript with type declarations, with no dependencies:
 
 ```sh
-pnpm core:package                       # → out/kedit-core/  (--tgz — ещё и архив для npm)
-cd D:/мой-мод && npm install D:/Kenshiproject/editor/out/kedit-core
+pnpm core:package                       # → out/kedit-core/  (--tgz — also an archive for npm)
+cd D:/my-mod && npm install D:/Kenshiproject/editor/out/kedit-core
 ```
 
 ```ts
@@ -363,33 +422,38 @@ import { ModContext, encodeText } from '@kedit/core';
 import { loadModContext, resolveGamePaths } from '@kedit/core/node';
 ```
 
-Скрипт запускается как обычно (`node build.ts`, Node ≥ 22.18). Старый относительный импорт
-`../../editor/packages/core/src/index.ts` тоже работает. Пакет помечен `private` — в npm
-он не публикуется.
+The script runs as usual (`node build.ts`, Node ≥ 22.18). The old relative import
+`../../editor/packages/core/src/index.ts` still works. The package is marked `private` and is
+not published to npm.
 
-## Устройство `packages/core`
+## Layout of `packages/core`
 
-- `src/format/` — бинарный формат: `read.ts`, `write.ts`, модель в `types.ts`, номера типов
-  записей в `item-types.ts`. Строковые значения хранятся как исходные байты
-  (`decodeText` умеет UTF-8 и cp1251), редкие особенности файла (биты NaN, булевы не 0/1,
-  идентификаторы не в UTF-8, длина записи 0 в формате 17) запоминаются, чтобы запись
-  была байт в байт.
-- `src/schema/` — парсеры `fcs*.def`, сборка схемы (`parseGameSchema`), сверка с данными
-  (`analyzeCoverage`) и дополнение схемы полями из данных (`withInferredFields`).
-- `src/locale/po.ts` — gettext PO и индекс переводов по строковым id записей;
-  `src/locale/translation.ts` — переводы текстов реплик из `<язык>.translation` (формат `.mod`).
-- `src/model/` — редактирование без Node: `context.ts` (`ModContext`: слои, статусы,
-  индекс ссылок, команды, undo/redo, сохранение отличий), `record-ops.ts` (наложение и
-  разность записей), `ops.ts` (операции JSON для CLI/MCP), `search.ts`, `validate.ts`,
-  `diff.ts`, `present.ts`, `dialogue.ts`, `dialogue-graph.ts` (граф диалога и проверки
-  недостижимых реплик), `schema-view.ts`, `enums.ts` (имена значений enum),
-  `stable-ids.ts` (постоянные id по имени).
-- `src/dialog/` — `talk.ts` (`simulateTalk`: какие диалоги персонаж рассматривает на событие и
-  какой выберет игра; `formatTalk`), `builder.ts` (`DialogBuilder` для скриптов сборки).
-- `src/world/` — мир из файлов уровня (`.zone`, `.level`): `world.ts` (`WorldIndex`: города,
-  здания с отрядами, экземпляры записей в зонах с наложением слоёв), `where.ts`
-  (`whereInGame` — цепочка обратных ссылок до места в мире, `formatWhere`).
-- `src/live/` — живая связь окна с MCP: протокол и `LiveHost` (запросы MCP над открытым
-  модом, наборы изменений ИИ: принять, откатить).
-- `src/node/` — то, что требует Node: пути к игре, загрузка файлов, `loadModContext`,
-  `saveModContext`, `loadWorld`, `loadTranslation`, `startLiveServer` (WebSocket живой связи).
+- `src/format/` — the binary format: `read.ts`, `write.ts`, the model in `types.ts`, record type
+  numbers in `item-types.ts`. String values are kept as the original bytes (`decodeText`
+  handles UTF-8 and cp1251); rare file quirks (NaN bits, booleans other than 0/1, non-UTF-8
+  ids, record length 0 in format 17) are remembered so that writing is byte for byte.
+- `src/schema/` — parsers for `fcs*.def`, schema assembly (`parseGameSchema`), comparison with
+  the data (`analyzeCoverage`), filling the schema with fields from the data
+  (`withInferredFields`) and FCS Extended schema extensions (`extensions.ts`).
+- `src/locale/po.ts` — gettext PO and a translation index by record string id;
+  `src/locale/translation.ts` — translations of dialogue line texts from
+  `<language>.translation` (`.mod` format).
+- `src/model/` — editing without Node: `context.ts` (`ModContext`: layers, statuses, reference
+  index, commands, undo/redo, saving the differences), `record-ops.ts` (layering and
+  differences of records), `ops.ts` (JSON operations for the CLI/MCP), `search.ts`,
+  `validate.ts`, `diff.ts`, `present.ts`, `dialogue.ts`, `dialogue-graph.ts` (dialogue graph
+  and checks for unreachable lines), `schema-view.ts`, `enums.ts` (enum value names),
+  `stable-ids.ts` (stable ids by name), `bulk.ts`, `merge.ts`, `conflicts.ts`,
+  `load-order.ts`, `translate.ts`.
+- `src/dialog/` — `talk.ts` (`simulateTalk`: which dialogues a character considers for an event
+  and which one the game picks; `formatTalk`), `play.ts` (conversation player), `builder.ts`
+  (`DialogBuilder` for build scripts).
+- `src/world/` — the world from the level files (`.zone`, `.level`): `world.ts` (`WorldIndex`:
+  towns, buildings with squads, record instances in zones with layering), `where.ts`
+  (`whereInGame` — the back-reference chain to a place in the world, `formatWhere`).
+- `src/live/` — the live link between the window and MCP: the protocol and `LiveHost` (MCP
+  requests over the open mod, AI change sets: accept, roll back).
+- `src/game/bridge.ts` — the protocol of the optional Kenshi Bridge game plugin.
+- `src/node/` — what needs Node: game paths, loading files, `loadModContext`,
+  `saveModContext`, `loadWorld`, `loadTranslation`, `startLiveServer` (the live-link
+  WebSocket), backups and autosave (`backup.ts`).

@@ -1,58 +1,61 @@
-# Свои типы и поля в моде: чтобы работало и в FCS Extended, и в Cactus
+# Custom types and fields in a mod: making them work in both FCS Extended and Cactus
 
-Коротко для авторов модов. Если ваш мод добавляет игре новые типы записей или поля (обычно вместе
-с плагином RE_Kenshi), редактору нужно о них рассказать. Формат один — тот же, что у
-[FCS Extended](https://github.com/BFrizzleFoShizzle/FCS_extended). Cactus читает эти же файлы
-сам, ничего отдельного для него писать не нужно.
+A short guide for mod authors. If your mod adds new record types or fields to the game (usually
+together with an RE_Kenshi plugin), the editor has to be told about them. There is one format —
+the one used by [FCS Extended](https://github.com/BFrizzleFoShizzle/FCS_extended). Cactus reads
+the same files itself; you do not need to write anything separate for it.
 
-## Что положить в папку мода
+## What to put in the mod folder
 
-Рядом с `ВашМод.mod` (в `mods/ВашМод/` или в папке мастерской):
+Next to `YourMod.mod` (in `mods/YourMod/` or in the workshop folder):
 
-- `fcs.def` — новые типы, поля, списки значений и категории дерева; читается после файлов игры;
-- `fcs_preload.def` — то же, но читается до файлов игры (нужно редко);
-- `ИМЯ.def.patch` — замены в файлах игры `fcs.def`, `fcs_enums.def`, `fcs_layout.def`;
-- `FCS_extended.json` — список DLL-плагинов для FCS Extended (`FCS_Plugins`).
+- `fcs.def` — new types, fields, enums and tree categories; read after the game's files;
+- `fcs_preload.def` — the same, but read before the game's files (rarely needed);
+- `NAME.def.patch` — replacements in the game files `fcs.def`, `fcs_enums.def`,
+  `fcs_layout.def` (and in `fcs_preload.def`);
+- `FCS_extended.json` — the list of DLL plugins for FCS Extended (`FCS_Plugins`).
 
-Большие и маленькие буквы в именах файлов не важны (`FCS.def` тоже подойдёт).
+Letter case in file names does not matter (`FCS.def` works too).
 
-Cactus применяет расширения открытого мода и всех его зависимостей автоматически. Что именно
-применилось, видно в окне «О моде» (строка «Расширения схемы») и по пометке «расширения: N» на
-кнопке «О моде».
+Cactus applies the extensions of the open mod and of all its dependencies automatically. What
+was applied is shown in the **Mod info** window (the **Schema extensions** section) and by the
+"extensions: N" badge on the **Mod info** button.
 
-## Пример `fcs.def`
+## Example `fcs.def`
 
 ```
 // enum itemType { VARIABLE=900 }
 [VARIABLE]
-value: 0 "начальное значение переменной"
+value: 0 "initial value of the variable"
 
 [FCS_LAYOUT]
 Variables: VARIABLE
 
 [DIALOGUE,DIALOGUE_LINE]
-variable equals: VARIABLE(0) "проверяет значение переменной"
+variable equals: VARIABLE(0) "checks the value of the variable"
 ```
 
-## Три правила
+## Three rules
 
-1. **Номер нового типа записи пишите в самом `fcs.def`.** Cactus берёт его из строки
-   `enum itemType { ИМЯ=N }` или из комментария `// enum itemType { ИМЯ=N }`. FCS Extended
-   узнаёт номер из вашей DLL, а Cactus DLL не запускает, поэтому без такой строки он покажет
-   предупреждение, а записи этого типа будут называться `TYPE_<номер>`. Комментарий FCS Extended
-   не мешает, так что он подходит обоим редакторам. Номер должен совпадать с тем, что в DLL, и не
-   занимать номера типов самой игры.
-2. **Значениям списков (enum) давайте явные номера:** `enum MyState { IDLE=0, ANGRY=1 }`. Тогда
-   число в файле мода не зависит от порядка строк и от того, какие ещё расширения подключены.
-3. **DLL-плагины в Cactus не запускаются.** Всё, что плагин добавляет в интерфейс или логику FCS,
-   в Cactus не появится; типы, поля, списки и категории из `.def`-файлов — появятся. Имена DLL
-   Cactus показывает в окне «О моде» с пометкой «не запускаются в Cactus».
+1. **Write the number of a new record type in `fcs.def` itself.** Cactus takes it from an
+   `enum itemType { NAME=N }` line or from a `// enum itemType { NAME=N }` comment. FCS Extended
+   learns the number from your DLL, but Cactus does not run DLLs, so without such a line it shows
+   a warning and records of this type are named `TYPE_<number>`. FCS Extended ignores the
+   comment, so it suits both editors. The number must match the one in the DLL and must not take
+   the numbers of the game's own types.
+2. **Give enum values explicit numbers:** `enum MyState { IDLE=0, ANGRY=1 }`. Then the number in
+   the mod file does not depend on the order of lines or on which other extensions are loaded.
+3. **DLL plugins are not run in Cactus.** Whatever a plugin adds to the FCS interface or logic
+   will not appear in Cactus; types, fields, enums and categories from the `.def` files will.
+   Cactus lists the DLL names in the **Mod info** window marked "not run in Cactus".
 
-## Как проверить
+## How to check
 
-Откройте мод в Cactus: у записи нового типа должно быть имя (а не `TYPE_900`), у полей — описания
-из кавычек, новые списки ссылок — на вкладке «Ссылки». Если в окне «О моде» есть строка
-«предупреждений: N», разверните её — там файл, номер строки и что не так. Сохранение мода данные
-не меняет: поля, которых Cactus не знает, остаются в файле как были.
+Open the mod in Cactus: a record of the new type should have a name (not `TYPE_900`), its fields
+should have the descriptions from the quotes, and new reference lists should be on the
+**References** tab. If the **Mod info** window shows a "warnings: N" line, expand it — it gives
+the file, the line number and what is wrong. Saving the mod does not change the data: fields
+Cactus does not know stay in the file as they were.
 
-Подробности для разработчиков Cactus: [`fcs-extended-plan.md`](fcs-extended-plan.md).
+Details for Cactus developers: [`fcs-extended-plan.md`](fcs-extended-plan.md) (internal notes,
+in Russian).
