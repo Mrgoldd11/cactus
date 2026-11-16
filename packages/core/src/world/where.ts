@@ -389,7 +389,7 @@ export function whereInGame(ctx: ModContext, id: string, options: WhereOptions =
   const maxDepth = options.maxDepth ?? 10;
   const sampleSize = options.instanceSample ?? 5;
   const rootRec = ctx.get(id);
-  if (!rootRec) throw new UiTextError({ en: `No record «${id}»`, ru: `Нет записи «${id}»`, zh: `没有记录 «${id}»` });
+  if (!rootRec) throw new UiTextError({ en: `No record “${id}”`, ru: `Нет записи «${id}»`, zh: `没有记录 “${id}”` });
   const w = new WhereWalker(ctx, world);
 
   const decorate = (node: WhereNode, rec: GameRecord): void => {
@@ -573,8 +573,8 @@ const whereEn: WhereWords = {
   kinds: { town: 'town', building: 'building', faction: 'faction', biome: 'biome', road: 'roads', start: 'start', campaign: 'raid' },
   groups: { faction: 'factions', biome: 'biomes', road: 'roads', campaign: 'raids', start: 'game start' },
   andMore: (n) => ` and ${n} more`,
-  squadOfLeader: (s) => `squad «${s}»`,
-  ofSquad: (s) => `squad «${s}»`,
+  squadOfLeader: (s) => `squad “${s}”`,
+  ofSquad: (s) => `squad “${s}”`,
   noPlace: ' — no place in the world found',
   variantNote: ' (* — only in a town variant: destroyed, taken over…)',
   icon: 'icon',
@@ -647,8 +647,8 @@ const whereZh: WhereWords = {
   kinds: { town: '城镇', building: '建筑', faction: '派系', biome: '生物群系', road: '道路', start: '开局', campaign: '袭击' },
   groups: { faction: '派系', biome: '生物群系', road: '道路', campaign: '袭击', start: '游戏开局' },
   andMore: (n) => ` 等另外 ${n} 个`,
-  squadOfLeader: (s) => `小队 «${s}»`,
-  ofSquad: (s) => `小队 «${s}»`,
+  squadOfLeader: (s) => `小队 “${s}”`,
+  ofSquad: (s) => `小队 “${s}”`,
   noPlace: ' — 未在世界中找到位置',
   variantNote: '（* — 仅在城镇变体中：被摧毁、被占领……）',
   icon: '图标',

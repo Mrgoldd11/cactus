@@ -51,7 +51,7 @@ export function parseFieldFilter(text: string): FieldFilter {
   const exists = /^(.+)\?$/.exec(text);
   if (exists) return { key: exists[1]!.trim(), op: 'exists' };
   const m = /^(.+?)(!=|!:|!~|<=|>=|=|~|:|\?|<|>)(.*)$/.exec(text);
-  if (!m) throw new UiTextError({ en: `Cannot read condition «${text}»: use key=value, key~text, key>number or key?`, ru: `Не понял условие «${text}»: нужно ключ=значение, ключ~текст, ключ>число или ключ?`, zh: `无法理解条件 «${text}»：应为 键=值、键~文本、键>数字 或 键?` });
+  if (!m) throw new UiTextError({ en: `Cannot read condition “${text}”: use key=value, key~text, key>number or key?`, ru: `Не понял условие «${text}»: нужно ключ=значение, ключ~текст, ключ>число или ключ?`, zh: `无法理解条件 “${text}”：应为 键=值、键~文本、键>数字 或 键?` });
   const raw = m[2]!;
   const op: FilterOp = raw === ':' ? '~' : raw === '!:' ? '!~' : raw === '?' ? 'regex' : (raw as FilterOp);
   const value = m[3]!.trim();
@@ -68,7 +68,7 @@ function regexOf(pattern: string): RegExp {
     try {
       re = new RegExp(pattern, 'i');
     } catch (e) {
-      throw new UiTextError({ en: `Invalid regular expression «${pattern}»: ${(e as Error).message}`, ru: `Неверное регулярное выражение «${pattern}»: ${(e as Error).message}`, zh: `无效的正则表达式 «${pattern}»：${(e as Error).message}` }, { cause: e });
+      throw new UiTextError({ en: `Invalid regular expression “${pattern}”: ${(e as Error).message}`, ru: `Неверное регулярное выражение «${pattern}»: ${(e as Error).message}`, zh: `无效的正则表达式 “${pattern}”：${(e as Error).message}` }, { cause: e });
     }
     if (regexCache.size > 200) regexCache.clear();
     regexCache.set(pattern, re);
@@ -81,7 +81,7 @@ export function resolveTypeFilter(type: string | number, types?: ItemTypes): num
   if (typeof type === 'number') return type;
   if (/^\d+$/.test(type)) return Number(type);
   const id = itemTypeId(type.toUpperCase(), types);
-  if (id === undefined) throw new UiTextError({ en: `Unknown record type «${type}»`, ru: `Неизвестный тип записи «${type}»`, zh: `未知的记录类型 «${type}»` });
+  if (id === undefined) throw new UiTextError({ en: `Unknown record type “${type}”`, ru: `Неизвестный тип записи «${type}»`, zh: `未知的记录类型 “${type}”` });
   return id;
 }
 

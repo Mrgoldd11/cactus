@@ -30,7 +30,7 @@ export interface BulkRequest {
 /** `ПОЛЕ=ЗНАЧЕНИЕ` → [поле, значение]. */
 function fieldValue(spec: string, flag: string): [string, string] {
   const i = spec.indexOf('=');
-  if (i <= 0) throw new UsageError({ en: `--${flag}: FIELD=VALUE expected, not «${spec}»`, ru: `--${flag}: нужно ПОЛЕ=ЗНАЧЕНИЕ, а не «${spec}»` });
+  if (i <= 0) throw new UsageError({ en: `--${flag}: FIELD=VALUE expected, not “${spec}”`, ru: `--${flag}: нужно ПОЛЕ=ЗНАЧЕНИЕ, а не «${spec}»` });
   return [spec.slice(0, i).trim(), spec.slice(i + 1)];
 }
 

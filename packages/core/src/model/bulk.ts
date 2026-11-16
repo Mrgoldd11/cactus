@@ -82,7 +82,7 @@ export interface BulkPreview {
 /** Записи типа по условиям, без удалённых модом; порядок — как в слоях. */
 export function bulkSelect(ctx: ModContext, query: BulkQuery): GameRecord[] {
   const type = typeof query.type === 'number' ? query.type : /^\d+$/.test(query.type) ? Number(query.type) : ctx.typeId(query.type.toUpperCase());
-  if (type === undefined) throw new EditError({ en: `Unknown record type «${String(query.type)}»`, ru: `Неизвестный тип записи «${String(query.type)}»`, zh: `未知的记录类型 «${String(query.type)}»` });
+  if (type === undefined) throw new EditError({ en: `Unknown record type “${String(query.type)}”`, ru: `Неизвестный тип записи «${String(query.type)}»`, zh: `未知的记录类型 “${String(query.type)}”` });
   const text = query.text?.trim().toLowerCase();
   const out: GameRecord[] = [];
   for (const sid of query.ids ?? ctx.allStringIds()) {
@@ -109,13 +109,13 @@ function pattern(op: BulkOperation): RegExp {
   try {
     return new RegExp(op.regex ? find : find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
   } catch (e) {
-    throw new EditError({ en: `Invalid regular expression «${find}»: ${(e as Error).message}`, ru: `Неверное регулярное выражение «${find}»: ${(e as Error).message}`, zh: `无效的正则表达式 «${find}»：${(e as Error).message}` });
+    throw new EditError({ en: `Invalid regular expression “${find}”: ${(e as Error).message}`, ru: `Неверное регулярное выражение «${find}»: ${(e as Error).message}`, zh: `无效的正则表达式 “${find}”：${(e as Error).message}` });
   }
 }
 
 function number(text: string, what: UiText): number {
   const n = Number(text.trim().replace('−', '-').replace(',', '.'));
-  if (text.trim() === '' || !Number.isFinite(n)) throw new EditError({ en: `${what.en}: a number is needed, not «${text}»`, ru: `${what.ru ?? what.en}: нужно число, а не «${text}»`, zh: `${what.zh ?? what.en}：需要数字，而不是 «${text}»` });
+  if (text.trim() === '' || !Number.isFinite(n)) throw new EditError({ en: `${what.en}: a number is needed, not “${text}”`, ru: `${what.ru ?? what.en}: нужно число, а не «${text}»`, zh: `${what.zh ?? what.en}：需要数字，而不是 “${text}”` });
   return n;
 }
 
@@ -150,13 +150,13 @@ interface BulkWords {
 
 const BULK_WORDS: Record<string, BulkWords> = {
   en: {
-    noField: (k) => `no field «${k}»`,
-    notText: (k) => `«${k}» is not text`,
-    notNumber: (k) => `«${k}» is not a number`,
-    noValue: (k) => `«${k}» has no value`,
-    noRefList: (c) => `no reference list «${c}»`,
+    noField: (k) => `no field “${k}”`,
+    notText: (k) => `“${k}” is not text`,
+    notNumber: (k) => `“${k}” is not a number`,
+    noValue: (k) => `“${k}” has no value`,
+    noRefList: (c) => `no reference list “${c}”`,
     moreChanges: (n) => `… ${n} more changes (--limit 0 — all)`,
-    skip: (s, n, w) => `skip ${s} «${n}»: ${w}`,
+    skip: (s, n, w) => `skip ${s} “${n}”: ${w}`,
     moreSkips: (n) => `… ${n} more skipped`,
     total: (m, c, s) => `records matched ${m}, will change ${c}, skipped ${s}`,
   },
@@ -172,13 +172,13 @@ const BULK_WORDS: Record<string, BulkWords> = {
     total: (m, c, s) => `подошло записей ${m}, изменится ${c}, пропущено ${s}`,
   },
   zh: {
-    noField: (k) => `没有字段 «${k}»`,
-    notText: (k) => `«${k}» 不是文本`,
-    notNumber: (k) => `«${k}» 不是数字`,
-    noValue: (k) => `«${k}» 没有值`,
-    noRefList: (c) => `没有引用列表 «${c}»`,
+    noField: (k) => `没有字段 “${k}”`,
+    notText: (k) => `“${k}” 不是文本`,
+    notNumber: (k) => `“${k}” 不是数字`,
+    noValue: (k) => `“${k}” 没有值`,
+    noRefList: (c) => `没有引用列表 “${c}”`,
     moreChanges: (n) => `… 还有 ${n} 处更改（--limit 0 显示全部）`,
-    skip: (s, n, w) => `跳过 ${s} «${n}»：${w}`,
+    skip: (s, n, w) => `跳过 ${s} “${n}”：${w}`,
     moreSkips: (n) => `… 还有 ${n} 个跳过`,
     total: (m, c, s) => `匹配记录 ${m}，将更改 ${c}，跳过 ${s}`,
   },

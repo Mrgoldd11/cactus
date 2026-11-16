@@ -24,11 +24,23 @@ export function VirtualList<T>({ items, rowHeight, renderRow, scrollToIndex, cla
   const [height, setHeight] = useState(400);
   const gutterRef = useRef(onGutter);
   gutterRef.current = onGutter;
+  const indexRef = useRef(scrollToIndex);
+  const rowHeightRef = useRef(rowHeight);
+  rowHeightRef.current = rowHeight;
+  indexRef.current = scrollToIndex;
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const measure = (): void => {
+      // Moving the list in the DOM (dockview re-parents panels on layout changes) resets scrollTop
+      // without a scroll event; resync from the element so rows are rendered for the real position.
+      const i = indexRef.current;
+      if (el.scrollTop === 0 && i !== undefined && i >= 0 && el.clientHeight > 0) {
+        const top = i * rowHeightRef.current;
+        if (top + rowHeightRef.current > el.clientHeight) el.scrollTop = top + rowHeightRef.current - el.clientHeight;
+      }
+      setScrollTop(el.scrollTop);
       setHeight(el.clientHeight);
       gutterRef.current?.(el.offsetWidth - el.clientWidth);
     };

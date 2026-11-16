@@ -30,11 +30,13 @@ import {
   linksChanged,
   moveCopies,
   moveLine,
+  enumLabel,
   removeAction,
   removedLinks,
   revertLine,
   revertLinks,
   setLineTexts,
+  quote,
   shortEnumLabel,
   translatedText,
   unlinkLine,
@@ -42,6 +44,7 @@ import {
   updateEffect,
   type DialogEnumUsage,
   type EnumDef,
+  type EnumValue,
   type GameRecord,
   type ModContext,
   type Reference,
@@ -95,12 +98,12 @@ export function useTranslation(project: Project): TranslationIndex | undefined {
 }
 
 /** Короткая подпись реплики: текст (рус., если есть) или имя. */
-export function lineCaption(ctx: ModContext, sid: string, tr: TranslationIndex | undefined): string {
+export function lineCaption(ctx: ModContext, sid: string, tr: TranslationIndex | undefined, lang = 'en'): string {
   const r = ctx.get(sid) ?? ctx.lower(sid);
   if (!r) return sid;
   const en = r.strings.has('text0') ? decodeText(r.strings.get('text0')!) : '';
   const s = translatedText(tr, sid, 'text0', en) ?? en;
-  const text = s === '' ? decodeText(r.name) : `«${s}»`;
+  const text = s === '' ? decodeText(r.name) : quote(s, lang);
   return text.length > 70 ? `${text.slice(0, 70)}…` : text;
 }
 
@@ -121,10 +124,14 @@ export function StatusBadge({ status }: { status: string | undefined }): ReactNo
 /** Выпадающий список значений enum; `usage` — сколько раз значение есть в данных (используемые первыми). */
 function EnumSelect({ def, value, onChange, usage, testId }: { def: EnumDef; value: number; onChange: (v: number) => void; usage?: Map<number, number>; testId?: string }): ReactNode {
   const t = useT();
+  const lang = useLang();
   const values = def.values.filter((v) => !v.name.endsWith('_END') || v.value === value);
   const used = usage ? values.filter((v) => usage.has(v.value) || v.value === value) : values;
   const unused = usage ? values.filter((v) => !usage.has(v.value) && v.value !== value) : [];
-  const label = (v: { name: string; value: number; label?: string }): string => (v.label !== undefined ? `${v.name} — ${v.label}` : v.name);
+  const label = (v: EnumValue): string => {
+    const l = enumLabel(def, v, lang);
+    return l !== undefined ? `${v.name} — ${l}` : v.name;
+  };
   return (
     <select
       className="ln-select"
@@ -181,6 +188,7 @@ function NumberInput({ value, onCommit, testId, int }: { value: number; onCommit
 
 export function LineInspector({ project, sid, parent, version, onGo, onSelect, onReport }: Props): ReactNode {
   const t = useT();
+  const lang = useLang();
   const ctx = project.ctx;
   const tr = useTranslation(project);
   const [asInGame, setAsInGame] = useState(false);
@@ -203,13 +211,13 @@ export function LineInspector({ project, sid, parent, version, onGo, onSelect, o
     onReport(tryEdit(fn));
   };
   const talker = getEnum(ctx.schema, 'TalkerEnum')!;
-  const name = (s: string): string => lineCaption(ctx, s, tr);
+  const name = (s: string): string => lineCaption(ctx, s, tr, lang);
 
   return (
     <div className="panel-scroll line-inspector" data-testid="line-inspector" data-sid={sid}>
       <div className="ln-head">
         <span className={`dg-chip ${isLine ? (isChoice(shown) ? 'choice' : 'npc') : 'head'}`}>
-          {isLine ? (isChoice(shown) ? t.dgPlayer : shortEnumLabel(talker, shown.ints.get('speaker') ?? 0)) : type}
+          {isLine ? (isChoice(shown) ? t.dgPlayer : shortEnumLabel(talker, shown.ints.get('speaker') ?? 0, lang)) : type}
         </span>
         <span className="mono small muted" title={t.lnIdHint}>
           {sid}
@@ -528,7 +536,8 @@ function Effects({ ctx, sid, rec, t, edit }: Part): ReactNode {
 }
 
 function ReadOnlyRef({ ctx, r, cat }: { ctx: ModContext; r: Reference; cat: string }): ReactNode {
-  return <div className="dg-cond mono">{describeDialogAction(ctx, r, cat) ?? r.target}</div>;
+  const lang = useLang();
+  return <div className="dg-cond mono">{describeDialogAction(ctx, r, cat, lang) ?? r.target}</div>;
 }
 
 /** Ссылки-фильтры и прочие действия (раса, фракция, предметы, отпереть диалог…) — правятся в инспекторе. */
@@ -653,6 +662,7 @@ function Next({
 
 /** Запись как в игре (нижние слои): только чтение. */
 function InGame({ ctx, rec, tr, t }: { ctx: ModContext; rec: GameRecord; tr: TranslationIndex | undefined; t: Strings }): ReactNode {
+  const lang = useLang();
   const talker = getEnum(ctx.schema, 'TalkerEnum')!;
   const isLine = ctx.typeName(rec.type) === 'DIALOGUE_LINE';
   return (
@@ -660,28 +670,28 @@ function InGame({ ctx, rec, tr, t }: { ctx: ModContext; rec: GameRecord; tr: Tra
       <div className="ln-section-title">{t.lnInGameTitle}</div>
       {isLine && (
         <div className="small">
-          {t.lnSpeaker}: {shortEnumLabel(talker, rec.ints.get('speaker') ?? 0)} · {t.lnScore}: {dialogueScore(ctx, rec).total} · {rec.floats.get('chance temporary') ?? 100}%
+          {t.lnSpeaker}: {shortEnumLabel(talker, rec.ints.get('speaker') ?? 0, lang)} · {t.lnScore}: {dialogueScore(ctx, rec).total} · {rec.floats.get('chance temporary') ?? 100}%
         </div>
       )}
       {isLine &&
         lineTexts(rec).map((x, i) => (
           <div key={i} className="dg-text">
-            «{translatedText(tr, rec.stringId, `text${i}`, x) ?? x}»
+            {quote(translatedText(tr, rec.stringId, `text${i}`, x) ?? x, lang)}
           </div>
         ))}
       {(rec.refs.get('conditions') ?? []).map((r) => (
         <div key={r.target} className="dg-cond mono">
-          ? {describeDialogAction(ctx, r, 'conditions') ?? r.target}
+          ? {describeDialogAction(ctx, r, 'conditions', lang) ?? r.target}
         </div>
       ))}
       {(rec.refs.get('effects') ?? []).map((r) => (
         <div key={r.target} className="dg-effect mono">
-          ! {describeDialogAction(ctx, r, 'effects') ?? r.target}
+          ! {describeDialogAction(ctx, r, 'effects', lang) ?? r.target}
         </div>
       ))}
       <ol className="ln-next">
         {(rec.refs.get('lines') ?? []).map((r) => (
-          <li key={r.target}>{lineCaption(ctx, r.target, tr)}</li>
+          <li key={r.target}>{lineCaption(ctx, r.target, tr, lang)}</li>
         ))}
       </ol>
     </div>

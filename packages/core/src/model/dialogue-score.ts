@@ -88,7 +88,7 @@ export interface DialogueScore {
 export const SCORE_PART_LABELS: Readonly<Record<ScorePartKey, UiText>> = {
   bonus: { en: 'score bonus' },
   conditions: { en: 'conditions', ru: 'условия', zh: '条件' },
-  tag: { en: 'condition «tag»', ru: 'условие «метка»', zh: '条件«标签»' },
+  tag: { en: 'condition “tag”', ru: 'условие «метка»', zh: '条件“标签”' },
   locked: { en: 'locked' },
   town: { en: 'in a town of the faction', ru: 'в городе фракции', zh: '在派系城镇中' },
   'my-faction': { en: 'my faction', ru: 'моя фракция', zh: '我的派系' },
@@ -100,7 +100,7 @@ export const SCORE_PART_LABELS: Readonly<Record<ScorePartKey, UiText>> = {
   unique: { en: 'unique' },
   'chance-permanent': { en: 'chance permanent below 99%', ru: 'постоянный шанс ниже 99%', zh: '永久几率低于 99%' },
   'target-type': { en: 'target type', ru: 'тип собеседника', zh: '对方类型' },
-  speaker: { en: 'speaker is not «me»', ru: 'говорит не «я»', zh: '说话者不是“我”' },
+  speaker: { en: 'speaker is not “me”', ru: 'говорит не «я»', zh: '说话者不是“我”' },
   interjector: { en: 'interjector or the whole squad speaks', ru: 'говорит вмешавшийся или весь отряд', zh: '插话者或整个小队发言' },
   interjection: { en: 'interjection node', ru: 'узел вмешательства', zh: '插话节点' },
   'race-match': { en: 'target race matched (in game)', ru: 'раса собеседника совпала (в игре)', zh: '对方种族匹配（游戏中）' },

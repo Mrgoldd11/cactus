@@ -8,12 +8,14 @@ import { useMemo, useState, type ReactNode } from 'react';
 import {
   buildDialogueGraph,
   dialogueScore,
+  enumLabel,
   EVENT_TALK,
   getEnum,
   PLAY_NPC,
   playConversation,
   playStartList,
   plainName,
+  quote,
   refValueEnum,
   shortEnumLabel,
   type ModContext,
@@ -24,7 +26,7 @@ import {
   type PlayStep,
   type TranslationIndex,
 } from '@kenshi-editor/core';
-import { errorText, type Strings, useT } from '../i18n.ts';
+import { errorText, type Strings, useLang, useT } from '../i18n.ts';
 import type { Project } from '../project.ts';
 import { lineCaption, useTranslation } from './LineInspector.tsx';
 import { partsText } from './TalkTab.tsx';
@@ -41,8 +43,8 @@ interface Props {
 const pct = (p: number): string => `${String(Math.round(p * 100))}%`;
 
 /** Условия записи одной строкой — как в графе (условия и фильтры). */
-function conditionsOf(ctx: ModContext, sid: string, tr: TranslationIndex | undefined): string[] {
-  const n = buildDialogueGraph(ctx, sid, { maxNodes: 1, ...(tr ? { translation: tr } : {}) }).nodes[0];
+function conditionsOf(ctx: ModContext, sid: string, tr: TranslationIndex | undefined, lang: string): string[] {
+  const n = buildDialogueGraph(ctx, sid, { maxNodes: 1, lang, ...(tr ? { translation: tr } : {}) }).nodes[0];
   const out = n ? [...n.conditions, ...n.filters] : [];
   const r = ctx.get(sid);
   if (r?.bools.get('locked')) out.unshift('locked');
@@ -53,6 +55,7 @@ function conditionsOf(ctx: ModContext, sid: string, tr: TranslationIndex | undef
 
 export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }: Props): ReactNode {
   const t = useT();
+  const lang = useLang();
   const ctx = project.ctx;
   const tr = useTranslation(project);
   const [event, setEvent] = useState(EVENT_TALK);
@@ -69,7 +72,8 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
     }
   }, [ctx, sid, event, mode, assume, answers, prefer, version]);
 
-  const events = useMemo(() => refValueEnum(ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0)?.values ?? [], [ctx]);
+  const evDef = useMemo(() => refValueEnum(ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0), [ctx]);
+  const events = evDef?.values ?? [];
   const characters = useMemo(() => {
     const out: { sid: string; label: string }[] = [];
     for (const r of ctx.records()) {
@@ -136,7 +140,7 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
             {!events.some((v) => v.value === event) && <option value={event}>{event}</option>}
             {events.map((v) => (
               <option key={v.value} value={v.value} title={v.description}>
-                {v.value} — {v.label ?? v.name}
+                {v.value} — {enumLabel(evDef!, v, lang) ?? v.name}
               </option>
             ))}
           </select>
@@ -233,13 +237,14 @@ interface StepProps {
 
 function Step(p: StepProps): ReactNode {
   const { ctx, tr, t, step, index, dialog } = p;
-  const caption = (id: string): string => lineCaption(ctx, id, tr);
+  const lang = useLang();
+  const caption = (id: string): string => lineCaption(ctx, id, tr, lang);
   const speaker = (id: string): string => {
     const sp = ctx.get(id)?.ints.get('speaker') ?? 0;
     if (sp === 0) return p.npcName;
     if (sp === 1 || sp === 2) return t.plPlayer;
     const def = getEnum(ctx.schema, 'TalkerEnum');
-    return def ? shortEnumLabel(def, sp) : String(sp);
+    return def ? shortEnumLabel(def, sp, lang) : String(sp);
   };
   return (
     <li className="pl-step" data-testid="pl-step" data-index={index}>
@@ -255,7 +260,7 @@ function Step(p: StepProps): ReactNode {
       {step.path
         .filter((l) => l.options.length > 1 || l.options.some((o) => !o.always))
         .map((l) => (
-          <Choice key={l.node} {...p} title={`${t.plInside} ${index === 0 && l.node === dialog ? `«${p.name(l.node)}»` : caption(l.node)}`} options={l.options} keyOf={l.node} isDialog={false} />
+          <Choice key={l.node} {...p} title={`${t.plInside} ${index === 0 && l.node === dialog ? quote(p.name(l.node), lang) : caption(l.node)}`} options={l.options} keyOf={l.node} isDialog={false} />
         ))}
       {step.said !== undefined && (
         <div className="pl-said" data-testid="pl-said" data-sid={step.said}>
@@ -279,6 +284,7 @@ function Step(p: StepProps): ReactNode {
 
 function Answers(p: StepProps & { answers: readonly PlayAnswer[] }): ReactNode {
   const { t, step, ctx, tr } = p;
+  const lang = useLang();
   const answered = step.answered;
   return (
     <div className="pl-answers">
@@ -296,7 +302,7 @@ function Answers(p: StepProps & { answers: readonly PlayAnswer[] }): ReactNode {
               onClick={() => { p.onAnswer(a.sid); }}
             >
               {chosen ? '▶ ' : '→ '}
-              {lineCaption(ctx, a.sid, tr)}
+              {lineCaption(ctx, a.sid, tr, lang)}
             </button>
             {!a.always && <AsIf {...p} sid={a.sid} passes={a.shown} />}
           </div>
@@ -319,7 +325,8 @@ function Answers(p: StepProps & { answers: readonly PlayAnswer[] }): ReactNode {
 }
 
 function AsIf(p: StepProps & { sid: string; passes: boolean }): ReactNode {
-  const conds = conditionsOf(p.ctx, p.sid, p.tr);
+  const lang = useLang();
+  const conds = conditionsOf(p.ctx, p.sid, p.tr, lang);
   return (
     <label className="pl-asif small" data-testid="pl-asif" data-sid={p.sid} title={conds.length ? `${p.t.talkConditions}: ${conds.join('; ')}` : undefined}>
       <input
@@ -337,6 +344,7 @@ function AsIf(p: StepProps & { sid: string; passes: boolean }): ReactNode {
 
 function Choice(p: StepProps & { title: string; options: readonly PlayOption[]; keyOf: string; isDialog: boolean }): ReactNode {
   const { t, ctx, tr } = p;
+  const lang = useLang();
   return (
     <div className="pl-choice">
       <div className="small pl-choice-title">{p.title}</div>
@@ -356,7 +364,7 @@ function Choice(p: StepProps & { title: string; options: readonly PlayOption[]; 
                       else p.onSelectLine(o.sid, p.dialog);
                     }}
                   >
-                    {p.isDialog ? p.name(o.sid) : lineCaption(ctx, o.sid, tr)}
+                    {p.isDialog ? p.name(o.sid) : lineCaption(ctx, o.sid, tr, lang)}
                   </button>
                   {p.isDialog && o.sources && o.sources.length > 0 && (
                     <span className="muted small"> · {[...new Set(o.sources.map((s) => t[`talkVia_${s.via}`]))].join(', ')}</span>
@@ -408,6 +416,7 @@ function whyText(o: PlayOption, t: Strings): string {
 /** Пример к правилу выбора на выбранном персонаже: сколько диалогов, что выберет игра при условиях и без. */
 export function TalkExample({ project, sid, version }: { project: Project; sid: string | undefined; version: number }): ReactNode {
   const t = useT();
+  const lang = useLang();
   const ctx = project.ctx;
   const tr = useTranslation(project);
   const data = useMemo(() => {
@@ -437,11 +446,11 @@ export function TalkExample({ project, sid, version }: { project: Project; sid: 
         <b>{t.howtoNothing}</b>
       ) : (
         <>
-          <b>«{name(p.dialog)}»</b>
+          <b>{quote(name(p.dialog), lang)}</b>
           {p.why === 'chosen-random' && <span className="muted"> ({t.plWhy_chosenRandom})</span>}
           {p.said !== undefined && (
             <>
-              ; {t.howtoSays}: <i>{lineCaption(ctx, p.said, tr)}</i>
+              ; {t.howtoSays}: <i>{lineCaption(ctx, p.said, tr, lang)}</i>
             </>
           )}
         </>

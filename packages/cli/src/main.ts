@@ -257,7 +257,7 @@ function parse(argv: string[]): ReturnType<typeof parseArgs<{ options: typeof OP
 function int(v: string | undefined, name: string, fallback: number): number {
   if (v === undefined) return fallback;
   const n = Number(v);
-  if (!Number.isInteger(n) || n < 0) throw new UsageError({ en: `--${name}: an integer ≥ 0 is needed, not «${v}»`, ru: `--${name}: нужно целое ≥ 0, а не «${v}»` });
+  if (!Number.isInteger(n) || n < 0) throw new UsageError({ en: `--${name}: an integer ≥ 0 is needed, not “${v}”`, ru: `--${name}: нужно целое ≥ 0, а не «${v}»` });
   return n;
 }
 
@@ -331,12 +331,12 @@ class Command {
   resolve(ctx: ModContext, spec: string, preferTypes?: readonly string[]): string {
     const found = lookupRecord(ctx, spec, preferTypes ? { preferTypes } : {});
     if (found.stringId !== undefined) return found.stringId;
-    if (found.candidates.length === 0) throw new NoRecordError({ en: `No record «${spec}» (neither id nor name)`, ru: `Нет записи «${spec}» (ни id, ни имени)` });
+    if (found.candidates.length === 0) throw new NoRecordError({ en: `No record “${spec}” (neither id nor name)`, ru: `Нет записи «${spec}» (ни id, ни имени)` });
     const shown = found.candidates.slice(0, 20);
     for (const h of shown) this.io.err(`  ${formatHit(h)}`);
     const more = found.candidates.length - shown.length;
     if (more > 0) this.io.err(this.t({ en: `  … ${more} more`, ru: `  … ещё ${more}` }));
-    throw new UsageError({ en: `«${spec}»: ${found.candidates.length} records match — pass an id from the list`, ru: `«${spec}»: подходит записей ${found.candidates.length} — укажите id из списка` });
+    throw new UsageError({ en: `“${spec}”: ${found.candidates.length} records match — pass an id from the list`, ru: `«${spec}»: подходит записей ${found.candidates.length} — укажите id из списка` });
   }
 
   /** Страница строк (или объектов в --json). */
@@ -459,7 +459,7 @@ const COMMANDS: Record<string, Handler> = {
     const ctx = c.ctx();
     const sid = c.resolve(ctx, c.arg(0, c.t({ en: '<character>', ru: '<персонаж>' })), ['CHARACTER']);
     const translation = c.ws.dataLocale !== undefined ? loadTranslation(c.ws.paths, c.ws.dataLocale) : undefined;
-    const sim = simulateTalk(ctx, sid, int(c.values.event, 'event', 1), translation ? { translation } : {});
+    const sim = simulateTalk(ctx, sid, int(c.values.event, 'event', 1), { lang: c.lang, ...(translation ? { translation } : {}) });
     if (c.values.json) c.io.out(JSON.stringify(sim, null, 1));
     else for (const l of formatTalk(sim, c.lang)) c.io.out(l);
     return 0;

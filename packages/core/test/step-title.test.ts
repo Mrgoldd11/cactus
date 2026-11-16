@@ -78,7 +78,7 @@ describe('названия шагов истории', () => {
   it('поля записи, ИИ, откат, своя метка', () => {
     const ctx = ctxOf();
     ctx.editRecord('K', (d) => d.ints.set('damage', 20));
-    expect(last(ctx)).toMatchObject({ text: { ru: 'Изменено «damage» у «Katana» → 20', en: 'Changed «damage» on «Katana» → 20' } });
+    expect(last(ctx)).toMatchObject({ text: { ru: 'Изменено «damage» у «Katana» → 20', en: 'Changed “damage” on “Katana” → 20' } });
     ctx.renameRecord('K', 'Long katana');
     expect(last(ctx).text.ru).toBe('Переименовано в «Long katana»');
     applyOps(ctx, [{ op: 'set', id: 'K', field: 'damage', value: 30 }], 'ИИ: урон катаны');

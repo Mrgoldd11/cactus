@@ -8,6 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import {
+  quote,
   INTERIORS,
   interiorLayouts,
   layoutObjects,
@@ -53,7 +54,7 @@ const en = {
   nothing: 'nothing',
   place: 'Place…',
   placeTip: 'New furniture or item spot from the records list — at the point in the screen centre',
-  placeSearch: 'Name (en/ru) or id',
+  placeSearch: 'Name (English or translated) or id',
   noMatches: 'Nothing found',
   remove: 'Remove (Del)',
   focus: 'Show (F)',
@@ -111,7 +112,7 @@ const ru: InteriorStrings = {
   nothing: 'нечего',
   place: 'Поставить…',
   placeTip: 'Новая мебель или точка предметов из списка записей — в точку в центре экрана',
-  placeSearch: 'Имя (рус/англ) или id',
+  placeSearch: 'Имя (английское или перевод) или id',
   noMatches: 'Ничего не найдено',
   remove: 'Удалить (Del)',
   focus: 'Показать (F)',
@@ -168,7 +169,7 @@ const zh: InteriorStrings = {
   nothing: '无',
   place: '放置…',
   placeTip: '从记录列表中放置新的家具或物品点——放在屏幕中心的位置',
-  placeSearch: '名称（英/俄）或 ID',
+  placeSearch: '名称（英文或译名）或 ID',
   noMatches: '未找到',
   remove: '移除 (Del)',
   focus: '定位 (F)',
@@ -424,7 +425,7 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
     if (!v || !edits || !current) return;
     const at = v.centrePoint();
     const ok = run(() => {
-      const r = placeInterior(edits, project.ctx, current.sid, target, at, [1, 0, 0, 0], `${s.stepPlace} «${current.name}»: ${name(target)}`);
+      const r = placeInterior(edits, project.ctx, current.sid, target, at, [1, 0, 0, 0], `${s.stepPlace} ${quote(current.name, lang)}: ${name(target)}`);
       setNote(r.template ? `${s.copied} ${r.template}` : s.fresh);
       pendingSelect.current = r.key;
     });

@@ -88,6 +88,7 @@ export const zh2 = {
   maximizeGroup: '最大化 / 还原',
   followsHint: '跟随当前选择',
   nothingToShow: '请选择合适的记录',
+  nothingToShowOf: (types: string): string => `请选择类型为 ${types} 的记录`,
   diagnosticsOk: '没有发现问题',
   placeholderSoon: '将在第 7 阶段推出',
   viewportStub: '城镇和建筑的 3D 视图将放在这里（第 7 阶段）。场景对象的选择方式与记录相同，它们的组件会显示在“组件”面板中。',

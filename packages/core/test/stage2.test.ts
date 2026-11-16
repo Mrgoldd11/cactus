@@ -125,16 +125,20 @@ describe('перечисления', () => {
     expect(parseEnumValue(e, 'один раз')).toBe(5);
     expect(parseEnumValue(e, '3')).toBe(3);
     expect(parseEnumValue(e, 'nope')).toBeUndefined();
-    expect(formatEnumValue(e, 5)).toBe('DR_ONCE_ONLY «один раз» (5)');
+    expect(formatEnumValue(e, 5)).toBe('DR_ONCE_ONLY “once only” (5)');
+    expect(formatEnumValue(e, 5, 'ru')).toBe('DR_ONCE_ONLY «один раз» (5)');
+    expect(formatEnumValue(e, 5, 'zh')).toBe('DR_ONCE_ONLY “仅一次” (5)');
     expect(formatEnumValue(e, 99)).toBe('99 (not in DialogRepetitionEnum)');
     expect(formatEnumValue(e, 99, 'ru')).toBe('99 (нет в DialogRepetitionEnum)');
   });
 
   it('условия и действия диалога текстом; tag по условию', () => {
     const ctx = ctxOf();
-    expect(describeDialogAction(ctx, ref('A1', 20), 'conditions')).toBe('собеседник: DC_RELATIONS < 20');
+    expect(describeDialogAction(ctx, ref('A1', 20), 'conditions')).toBe('target: DC_RELATIONS < 20');
+    expect(describeDialogAction(ctx, ref('A1', 20), 'conditions', 'ru')).toBe('собеседник: DC_RELATIONS < 20');
     expect(fieldEnum(schema, 'DIALOG_ACTION', 'tag', ctx.get('A2'))?.name).toBe('PersonalityTags');
-    expect(describeDialogAction(ctx, ref('A2', 1), 'conditions')).toBe('я: DC_PERSONALITY_TAG PT_HONORABLE = 1');
+    expect(describeDialogAction(ctx, ref('A2', 1), 'conditions')).toBe('me: DC_PERSONALITY_TAG PT_HONORABLE = 1');
+    expect(describeDialogAction(ctx, ref('A2', 1), 'conditions', 'zh')).toBe('我: DC_PERSONALITY_TAG PT_HONORABLE = 1');
     expect(describeDialogAction(ctx, ref('E1'), 'effects')).toMatch(/^DA_/);
   });
 

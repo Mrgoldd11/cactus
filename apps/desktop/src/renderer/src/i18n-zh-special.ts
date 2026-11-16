@@ -73,7 +73,7 @@ export const specialZh: SpecialStrings = {
   compareHint: '武器、护甲、物品和背包并排比较：可排序、筛选，并直接在单元格中编辑。',
   cmpType: '类型',
   cmpSearch: '按名称筛选…',
-  cmpFilter: '字段筛选，例如 value>1000',
+  cmpFilter: '筛选：value>1000',
   cmpFilterTip: '与搜索类似：field=value、field>3、field<=1.5、field~text、field?（多个条件用 ; 分隔）',
   cmpOnlyChanged: '仅已修改的',
   cmpOnlyChangedTip: '只显示被此 Mod 或其他已加载 Mod 修改或新增的记录。',
@@ -128,7 +128,7 @@ export const specialZh: SpecialStrings = {
         : kind === 'replace'
           ? '用来替换查找到的文本的内容'
           : kind === 'refAdd' || kind === 'refRemove'
-            ? '要链接到的记录：名称（英文或俄文）或 ID'
+            ? '要链接到的记录：名称（英文或译名）或 ID'
             : '字段的新值',
   bulkValuePh: (kind: string): string => (kind === 'mul' ? '倍数，例如 1.5' : kind === 'add' ? '数量，例如 100' : kind === 'replace' ? '替换为…' : kind === 'refAdd' || kind === 'refRemove' ? '记录：名称或 ID' : '新值'),
   bulkRefAdd: '添加引用',
@@ -144,8 +144,8 @@ export const specialZh: SpecialStrings = {
   bulkCondRefCount: 'Ref——有多少条记录链接到这条记录',
   bulkColumnsNote: '列：被修改的字段和条件字段——点击标题可排序。',
   bulkSearchPh: '名称或 ID：katana',
-  bulkSearchTip: '可选。ID 或名称的一部分——英文或俄文（katana、катана）。只在所选类型的记录中搜索。',
-  bulkFilterPh: '字段条件，例如 value>1000',
+  bulkSearchTip: '可选。ID 或名称的一部分——英文名或译名（katana）。只在所选类型的记录中搜索。',
+  bulkFilterPh: '条件：value>1000',
   bulkFilterHelpTip: '字段筛选：运算符和该类型的字段',
   bulkFilterHelpTitle: '字段筛选——可用于该类型的任何字段，而不仅是价格',
   bulkOpsHead: ['写法', '含义', '示例'],

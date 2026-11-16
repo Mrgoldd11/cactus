@@ -510,7 +510,7 @@ export class ModContext {
     }
     const later = [...last].filter(([sid, after]) => this.deltas.get(sid) !== after?.delta).map(([sid]) => sid);
     if (info !== undefined && this.modInfo !== info) later.push('заголовок мода');
-    if (later.length > 0) throw new EditError({ en: `Cannot roll back «${cs.label}»: changed later: ${later.join(', ')}`, ru: `Нельзя откатить «${cs.label}»: позже изменены ${later.join(', ')}`, zh: `无法回滚 «${cs.label}»：之后又修改了 ${later.join('、')}` });
+    if (later.length > 0) throw new EditError({ en: `Cannot roll back “${cs.label}”: changed later: ${later.join(', ')}`, ru: `Нельзя откатить «${cs.label}»: позже изменены ${later.join(', ')}`, zh: `无法回滚 “${cs.label}”：之后又修改了 ${later.join('、')}` });
     const next = this.nextChangesetId;
     this.transaction(`откат: ${cs.label}`, () => {
       for (const op of [...cs.ops].reverse()) {
@@ -519,7 +519,7 @@ export class ModContext {
       }
     });
     const done = this.undoStack.at(-1);
-    if (done?.id !== next) throw new EditError({ en: `Rolling back «${cs.label}» changed nothing`, ru: `Откат «${cs.label}» ничего не изменил`, zh: `回滚 «${cs.label}» 没有改变任何内容` });
+    if (done?.id !== next) throw new EditError({ en: `Rolling back “${cs.label}” changed nothing`, ru: `Откат «${cs.label}» ничего не изменил`, zh: `回滚 “${cs.label}” 没有改变任何内容` });
     return done;
   }
 

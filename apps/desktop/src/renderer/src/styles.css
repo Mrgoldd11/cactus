@@ -306,6 +306,8 @@ textarea {
 }
 .toolbar {
   display: flex;
+  /* Narrow windows: wrap to a second row instead of pushing AI, settings and language off-screen. */
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   padding: 5px 8px;
@@ -313,6 +315,8 @@ textarea {
   border-bottom: 1px solid var(--border);
 }
 .mod-title {
+  min-width: 0;
+  max-width: 260px;
   font-weight: 600;
   margin-right: 8px;
   overflow: hidden;
@@ -573,6 +577,8 @@ textarea {
 }
 .tabs {
   display: flex;
+  /* Narrow inspector: tabs go to a second row instead of being cut off. */
+  flex-wrap: wrap;
   gap: 2px;
   padding: 4px 8px 0;
   border-bottom: 1px solid var(--border);
@@ -825,6 +831,8 @@ tr.fs-removed td:first-child {
   line-height: 1.6;
 }
 .where-step {
+  /* inline-block: the path may break between steps (the spans have no spaces between them). */
+  display: inline-block;
   margin-right: 6px;
   white-space: nowrap;
 }
@@ -1618,6 +1626,10 @@ button.small.active {
 }
 .panel-scroll {
   overflow: auto;
+}
+/* Text panels (how-to, player, diagnostics): keep text off the panel edges. */
+.panel-pad {
+  padding: 6px 10px;
 }
 .panel-empty {
   display: flex;

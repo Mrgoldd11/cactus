@@ -102,7 +102,7 @@ const MERGE_EN: MergeWords = {
   blockedNoLayer: "the record only changes data of a mod that is not among your layers (the source's dependency is not connected)",
   skipNotListed: 'not in the change list (already merged, same as yours or rejected)',
   skipRejected: 'rejected — bring it back to the list first',
-  planHead: (s, n, ch, del, conf) => `merge «${s}»: new ${n}, changed ${ch}, deleted ${del}, conflicts ${conf}`,
+  planHead: (s, n, ch, del, conf) => `merge “${s}”: new ${n}, changed ${ch}, deleted ${del}, conflicts ${conf}`,
   rejected: (n) => `, rejected (hidden) ${n}`,
   already: (n) => `, already merged ${n}`,
   identical: (n) => `, identical ${n}`,
@@ -156,7 +156,7 @@ const MERGE_ZH: MergeWords = {
   blockedNoLayer: '该记录只修改了不在你的图层中的 Mod 的数据（来源的依赖项未连接）',
   skipNotListed: '不在更改列表中（已合并、与你的相同或已拒绝）',
   skipRejected: '已拒绝——请先把它放回列表',
-  planHead: (s, n, ch, del, conf) => `合并 «${s}»：新增 ${n}，修改 ${ch}，删除 ${del}，冲突 ${conf}`,
+  planHead: (s, n, ch, del, conf) => `合并 “${s}”：新增 ${n}，修改 ${ch}，删除 ${del}，冲突 ${conf}`,
   rejected: (n) => `，已拒绝（隐藏）${n}`,
   already: (n) => `，已合并 ${n}`,
   identical: (n) => `，相同 ${n}`,
@@ -249,7 +249,7 @@ export function parseMergeStore(text: string): MergeStore {
   for (const [k, s] of Object.entries(o.sources)) {
     const st = s as Partial<MergeSourceState> | undefined;
     if (!st || typeof st.name !== 'string' || !isRecordOfStrings(st.baseline ?? {}) || !isRecordOfStrings(st.rejected ?? {})) {
-      throw new MergeError({ en: `The merge file (.kedit-merge.json): the entry about source «${k}» is damaged.`, ru: `Файл слияния (.kedit-merge.json): повреждена запись об источнике «${k}».`, zh: `合并文件（.kedit-merge.json）：关于来源 «${k}» 的条目已损坏。` });
+      throw new MergeError({ en: `The merge file (.kedit-merge.json): the entry about source “${k}” is damaged.`, ru: `Файл слияния (.kedit-merge.json): повреждена запись об источнике «${k}».`, zh: `合并文件（.kedit-merge.json）：关于来源 “${k}” 的条目已损坏。` });
     }
     out.sources[k] = { name: st.name, baseline: { ...(st.baseline ?? {}) }, rejected: { ...(st.rejected ?? {}) } };
   }
@@ -498,7 +498,7 @@ const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCas
  * активного мода или ваниль: их записи уже входят в ваши слои.
  */
 export function checkMergeSource(ctx: ModContext, sourceName: string): void {
-  if (same(sourceName, ctx.modName)) throw new MergeError({ en: `Cannot merge mod «${sourceName}» into itself.`, ru: `Нельзя слить мод «${sourceName}» сам в себя.`, zh: `不能将 Mod «${sourceName}» 合并到它自身。` });
+  if (same(sourceName, ctx.modName)) throw new MergeError({ en: `Cannot merge mod “${sourceName}” into itself.`, ru: `Нельзя слить мод «${sourceName}» сам в себя.`, zh: `不能将 Mod “${sourceName}” 合并到它自身。` });
   const layer = ctx.layers.find((l) => same(l.name, sourceName)) ?? ctx.info.dependencies.find((d) => same(d, sourceName));
   if (layer !== undefined) {
     const name = typeof layer === 'string' ? layer : layer.name;

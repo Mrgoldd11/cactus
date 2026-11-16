@@ -168,7 +168,7 @@ export function ModInfoModal({ project, onReport, onClose }: { project: Project;
           }}
         />
         <label>{t.dependencies}</label>
-        <span className="mono">{info.dependencies.join(', ')}</span>
+        {info.dependencies.length > 0 ? <span className="mono">{info.dependencies.join(', ')}</span> : <span className="muted">{t.noDependencies}</span>}
         <ExtensionNote project={project} />
       </div>
     </Modal>
@@ -258,7 +258,8 @@ export function ValidationModal({ project, onGo, onClose }: { project: Project; 
 /** Список проблем проверки мода (окно «Проверка» и панель «Диагностика»). */
 export function IssueList({ project, issues, onGo }: { project: Project; issues: readonly ValidationIssue[]; onGo: (sid: string) => void }): ReactNode {
   const lang = useLang();
-  if (issues.length === 0) return <p data-testid="validation-ok">✓</p>;
+  const t = useT();
+  if (issues.length === 0) return <p className="panel-empty muted" data-testid="validation-ok">✓ {t.diagnosticsOk}</p>;
   return (
     <ul className="issues">
       {issues.map((i, n) => (

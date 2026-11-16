@@ -37,3 +37,12 @@ export function errorMessage(e: unknown, lang = 'en'): string {
   if (e instanceof UiTextError) return uiText(e.texts, lang);
   return e instanceof Error ? e.message : String(e);
 }
+
+/** Quote marks per interface language; other languages use the English ones. */
+const QUOTES: Readonly<Record<string, readonly [string, string]>> = { en: ['“', '”'], ru: ['«', '»'], zh: ['“', '”'] };
+
+/** `text` in the quote marks of `lang`: “katana” in English, «катана» in Russian. */
+export function quote(text: string, lang = 'en'): string {
+  const [open, close] = QUOTES[lang] ?? QUOTES.en!;
+  return `${open}${text}${close}`;
+}

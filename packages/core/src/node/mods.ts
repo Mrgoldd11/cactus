@@ -285,7 +285,7 @@ export function planModCopy(paths: GamePaths, source: string, options: { name?: 
     plan.warningTexts.push(t);
   };
   let why: UiText | undefined;
-  if (name === '' || BAD_NAME.test(name) || hasControlChar(name) || name.endsWith('.') || name.endsWith(' ')) why = { en: `Bad mod name: «${name}»`, ru: `Плохое имя мода: «${name}»`, zh: `Mod 名称无效：«${name}»` };
+  if (name === '' || BAD_NAME.test(name) || hasControlChar(name) || name.endsWith('.') || name.endsWith(' ')) why = { en: `Bad mod name: “${name}”`, ru: `Плохое имя мода: «${name}»`, zh: `Mod 名称无效：“${name}”` };
   else if (resolve(dest).toLowerCase() === src.toLowerCase()) why = { en: 'This is the file in mods/ itself — nowhere to copy it; give the copy another name', ru: 'Это и есть файл в mods/ — копировать некуда; дайте копии другое имя', zh: '这就是 mods/ 中的文件本身——无处可复制；请给副本另起名称' };
   else if (existsSync(dirname(dest))) why = { en: `Folder ${dirname(dest)} already exists — choose another name or delete it yourself`, ru: `Папка ${dirname(dest)} уже есть — выберите другое имя или удалите её сами`, zh: `文件夹 ${dirname(dest)} 已存在——请换个名称或自行删除它` };
   if (why) {
@@ -304,9 +304,9 @@ export function planModCopy(paths: GamePaths, source: string, options: { name?: 
     );
   } else if (enabled) {
     warn({
-      en: `The copy has another name: mods.cfg enables the original «${sourceFileName}»; enable the copy separately (and disable the original if the edits should replace it).`,
+      en: `The copy has another name: mods.cfg enables the original “${sourceFileName}”; enable the copy separately (and disable the original if the edits should replace it).`,
       ru: `Копия под другим именем: в mods.cfg включён оригинал «${sourceFileName}», копию надо включить отдельно (и выключить оригинал, если правки должны его заменить).`,
-      zh: `副本使用了其他名称：mods.cfg 中启用的是原文件 «${sourceFileName}»，需要单独启用副本（如果修改应替换原文件，请禁用原文件）。`,
+      zh: `副本使用了其他名称：mods.cfg 中启用的是原文件 “${sourceFileName}”，需要单独启用副本（如果修改应替换原文件，请禁用原文件）。`,
     });
   }
   if (workshopId !== undefined) {

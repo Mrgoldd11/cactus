@@ -25,7 +25,7 @@ function GraphPanel({ def, params }: PanelProps): ReactNode {
   const { project, go, report, selection, open, hasPanel } = useWorkbench();
   const { sid, version } = useFollowed(def, params);
   const select = useSelectLine(sid);
-  if (sid === undefined) return <Empty />;
+  if (sid === undefined) return <Empty types={def.shows?.types} />;
   const line = selection.latest((s) => s.kind === 'line');
   return (
     <DialogueGraphTab
@@ -48,7 +48,7 @@ function LinePanel({ def, params }: PanelProps): ReactNode {
   const { sid, item, version } = useFollowed(def, params);
   const dialog = item?.kind === 'line' ? item.dialog : undefined;
   const select = useSelectLine(dialog);
-  if (sid === undefined || !project.record(sid)) return <Empty />;
+  if (sid === undefined || !project.record(sid)) return <Empty types={def.shows?.types} />;
   const parent = item?.kind === 'line' ? item.parent : undefined;
   return <LineInspector project={project} sid={sid} {...(parent !== undefined ? { parent } : {})} version={version} onGo={go} onSelect={select} onReport={report} />;
 }
@@ -57,14 +57,14 @@ function PlayerPanel({ def, params }: PanelProps): ReactNode {
   const { project, go, selection } = useWorkbench();
   const t = useT();
   const { sid, version } = useFollowed(def, params);
-  if (sid === undefined) return <Empty />;
+  if (sid === undefined) return <Empty types={def.shows?.types} />;
   // Реплика из разговора: её диалог — в граф, сама реплика — в инспектор реплики.
   const selectLine = (line: string, dialog?: string): void => {
     if (dialog !== undefined) selection.select({ kind: 'record', sid: dialog }, { history: false });
     selection.select({ kind: 'line', sid: line, ...(dialog !== undefined ? { dialog } : {}) }, { history: false });
   };
   return (
-    <div className="panel-scroll">
+    <div className="panel-scroll panel-pad">
       <ConversationPlayer key={sid} project={project} sid={sid} version={version} onGo={go} onSelectLine={selectLine} />
       <details className="pl-summary" open>
         <summary>{t.plSummary}</summary>
@@ -79,7 +79,7 @@ function HowtoPanel({ def, params }: PanelProps): ReactNode {
   const { project } = useWorkbench();
   const { sid, version } = useFollowed(def, params);
   return (
-    <div className="panel-scroll howto" data-testid="howto">
+    <div className="panel-scroll panel-pad howto" data-testid="howto">
       <TalkExample project={project} sid={sid} version={version} />
       <TalkRulesBody />
     </div>

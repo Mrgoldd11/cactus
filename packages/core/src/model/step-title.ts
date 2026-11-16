@@ -106,7 +106,7 @@ class Describer {
     if (itemTypeName(rec.type) === LINE) return this.quoted(this.lineText(rec));
     const en = decodeText(rec.name) || rec.stringId;
     const tr = this.ctx.localizedName(rec.stringId) ?? en;
-    return { en: ` «${short(en)}»`, ru: ` «${short(tr)}»`, zh: ` «${short(tr)}»` };
+    return { en: ` “${short(en)}”`, ru: ` «${short(tr)}»`, zh: ` “${short(tr)}”` };
   }
 
   added(): RecordDiff[] {
@@ -187,13 +187,13 @@ class Describer {
       if (this.isLine(d) && fields.every((f) => f.kind === 'field' && f.dict === 'strings' && /^text\d+$/.test(f.key))) return this.lineTextChanged(d);
       if (fields.length === 1 && fields[0]!.kind === 'name') {
         const after = decodeText(d.after!.name);
-        return { ru: `Переименовано в «${short(after)}»`, en: `Renamed to «${short(after)}»`, zh: `重命名为 «${short(after)}»` };
+        return { ru: `Переименовано в «${short(after)}»`, en: `Renamed to “${short(after)}”`, zh: `重命名为 “${short(after)}”` };
       }
       if (fields.length === 1) {
         const f = fields[0]!;
         const key = f.kind === 'field' || f.kind === 'instance' ? f.key : f.kind === 'ref' || f.kind === 'refOrder' ? f.category : f.kind;
         const value = f.kind === 'field' && f.after !== undefined ? ` → ${short(formatScalar(f.dict, f.after))}` : '';
-        return { ru: `Изменено «${key}» у${name.ru}${value}`, en: `Changed «${key}» on${name.en}${value}`, zh: `修改了${name.zh} 的 «${key}»${value}` };
+        return { ru: `Изменено «${key}» у${name.ru}${value}`, en: `Changed “${key}” on${name.en}${value}`, zh: `修改了${name.zh} 的 “${key}”${value}` };
       }
       return {
         ru: `Изменено ${fields.length} ${plural(fields.length, 'поле', 'поля', 'полей')} у${name.ru}`,
@@ -293,7 +293,7 @@ class Describer {
     }
     const merge = /^слияние: (.*) \((\d+) записей\)$/s.exec(label);
     if (merge)
-      return { ru: `Слияние с «${merge[1]!}»: записей ${merge[2]!}`, en: `Merge from «${merge[1]!}»: ${merge[2]!} records`, zh: `从 «${merge[1]!}» 合并：${merge[2]!} 条记录` };
+      return { ru: `Слияние с «${merge[1]!}»: записей ${merge[2]!}`, en: `Merge from “${merge[1]!}”: ${merge[2]!} records`, zh: `从 “${merge[1]!}” 合并：${merge[2]!} 条记录` };
     const pkg = /^Пакет диалогов («.*») → (?:(«.*»)|(\d+) персонажам)$/s.exec(label);
     if (pkg) {
       const [, p, one, n] = pkg;

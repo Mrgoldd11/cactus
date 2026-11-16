@@ -16,22 +16,14 @@ interface Props {
   status: LiveStatus;
   onGo: (sid: string) => void;
   onReport: (err: string | undefined) => void;
-  onClose: () => void;
 }
 
-export function AiPanel({ project, changesets, status, onGo, onReport, onClose }: Props): ReactNode {
+export function AiPanel({ project, changesets, status, onGo, onReport }: Props): ReactNode {
   const t = useT();
   const lang = useLang();
   const list = [...changesets].reverse();
   return (
     <div className="ai-panel" data-testid="ai-panel">
-      <div className="pane-title ai-head">
-        <span>{t.aiChanges}</span>
-        <span className="grow" />
-        <button className="link" onClick={onClose} title={t.close}>
-          ×
-        </button>
-      </div>
       <div className="ai-conn muted" data-testid="ai-conn">
         {status.error !== undefined
           ? `${t.aiServerFailed}: ${status.error}`

@@ -251,7 +251,9 @@ export function BackupsModal({
       title={t.backupsTitle}
       onClose={onClose}
       testId="backups-modal"
+      // No backups yet: nothing to restore, so no footer with dead buttons.
       footer={
+        items?.length ? (
         <>
           <span className="muted">{t.backupsNote}</span>
           <span className="grow" />
@@ -262,6 +264,7 @@ export function BackupsModal({
             {t.backupRestore}
           </button>
         </>
+        ) : undefined
       }
     >
       {items === undefined ? null : items.length === 0 ? (

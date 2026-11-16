@@ -5,8 +5,10 @@
 import { itemTypeName } from '../format/item-types.ts';
 import type { GameRecord, Reference } from '../format/types.ts';
 import { decodeText } from '../text.ts';
+import { quote } from '../ui-text.ts';
 import {
   BUILTIN_ENUM_LABELS,
+  BUILTIN_ENUM_LABELS_I18N,
   BUILTIN_ENUMS,
   BUILTIN_FIELD_ENUMS,
   BUILTIN_REF_VALUE_ENUMS,
@@ -74,17 +76,25 @@ export function refValueLabels(typeName: string, category: string): readonly str
 /** "Not in" of an unknown enum value, per interface language. */
 const NOT_IN: Record<string, string> = { en: 'not in', ru: 'нет в', zh: '不在' };
 
+/** Short label of a value in the interface language (built-in enums only); Russian is the stored one. */
+export function enumLabel(def: EnumDef, v: EnumValue, lang = 'en'): string | undefined {
+  if (v.label === undefined) return undefined;
+  if (lang === 'ru') return v.label;
+  return BUILTIN_ENUM_LABELS_I18N[lang]?.[def.name]?.[v.name] ?? BUILTIN_ENUM_LABELS_I18N.en![def.name]?.[v.name] ?? v.label;
+}
+
 /** `DR_ONCE_ONLY «один раз» (5)`; неизвестное значение — `5 (нет в DialogRepetitionEnum)`. */
 export function formatEnumValue(def: EnumDef, value: number, lang = 'en'): string {
   const v = enumValue(def, value);
   if (!v) return `${value} (${NOT_IN[lang] ?? NOT_IN.en!} ${def.name})`;
-  return `${v.name}${v.label !== undefined ? ` «${v.label}»` : ''} (${value})`;
+  const label = enumLabel(def, v, lang);
+  return `${v.name}${label !== undefined ? ` ${quote(label, lang)}` : ''} (${value})`;
 }
 
 /** Короткая подпись значения: русская подпись, иначе имя, иначе число. */
-export function shortEnumLabel(def: EnumDef, value: number): string {
+export function shortEnumLabel(def: EnumDef, value: number, lang = 'en'): string {
   const v = enumValue(def, value);
-  return v ? (v.label ?? v.name) : String(value);
+  return v ? (enumLabel(def, v, lang) ?? v.name) : String(value);
 }
 
 /**
@@ -103,12 +113,19 @@ export function parseEnumValue(def: EnumDef, input: string | number): number | u
   return hit?.value;
 }
 
+const ACTION_WORDS: Record<string, { action: string; condition: string }> = {
+  en: { action: 'action', condition: 'condition' },
+  ru: { action: 'действие', condition: 'условие' },
+  zh: { action: '动作', condition: '条件' },
+};
+
 /**
  * Условие или действие диалога одной строкой: `собеседник: DC_RELATIONS < 20`,
  * `DC_PERSONALITY_TAG PT_SMART = 1`, `DA_TRADE`. `ref` — ссылка на DIALOG_ACTION из
  * `conditions` (сравниваемое значение — v0 ссылки) или `effects`.
  */
-export function describeDialogAction(ctx: ModContext, ref: Reference, category: string): string | undefined {
+export function describeDialogAction(ctx: ModContext, ref: Reference, category: string, lang = 'en'): string | undefined {
+  const w = ACTION_WORDS[lang] ?? ACTION_WORDS.en!;
   const a = ctx.get(ref.target);
   if (!a || itemTypeName(a.type) !== 'DIALOG_ACTION') return undefined;
   const schema = ctx.schema;
@@ -119,15 +136,15 @@ export function describeDialogAction(ctx: ModContext, ref: Reference, category: 
     const def = getEnum(schema, 'DialogActionEnum')!;
     const v = enumValue(def, action);
     const vals = ref.v0 || ref.v1 || ref.v2 ? ` ${ref.v0}/${ref.v1}/${ref.v2}` : '';
-    return `${v?.name ?? `действие ${action}`}${vals}`;
+    return `${v?.name ?? `${w.action} ${action}`}${vals}`;
   }
   const cond = ints.get('condition name');
   if (cond === undefined) return undefined;
   const condDef = getEnum(schema, 'DialogConditionEnum')!;
   const parts: string[] = [];
   const who = ints.get('who');
-  if (who !== undefined) parts.push(`${shortEnumLabel(getEnum(schema, 'TalkerEnum')!, who)}:`);
-  parts.push(enumValue(condDef, cond)?.name ?? `условие ${cond}`);
+  if (who !== undefined) parts.push(`${shortEnumLabel(getEnum(schema, 'TalkerEnum')!, who, lang)}:`);
+  parts.push(enumValue(condDef, cond)?.name ?? `${w.condition} ${cond}`);
   const tag = ints.get('tag');
   const tagDef = fieldEnum(schema, 'DIALOG_ACTION', 'tag', a);
   if (tag !== undefined && tag !== -1) parts.push(tagDef ? (enumValue(tagDef, tag)?.name ?? `tag ${tag}`) : `tag ${tag}`);
@@ -139,9 +156,9 @@ export function describeDialogAction(ctx: ModContext, ref: Reference, category: 
 }
 
 /** Подпись значений ссылки для показа: `событие EV_LAUNCH_ATTACK «начинаю атаку» (16)`. */
-export function describeRefValues(schema: GameSchema | undefined, typeName: string, category: string, ref: Reference): string | undefined {
+export function describeRefValues(schema: GameSchema | undefined, typeName: string, category: string, ref: Reference, lang = 'en'): string | undefined {
   const def = refValueEnum(schema, typeName, category, 0);
   if (!def) return undefined;
   const label = refValueLabels(typeName, category)?.[0] ?? 'v0';
-  return `${label} ${formatEnumValue(def, ref.v0)}`;
+  return `${label} ${formatEnumValue(def, ref.v0, lang)}`;
 }

@@ -314,7 +314,7 @@ function parseTranslationPo(text: string): ParsedTranslationFile {
     if (bar <= 0) continue;
     rows.push({ id: e.msgctxt.slice(0, bar), field: e.msgctxt.slice(bar + 1), original: e.msgid, translation: e.msgstr[0] ?? '' });
   }
-  if (rows.length === 0 && po.entries.length > 0) throw new EditError({ en: 'Translation file: the PO has no entries with msgctxt «id|field» — it is not an editor export', ru: 'Файл перевода: в PO нет строк с msgctxt «id|поле» — это не выгрузка редактора', zh: '翻译文件：PO 中没有 msgctxt 为 «id|字段» 的条目——这不是编辑器导出的文件' });
+  if (rows.length === 0 && po.entries.length > 0) throw new EditError({ en: 'Translation file: the PO has no entries with msgctxt “id|field” — it is not an editor export', ru: 'Файл перевода: в PO нет строк с msgctxt «id|поле» — это не выгрузка редактора', zh: '翻译文件：PO 中没有 msgctxt 为 “id|字段” 的条目——这不是编辑器导出的文件' });
   const source = po.headers.get('X-Kedit-Source');
   return { ...(source ? { source } : {}), rows };
 }

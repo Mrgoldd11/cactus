@@ -90,6 +90,8 @@ export interface DialogueGraph {
 export interface DialogueGraphOptions {
   maxNodes?: number;
   translation?: TranslationIndex;
+  /** Interface language of speaker, event and condition labels (default English). */
+  lang?: string;
 }
 
 function chance(rec: GameRecord): number {
@@ -131,7 +133,8 @@ export function shadowedLines(ctx: ModContext, parent: string): { line: string; 
 }
 
 export function buildDialogueGraph(ctx: ModContext, stringId: string, options: DialogueGraphOptions = {}): DialogueGraph {
-  const tree = buildDialogueTree(ctx, stringId, { maxNodes: options.maxNodes ?? 400 });
+  const lang = options.lang ?? 'en';
+  const tree = buildDialogueTree(ctx, stringId, { maxNodes: options.maxNodes ?? 400, lang });
   const talker = getEnum(ctx.schema, 'TalkerEnum');
   const eventDef = refValueEnum(ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0);
   const nodes: DialogueGraphNode[] = [];
@@ -174,11 +177,11 @@ export function buildDialogueGraph(ctx: ModContext, stringId: string, options: D
     }
     if (n.speaker !== undefined) {
       node.speaker = n.speaker;
-      if (talker) node.speakerLabel = shortEnumLabel(talker, n.speaker);
+      if (talker) node.speakerLabel = shortEnumLabel(talker, n.speaker, lang);
     }
     if (n.event !== undefined) {
       node.event = n.event;
-      if (eventDef) node.eventLabel = formatEnumValue(eventDef, n.event);
+      if (eventDef) node.eventLabel = formatEnumValue(eventDef, n.event, lang);
     }
     const issue = (kind: DialogueIssueKind, texts: UiText, by?: string): void => {
       const i: DialogueIssue = { kind, node: n.stringId, text: texts.en, texts, ...(by !== undefined ? { by } : {}) };
@@ -221,9 +224,9 @@ export function buildDialogueGraph(ctx: ModContext, stringId: string, options: D
       if (!target || target.issues.some((i) => i.kind === 'shadowed')) continue;
       const by = shortName(ctx, s.by, options.translation);
       const texts: UiText = {
-        en: `never chosen: sibling line «${by}» always fits, comes earlier and has a higher score`,
+        en: `never chosen: sibling line “${by}” always fits, comes earlier and has a higher score`,
         ru: `не будет выбрана: соседняя реплика «${by}» подходит всегда, стоит раньше, и очков у неё больше`,
-        zh: `永远不会被选中：同级台词 «${by}» 始终适用、排在前面且分数更高`,
+        zh: `永远不会被选中：同级台词 “${by}” 始终适用、排在前面且分数更高`,
       };
       const i: DialogueIssue = { kind: 'shadowed', node: s.line, by: s.by, text: texts.en, texts };
       target.issues.push(i);

@@ -125,7 +125,7 @@ function checkDependencyDeletions(ctx: ModContext, issues: ValidationIssue[]): v
           stringId: e.source,
           key: e.category,
           target: rec.stringId,
-          ...msg({ en: `refers to ${rec.stringId} «${decodeText(rec.name)}», which ${layer.name} removes`, ru: `ссылается на ${rec.stringId} «${decodeText(rec.name)}», которую удаляет ${layer.name}`, zh: `引用了被 ${layer.name} 删除的 ${rec.stringId} «${decodeText(rec.name)}»` }),
+          ...msg({ en: `refers to ${rec.stringId} “${decodeText(rec.name)}”, which ${layer.name} removes`, ru: `ссылается на ${rec.stringId} «${decodeText(rec.name)}», которую удаляет ${layer.name}`, zh: `引用了被 ${layer.name} 删除的 ${rec.stringId} “${decodeText(rec.name)}”` }),
         });
       }
     }
@@ -196,9 +196,9 @@ function checkActionOverrides(ctx: ModContext, issues: ValidationIssue[]): void 
         key,
         target: added.dialog,
         ...msg({
-          en: `dialogue ${added.dialog} «${ctx.name(added.dialog) ?? ''}» (score ${my}) is not below ${rv} «${ctx.name(rv) ?? ''}» (score ${theirs}, ${acts('en')}) on event ${added.event}: the game may pick the mod dialogue and the action will not happen; make your dialogue a fallback (lower score bonus)`,
+          en: `dialogue ${added.dialog} “${ctx.name(added.dialog) ?? ''}” (score ${my}) is not below ${rv} “${ctx.name(rv) ?? ''}” (score ${theirs}, ${acts('en')}) on event ${added.event}: the game may pick the mod dialogue and the action will not happen; make your dialogue a fallback (lower score bonus)`,
           ru: `диалог ${added.dialog} «${ctx.name(added.dialog) ?? ''}» (очки ${my}) не уступает ${rv} «${ctx.name(rv) ?? ''}» (очки ${theirs}, ${acts('ru')}) на событии ${added.event}: игра может выбрать диалог мода, и действие не случится; сделайте свой диалог запасным (score bonus ниже)`,
-          zh: `对话 ${added.dialog} «${ctx.name(added.dialog) ?? ''}»（分数 ${my}）不低于 ${rv} «${ctx.name(rv) ?? ''}»（分数 ${theirs}，${acts('zh')}），事件 ${added.event}：游戏可能选择 Mod 的对话，动作将不会发生；请把你的对话设为备用（降低 score bonus）`,
+          zh: `对话 ${added.dialog} “${ctx.name(added.dialog) ?? ''}”（分数 ${my}）不低于 ${rv} “${ctx.name(rv) ?? ''}”（分数 ${theirs}，${acts('zh')}），事件 ${added.event}：游戏可能选择 Mod 的对话，动作将不会发生；请把你的对话设为备用（降低 score bonus）`,
         }),
       });
     }

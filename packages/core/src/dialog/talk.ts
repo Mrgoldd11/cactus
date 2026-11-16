@@ -289,11 +289,13 @@ export interface TalkOptions {
   translation?: TranslationIndex;
   /** Готовый индекс отрядов (для повторных вызовов). */
   squads?: SquadIndex;
+  /** Interface language of the event label (default English). */
+  lang?: string;
 }
 
-function eventLabelOf(ctx: ModContext, event: number): string {
+function eventLabelOf(ctx: ModContext, event: number, lang: string): string {
   const def = refValueEnum(ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0);
-  return def ? formatEnumValue(def, event) : String(event);
+  return def ? formatEnumValue(def, event, lang) : String(event);
 }
 
 function dialogConditions(rec: GameRecord, root: DialogueGraphNode | undefined): string[] {
@@ -414,7 +416,7 @@ export function simulateTalk(ctx: ModContext, character: string, event = EVENT_T
   const rank = new Map(chooseOrder(ctx, list).map((d, i) => [d, i]));
   const live = (x: TalkCandidate): number => (x.verdict === 'locked' || x.verdict === 'empty' || x.verdict === 'missing' ? 1 : 0);
   const candidates = [...byDialog.values()].sort((a, b) => live(a) - live(b) || (rank.get(a.dialog) ?? 0) - (rank.get(b.dialog) ?? 0));
-  const sim: TalkSimulation = { character, name: ctx.name(character) ?? character, event, eventLabel: eventLabelOf(ctx, event), candidates, pool, opening: [] };
+  const sim: TalkSimulation = { character, name: ctx.name(character) ?? character, event, eventLabel: eventLabelOf(ctx, event, options.lang ?? 'en'), candidates, pool, opening: [] };
   const loc = ctx.localizedName(character);
   if (loc !== undefined) sim.localized = loc;
   const winner = candidates.find((x) => x.verdict === 'wins');
@@ -497,7 +499,7 @@ const talkEn: TalkWords = {
   rules: [
     'The game collects all dialogues of the character for the event: its own, from its packages, from the squad and faction packages.',
     'It drops those that do not fit right now: conditions not met, the chance failed or the dialogue is locked.',
-    'Of the rest it takes those with the highest score. If there are several, one at random with equal odds: score does not give «better chances».',
+    'Of the rest it takes those with the highest score. If there are several, one at random with equal odds: score does not give “better chances”.',
     'Score = score bonus plus extras: +1 for each condition, +2 for faction, town, race, item, world state and so on. That is why a dialogue with met conditions usually beats a plain one.',
     'The score of the first line is added to the dialogue score; the first line is picked by the same rule.',
     'A subtlety: the game walks the list top to bottom and does not drop those already taken, so sometimes dialogues with a lower score get into the draw too.',
@@ -511,10 +513,10 @@ const talkEn: TalkWords = {
   shadowed: 'the game will not pick it',
   head: (n, c, e) => `${n} (${c}), event ${e}`,
   noDialogs: 'no dialogues for this event',
-  winner: (n) => `result: without any conditions the game picks «${n}»`,
+  winner: (n) => `result: without any conditions the game picks “${n}”`,
   pool: (n, l) => `result: without conditions the game picks one of ${String(n)} at random: ${l}`,
   none: 'result: no dialogue fits without conditions — what is said depends on conditions',
-  overrideNote: 'dialogues that «fire when conditions are met» override this when their conditions are met',
+  overrideNote: 'dialogues that “fire when conditions are met” override this when their conditions are met',
   score: (n) => `score ${String(n)}`,
   withOpening: (n) => `, with the first line — up to ${String(n)}`,
   always: 'no conditions',
@@ -523,7 +525,7 @@ const talkEn: TalkWords = {
   actions: 'actions',
   from: 'from',
   layer: 'layer',
-  opening: (n) => `start of conversation «${n}»:`,
+  opening: (n) => `start of conversation “${n}”:`,
   chance: 'chance',
   chanceIf: 'chance if conditions met',
   player: 'player',
@@ -591,7 +593,7 @@ const talkZh: TalkWords = {
   shadowed: '游戏不会选择它',
   head: (n, c, e) => `${n}（${c}），事件 ${e}`,
   noDialogs: '该事件没有对话',
-  winner: (n) => `结果：无需任何条件，游戏会选择 «${n}»`,
+  winner: (n) => `结果：无需任何条件，游戏会选择 “${n}”`,
   pool: (n, l) => `结果：无条件时游戏会从 ${String(n)} 个中随机选一个：${l}`,
   none: '结果：无条件时没有适用的对话 — 说什么取决于条件',
   overrideNote: '“条件满足时触发”的对话在条件满足时会覆盖此结果',
@@ -603,7 +605,7 @@ const talkZh: TalkWords = {
   actions: '动作',
   from: '来源',
   layer: '图层',
-  opening: (n) => `对话开头 «${n}»：`,
+  opening: (n) => `对话开头 “${n}”：`,
   chance: '几率',
   chanceIf: '条件满足时几率',
   player: '玩家',

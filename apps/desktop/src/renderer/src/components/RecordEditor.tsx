@@ -11,6 +11,7 @@ import {
   decodeText,
   defaultValue,
   encodeText,
+  enumLabel,
   fieldRows,
   formatFieldValue,
   formatFloat,
@@ -183,12 +184,12 @@ function TabButton({ tab, cur, set, label, marked }: { tab: Tab; cur: Tab; set: 
 
 // ---------------------------------------------------------------- поля
 
-function displayValue(ctx: ModContext, rec: GameRecord, row: FieldRow, v: ScalarValue | undefined): string {
+function displayValue(ctx: ModContext, rec: GameRecord, row: FieldRow, v: ScalarValue | undefined, lang: string): string {
   if (v === undefined) return '';
   if (row.dict === 'strings' || row.dict === 'files') return decodeText(v as Uint8Array);
   if (row.dict === 'floats') return formatFloat(v as number);
   if (row.dict === 'vec3s' || row.dict === 'vec4s') return (v as number[]).map(formatFloat).join(', ');
-  return formatFieldValue(ctx, rec, row.dict, row.key, v);
+  return formatFieldValue(ctx, rec, row.dict, row.key, v, lang);
 }
 
 /** Текст из поля ввода → значение поля; строка — ошибка разбора. */
@@ -329,6 +330,7 @@ interface FieldLineProps {
 }
 
 function FieldLine({ ctx, rec, row, disabled, t, onSet, onText, onReset }: FieldLineProps): ReactNode {
+  const lang = useLang();
   const shownValue = row.value ?? (row.def ? defaultValue(ctx.schema, row.def) : undefined);
   const canReset = row.state === 'changed' || row.state === 'added' || row.state === 'removed';
   return (
@@ -349,8 +351,8 @@ function FieldLine({ ctx, rec, row, disabled, t, onSet, onText, onReset }: Field
       <span className="field-value">
         <FieldInput ctx={ctx} rec={rec} row={row} value={shownValue} disabled={disabled} onSet={onSet} onText={onText} />
       </span>
-      <span className="field-lower muted" title={row.lower !== undefined ? displayValue(ctx, rec, row, row.lower) : undefined}>
-        {row.lower !== undefined ? displayValue(ctx, rec, row, row.lower) : ''}
+      <span className="field-lower muted" title={row.lower !== undefined ? displayValue(ctx, rec, row, row.lower, lang) : undefined}>
+        {row.lower !== undefined ? displayValue(ctx, rec, row, row.lower, lang) : ''}
       </span>
       <span>
         {canReset && !disabled && (
@@ -363,11 +365,11 @@ function FieldLine({ ctx, rec, row, disabled, t, onSet, onText, onReset }: Field
   );
 }
 
-function enumOptions(e: EnumDef, value: number | undefined): ReactNode[] {
+function enumOptions(e: EnumDef, value: number | undefined, lang: string): ReactNode[] {
   const opts = e.values.map((v) => (
     <option key={v.value} value={v.value} title={v.description}>
       {v.name}
-      {v.label !== undefined ? ` — ${v.label}` : ''}
+      {v.label !== undefined ? ` — ${enumLabel(e, v, lang) ?? v.label}` : ''}
     </option>
   ));
   if (value !== undefined && !e.values.some((v) => v.value === value)) opts.unshift(
@@ -383,6 +385,7 @@ function colorHex(v: number): string {
 }
 
 function FieldInput({ ctx, rec, row, value, disabled, onSet, onText }: { ctx: ModContext; rec: GameRecord; row: FieldRow; value: ScalarValue | undefined; disabled: boolean; onSet: (v: ScalarValue) => void; onText: (text: string) => void }): ReactNode {
+  const lang = useLang();
   const testId = `field-${row.key}`;
   if (row.dict === 'bools') {
     return (
@@ -408,11 +411,11 @@ function FieldInput({ ctx, rec, row, value, disabled, onSet, onText }: { ctx: Mo
         }}
       >
         {value === undefined && <option value="" />}
-        {enumOptions(row.enum, typeof value === 'number' ? value : undefined)}
+        {enumOptions(row.enum, typeof value === 'number' ? value : undefined, lang)}
       </select>
     );
   }
-  const text = row.dict === 'ints' ? (value === undefined ? '' : String(value)) : displayValue(ctx, rec, row, value);
+  const text = row.dict === 'ints' ? (value === undefined ? '' : String(value)) : displayValue(ctx, rec, row, value, lang);
   const input = (
     <CommitInput
       value={text}
@@ -537,6 +540,7 @@ function RefsTab({ project, sid, groups, disabled, edit, onGo }: { project: Proj
 }
 
 function RefLine({ ctx, sid, group, row, disabled, edit, onGo, t }: { ctx: ModContext; sid: string; group: RefGroup; row: RefRow; disabled: boolean; edit: (fn: () => void) => void; onGo: (sid: string) => void; t: Strings }): ReactNode {
+  const lang = useLang();
   const r = row.ref;
   const values = [r.v0, r.v1, r.v2];
   const removed = row.state === 'removed';
@@ -578,7 +582,7 @@ function RefLine({ ctx, sid, group, row, disabled, edit, onGo, t }: { ctx: ModCo
                   setValue(i, Number(ev.target.value));
                 }}
               >
-                {enumOptions(e, v)}
+                {enumOptions(e, v, lang)}
               </select>
             </span>
           );

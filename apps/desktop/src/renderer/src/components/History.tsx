@@ -245,7 +245,7 @@ export function HistoryList({ project, status }: { project: Project; status: (m:
       >
         <span className="hist-pos">{state === 'current' ? '▶' : ''}</span>
         <span className="hist-num muted">{n === 0 ? '' : n}</span>
-        <span className="hist-text">{text}</span>
+        <span className="hist-text" title={text}>{text}</span>
         {s && <StepMarks step={s} t={t} />}
         {state === 'current' && <span className="hist-here">{t.histCurrent}</span>}
       </button>

@@ -190,7 +190,7 @@ export function formatRecord(ctx: ModContext, rec: GameRecord, options: FormatRe
     if (list.length === 0) continue;
     out.push(`  ref ${cat}:`);
     for (const r of list.slice(0, max)) {
-      const note = isRemovedRef(r) ? undefined : (describeDialogAction(ctx, r, cat) ?? describeRefValues(ctx.schema, typeName, cat, r));
+      const note = isRemovedRef(r) ? undefined : (describeDialogAction(ctx, r, cat, lang) ?? describeRefValues(ctx.schema, typeName, cat, r, lang));
       out.push(`    → ${refLabel(ctx, r.target, lang)}  ${formatRefValues(r, lang)}${note !== undefined ? `  — ${note}` : ''}`);
     }
     if (list.length > max) out.push(`    ${w.more(list.length - max)}`);

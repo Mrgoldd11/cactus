@@ -243,7 +243,7 @@ describe('слияние: применение', () => {
     expect(ctx.history().undo).toHaveLength(1);
     const cs = ctx.history().undo[0]!;
     expect(describeChangeset(ctx, cs).text.ru).toBe('Слияние с «Source.mod»: записей 4');
-    expect(describeChangeset(ctx, cs).text.en).toBe('Merge from «Source.mod»: 4 records');
+    expect(describeChangeset(ctx, cs).text.en).toBe('Merge from “Source.mod”: 4 records');
     // Изменённая запись ванили в моде — только поле value.
     const delta = ctx.delta('k')!;
     expect([...delta.ints.keys()]).toEqual(['value']);

@@ -7,6 +7,7 @@
  */
 import { useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import {
+  quote,
   applyMerge,
   checkMergeSource,
   FileType,
@@ -282,7 +283,7 @@ function MergePanel(): ReactNode {
     try {
       checkMergeSource(ctx, r.name);
       const file = readDataFile(r.bytes);
-      if (file.fileType !== FileType.Mod && file.fileType !== FileType.MergeMod) throw new MergeError(`«${r.name}»: ${t.mgBadFile}`);
+      if (file.fileType !== FileType.Mod && file.fileType !== FileType.MergeMod) throw new MergeError(`${quote(r.name, lang)}: ${t.mgBadFile}`);
       session.source = { name: r.name, file };
       session.levelData = r.levelData;
     } catch (e) {

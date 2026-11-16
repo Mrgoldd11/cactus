@@ -7,6 +7,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   EVENT_TALK,
+  enumLabel,
+  quote,
   refValueEnum,
   simulateTalk,
   type ScorePart,
@@ -14,7 +16,7 @@ import {
   type TalkLine,
   type TalkSimulation,
 } from '@kenshi-editor/core';
-import { errorText, type Strings, useT } from '../i18n.ts';
+import { errorText, type Strings, useLang, useT } from '../i18n.ts';
 import { recordName, useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
 
@@ -26,6 +28,7 @@ interface Props {
 }
 
 export function TalkTab({ project, sid, version, onGo }: Props): ReactNode {
+  const lang = useLang();
   const t = useT();
   const [event, setEvent] = useState(EVENT_TALK);
   const translation = useGameTexts(project);
@@ -39,7 +42,8 @@ export function TalkTab({ project, sid, version, onGo }: Props): ReactNode {
     }
   }, [project, sid, event, version, translation]);
 
-  const events = useMemo(() => refValueEnum(project.ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0)?.values ?? [], [project]);
+  const evDef = useMemo(() => refValueEnum(project.ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0), [project]);
+  const events = evDef?.values ?? [];
 
   return (
     <div className="talk" data-testid="talk" data-sid={sid}>
@@ -56,7 +60,7 @@ export function TalkTab({ project, sid, version, onGo }: Props): ReactNode {
             {!events.some((v) => v.value === event) && <option value={event}>{event}</option>}
             {events.map((v) => (
               <option key={v.value} value={v.value} title={v.description}>
-                {v.value} — {v.label ?? v.name}
+                {v.value} — {(evDef && enumLabel(evDef, v, lang)) ?? v.name}
               </option>
             ))}
           </select>
@@ -88,6 +92,7 @@ export function partsText(parts: readonly ScorePart[], t: Strings): string {
 
 function TalkBody({ sim, nameOf, onGo }: { sim: TalkSimulation; nameOf: (sid: string) => string; onGo: (sid: string) => void }): ReactNode {
   const t = useT();
+  const lang = useLang();
   const byId = new Map(sim.candidates.map((c) => [c.dialog, c]));
   const winner = sim.winner !== undefined ? byId.get(sim.winner) : undefined;
   const pool = sim.pool.map((d) => byId.get(d)).filter((c): c is TalkCandidate => c !== undefined);
@@ -125,7 +130,7 @@ function TalkBody({ sim, nameOf, onGo }: { sim: TalkSimulation; nameOf: (sid: st
         <div className="talk-opening" data-testid="talk-opening">
           <div className="group-title">
             {t.talkOpening}
-            {openingOf && openingOf !== winner && ` ${t.talkOpeningOf} «${dialogName(openingOf.dialog)}»`}
+            {openingOf && openingOf !== winner && ` ${t.talkOpeningOf} ${quote(dialogName(openingOf.dialog), lang)}`}
           </div>
           {sim.opening.map((l) => (
             <div key={l.id} className="talk-line-block">
@@ -189,7 +194,8 @@ function CandidateRow({
   onGo: (sid: string) => void;
 }): ReactNode {
   const t = useT();
-  const names = (ds: readonly string[]): string => ds.map((d) => `«${dialogName(d)}»`).join(', ');
+  const lang = useLang();
+  const names = (ds: readonly string[]): string => ds.map((d) => quote(dialogName(d), lang)).join(', ');
   const odds = c.odds !== undefined && (c.verdict === 'random' || c.verdict === 'tie') ? `, ${t.talkChance} ${pct(c.odds)}` : '';
   const withWhom = c.with?.length ? `; ${t.talkWith} ${names(c.with)}` : '';
   const byWhom = c.verdict === 'shadowed' && c.by !== undefined ? ` ${names([c.by])}` : '';
@@ -268,6 +274,7 @@ function CandidateRow({
 
 function LineView({ l, onGo }: { l: TalkLine; onGo: (sid: string) => void }): ReactNode {
   const t = useT();
+  const lang = useLang();
   const first = l.texts[0];
   return (
     <span className="talk-line" data-testid="talk-line" data-id={l.id}>
@@ -279,7 +286,7 @@ function LineView({ l, onGo }: { l: TalkLine; onGo: (sid: string) => void }): Re
           onGo(l.id);
         }}
       >
-        {first ? `«${first.localized ?? first.en}»` : t.talkNoText}
+        {first ? quote(first.localized ?? first.en, lang) : t.talkNoText}
       </button>
       {l.texts.length > 1 && (
         <span className="muted small">

@@ -31,7 +31,7 @@ export const CLI_LANGS = ['en', 'ru', 'zh'] as const;
 /** CLI language: `--lang`, otherwise KEDIT_LANG, otherwise English. */
 export function resolveCliLang(option: string | undefined, env: NodeJS.ProcessEnv): string {
   const v = (option ?? env['KEDIT_LANG'] ?? 'en').trim().toLowerCase();
-  if (!(CLI_LANGS as readonly string[]).includes(v)) throw new UsageError({ en: `--lang: ${CLI_LANGS.join(', ')}, not «${v}»`, ru: `--lang: ${CLI_LANGS.join(', ')}, а не «${v}»` });
+  if (!(CLI_LANGS as readonly string[]).includes(v)) throw new UsageError({ en: `--lang: ${CLI_LANGS.join(', ')}, not “${v}”`, ru: `--lang: ${CLI_LANGS.join(', ')}, а не «${v}»` });
   return v;
 }
 

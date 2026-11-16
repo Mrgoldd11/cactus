@@ -135,7 +135,7 @@ export function parseDiffStatuses(text: string): DiffChange[] {
     .filter((s) => s !== '')
     .map((s) => {
       const c = DIFF_CHANGE_ALIASES[s];
-      if (!c) throw new UiTextError({ en: `Unknown diff status «${s}»: added, changed, removed`, ru: `Неизвестный статус разницы «${s}»: added, changed, removed`, zh: `未知的差异状态 «${s}»：added、changed、removed` });
+      if (!c) throw new UiTextError({ en: `Unknown diff status “${s}”: added, changed, removed`, ru: `Неизвестный статус разницы «${s}»: added, changed, removed`, zh: `未知的差异状态 “${s}”：added、changed、removed` });
       return c;
     });
 }

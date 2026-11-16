@@ -50,11 +50,13 @@ export interface DialogueNode {
 export interface DialogueTreeOptions {
   maxDepth?: number;
   maxNodes?: number;
+  /** Interface language of the condition and effect texts (default English). */
+  lang?: string;
 }
 
 const SKIP_FIELDS = new Set(['speaker']);
 
-function actions(ctx: ModContext, rec: GameRecord, category: string): DialogueAction[] {
+function actions(ctx: ModContext, rec: GameRecord, category: string, lang: string): DialogueAction[] {
   return (rec.refs.get(category) ?? []).map((r) => {
     const a = ctx.get(r.target);
     const fields: string[] = [];
@@ -63,7 +65,7 @@ function actions(ctx: ModContext, rec: GameRecord, category: string): DialogueAc
     }
     fields.push(`ref=${r.v0}/${r.v1}/${r.v2}`);
     const out: DialogueAction = { stringId: r.target, name: a ? decodeText(a.name) : '<нет>', fields };
-    const text = describeDialogAction(ctx, r, category);
+    const text = describeDialogAction(ctx, r, category, lang);
     if (text !== undefined) out.text = text;
     return out;
   });
@@ -73,6 +75,7 @@ export function buildDialogueTree(ctx: ModContext, stringId: string, options: Di
   const seen = new Set<string>();
   const maxDepth = options.maxDepth ?? Infinity;
   const maxNodes = options.maxNodes ?? Infinity;
+  const lang = options.lang ?? 'en';
   let count = 0;
   const visit = (sid: string, depth: number, event?: number): DialogueNode => {
     const rec = ctx.get(sid);
@@ -105,8 +108,8 @@ export function buildDialogueTree(ctx: ModContext, stringId: string, options: Di
         else if (!SKIP_FIELDS.has(k)) node.fields.push(`${k}=${formatFieldValue(ctx, rec, dict, k, v)}`);
       }
     }
-    node.conditions = actions(ctx, rec, 'conditions');
-    node.effects = actions(ctx, rec, 'effects');
+    node.conditions = actions(ctx, rec, 'conditions', lang);
+    node.effects = actions(ctx, rec, 'effects', lang);
     for (const [cat, list] of rec.refs) {
       if (cat === 'conditions' || cat === 'effects' || (TREE_CATEGORIES as readonly string[]).includes(cat) || list.length === 0) continue;
       node.refs.push({ category: cat, targets: list.map((r) => refLabel(ctx, r.target) + (r.v0 || r.v1 || r.v2 ? ` =${r.v0}/${r.v1}/${r.v2}` : '')) });

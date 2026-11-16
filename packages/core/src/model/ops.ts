@@ -89,7 +89,7 @@ const DICT_ALIASES: Record<string, ScalarDict> = {
 
 export function parseDictName(name: string): ScalarDict {
   const d = DICT_ALIASES[name.toLowerCase()];
-  if (!d) throw new EditError({ en: `Unknown field kind «${name}»: bool, int, float, str, file, vec3, vec4`, ru: `Неизвестный вид поля «${name}»: bool, int, float, str, file, vec3, vec4`, zh: `未知的字段类型 «${name}»：bool, int, float, str, file, vec3, vec4` });
+  if (!d) throw new EditError({ en: `Unknown field kind “${name}”: bool, int, float, str, file, vec3, vec4`, ru: `Неизвестный вид поля «${name}»: bool, int, float, str, file, vec3, vec4`, zh: `未知的字段类型 “${name}”：bool, int, float, str, file, vec3, vec4` });
   return d;
 }
 
@@ -119,7 +119,7 @@ function enumInput(ctx: ModContext, stringId: string, key: string, value: JsonSc
   const def = rec && fieldEnum(ctx.schema, ctx.typeName(rec.type), key, rec);
   if (!def) return value;
   const n = parseEnumValue(def, value);
-  if (n === undefined) throw new EditError({ en: `${def.name} has no value «${value}»`, ru: `В ${def.name} нет значения «${value}»`, zh: `${def.name} 中没有值 «${value}»` });
+  if (n === undefined) throw new EditError({ en: `${def.name} has no value “${value}”`, ru: `В ${def.name} нет значения «${value}»`, zh: `${def.name} 中没有值 “${value}”` });
   return n;
 }
 
@@ -368,7 +368,7 @@ export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = defaul
     if (/^-?\d+$/.test(v.trim())) return Number(v);
     const def = getEnum(ctx.schema, name);
     const n = def && parseEnumValue(def, v);
-    if (n === undefined) throw new EditError({ en: `${name} has no value «${v}»`, ru: `В ${name} нет значения «${v}»`, zh: `${name} 中没有值 «${v}»` });
+    if (n === undefined) throw new EditError({ en: `${name} has no value “${v}”`, ru: `В ${name} нет значения «${v}»`, zh: `${name} 中没有值 “${v}”` });
     return n;
   }
 

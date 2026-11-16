@@ -6,6 +6,7 @@
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import {
+  quote,
   applyTranslationRows,
   ensureTranslationDependency,
   formatTranslationCsv,
@@ -240,7 +241,7 @@ function TranslatePanel(): ReactNode {
               <ul>
                 {ir.stale.slice(0, 50).map((s) => (
                   <li key={`${s.id}\n${s.field}`}>
-                    <span className="mono">{s.id} {s.field}</span>: {t.trStaleWas} «{s.was}», {t.trStaleNow} «{s.now}»
+                    <span className="mono">{s.id} {s.field}</span>: {t.trStaleWas} {quote(s.was, lang)}, {t.trStaleNow} {quote(s.now, lang)}
                   </li>
                 ))}
               </ul>

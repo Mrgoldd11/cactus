@@ -82,7 +82,6 @@ export function CategoryTree({ project, version, selected, onSelect, modCount }:
 
   return (
     <div className="tree-pane" data-testid="category-tree">
-      <div className="pane-title">{t.categories}</div>
       <ul className="tree">
         <li>
           <div

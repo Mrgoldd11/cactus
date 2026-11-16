@@ -94,16 +94,14 @@ function DiagnosticsPanel(): ReactNode {
   const issues = useMemo(() => validateMod(project.ctx), [project, version]);
   const errors = issues.filter((i) => i.severity === 'error').length;
   return (
-    <div className="panel-scroll" data-testid="diagnostics">
-      <div className="pane-title">
-        {issues.length === 0 ? t.diagnosticsOk : `${errors} ${t.errors}, ${issues.length - errors} ${t.warnings}`}
-      </div>
+    <div className="panel-scroll panel-pad" data-testid="diagnostics">
+      {issues.length > 0 && <div className="pane-title">{`${errors} ${t.errors}, ${issues.length - errors} ${t.warnings}`}</div>}
       <IssueList project={project} issues={issues} onGo={go} />
     </div>
   );
 }
 
-function AiChangesPanel({ api }: PanelProps): ReactNode {
+function AiChangesPanel(): ReactNode {
   const { project, go, report } = useWorkbench();
   const changesets = useAiChangesets();
   const status = useLiveStatus();
@@ -114,9 +112,6 @@ function AiChangesPanel({ api }: PanelProps): ReactNode {
       status={status}
       onGo={go}
       onReport={report}
-      onClose={() => {
-        api.close();
-      }}
     />
   );
 }

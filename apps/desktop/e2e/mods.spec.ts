@@ -325,7 +325,7 @@ test('перевод: панель «Перевод» — оригинал и п
     const panel = page.getByTestId('translate-panel');
     await expect(panel).toContainText('Выберите мод');
     await page.getByTestId('tr-add-source').selectOption('Hats.mod');
-    await expect(page.getByTestId('tr-summary')).toHaveText('переведено 0 из 4', { timeout: 60_000 });
+    await expect(page.getByTestId('tr-summary')).toHaveText('Переведено: 0 из 4', { timeout: 60_000 });
     await expect(page.getByTestId('tr-source')).toHaveValue('Hats.mod');
 
     // Перевод в поле — в мод: статус «есть», запись в моде, зависимость от оригинала.
@@ -334,7 +334,7 @@ test('перевод: панель «Перевод» — оригинал и п
     await input.fill('Соломенная шляпа');
     await input.press('Control+Enter');
     await expect(row('1-Hats.mod', 'name')).toHaveAttribute('data-status', 'done');
-    await expect(page.getByTestId('tr-summary')).toHaveText('переведено 1 из 4');
+    await expect(page.getByTestId('tr-summary')).toHaveText('Переведено: 1 из 4');
     await expect(page.getByTestId('save')).toHaveClass(/primary/);
 
     await page.getByTestId('tr-filter-todo').check();
@@ -361,15 +361,15 @@ test('перевод: панель «Перевод» — оригинал и п
     writeFileSync(csv, filled);
     await page.getByTestId('tr-import').click();
     await expect(page.getByTestId('tr-import-report')).toContainText('Загружено переводов: 3, уже такие же: 1');
-    await expect(page.getByTestId('tr-summary')).toHaveText('переведено 4 из 4');
+    await expect(page.getByTestId('tr-summary')).toHaveText('Переведено: 4 из 4');
     await expect(row('2-Hats.mod', 'description').getByTestId('tr-input')).toHaveValue('Тяжёлая, "очень" тяжёлая.');
     await expect(page.getByTestId('tr-checks')).toContainText('Меняются только тексты');
     await page.screenshot({ path: join(shots, '32-translate.png') });
 
     await page.keyboard.press('Control+KeyZ');
-    await expect(page.getByTestId('tr-summary')).toHaveText('переведено 1 из 4');
+    await expect(page.getByTestId('tr-summary')).toHaveText('Переведено: 1 из 4');
     await page.keyboard.press('Control+KeyY');
-    await expect(page.getByTestId('tr-summary')).toHaveText('переведено 4 из 4');
+    await expect(page.getByTestId('tr-summary')).toHaveText('Переведено: 4 из 4');
 
     // Выгрузка в папку игры — отказ.
     await app.evaluate(({ dialog }, p) => {

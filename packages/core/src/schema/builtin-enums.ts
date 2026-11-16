@@ -65,6 +65,88 @@ export const BUILTIN_ENUM_LABELS: Readonly<Record<string, Readonly<Record<string
   },
 };
 
+/** The same short labels in English and Chinese; the Russian ones above stay the parse aliases. */
+export const BUILTIN_ENUM_LABELS_I18N: Readonly<Record<string, Readonly<Record<string, Readonly<Record<string, string>>>>>> = {
+  en: {
+    TalkerEnum: {
+      T_ME: 'me',
+      T_TARGET: 'target',
+      T_TARGET_IF_PLAYER: 'target if player',
+      T_INTERJECTOR1: 'interjector 1',
+      T_INTERJECTOR2: 'interjector 2',
+      T_INTERJECTOR3: 'interjector 3',
+      T_WHOLE_SQUAD: 'whole squad',
+      T_TARGET_WITH_RACE: 'target of the race',
+    },
+    ComparisonEnum: { CE_EQUALS: '=', CE_LESS_THAN: '<', CE_MORE_THAN: '>' },
+    DialogRepetitionEnum: {
+      DR_NO_LIMIT: 'no limit',
+      DR_SHORT_2: '2 h',
+      DR_MEDIUM_6: '6 h',
+      DR_LONG_48: '48 h',
+      DR_LONG_1WEEK: 'a week',
+      DR_ONCE_ONLY: 'once only',
+      DR_VSHORT_020: 'very short',
+    },
+    EventTriggerEnum: {
+      EV_PLAYER_TALK_TO_ME: 'talk',
+      EV_ANNOUNCEMENT: 'announcement',
+      EV_I_SEE_NEUTRAL_SQUAD: 'sees a neutral squad',
+      EV_I_SEE_RAGDOLL: 'sees someone lying',
+      EV_______: 'sees a hostile squad',
+      EV_I_________: 'a comrade fell',
+      EV_I_DEFEATED_SQUAD: 'defeated a squad',
+      EV_LAUNCH_ATTACK: 'launching an attack',
+      EV_GET_UP_PEACE: 'got up after a fight',
+      EV_GET_UP_FIGHT: 'got up in a fight',
+      EV_SPEECH_INTERRUPTED_ATTACKED_BY_TARGET: 'attacked mid-conversation',
+      EV_GIVE_UP_CHASE: 'gave up the chase',
+      EV_I_SEE_ENEMY_PLAYER: 'sees an enemy player',
+      EV_I_SEE_ALLY_PLAYER: 'sees an allied player',
+      EV_CROWD_TRIGGERED: 'crowd',
+    },
+  },
+  zh: {
+    TalkerEnum: {
+      T_ME: '我',
+      T_TARGET: '对方',
+      T_TARGET_IF_PLAYER: '对方（如果是玩家）',
+      T_INTERJECTOR1: '插话者 1',
+      T_INTERJECTOR2: '插话者 2',
+      T_INTERJECTOR3: '插话者 3',
+      T_WHOLE_SQUAD: '整个小队',
+      T_TARGET_WITH_RACE: '指定种族的对方',
+    },
+    ComparisonEnum: { CE_EQUALS: '=', CE_LESS_THAN: '<', CE_MORE_THAN: '>' },
+    DialogRepetitionEnum: {
+      DR_NO_LIMIT: '无限制',
+      DR_SHORT_2: '2 小时',
+      DR_MEDIUM_6: '6 小时',
+      DR_LONG_48: '48 小时',
+      DR_LONG_1WEEK: '一周',
+      DR_ONCE_ONLY: '仅一次',
+      DR_VSHORT_020: '很短',
+    },
+    EventTriggerEnum: {
+      EV_PLAYER_TALK_TO_ME: '对话',
+      EV_ANNOUNCEMENT: '公告',
+      EV_I_SEE_NEUTRAL_SQUAD: '看到中立小队',
+      EV_I_SEE_RAGDOLL: '看到倒地者',
+      EV_______: '看到敌对小队',
+      EV_I_________: '同伴倒下',
+      EV_I_DEFEATED_SQUAD: '击败了小队',
+      EV_LAUNCH_ATTACK: '发起进攻',
+      EV_GET_UP_PEACE: '战斗后起身',
+      EV_GET_UP_FIGHT: '战斗中起身',
+      EV_SPEECH_INTERRUPTED_ATTACKED_BY_TARGET: '对话中遭到攻击',
+      EV_GIVE_UP_CHASE: '放弃追击',
+      EV_I_SEE_ENEMY_PLAYER: '看到敌对玩家',
+      EV_I_SEE_ALLY_PLAYER: '看到盟友玩家',
+      EV_CROWD_TRIGGERED: '人群',
+    },
+  },
+};
+
 /** Поля типов, которых нет в fcs.def (FCS показывает их своими окнами): поле → enum. */
 export const BUILTIN_FIELD_ENUMS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   DIALOG_ACTION: {

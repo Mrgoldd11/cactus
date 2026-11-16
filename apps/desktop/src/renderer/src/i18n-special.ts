@@ -86,7 +86,7 @@ export const specialEn = {
   facOnlyLinkedTip: 'Hide factions that have no relations and that no one has a relation to.',
   facMod: 'Changed by',
   facModAll: 'any (all factions)',
-  facSummary: (shown: number, all: number) => `factions ${shown} of ${all}`,
+  facSummary: (shown: number, all: number) => `Factions: ${shown} of ${all}`,
   facCap: (n: number) => `Showing the first ${n}. Narrow the filter to see the rest.`,
   facNote: 'Row — how it feels, column — towards whom. Number from −100 to +100; B → A may differ from A → B.',
   facHelpTip: 'What the colours and numbers mean',
@@ -121,7 +121,7 @@ export const specialEn = {
   compareHint: 'Weapons, armour, items and bags side by side: sort, filter, edit right in the cell.',
   cmpType: 'Type',
   cmpSearch: 'Filter by name…',
-  cmpFilter: 'Field filter, e.g. value>1000',
+  cmpFilter: 'Filter: value>1000',
   cmpFilterTip: 'Like the search: field=value, field>3, field<=1.5, field~text, field? (several — separated by ;)',
   cmpOnlyChanged: 'Only changed',
   cmpOnlyChangedTip: 'Only records the mod or other loaded mods change or add.',
@@ -130,7 +130,7 @@ export const specialEn = {
   cmpColumnsDefault: 'Default set',
   cmpColumnsAll: 'All differing',
   cmpName: 'Name',
-  cmpSummary: (shown: number, all: number) => `records ${shown} of ${all}`,
+  cmpSummary: (shown: number, all: number) => `Records: ${shown} of ${all}`,
   cmpCap: (n: number) => `Showing the first ${n}. Narrow the filter to see the rest.`,
   cmpNote: 'Click a column header to sort. Click a cell to edit (Enter — apply, Esc — cancel). ▲ — the largest in the column, ▼ — the smallest. Yellow — changed by your mod, blue — by other loaded mods.',
   cmpMine: 'changed by this mod',
@@ -156,18 +156,18 @@ export const specialEn = {
   bulkValue: 'Value',
   bulkWith: 'Replace with…',
   bulkApply: (n: number) => `Apply (${n})`,
-  bulkNote: 'Pick records by type, name and field filter, then the operation. The table shows before → after; untick the rows you do not want to change. Apply changes the ticked ones in one step (one undo). Replace in the «name» field renames records.',
+  bulkNote: 'Pick records by type, name and field filter, then the operation. The table shows before → after; untick the rows you do not want to change. Apply changes the ticked ones in one step (one undo). Replace in the “name” field renames records.',
   bulkSummary: (matched: number, changes: number, skipped: number) => `matched ${matched}, will change ${changes}, skipped ${skipped}`,
   bulkEmpty: 'Choose the field and the value — the preview appears here.',
   bulkNeed: (what: 'field' | 'value' | 'find', kind: string): string => {
     const ref = kind === 'refAdd' || kind === 'refRemove';
-    if (what === 'field') return ref ? 'Pick «Field» — the reference list to change, e.g. weapons (what a shop sells).' : 'Fill in «Field» — which field to change, e.g. value (the price).';
-    if (what === 'find') return 'Fill in «Find…» — the text to look for, e.g. Katana.';
-    if (ref) return 'Fill in «Value» — the record to link to: its name or id, e.g. Katana.';
-    return kind === 'mul' ? 'Fill in «Value» — the multiplier, e.g. 1.5 (×1.5) or 0.5 (half).' : kind === 'add' ? 'Fill in «Value» — how much to add, e.g. 100 (or -50 to subtract).' : 'Fill in «Value» — the new value for the field, e.g. 1000.';
+    if (what === 'field') return ref ? 'Pick “Field” — the reference list to change, e.g. weapons (what a shop sells).' : 'Fill in “Field” — which field to change, e.g. value (the price).';
+    if (what === 'find') return 'Fill in “Find…” — the text to look for, e.g. Katana.';
+    if (ref) return 'Fill in “Value” — the record to link to: its name or id, e.g. Katana.';
+    return kind === 'mul' ? 'Fill in “Value” — the multiplier, e.g. 1.5 (×1.5) or 0.5 (half).' : kind === 'add' ? 'Fill in “Value” — how much to add, e.g. 100 (or -50 to subtract).' : 'Fill in “Value” — the new value for the field, e.g. 1000.';
   },
   bulkMatchedNow: (n: number) => `Records matching the type and filters: ${n}.`,
-  bulkFieldTip: 'Which field (or reference list) to change. The list only shows what fits the chosen operation. «name» is the record name (Replace text only).',
+  bulkFieldTip: 'Which field (or reference list) to change. The list only shows what fits the chosen operation. “name” is the record name (Replace text only).',
   bulkValueTip: (kind: string): string =>
     kind === 'mul'
       ? 'The multiplier: 2 doubles, 0.5 halves'
@@ -176,7 +176,7 @@ export const specialEn = {
         : kind === 'replace'
           ? 'The text to put in place of the found one'
           : kind === 'refAdd' || kind === 'refRemove'
-            ? 'The record to link to: name (English or Russian) or id'
+            ? 'The record to link to: name (English or translated) or id'
             : 'The new value of the field',
   bulkValuePh: (kind: string): string => (kind === 'mul' ? 'Multiplier, e.g. 1.5' : kind === 'add' ? 'Amount, e.g. 100' : kind === 'replace' ? 'Replace with…' : kind === 'refAdd' || kind === 'refRemove' ? 'Record: name or id' : 'New value'),
   bulkRefAdd: 'Add reference',
@@ -185,15 +185,15 @@ export const specialEn = {
   bulkRefValuesTip: 'Numbers stored with the reference, e.g. v0 is the chance (see the field description). Empty: a new reference gets the defaults, an existing one stays as is.',
   bulkPickRow: 'Apply to this record',
   bulkPickAll: 'Select all / none',
-  bulkChosen: (n: number, total: number): string => `selected ${n} of ${total}`,
+  bulkChosen: (n: number, total: number): string => `Selected: ${n} of ${total}`,
   bulkSortTip: 'Click to sort',
   bulkFilterTip: 'Like the FCS search: field=value, field!=value, field>3, field:text (contains), field!:text, field?regex, field? (is set), list>5, list.v0>=3, Ref>0. Several — separated by ;',
   bulkCondRefList: 'reference list',
   bulkCondRefCount: 'Ref — how many records link to this one',
   bulkColumnsNote: 'Columns: the field being changed and the condition field — click a header to sort.',
   bulkSearchPh: 'Name or id: katana',
-  bulkSearchTip: 'Optional. Part of the id or the name — English or Russian (katana, катана). Only records of the chosen type are searched.',
-  bulkFilterPh: 'Field condition, e.g. value>1000',
+  bulkSearchTip: 'Optional. Part of the id or the name — English or translated (katana). Only records of the chosen type are searched.',
+  bulkFilterPh: 'Condition: value>1000',
   bulkFilterHelpTip: 'Field filter: operators and the fields of this type',
   bulkFilterHelpTitle: 'Field filter — any field of the type, not only the price',
   bulkOpsHead: ['Write', 'Meaning', 'Example'],
@@ -227,7 +227,7 @@ export const specialEn = {
   bulkCondValue: 'value',
   bulkCondPickValue: '— value —',
   bulkCondAdd: 'Add condition',
-  bulkCondTip: 'Builds the «field filter» for you: pick a field, how to compare, and the value. The condition is added to the filter text.',
+  bulkCondTip: 'Builds the “field filter” for you: pick a field, how to compare, and the value. The condition is added to the filter text.',
   bulkCmp: [
     ['=', 'equals'],
     ['!=', 'not equal'],
@@ -244,17 +244,17 @@ export const specialEn = {
   bulkSentence: (x: BulkSentenceArgs): string => {
     const what =
       x.kind === 'mul'
-        ? `Multiply «${x.field}» by ${x.value}`
+        ? `Multiply “${x.field}” by ${x.value}`
         : x.kind === 'add'
-          ? `Add ${x.value} to «${x.field}»`
+          ? `Add ${x.value} to “${x.field}”`
           : x.kind === 'replace'
-            ? `In «${x.field}» replace «${x.find}» with «${x.value}»`
+            ? `In “${x.field}” replace “${x.find}” with “${x.value}”`
             : x.kind === 'refAdd'
-              ? `Add a link to «${x.value}» to the list «${x.field}»`
+              ? `Add a link to “${x.value}” to the list “${x.field}”`
               : x.kind === 'refRemove'
-                ? `Remove the link to «${x.value}» from the list «${x.field}»`
-                : `Set «${x.field}» to ${x.value}`;
-    const where = [x.filter.trim() !== '' ? `where ${x.filter.trim()}` : '', x.search.trim() !== '' ? `with «${x.search.trim()}» in the name or id` : '', x.modOnly ? 'only from the mod' : ''].filter((w) => w !== '').join(', ');
+                ? `Remove the link to “${x.value}” from the list “${x.field}”`
+                : `Set “${x.field}” to ${x.value}`;
+    const where = [x.filter.trim() !== '' ? `where ${x.filter.trim()}` : '', x.search.trim() !== '' ? `with “${x.search.trim()}” in the name or id` : '', x.modOnly ? 'only from the mod' : ''].filter((w) => w !== '').join(', ');
     return `${what} in ${x.type} records${where !== '' ? `, ${where}` : ''}. Will change ${x.changes} of ${x.matched}.`;
   },
   bulkHelpTip: 'How bulk edits work, with examples',
@@ -265,12 +265,12 @@ export const specialEn = {
     ['Name search (optional)', 'Part of the id or of the English/Russian name.', 'katana'],
     ['Field filter (optional)', 'Conditions on fields, several separated by ;', 'value>=300'],
     ['Only in the mod', 'Only records the mod already adds or changes.', ''],
-    ['Operation', 'Set — put a value. Multiply / Add — numbers. Replace text — in text fields and in «name».', 'Multiply'],
+    ['Operation', 'Set — put a value. Multiply / Add — numbers. Replace text — in text fields and in “name”.', 'Multiply'],
     ['Field', 'What to change. Typing shows the fields of this type.', 'value (the price)'],
     ['Value (required)', 'The number or text for the operation. Until it is filled in there is no preview.', '1.5'],
     ['Apply', 'Changes all rows of the table in one step; one undo reverts them all.', ''],
   ] as readonly (readonly [string, string, string])[],
-  bulkHelpExamples: ['Everything in WEAPON costs twice as much: operation Multiply, field value, value 2.', 'Rename: operation Replace text, field name, Find «Katana», Replace with «Katana MK2».', 'Sell a weapon in every shop: type VENDOR_LIST, operation Add reference, field weapons, value — the weapon name or id.'],
+  bulkHelpExamples: ['Everything in WEAPON costs twice as much: operation Multiply, field value, value 2.', 'Rename: operation Replace text, field name, Find “Katana”, Replace with “Katana MK2”.', 'Sell a weapon in every shop: type VENDOR_LIST, operation Add reference, field weapons, value — the weapon name or id.'],
   bulkNothing: 'Nothing would change.',
   bulkBefore: 'Before',
   bulkAfter: 'After',
@@ -319,7 +319,7 @@ export const specialEn = {
   grLinks: 'Link values',
   grApply: 'Apply',
   grEmpty: 'Nothing to show',
-  grPick: 'Click a node: details, jumps to the record and «Where in game», link values.',
+  grPick: 'Click a node: details, jumps to the record and “Where in game”, link values.',
   grMissing: 'no such record',
   grValue: (i: number) => `value ${i + 1}`,
   /** Что значат значения ссылки, по полю. */
@@ -375,7 +375,7 @@ export const specialRu: SpecialStrings = {
   facOnlyLinkedTip: 'Скрыть фракции без отношений, к которым тоже никто не относится.',
   facMod: 'Поменял',
   facModAll: 'любой (все фракции)',
-  facSummary: (shown: number, all: number) => `фракций ${shown} из ${all}`,
+  facSummary: (shown: number, all: number) => `Фракций: ${shown} из ${all}`,
   facCap: (n: number) => `Показаны первые ${n}. Уточните фильтр, чтобы увидеть остальные.`,
   facNote: 'Строка — как относится, столбец — к кому. Число от −100 до +100; B → A может отличаться от A → B.',
   facHelpTip: 'Что значат цвета и числа',
@@ -409,7 +409,7 @@ export const specialRu: SpecialStrings = {
   compareHint: 'Оружие, броня, предметы и сумки рядом: сортировка, фильтры, правка прямо в ячейке.',
   cmpType: 'Тип',
   cmpSearch: 'Фильтр по имени…',
-  cmpFilter: 'Фильтр по полю, напр. value>1000',
+  cmpFilter: 'Фильтр: value>1000',
   cmpFilterTip: 'Как в поиске: поле=значение, поле>3, поле<=1.5, поле~текст, поле? (несколько — через ;)',
   cmpOnlyChanged: 'Только изменённые',
   cmpOnlyChangedTip: 'Только записи, которые меняет или добавляет мод или другие загруженные моды.',
@@ -418,7 +418,7 @@ export const specialRu: SpecialStrings = {
   cmpColumnsDefault: 'Набор по умолчанию',
   cmpColumnsAll: 'Все различающиеся',
   cmpName: 'Имя',
-  cmpSummary: (shown: number, all: number) => `записей ${shown} из ${all}`,
+  cmpSummary: (shown: number, all: number) => `Записей: ${shown} из ${all}`,
   cmpCap: (n: number) => `Показаны первые ${n}. Уточните фильтр, чтобы увидеть остальные.`,
   cmpNote: 'Клик по заголовку — сортировка. Клик по ячейке — правка (Enter — применить, Esc — отмена). ▲ — наибольшее в столбце, ▼ — наименьшее. Жёлтое — поменял ваш мод, синее — другие загруженные моды.',
   cmpMine: 'поменял этот мод',
@@ -473,15 +473,15 @@ export const specialRu: SpecialStrings = {
   bulkRefValuesTip: 'Числа, которые хранятся в ссылке, например v0 — шанс (смотрите описание поля). Пусто: у новой ссылки значения по умолчанию, у существующей — не меняются.',
   bulkPickRow: 'Применить к этой записи',
   bulkPickAll: 'Выбрать все / снять все',
-  bulkChosen: (n: number, total: number): string => `выбрано ${n} из ${total}`,
+  bulkChosen: (n: number, total: number): string => `Выбрано: ${n} из ${total}`,
   bulkSortTip: 'Клик — сортировать',
   bulkFilterTip: 'Как в поиске FCS: поле=значение, поле!=значение, поле>3, поле:текст (содержит), поле!:текст, поле?regex, поле? (задано), список>5, список.v0>=3, Ref>0. Несколько — через ;',
   bulkCondRefList: 'список ссылок',
   bulkCondRefCount: 'Ref — сколько записей ссылаются на эту',
   bulkColumnsNote: 'Колонки: меняемое поле и поле из условия — сортировка кликом по заголовку.',
-  bulkSearchPh: 'Имя или id: katana, катана',
-  bulkSearchTip: 'Необязательно. Часть id или названия — английского или русского (katana, катана). Ищет только среди записей выбранного типа.',
-  bulkFilterPh: 'Условие по полю, напр. value>1000',
+  bulkSearchPh: 'Имя или id: катана',
+  bulkSearchTip: 'Необязательно. Часть id или названия — английского или переведённого (katana, катана). Ищет только среди записей выбранного типа.',
+  bulkFilterPh: 'Условие: value>1000',
   bulkFilterHelpTip: 'Фильтр по полю: операторы и поля этого типа',
   bulkFilterHelpTitle: 'Фильтр по полю — можно любое поле типа, не только цена',
   bulkOpsHead: ['Пишем', 'Значит', 'Пример'],

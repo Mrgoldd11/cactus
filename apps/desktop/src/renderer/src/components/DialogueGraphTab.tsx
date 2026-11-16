@@ -37,6 +37,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
+  quote,
   addLine,
   buildDialogueGraph,
   deleteGraphItems,
@@ -185,7 +186,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
 
 
   const root = focusRoot !== undefined && ctx.get(focusRoot) ? focusRoot : sid;
-  const graph = useMemo((): DialogueGraph => buildDialogueGraph(ctx, root, translation ? { translation } : {}), [ctx, root, version, translation]);
+  const graph = useMemo((): DialogueGraph => buildDialogueGraph(ctx, root, { lang, ...(translation ? { translation } : {}) }), [ctx, root, version, translation, lang]);
   const checks = useMemo(() => dialogueChecks(ctx, graph), [ctx, graph, version]);
   const checksByNode = useMemo(() => {
     const m = new Map<string, DialogCheck[]>();
@@ -1013,7 +1014,7 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
         <>
           {n.texts.slice(0, MAX_TEXTS).map((x, i) => (
             <div key={i} className="dg-text" title={x.localized !== undefined ? x.en : ''}>
-              «{x.localized ?? x.en}»
+              {quote(x.localized ?? x.en, lang)}
             </div>
           ))}
           {n.type === 'DIALOGUE_LINE' && n.texts.length === 0 && <div className="dg-text muted">{t.dgEmptyText}</div>}

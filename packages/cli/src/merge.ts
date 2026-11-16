@@ -64,7 +64,7 @@ export function runMerge(ws: Workspace, ctx: ModContext, r: MergeRequest, limit:
 
 function merge(ws: Workspace, ctx: ModContext, r: MergeRequest, limit: number, out: (line: string) => void): number {
   const kinds = r.kinds.map((k) => {
-    if (!KINDS.includes(k as MergeKind)) throw new UsageError({ en: `--kind: ${KINDS.join(', ')}, not «${k}»`, ru: `--kind: ${KINDS.join(', ')}, а не «${k}»` });
+    if (!KINDS.includes(k as MergeKind)) throw new UsageError({ en: `--kind: ${KINDS.join(', ')}, not “${k}”`, ru: `--kind: ${KINDS.join(', ')}, а не «${k}»` });
     return k as MergeKind;
   });
   let conflicts: MergeChoice | undefined;

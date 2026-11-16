@@ -5,6 +5,7 @@
  */
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
+  quote,
   displayName,
   formatPosition,
   whereInGame,
@@ -147,6 +148,7 @@ function placeLabel(p: WherePlace): string {
 
 function FactView({ fact: f, onGo }: { fact: WhereFact; onGo: (sid: string) => void }): ReactNode {
   const t = useT();
+  const lang = useLang();
   const towns = f.places.filter((p) => p.kind === 'town');
   const others = f.places.filter((p) => p.kind !== 'town' && p.kind !== 'building');
   const located = f.places.filter((p) => p.positions.length > 0);
@@ -203,7 +205,7 @@ function FactView({ fact: f, onGo }: { fact: WhereFact; onGo: (sid: string) => v
             sq.trader ? t.whereTrader : '',
             sq.members.length ? `${t.whereWith} ${sq.members.map(displayName).join(', ')}` : '',
             sq.faction.length ? `${t.whereFaction} ${sq.faction.map(displayName).join(', ')}` : '',
-            sq.interior ? `${t.whereInterior} «${sq.interior}»` : '',
+            sq.interior ? `${t.whereInterior} ${quote(sq.interior, lang)}` : '',
           ]
             .filter(Boolean)
             .join('; ')}
