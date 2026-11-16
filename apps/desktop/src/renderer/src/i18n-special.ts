@@ -1,15 +1,15 @@
 /**
- * Строки специальных редакторов (этап 5): матрица отношений, таблицы сравнения, массовые
- * правки, графы, перепись NPC. Вливаются в общий словарь `i18n.ts`.
+ * Strings of the special editors (stage 5): relation matrix, comparison tables, bulk
+ * edits, graphs, NPC census. Merged into the shared dictionary `i18n.ts`.
  */
 /**
- * Справка «?» панели отношений: таблица «значение → что значит». Сверено с описаниями полей в
- * fcs.def («enemy classification»: макс. отношение, которое считается врагом, нападение при
- * виде; «default relation»; «coexistence») и с ячейками таблицы. Чего в данных нет, не
- * выдумываем: порог «союзник» 50 — только цвет.
+ * «?» help of the relations panel: a «value → meaning» table. Checked against the field descriptions in
+ * fcs.def («enemy classification»: max relation that counts as enemy, attack on
+ * sight; «default relation»; «coexistence») and against the table cells. What is not in the data we do not
+ * make up: the «ally» threshold 50 is colour only.
  */
 type HelpRows = ReadonlyArray<readonly [string, string]>;
-/** Что подставляется в фразу «что будет сделано» панели массовых правок. */
+/** What is substituted into the «what will be done» phrase of the bulk edit panel. */
 export interface BulkSentenceArgs {
   kind: string;
   field: string;
@@ -39,7 +39,7 @@ const FAC_HELP_RU: HelpRows = [
   ['точка в углу', 'Какой-то мод меняет это отношение (какой — в подсказке ячейки).'],
 ];
 
-/** Подписи значений ссылки в панели «Графы» по категории ссылки. */
+/** Labels of reference values in the «Graphs» panel by reference category. */
 const GR_VALUES_EN: Readonly<Record<string, string[]>> = {
   squad: ['min', 'max'],
   squad2: ['min', 'max'],
@@ -78,7 +78,7 @@ const GR_VALUES_RU: Readonly<Record<string, string[]>> = {
 };
 
 export const specialEn = {
-  // матрица отношений фракций
+  // faction relation matrix
   panel_factions: 'Faction relations',
   factionsHint: 'Faction × faction table: who is an enemy, neutral or ally. Click a cell to change the value.',
   facSearch: 'Filter factions…',
@@ -116,7 +116,7 @@ export const specialEn = {
   facWhomTip: 'Towards whom (column). Type part of the name — pick from the list.',
   facNone: 'No factions match the filter.',
   facOpen: 'Open record',
-  // таблицы сравнения
+  // comparison tables
   panel_compare: 'Compare items',
   compareHint: 'Weapons, armour, items and bags side by side: sort, filter, edit right in the cell.',
   cmpType: 'Type',
@@ -276,7 +276,7 @@ export const specialEn = {
   bulkAfter: 'After',
   bulkCap: (n: number) => `Showing the first ${n}; Apply changes all the ticked ones.`,
   bulkSkipped: (n: number) => `Skipped: ${n}`,
-  // графы: исследования, крафт, состав отрядов и городов
+  // graphs: research, crafting, squad and town make-up
   panel_graphs: 'Graphs',
   graphsHint: 'Research tree, crafting (station → what it makes → from what), squad and town composition. Click a node for details, jumps and link values.',
   grResearch: 'Research',
@@ -322,8 +322,8 @@ export const specialEn = {
   grPick: 'Click a node: details, jumps to the record and “Where in game”, link values.',
   grMissing: 'no such record',
   grValue: (i: number) => `value ${i + 1}`,
-  /** Что значат значения ссылки, по полю. */
-  // Перепись NPC
+  /** What reference values mean, per field. */
+  // NPC census
   panel_census: 'NPC census',
   censusHint: 'All characters by faction and town: who you meet most often, who has no dialogue, who is already in the mod',
   ceByFaction: 'By faction',
@@ -649,7 +649,7 @@ export const specialRu: SpecialStrings = {
   grPick: 'Щёлкните узел: подробности, переход к записи и в «Где в игре», значения связи.',
   grMissing: 'нет такой записи',
   grValue: (i: number) => `значение ${i + 1}`,
-  // Перепись NPC
+  // NPC census
   panel_census: 'Перепись NPC',
   censusHint: 'Все персонажи по фракциям и городам: кого встречаешь чаще, у кого нет диалогов, кто уже в моде',
   ceByFaction: 'По фракциям',

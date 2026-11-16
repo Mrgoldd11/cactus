@@ -1,6 +1,6 @@
 /**
- * Живая связь с ИИ в окне: запросы MCP (через main) выполняет `LiveHost` над открытым
- * проектом. Правки ИИ сразу видны в окне и копятся в списке наборов изменений.
+ * Live AI link in the window: `LiveHost` executes MCP requests (via main) on the open
+ * project. AI edits are visible in the window at once and pile up in the change set list.
  */
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { LiveHost, type HostedChangeset } from '@kenshi-editor/core';
@@ -27,7 +27,7 @@ liveHost.subscribe(() => {
   hostVersion++;
 });
 
-/** Открыт другой проект (или закрыт): прежние наборы изменений к нему не относятся. */
+/** Another project was opened (or closed): the earlier change sets do not belong to it. */
 export function setLiveProject(p: Project | undefined): void {
   if (current?.project === p) return;
   current = p ? { project: p, session: ++sessions } : undefined;
@@ -44,7 +44,7 @@ export function startLiveBridge(): void {
   });
 }
 
-/** Наборы изменений ИИ; компонент перерисовывается при каждом их изменении. */
+/** AI change sets; the component re-renders on every change of them. */
 export function useAiChangesets(): readonly HostedChangeset[] {
   useSyncExternalStore(
     (cb) => liveHost.subscribe(cb),

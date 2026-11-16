@@ -1,6 +1,6 @@
 /**
- * Дерево категорий из fcs_layout.def (как в FCS) с числом записей в каждом узле, плюс
- * псевдо-узел «Изменения мода» и «Прочие типы» для типов, которых в дереве нет.
+ * Category tree from fcs_layout.def (as in FCS) with the record count in each node, plus the
+ * pseudo-nodes «Mod changes» and «Other types» for types not in the tree.
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { OTHER_TYPES_ID, type CategoryNode } from '@kenshi-editor/core';

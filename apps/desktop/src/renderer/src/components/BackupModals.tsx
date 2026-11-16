@@ -1,5 +1,5 @@
 /**
- * Окна автосохранения и копий: настройки, «Найдена более свежая копия», «Резервные копии мода».
+ * Autosave and backup windows: settings, «A newer copy was found», «Mod backups».
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { DATA_LOCALE_AUTO, DATA_LOCALE_NONE, dataLocaleFor, LOCALE, type BackupItem, type GameInstallInfo, type GameLocaleInfo, type Lang, type RecoveryInfo, type Settings } from '../../../shared/api.ts';
@@ -11,7 +11,7 @@ export function formatTime(ms: number, lang: Lang): string {
   return new Date(ms).toLocaleString(LOCALE[lang], { dateStyle: 'short', timeStyle: 'medium' });
 }
 
-/** Только часы и минуты — для строки состояния. */
+/** Hours and minutes only — for the status bar. */
 export function formatClock(ms: number, lang: Lang): string {
   return new Date(ms).toLocaleTimeString(LOCALE[lang], { hour: '2-digit', minute: '2-digit' });
 }

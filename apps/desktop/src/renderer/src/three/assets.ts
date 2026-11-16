@@ -1,12 +1,12 @@
 /**
- * Загрузка файлов модели из папки игры: `.mesh` → геометрия three.js, `.dds` → текстура.
- * Разбор — в ядре (`parseOgreMesh`, `decodeDds`); здесь только кэш и перевод в объекты three.js.
+ * Loading model files from the game folder: `.mesh` → three.js geometry, `.dds` → texture.
+ * Parsing is in the core (`parseOgreMesh`, `decodeDds`); here only the cache and conversion to three.js objects.
  */
 import * as THREE from 'three';
 import { decodeDds, parseOgreMesh, triangleIndices, type OgreMesh } from '@kenshi-editor/core';
 import type { GameInstallInfo } from '../../../shared/api.ts';
 
-/** Наибольшая сторона текстуры в окне: больше на маленькой модели не видно, а распаковка дольше. */
+/** Largest texture side in the window: more is not visible on a small model, and decoding takes longer. */
 const TEXTURE_MAX = 1024;
 
 const meshes = new Map<string, Promise<OgreMesh | null>>();
@@ -16,7 +16,7 @@ function key(game: GameInstallInfo, path: string): string {
   return `${game.kenshi}|${path.toLowerCase()}`;
 }
 
-/** Модель из папки игры; null — файла нет. Ошибка разбора — исключение. */
+/** Model from the game folder; null — no file. Parse error — exception. */
 export function loadMesh(game: GameInstallInfo, path: string): Promise<OgreMesh | null> {
   const k = key(game, path);
   let p = meshes.get(k);
@@ -28,7 +28,7 @@ export function loadMesh(game: GameInstallInfo, path: string): Promise<OgreMesh 
   return p;
 }
 
-/** Текстура из папки игры; null — файла нет или формат не читается. */
+/** Texture from the game folder; null — no file or the format cannot be read. */
 export function loadTexture(game: GameInstallInfo, path: string): Promise<THREE.Texture | null> {
   const k = key(game, path);
   let p = textures.get(k);
@@ -38,7 +38,7 @@ export function loadTexture(game: GameInstallInfo, path: string): Promise<THREE.
       try {
         const img = decodeDds(bytes, { maxSize: TEXTURE_MAX });
         const tex = new THREE.DataTexture(img.rgba, img.width, img.height, THREE.RGBAFormat);
-        // DDS хранит строки сверху вниз, а UV Ogre считают v от верха — переворачивать не нужно.
+        // DDS stores rows top to bottom, and Ogre UVs count v from the top — no flip needed.
         tex.flipY = false;
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.wrapS = THREE.RepeatWrapping;
@@ -58,7 +58,7 @@ export function loadTexture(game: GameInstallInfo, path: string): Promise<THREE.
   return p;
 }
 
-/** Геометрии подмоделей (одна на подмодель, материал задаёт запись). */
+/** Submesh geometries (one per submesh, the record sets the material). */
 export function meshGeometries(mesh: OgreMesh): THREE.BufferGeometry[] {
   const out: THREE.BufferGeometry[] = [];
   for (const sub of mesh.submeshes) {

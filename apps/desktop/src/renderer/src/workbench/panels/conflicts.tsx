@@ -1,7 +1,7 @@
 /**
- * Панель «Конфликты»: какие загруженные моды (зависимости, моды контекста, сам мод) задают
- * одно и то же поле одной записи по-разному, значения каждого слоя по порядку загрузки
- * и кто победит. Клик по записи — переход к ней. Считается по слоям в памяти, без диска.
+ * «Conflicts» panel: which loaded mods (dependencies, context mods, the mod itself) set
+ * the same field of the same record differently, each layer's values in load order
+ * and who wins. Click on a record — go to it. Computed from the layers in memory, no disk.
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { contextLayers, findConflicts, isVanillaLayer, type FieldConflict, type RecordConflict } from '@kenshi-editor/core';
@@ -12,7 +12,7 @@ import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
 import { Empty } from './common.tsx';
 
-/** Строк в таблице за раз: дальше — уточнить поиск. */
+/** Table rows at a time: beyond that — narrow the search. */
 const MAX_ROWS = 300;
 
 export function conflictFieldLabel(t: Strings, project: Project, f: FieldConflict): string {
@@ -30,7 +30,7 @@ export function conflictFieldLabel(t: Strings, project: Project, f: FieldConflic
   }
 }
 
-/** Конфликты проекта; `only` — имя мода, чьи конфликты нужны. */
+/** Project conflicts; `only` — name of the mod whose conflicts are needed. */
 export function projectConflicts(project: Project, only?: string): RecordConflict[] {
   return findConflicts(contextLayers(project.ctx), only !== undefined ? { only } : {});
 }

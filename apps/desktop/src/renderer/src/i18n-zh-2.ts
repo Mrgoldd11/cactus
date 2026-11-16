@@ -1,4 +1,4 @@
-/** Китайский (简体中文), часть 2: перевод, конфликты, история, проигрыватель разговора, граф и строка диалога. */
+/** Chinese (简体中文), part 2: translation, conflicts, history, conversation player, dialogue graph and line. */
 export const zh2 = {
   trAddSourceTip: '把已安装的 Mod 添加为依赖项并翻译它',
   trNoSource: '请选择要翻译的 Mod，它会成为你的 Mod 的依赖项。',
@@ -98,7 +98,7 @@ export const zh2 = {
   placeholderSoon: '将在第 7 阶段推出',
   viewportStub: '城镇和建筑的 3D 视图将放在这里（第 7 阶段）。场景对象的选择方式与记录相同，它们的组件会显示在“组件”面板中。',
   componentsStub: '所选场景对象的组件（第 7 阶段）。目前显示：该对象背后的记录。',
-  // проигрыватель разговора
+  // conversation player
   plCharacter: '角色',
   plMode: '条件',
   plModeHint: '如何对待编辑器无法检查的条件（关系、任务、物品）。可以用“视为满足”覆盖任意记录。',
@@ -137,7 +137,7 @@ export const zh2 = {
   howtoSays: '第一句台词',
   plSummary: '该角色的所有对话（汇总）',
   howtoTry: '在“对话”面板中试试：勾选条件“视为满足”，再点击回答。',
-  // редактор диалогов
+  // dialogue editor
   dgSearch: '搜索文本或 ID…（Enter——下一个）',
   dgNotFound: '未找到',
   dgFit: '显示全部',

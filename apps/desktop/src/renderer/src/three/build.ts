@@ -1,7 +1,7 @@
 /**
- * Модель записи (`modelOfRecord` из ядра) → группа three.js: каждая часть — своя модель,
- * текстура и сдвиг. Альфа-канал текстур Kenshi — это блеск, а не прозрачность, поэтому
- * материал непрозрачный.
+ * Record model (`modelOfRecord` from the core) → three.js group: each part has its own model,
+ * texture and offset. The alpha channel of Kenshi textures is gloss, not transparency, so the
+ * material is opaque.
  */
 import * as THREE from 'three';
 import type { RecordModel } from '@kenshi-editor/core';
@@ -11,7 +11,7 @@ import { loadMesh, loadTexture, meshGeometries } from './assets.ts';
 export interface BuiltModel {
   group: THREE.Group;
   triangles: number;
-  /** Файлы, которых нет в папке игры или которые не читаются. */
+  /** Files missing from the game folder or unreadable. */
   missing: string[];
 }
 
@@ -66,7 +66,7 @@ export async function buildModel(game: GameInstallInfo, model: RecordModel): Pro
   return { group, triangles, missing };
 }
 
-/** Освободить геометрию и материалы группы (текстуры общие — в кэше, их не трогаем). */
+/** Free the group geometry and materials (textures are shared — in the cache, not touched). */
 export function disposeModel(obj: THREE.Object3D): void {
   obj.traverse((o) => {
     if (o instanceof THREE.Mesh) {

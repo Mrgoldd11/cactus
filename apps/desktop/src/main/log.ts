@@ -1,8 +1,8 @@
 /**
- * Журнал ошибок в файл: `<данные приложения>/logs/kenshi-mod-editor.log` (Windows:
- * `%APPDATA%\Cactus\logs`). Пишутся ошибки и предупреждения главного процесса и окна
- * (консоль окна, падение окна, ошибки загрузки). Файл больше 1 МБ при запуске переносится в
- * `kenshi-mod-editor.old.log`, так что журнал не растёт без конца.
+ * Error log file: `<app data>/logs/kenshi-mod-editor.log` (Windows:
+ * `%APPDATA%\Cactus\logs`). Errors and warnings of the main process and the window are written
+ * (window console, window crash, load errors). A file over 1 MB is moved at startup to
+ * `kenshi-mod-editor.old.log`, so the log does not grow forever.
  */
 import { appendFileSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,11 +26,11 @@ export function log(level: 'info' | 'warn' | 'error', ...parts: unknown[]): void
   try {
     appendFileSync(file, `${new Date().toISOString()} [${level}] ${text}\n`);
   } catch {
-    // Журнал не должен ронять приложение.
+    // The log must not crash the app.
   }
 }
 
-/** Открыть журнал в папке `dir`, записать строку запуска и перехватить ошибки главного процесса. */
+/** Open the log in folder `dir`, write the startup line and catch main-process errors. */
 export function initLog(dir: string, startLine: string): void {
   try {
     mkdirSync(dir, { recursive: true });
@@ -61,7 +61,7 @@ export function initLog(dir: string, startLine: string): void {
   }
 }
 
-/** Ошибки и предупреждения окна — в журнал. */
+/** Window errors and warnings — into the log. */
 export function watchWindow(wc: WebContents): void {
   wc.on('console-message', (e) => {
     if (e.level === 'error' || e.level === 'warning') log(e.level === 'error' ? 'error' : 'warn', `window: ${e.message} (${e.sourceId}:${String(e.lineNumber)})`);

@@ -1,7 +1,7 @@
 /**
- * Панели диалогов: граф диалога (с правкой), инспектор реплики, проигрыватель разговора.
- * Реплики, выбранные в графе или инспекторе, — выбор вида «line»: граф за ними не прыгает,
- * инспектор реплики показывает последнюю.
+ * Dialogue panels: dialogue graph (with editing), line inspector, conversation player.
+ * Lines selected in the graph or inspector are a selection of kind «line»: the graph does not jump after them,
+ * the line inspector shows the latest one.
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { EVENT_TALK, enumLabel, refValueEnum, simulateTalk, squadIndex, talkSources } from '@kenshi-editor/core';
@@ -16,7 +16,7 @@ import { registerPanel, type PanelProps } from '../registry.ts';
 import { useFollowed, useWorkbench } from '../context.ts';
 import { Empty } from './common.tsx';
 
-/** Выбрать реплику (без истории «назад/вперёд»: это шаги внутри диалога). */
+/** Select a line (without «back/forward» history: these are steps inside a dialogue). */
 function useSelectLine(dialog: string | undefined): (sid: string, parent?: string) => void {
   const { selection } = useWorkbench();
   return (sid, parent) => {
@@ -145,7 +145,7 @@ function PlayerPanel({ def, params }: PanelProps): ReactNode {
   const t = useT();
   const { sid, version } = useFollowed(def, params);
   if (sid === undefined) return <Empty types={def.shows?.types} />;
-  // Реплика из разговора: её диалог — в граф, сама реплика — в инспектор реплики.
+  // A line from the conversation: its dialogue goes to the graph, the line itself to the line inspector.
   const selectLine = (line: string, dialog?: string): void => {
     if (dialog !== undefined) selection.select({ kind: 'record', sid: dialog }, { history: false });
     selection.select({ kind: 'line', sid: line, ...(dialog !== undefined ? { dialog } : {}) }, { history: false });
@@ -161,7 +161,7 @@ function PlayerPanel({ def, params }: PanelProps): ReactNode {
   );
 }
 
-/** «Как игра выбирает диалог»: правило простыми словами и пример на выбранном персонаже. */
+/** «How the game chooses a dialogue»: the rule in plain words and an example on the selected character. */
 function HowtoPanel({ def, params }: PanelProps): ReactNode {
   const { project } = useWorkbench();
   const { sid, version } = useFollowed(def, params);
@@ -179,7 +179,7 @@ registerPanel({
   icon: '⑂',
   component: GraphPanel,
   area: 'center',
-  // Реплики из самого графа выбираются как «line» — граф за ними не прыгает.
+  // Lines from the graph itself are selected as «line» — the graph does not jump after them.
   // A character opens its main dialogue, with a switcher to its other dialogues.
   shows: { kinds: ['record'], types: ['DIALOGUE_PACKAGE', 'DIALOGUE', 'DIALOGUE_LINE', 'CHARACTER'] },
   multi: true,

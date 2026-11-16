@@ -1,7 +1,7 @@
 /**
- * Договор между окном (renderer) и главным процессом (main). Окно не трогает файлы само:
- * всё чтение и запись — через эти вызовы, main выполняет их и спрашивает подтверждение,
- * если запись идёт в папку игры или мастерской.
+ * Contract between the window (renderer) and the main process (main). The window does not touch files itself:
+ * all reading and writing goes through these calls, main executes them and asks for confirmation
+ * if the write goes into the game or Workshop folder.
  */
 import type { ExtensionLayer, LiveRequestBody } from '@kenshi-editor/core';
 
@@ -28,7 +28,7 @@ export interface WorldDumpIndex {
 }
 
 export interface ModEntry {
-  /** Имя файла (`Мой мод.mod`). */
+  /** File name (`My mod.mod`). */
   fileName: string;
   path: string;
   source: 'mods' | 'workshop' | 'other';
@@ -37,34 +37,34 @@ export interface ModEntry {
   dependencies?: string[];
   references?: string[];
   recordCount?: number;
-  /** Место в `data/mods.cfg` (с 0), если мод включён. */
+  /** Place in `data/mods.cfg` (from 0), if the mod is enabled. */
   loadIndex?: number;
-  /** Номер предмета мастерской (папка), если мод оттуда. */
+  /** Workshop item number (folder), if the mod comes from there. */
   workshopId?: string;
-  /** Есть в `mods.cfg`. */
+  /** Present in `mods.cfg`. */
   enabled?: boolean;
-  /** Такой же файл есть в `mods/`, игра возьмёт его, а не этот. */
+  /** The same file exists in `mods/`; the game takes that one, not this. */
   shadowedBy?: string;
-  /** Копия чужого мода (`.kedit-origin.json`): номер мастерской оригинала или путь к нему. */
+  /** Copy of someone else's mod (`.kedit-origin.json`): the original's Workshop number or its path. */
   copyOf?: string;
   error?: string;
 }
 
 export interface ProjectRequest {
   game: GameInstallInfo;
-  /** Существующий .mod; если не задан — новый мод `modName`. */
+  /** Existing .mod; if not set — a new mod `modName`. */
   modPath?: string;
   modName?: string;
-  /** Зависимости (имена .mod); по умолчанию — из заголовка мода. */
+  /** Dependencies (.mod names); by default — from the mod header. */
   dependencies?: string[];
-  /** Другие моды слоями под модом (по порядку `mods.cfg`), без записи в его заголовок. */
+  /** Other mods layered under the mod (in `mods.cfg` order), not written into its header. */
   contextMods?: string[];
   /**
    * Path of the mod file when the window keeps the mod itself and sends no `modPath` (other
    * dependencies, a restored version): its folder is still searched for schema extensions.
    */
   extensionsOf?: string;
-  /** Ключи файлов, уже разобранных в окне (`ParsedFileCache`): их байты не присылаются. */
+  /** Keys of files already parsed in the window (`ParsedFileCache`): their bytes are not sent. */
   known?: string[];
   /** Data language: `gamedata.po` of this game locale comes in the bundle. */
   dataLocale?: string;
@@ -73,43 +73,43 @@ export interface ProjectRequest {
 export interface NamedBytes {
   name: string;
   path: string;
-  /** Пусто, если файл есть в кэше окна под ключом `key`. */
+  /** Empty if the file is in the window cache under key `key`. */
   bytes: Uint8Array;
-  /** Ключ кэша (путь, размер, время изменения) — у ванили и зависимостей. */
+  /** Cache key (path, size, modification time) — for vanilla and dependencies. */
   key?: string;
 }
 
-/** Откуда файл мода: из мастерской (только чтение) или копия чужого мода. */
+/** Where the mod file comes from: the Workshop (read only) or a copy of someone else's mod. */
 export interface ModProvenance {
-  /** Файл в мастерской Steam: сохранить в него нельзя, только в копию в `mods/`. */
+  /** File in the Steam Workshop: it cannot be saved to, only to a copy in `mods/`. */
   inWorkshop?: boolean;
   workshopId?: string;
-  /** Копия чужого мода (файл `<имя>.kedit-origin.json` рядом). */
+  /** Copy of someone else's mod (file `<name>.kedit-origin.json` next to it). */
   copyOf?: {
     source: string;
     workshopId?: string;
     author?: string;
     copiedAt: string;
-    /** Оригинал изменился после копирования (автор обновил мод). */
+    /** The original changed after copying (the author updated the mod). */
     changed?: boolean;
-    /** Оригинала больше нет. */
+    /** The original no longer exists. */
     gone?: boolean;
   };
 }
 
-/** Копия чужого мода для правки (после подтверждения в диалоге main). */
+/** Copy of someone else's mod for editing (after confirmation in the main dialog). */
 export type CopyModResult = { ok: true; path: string; provenance?: ModProvenance } | { ok: false; cancelled: boolean; error?: string };
 
-/** Всё, что нужно окну, чтобы собрать контекст редактирования. */
+/** Everything the window needs to build the editing context. */
 export interface ProjectBundle {
   game: GameInstallInfo;
   modName: string;
-  /** Файл мода, если он уже есть на диске. */
+  /** Mod file, if it already exists on disk. */
   mod?: NamedBytes;
   vanilla: NamedBytes[];
   dependencies: NamedBytes[];
   missingDependencies: string[];
-  /** Какие из `dependencies` — моды контекста (не записаны в заголовке мода). */
+  /** Which of `dependencies` are context mods (not written in the mod header). */
   contextMods?: string[];
   schema: { fcsDef: string; fcsEnums?: string; fcsLayout?: string };
   /**
@@ -122,41 +122,41 @@ export interface ProjectBundle {
   po?: string;
   /** Locale of `po`. */
   dataLocale?: string;
-  /** Путь сохранения по умолчанию для нового мода. */
+  /** Default save path for a new mod. */
   suggestedPath: string;
-  /** Откуда открытый мод (мастерская, копия). */
+  /** Where the open mod comes from (Workshop, copy). */
   provenance?: ModProvenance;
-  /** Файл слияния `<имя>.kedit-merge.json` рядом с модом (текст), если он есть. */
+  /** Merge file `<name>.kedit-merge.json` next to the mod (text), if present. */
   mergeStore?: string;
 }
 
 export interface SaveRequest {
   path: string;
   bytes: Uint8Array;
-  /** Решения слияния: main пишет их рядом с модом в `<имя>.kedit-merge.json` (не в .mod). */
+  /** Merge decisions: main writes them next to the mod in `<name>.kedit-merge.json` (not into the .mod). */
   mergeStore?: string;
   /**
-   * Файлы уровня мода (`zone.X.Y.zone`, `leveldata.level`, `interiors.level`): main пишет их в
-   * `leveldata` рядом с модом — только имя файла, без папок.
+   * Mod level files (`zone.X.Y.zone`, `leveldata.level`, `interiors.level`): main writes them into
+   * `leveldata` next to the mod — file name only, no folders.
    */
   world?: { path: string; bytes: Uint8Array }[];
-  /** Имя мода и прежний путь — чтобы после сохранения убрать автосохранения этого мода. */
+  /** Mod name and previous path — to remove this mod's autosaves after saving. */
   modName?: string;
   previousPath?: string;
 }
 
-/** Мод-источник слияния: байты файла и данные уровня рядом с ним. */
+/** Merge source mod: file bytes and the level data next to it. */
 export interface MergeSourceBytes {
   name: string;
   path: string;
   bytes: Uint8Array;
-  /** Файлы `leveldata/*.zone|*.level` рядом с источником (слияние их не трогает, только сообщает). */
+  /** `leveldata/*.zone|*.level` files next to the source (the merge does not touch them, only reports them). */
   levelData?: { dir: string; files: string[] };
 }
 
 export type MergeSourceResult = ({ ok: true } & MergeSourceBytes) | { ok: false; error: string };
 
-/** Запись `mods.cfg`: `stale` — файл изменился на диске, пока окно показывало старый порядок. */
+/** `mods.cfg` write: `stale` — the file changed on disk while the window showed the old order. */
 export type ModOrderResult =
   | { ok: true; path: string; changed: boolean; backup?: string }
   | { ok: false; cancelled: boolean; error?: string; stale?: boolean };
@@ -186,7 +186,7 @@ export const LANGS = [
 export type Lang = (typeof LANGS)[number]['code'];
 
 export const isLang = (v: unknown): v is Lang => LANGS.some((l) => l.code === v);
-/** Локаль для форматирования дат и чисел на языке интерфейса. */
+/** Locale for formatting dates and numbers in the UI language. */
 export const LOCALE = Object.fromEntries(LANGS.map((l) => [l.code, l.locale])) as Record<Lang, string>;
 
 /** `Settings.dataLocale`: follow the interface language. */
@@ -221,30 +221,30 @@ export interface Settings {
    * originals only, or a locale folder of the game (`de_DE`).
    */
   dataLocale?: string;
-  /** Последняя выбранная папка игры. */
+  /** Last chosen game folder. */
   gameDir?: string;
-  /** Недавно открытые моды. */
+  /** Recently opened mods. */
   recent: string[];
-  /** Раскладка рабочего пространства (панели и их места). */
+  /** Workspace layout (panels and their places). */
   workspace?: WorkspaceSettings;
-  /** Автосохранение раз в столько минут (0 — выключено; по умолчанию 5). */
+  /** Autosave every this many minutes (0 — off; default 5). */
   autosaveMinutes: number;
-  /** Сколько прежних версий мода хранить при сохранении (0 — не хранить; по умолчанию 5). */
+  /** How many previous mod versions to keep on save (0 — none; default 5). */
   backupCount: number;
 }
 
-/** Мод для автосохранения и копий: файл на диске или новый мод по имени. */
+/** Mod for autosaves and backups: a file on disk or a new mod by name. */
 export interface ModRef {
   path?: string | undefined;
   modName: string;
 }
 
-/** Автосохранение новее мода: предложить восстановить. */
+/** Autosave newer than the mod: offer to restore. */
 export interface RecoveryInfo {
-  /** Когда записано автосохранение (мс). */
+  /** When the autosave was written (ms). */
   savedAt: number;
   size: number;
-  /** Файл мода на диске есть; его время и размер. */
+  /** The mod file exists on disk; its time and size. */
   modExists: boolean;
   modTime?: number;
   modSize?: number;
@@ -252,12 +252,12 @@ export interface RecoveryInfo {
 
 export type AutosaveResult = { ok: true; savedAt: number; size: number } | { ok: false; error: string };
 
-/** Версия мода из резервных копий. */
+/** Mod version from backups. */
 export interface BackupItem {
-  /** `autosave` или имя файла копии. */
+  /** `autosave` or the backup file name. */
   id: string;
   kind: 'backup' | 'autosave' | 'restore-point';
-  /** Мс с 1970: когда создана копия (для `backup` — когда её заменили новой версией). */
+  /** Ms since 1970: when the backup was created (for `backup` — when it was replaced by a newer version). */
   time: number;
   size: number;
 }
@@ -265,92 +265,92 @@ export interface BackupItem {
 export type ExportBackupResult = { ok: true; path: string } | { ok: false; cancelled: true } | { ok: false; cancelled: false; error: string };
 
 export interface WorkspaceSettings {
-  /** Снимок раскладки dockview (`toJSON`). */
+  /** dockview layout snapshot (`toJSON`). */
   layout?: unknown;
-  /** Последняя выбранная готовая раскладка: её ставит «Сбросить раскладку». */
+  /** Last chosen preset layout: «Reset layout» applies it. */
   preset?: string;
 }
 
 export interface WorldFileBytes {
-  /** Слой (имя .mod), из которого файл. */
+  /** Layer (.mod name) the file comes from. */
   layer: string;
-  /** Имя файла в папке `leveldata` (`zone.42.22.zone`). */
+  /** File name in the `leveldata` folder (`zone.42.22.zone`). */
   path: string;
-  /** Пусто, если файл есть в кэше окна под ключом `key`. */
+  /** Empty if the file is in the window cache under key `key`. */
   bytes: Uint8Array;
   key: string;
 }
 
 export interface WorldRequest {
   game: GameInstallInfo;
-  /** Файлы .mod (зависимости по порядку, затем сам мод), чьи папки `leveldata` наложить. */
+  /** .mod files (dependencies in order, then the mod itself) whose `leveldata` folders to overlay. */
   modPaths: string[];
-  /** Ключи файлов, уже разобранных в окне. */
+  /** Keys of files already parsed in the window. */
   known?: string[];
-  /** Только интерьеры (`interiors.level`): они большие, их читают по запросу панели «Внутри». */
+  /** Interiors only (`interiors.level`): they are big and read on request of the «Inside» panel. */
   interiors?: boolean;
 }
 
-/** Живая связь с ИИ (MCP): сервер в main, запросы выполняет окно. */
+/** Live AI link (MCP): server in main, the window executes requests. */
 export interface LiveStatus {
-  /** Порт на 127.0.0.1; нет — сервер не запущен (см. error). */
+  /** Port on 127.0.0.1; absent — the server is not running (see error). */
   port?: number;
-  /** Подключённые клиенты (MCP-серверы ИИ). */
+  /** Connected clients (AI MCP servers). */
   clients: { id: number; name: string; since: number }[];
   error?: string;
 }
 
 export type LiveReply = { ok: true; result: unknown } | { ok: false; error: string };
 
-/** Текстовый файл (выгрузка перевода): CSV, JSON или PO. */
+/** Text file (translation export): CSV, JSON or PO. */
 export type TextFileKind = 'csv' | 'json' | 'po';
 
 export type SaveTextResult = { ok: true; path: string } | { ok: false; cancelled: true } | { ok: false; cancelled: false; error: string };
 
-/** Связь с игрой через плагин Kenshi Bridge (RE_Kenshi). */
+/** Game link via the Kenshi Bridge plugin (RE_Kenshi). */
 export interface GameLinkStatus {
-  /** Плагин отвечает. */
+  /** The plugin answers. */
   connected: boolean;
-  /** Игра в мире (не в меню и не на загрузке). */
+  /** The game is in the world (not in the menu and not loading). */
   inGame: boolean;
   version?: string;
 }
 
 export type GameReply = { ok: true; result: unknown } | { ok: false; code: string; message: string };
 
-/** Команды плагина, которые окно может отправить (через main). */
+/** Plugin commands the window may send (via main). */
 export const GAME_COMMANDS = ['state', 'camera', 'teleport', 'speed', 'pause', 'towns', 'trace', 'trace_get'] as const;
 export type GameCommand = (typeof GAME_COMMANDS)[number];
 
 export interface KeditApi {
   detectGames(): Promise<GameInstallInfo[]>;
-  /** Диалог выбора папки игры; null — отменено или в папке нет игры. */
+  /** Game folder picker dialog; null — cancelled or there is no game in the folder. */
   chooseGameDir(): Promise<GameInstallInfo | { error: string } | null>;
   listMods(game: GameInstallInfo): Promise<ModEntry[]>;
-  /** Порядок `data/mods.cfg` как есть. */
+  /** `data/mods.cfg` order as is. */
   readModOrder(game: GameInstallInfo): Promise<string[]>;
   /**
-   * Записать новый порядок `mods.cfg` — только после подтверждения в диалоге main; копия рядом,
-   * игра и лаунчер должны быть закрыты. `expected` — порядок, от которого шли правки.
+   * Write a new `mods.cfg` order — only after confirmation in the main dialog; a copy is kept next to it,
+   * the game and the launcher must be closed. `expected` — the order the edits started from.
    */
   writeModOrder(game: GameInstallInfo, names: string[], expected: string[]): Promise<ModOrderResult>;
-  /** Диалог выбора файла .mod. */
+  /** .mod file picker dialog. */
   chooseModFile(game: GameInstallInfo): Promise<string | null>;
   openProject(req: ProjectRequest): Promise<ProjectBundle>;
-  /** Диалог «Сохранить как». */
+  /** «Save as» dialog. */
   chooseSavePath(defaultPath: string): Promise<string | null>;
-  /** Записать мод. В папку игры — только после подтверждения в диалоге main; в мастерскую — никогда. */
+  /** Write the mod. Into the game folder — only after confirmation in the main dialog; into the Workshop — never. */
   saveMod(req: SaveRequest): Promise<SaveResult>;
-  /** Прочитать мод-источник слияния (.mod / .base по пути): байты и данные уровня рядом. Только чтение. */
+  /** Read the merge source mod (.mod / .base by path): bytes and the level data next to it. Read only. */
   readMergeSource(path: string): Promise<MergeSourceResult>;
-  /** Скопировать чужой мод в `mods/<имя>/<имя>.mod` для правки (main спросит подтверждение). */
+  /** Copy someone else's mod to `mods/<name>/<name>.mod` for editing (main asks for confirmation). */
   copyModForEditing(game: GameInstallInfo, path: string): Promise<CopyModResult>;
-  /** Байты файлов уровня (города, здания, зоны) ванили и модов — для «Где в игре». */
+  /** Bytes of level files (towns, buildings, zones) of vanilla and mods — for «Where in game». */
   loadWorld(req: WorldRequest): Promise<WorldFileBytes[]>;
   /**
-   * Байты файла модели или текстуры (`.mesh`, `.dds`, `.png`, `.material`) по пути из записи
-   * (`.\data\items\a.mesh`, относительно папки игры). Только чтение и только внутри папки игры
-   * или мастерской; иначе null.
+   * Bytes of a model or texture file (`.mesh`, `.dds`, `.png`, `.material`) by the path from a record
+   * (`.\data\items\a.mesh`, relative to the game folder). Read only and only inside the game folder
+   * or the Workshop; otherwise null.
    */
   readGameAsset(game: GameInstallInfo, relPath: string): Promise<Uint8Array | null>;
   /** Zones of the world dump made by the Kenshi Bridge plugin in the running game (foliage, buildings). */
@@ -358,20 +358,20 @@ export interface KeditApi {
   /** One zone file of that dump, or null. */
   readWorldDump(kind: 'foliage' | 'buildings', x: number, y: number): Promise<Uint8Array | null>;
   /**
-   * Тайл рельефа (квадродерево карты высот `fullmap.tif`): 129×129 значений карты высот.
-   * null — нет карты высот в папке игры.
+   * Terrain tile (quadtree of the `fullmap.tif` heightmap): 129×129 heightmap values.
+   * null — no heightmap in the game folder.
    */
   readTerrainTile(game: GameInstallInfo, level: number, tx: number, ty: number): Promise<Uint16Array | null>;
-  /** Диалог «Сохранить» и запись картинки PNG (иконка). В папку игры и мастерской не пишет — `game-folder`. */
+  /** «Save» dialog and writing a PNG image (icon). Does not write into the game or Workshop folder — `game-folder`. */
   savePngFile(defaultName: string, png: Uint8Array): Promise<SaveTextResult>;
-  /** Иконка предмета (поле `icon`, путь относительно папки игры) как data URL; null — нет файла. */
+  /** Item icon (field `icon`, path relative to the game folder) as a data URL; null — no file. */
   readIcon(game: GameInstallInfo, iconPath: string): Promise<string | null>;
   /**
-   * Диалог «Сохранить» и запись текста (UTF-8). В папку игры и мастерской не пишет — ошибка
-   * `game-folder` (выгрузка перевода — рабочий файл, ему там не место).
+   * «Save» dialog and writing text (UTF-8). Does not write into the game or Workshop folder — error
+   * `game-folder` (a translation export is a work file, it does not belong there).
    */
   saveTextFile(defaultName: string, kind: TextFileKind, text: string): Promise<SaveTextResult>;
-  /** Диалог «Открыть» для CSV/JSON/PO и текст файла; null — отменено. */
+  /** «Open» dialog for CSV/JSON/PO and the file text; null — cancelled. */
   openTextFile(): Promise<{ path: string; text: string } | { error: string } | null>;
   /** Bytes of `locale/<locale>/<locale>.translation` (dialogue lines and other texts); null — no file. */
   readTranslation(game: GameInstallInfo, locale: string): Promise<Uint8Array | null>;
@@ -382,36 +382,36 @@ export interface KeditApi {
   getSettings(): Promise<Settings>;
   setSettings(patch: Partial<Settings>): Promise<Settings>;
   /**
-   * Записать автосохранение мода в папку данных приложения (не в мод, не в игру, не в мастерскую).
-   * Окно зовёт только когда есть несохранённые правки.
+   * Write a mod autosave into the app data folder (not into the mod, the game or the Workshop).
+   * The window calls it only when there are unsaved edits.
    */
   autosave(ref: ModRef, bytes: Uint8Array): Promise<AutosaveResult>;
-  /** Убрать автосохранение (правок больше нет или от них отказались). */
+  /** Remove the autosave (no edits left, or they were discarded). */
   autosaveClear(ref: ModRef): Promise<void>;
-  /** Есть ли автосохранение новее мода (или мода на диске нет): предложить восстановить. */
+  /** Whether there is an autosave newer than the mod (or no mod on disk): offer to restore. */
   findRecovery(ref: ModRef): Promise<RecoveryInfo | null>;
-  /** Байты автосохранения для восстановления. */
+  /** Autosave bytes for restoring. */
   readAutosave(ref: ModRef): Promise<Uint8Array | null>;
-  /** «Открыть как есть»: автосохранение уходит в список резервных копий мода. */
+  /** «Open as is»: the autosave goes to the mod backup list. */
   keepAutosave(ref: ModRef): Promise<void>;
-  /** Автосохранение и резервные копии мода, новые сверху. */
+  /** Mod autosave and backups, newest first. */
   listBackups(ref: ModRef): Promise<BackupItem[]>;
   readBackup(ref: ModRef, id: string): Promise<Uint8Array | null>;
-  /** Точка возврата: текущее состояние уходит в копии перед восстановлением старой версии. */
+  /** Restore point: the current state goes to backups before restoring an old version. */
   addRestorePoint(ref: ModRef, bytes: Uint8Array): Promise<void>;
-  /** Диалог «Сохранить» и запись копии как отдельного файла (в игре — с подтверждением, в мастерской — никогда). */
+  /** «Save» dialog and writing a backup as a separate file (into the game — with confirmation, into the Workshop — never). */
   exportBackup(ref: ModRef, id: string): Promise<ExportBackupResult>;
-  /** Есть ли несохранённые изменения (main спросит при закрытии окна). */
+  /** Whether there are unsaved changes (main asks when the window closes). */
   setDirty(dirty: boolean, title: string): void;
-  /** Обработчик запросов ИИ к открытому проекту (один на окно; новый заменяет прежний). */
+  /** Handler of AI requests to the open project (one per window; a new one replaces the previous). */
   onLiveRequest(handler: (req: LiveRequestBody) => LiveReply): void;
   getLiveStatus(): Promise<LiveStatus>;
-  /** Подписка на состояние живой связи; вернёт отписку. */
+  /** Subscribe to the live link state; returns the unsubscribe function. */
   onLiveStatus(cb: (s: LiveStatus) => void): () => void;
   getGameStatus(): Promise<GameLinkStatus>;
-  /** Подписка на связь с игрой; вернёт отписку. */
+  /** Subscribe to the game link; returns the unsubscribe function. */
   onGameStatus(cb: (s: GameLinkStatus) => void): () => void;
-  /** Команда плагину игры (main пропускает только `GAME_COMMANDS`). */
+  /** Command to the game plugin (main lets through only `GAME_COMMANDS`). */
   gameRequest(cmd: GameCommand, args?: object): Promise<GameReply>;
 }
 

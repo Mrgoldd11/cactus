@@ -1,23 +1,23 @@
 /**
- * Реестр панелей (как contribution points в VS Code). Панель объявляет себя одним вызовом
- * `registerPanel` в своём файле в `workbench/panels/`; оболочка (меню «Окно», раскладки,
- * сохранение) берёт всё из реестра и про конкретные панели не знает.
+ * Panel registry (like contribution points in VS Code). A panel declares itself with one
+ * `registerPanel` call in its file in `workbench/panels/`; the shell («Window» menu, layouts,
+ * saving) takes everything from the registry and knows nothing about specific panels.
  */
 import type { ComponentType } from 'react';
 import type { DockviewPanelApi } from 'dockview-react';
 import type { Strings } from '../i18n.ts';
 import type { SelectionKind } from './selection.ts';
 
-/** Куда панель встаёт по умолчанию, если её открыть из меню «Окно». */
+/** Where the panel goes by default when opened from the «Window» menu. */
 export type PanelArea = 'left' | 'center' | 'right' | 'bottom';
 
 /** Window menu sections, in menu order; the first three match the layout presets. */
 export const PANEL_GROUPS = ['data', 'dialogue', 'scene', 'mod'] as const;
 export type PanelGroup = (typeof PANEL_GROUPS)[number];
 
-/** Параметры экземпляра панели (сохраняются в раскладке). */
+/** Panel instance parameters (saved in the layout). */
 export interface PanelParams {
-  /** Закреплённая запись: панель показывает её, а не текущий выбор. */
+  /** Pinned record: the panel shows it instead of the current selection. */
   sid?: string;
 }
 
@@ -28,27 +28,27 @@ export interface PanelProps {
 }
 
 export interface PanelDef {
-  /** Постоянный id: под ним панель хранится в раскладке. */
+  /** Stable id: the panel is stored in the layout under it. */
   id: string;
   title: (t: Strings) => string;
-  /** Значок во вкладке и в меню (символ). */
+  /** Icon in the tab and in the menu (a character). */
   icon: string;
   component: ComponentType<PanelProps>;
   area: PanelArea;
   /**
-   * Что панель умеет показывать: виды выбора и типы записей (`CHARACTER`, `DIALOGUE`…).
-   * Панель с `shows` следует за выбором, её можно закрепить на записи (⊙).
+   * What the panel can show: selection kinds and record types (`CHARACTER`, `DIALOGUE`…).
+   * A panel with `shows` follows the selection and can be pinned to a record (⊙).
    */
   shows?: { kinds: readonly SelectionKind[]; types?: readonly string[] };
-  /** Можно открыть несколько экземпляров, каждый закреплён на своей записи. */
+  /** Several instances can be opened, each pinned to its own record. */
   multi?: boolean;
   /** Section of the Window menu the panel is listed in. */
   group: PanelGroup;
-  /** Место в меню «Окно». */
+  /** Place in the «Window» menu. */
   order: number;
-  /** Пояснение в меню. */
+  /** Description in the menu. */
   hint?: (t: Strings) => string;
-  /** Заготовка на будущее (сцена): помечается в меню. */
+  /** Placeholder for the future (scene): marked in the menu. */
   placeholder?: boolean;
 }
 
@@ -68,7 +68,7 @@ export function allPanels(): PanelDef[] {
   return [...panels.values()].sort((a, b) => a.order - b.order);
 }
 
-/** id экземпляра в раскладке: одиночная панель — её id, закреплённая копия — `id:sid`. */
+/** Instance id in the layout: a single panel — its id, a pinned copy — `id:sid`. */
 export function instanceId(def: PanelDef, params: PanelParams = {}): string {
   return def.multi && params.sid !== undefined ? `${def.id}:${params.sid}` : def.id;
 }

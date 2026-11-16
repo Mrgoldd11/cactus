@@ -1,6 +1,6 @@
 /**
- * Заготовка этапа 7 (3D-вид): панель «Вид сцены» (тип viewport) и инспектор компонентов.
- * Объекты сцены выбираются через общий сервис выбора как `{ kind: 'scene', id, sid }`.
+ * Stage 7 placeholder (3D view): the «Scene view» panel (viewport type) and the component inspector.
+ * Scene objects are selected through the shared selection service as `{ kind: 'scene', id, sid }`.
  */
 import type { ReactNode } from 'react';
 import { decodeText } from '@kenshi-editor/core';

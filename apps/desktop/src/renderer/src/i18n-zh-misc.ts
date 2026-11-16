@@ -1,4 +1,4 @@
-/** Китайский (简体中文): слияние модов, автосохранение, резервные копии и настройки. */
+/** Chinese (简体中文): mod merge, autosave, backups and settings. */
 import type { backupEn } from './i18n-backup.ts';
 import type { MergeCountsView, MergeDoneView, MergePreviewView, MergeStrings } from './i18n-merge.ts';
 

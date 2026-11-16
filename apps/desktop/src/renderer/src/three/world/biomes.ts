@@ -1,23 +1,23 @@
 /**
- * Текстуры земли вблизи: записи BIOMES (какие текстуры у местности) и карта биомов
- * `data/newland/land/biomemap.png` (1024², цвет пикселя = поле `index` биома; столбец — x,
- * строка — z, как у карт цвета — проверено сравнением с `ground colour` биомов).
+ * Close-up ground textures: BIOMES records (which textures the terrain has) and the biome map
+ * `data/newland/land/biomemap.png` (1024², pixel colour = biome `index` field; column — x,
+ * row — z, as with colour maps — checked by comparing with the biomes' `ground colour`).
  *
- * Земля рисуется так: цвет — из карты цвета (вид сверху), а вблизи он умножается на рисунок
- * текстуры биома, делённый на её средний цвет. Так сохраняется цвет местности, а появляется
- * мелкий рисунок: песок, камни, трещины. На склонах — текстура склона, на обрывах — обрыва.
- * Вдали (`fade distance` биома) рисунок плавно исчезает.
+ * The ground is drawn like this: colour comes from the colour map (top view), and up close it is multiplied by the
+ * biome texture pattern divided by its average colour. So the terrain colour is kept, while a
+ * fine pattern appears: sand, stones, cracks. On slopes — the slope texture, on cliffs — the cliff one.
+ * Far away (biome `fade distance`) the pattern fades out smoothly.
  *
- * Не проверено: единица `tiling` — считаем «повторов на зону» (4608 единиц).
+ * Not verified: the unit of `tiling` — we assume «repeats per zone» (4608 units).
  *
- * Растительность биома: `foliage` → FOLIAGE_LAYER → `meshes` (v0 — плотность) → FOLIAGE_MESH
- * с правилами (размер, склон, высота, кучки). Мест в файлах нет — игра раскладывает сама.
+ * Biome vegetation: `foliage` → FOLIAGE_LAYER → `meshes` (v0 — density) → FOLIAGE_MESH
+ * with rules (size, slope, height, clumps). The files have no positions — the game places them itself.
  */
 import * as THREE from 'three';
 import { decodeText, gamePath, type ModContext } from '@kenshi-editor/core';
 
 export const BIOME_MAP_PATH = 'data/newland/land/biomemap.png';
-/** Повторы текстуры считаются на столько единиц мира (зона). */
+/** Texture repeats are counted per this many world units (a zone). */
 const TILING_UNIT = 4608;
 
 export interface Biome {
@@ -26,30 +26,30 @@ export interface Biome {
   base?: string;
   slope?: string;
   cliff?: string;
-  /** Повторов на единицу мира по x и по второй оси. */
+  /** Repeats per world unit along x and along the second axis. */
   tileBase: [number, number];
   tileSlope: [number, number];
   tileCliff: [number, number];
-  /** Склон (градусы): от, до, размытие. */
+  /** Slope (degrees): from, to, blur. */
   slopeRange: [number, number, number];
-  /** Обрыв: от, размытие. */
+  /** Cliff: from, blur. */
   cliffFrom: [number, number];
   fade: number;
-  /** Растительность и камни (FOLIAGE_MESH с правилами). */
+  /** Vegetation and rocks (FOLIAGE_MESH with rules). */
   foliage: FoliageRule[];
 }
 
-/** Правило раскладки одной модели растительности (поля FOLIAGE_MESH). */
+/** Placement rule of one vegetation model (FOLIAGE_MESH fields). */
 export interface FoliageRule {
   target: string;
-  /** Плотность из ссылки слоя (v0). Единица не выяснена. */
+  /** Density from the layer reference (v0). Unit unknown. */
   density: number;
   clustered: boolean;
   cluster: [number, number];
   radius: [number, number];
   scale: [number, number];
   offset: [number, number];
-  /** Склон в «процентах» (100 × тангенс угла — предположение). */
+  /** Slope in «percent» (100 × tangent of the angle — an assumption). */
   slope: [number, number];
   altitude: [number, number];
   avoidTowns: boolean;
@@ -89,7 +89,7 @@ function foliageRules(ctx: ModContext, layers: readonly { target: string }[]): F
   return out;
 }
 
-/** Биомы по `index` (последний слой побеждает, как в игре). */
+/** Biomes by `index` (the last layer wins, as in the game). */
 export function readBiomes(ctx: ModContext): Map<number, Biome> {
   const out = new Map<number, Biome>();
   for (const r of ctx.records()) {
@@ -122,11 +122,11 @@ export function readBiomes(ctx: ModContext): Map<number, Biome> {
 
 export interface DetailTexture {
   tex: THREE.Texture;
-  /** Средний цвет (линейный) — на него делим, чтобы не менять цвет местности. */
+  /** Average colour (linear) — we divide by it so the terrain colour does not change. */
   avg: THREE.Vector3;
 }
 
-/** Средний линейный цвет картинки RGBA (sRGB) — по каждому 7-му пикселю. */
+/** Average linear colour of an RGBA (sRGB) image — from every 7th pixel. */
 export function averageColour(rgba: Uint8Array): THREE.Vector3 {
   const lin = new Float32Array(256);
   for (let i = 0; i < 256; i++) {
@@ -190,7 +190,7 @@ const FRAGMENT_BODY = /* glsl */ `
 }
 `;
 
-/** Материал земли с цветом сверху и рисунком биома вблизи. */
+/** Ground material with colour from above and the biome pattern up close. */
 export function detailMaterial(colour: THREE.Texture, biome: Biome, base: DetailTexture, slope: DetailTexture, cliff: DetailTexture): THREE.MeshLambertMaterial {
   const mat = new THREE.MeshLambertMaterial({ map: colour });
   const uniforms = {

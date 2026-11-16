@@ -160,7 +160,7 @@ textarea {
   color: var(--changed);
 }
 
-/* статусы записей (как в FCS) */
+/* record statuses (as in FCS) */
 .st-new,
 .st-new .name {
   color: var(--new);
@@ -184,7 +184,7 @@ textarea {
   border-color: var(--deleted);
 }
 
-/* стартовый экран */
+/* start screen */
 .start {
   max-width: 1100px;
   margin: 0 auto;
@@ -298,7 +298,7 @@ textarea {
   color: var(--muted);
 }
 
-/* редактор */
+/* editor */
 .editor {
   display: flex;
   flex-direction: column;
@@ -418,7 +418,7 @@ textarea {
   color: var(--error);
 }
 
-/* дерево */
+/* tree */
 .tree-pane {
   border-right: 1px solid var(--border);
   overflow: auto;
@@ -464,7 +464,7 @@ textarea {
   font-size: 11px;
 }
 
-/* список */
+/* list */
 .list-pane {
   display: flex;
   flex-direction: column;
@@ -481,7 +481,7 @@ textarea {
 .list-actions {
   border-bottom: 1px solid var(--border);
   padding-top: 0;
-  /* Узкая колонка (открыта панель ИИ): кнопки переносятся, счётчик не налезает на соседнюю. */
+  /* Narrow column (AI panel open): buttons wrap, the counter does not overlap the neighbour. */
   flex-wrap: wrap;
   row-gap: 4px;
 }
@@ -510,7 +510,7 @@ textarea {
   font-weight: 600;
   border-bottom: 1px solid var(--border);
 }
-/* В узкой колонке «Строковый id» не переносится на вторую строку (она вылезала на первую запись). */
+/* In a narrow column «String id» does not wrap to a second line (it spilled over the first record). */
 .list-header > span {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -552,7 +552,7 @@ textarea {
   text-decoration: line-through;
 }
 
-/* редактор записи */
+/* record editor */
 .record-editor {
   display: flex;
   flex-direction: column;
@@ -736,7 +736,7 @@ tr.fs-removed td:first-child {
   word-break: break-all;
 }
 
-/* окна */
+/* windows */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -805,7 +805,7 @@ tr.fs-removed td:first-child {
   color: var(--changed);
 }
 
-/* где в игре */
+/* where in game */
 .where {
   display: flex;
   flex-direction: column;
@@ -869,7 +869,7 @@ tr.fs-removed td:first-child {
   white-space: normal;
 }
 
-/* граф диалога */
+/* dialogue graph */
 .tab-body:has(> .dg) {
   overflow: hidden;
   padding: 0;
@@ -942,7 +942,7 @@ tr.fs-removed td:first-child {
   --xy-node-background-color: transparent;
 }
 .dg-node {
-  /* Протягивание связи с края узла не должно выделять и тащить текст узла. */
+  /* Dragging a link from a node edge must not select and drag the node text. */
   user-select: none;
   background: var(--bg2);
   border: 1px solid var(--border);
@@ -1079,7 +1079,7 @@ tr.fs-removed td:first-child {
 .dg:focus {
   outline: none;
 }
-/* Меню по правой кнопке мыши */
+/* Right-click menu */
 .dg-menu {
   position: absolute;
   z-index: 20;
@@ -1124,7 +1124,7 @@ tr.fs-removed td:first-child {
 .dg-menu-note {
   padding: 4px 10px;
 }
-/* Текст прямо в узле */
+/* Text right in the node */
 .dg-edit {
   width: 100%;
   box-sizing: border-box;
@@ -1140,7 +1140,7 @@ tr.fs-removed td:first-child {
   outline: 2px solid var(--new);
   outline-offset: 1px;
 }
-/* Режим «связать с…» и вопрос перед удалением */
+/* «Link to…» mode and the question before deleting */
 .dg-banner {
   position: absolute;
   top: 8px;
@@ -1178,7 +1178,7 @@ tr.fs-removed td:first-child {
   gap: 8px;
   justify-content: flex-end;
 }
-/* Подсказка внизу графа и кнопка «Открыть реплику», когда панель закрыта */
+/* Hint at the bottom of the graph and the «Open line» button when the panel is closed */
 .dg-hint {
   padding: 3px 6px;
   border-top: 1px solid var(--border);
@@ -1192,7 +1192,7 @@ tr.fs-removed td:first-child {
   }
 }
 
-/* Статус записи мода и инспектор реплики */
+/* Mod record status and line inspector */
 .st-badge {
   border-radius: 3px;
   padding: 0 5px;
@@ -1347,7 +1347,7 @@ button.small.active {
   padding-left: 6px;
 }
 
-/* Живая связь с ИИ */
+/* Live AI link */
 .panes.with-ai {
   grid-template-columns: 240px minmax(300px, 1fr) minmax(420px, 1.2fr) 340px;
 }
@@ -1470,7 +1470,7 @@ button.small.active {
   margin-top: 6px;
 }
 
-/* разговор */
+/* conversation */
 .talk {
   display: flex;
   flex-direction: column;
@@ -1606,7 +1606,7 @@ button.small.active {
   overflow-wrap: normal;
 }
 
-/* Рабочее пространство (dockview) */
+/* Workspace (dockview) */
 .workbench {
   flex: 1;
   min-height: 0;
@@ -1701,7 +1701,7 @@ button.small.active {
   opacity: 1;
 }
 
-/* Меню «Окно» */
+/* «Window» menu */
 .menu-wrap {
   position: relative;
 }
@@ -1774,7 +1774,7 @@ button.small.active {
   background: var(--border);
 }
 
-/* Заготовка 3D-вида (этап 7) */
+/* 3D view placeholder (stage 7) */
 .viewport-stub {
   position: relative;
   display: flex;
@@ -1806,7 +1806,7 @@ button.small.active {
   gap: 8px;
 }
 
-/* проигрыватель разговора */
+/* conversation player */
 .player {
   display: flex;
   flex-direction: column;
@@ -1921,7 +1921,7 @@ button.small.active {
   margin-bottom: 12px;
 }
 
-/* История правок: кружочки ↶ ↷ со списком шагов, панель «История» */
+/* Edit history: ↶ ↷ round buttons with a list of steps, the «History» panel */
 .hist-buttons {
   position: relative;
   display: inline-flex;
@@ -2082,7 +2082,7 @@ button.small.active {
   white-space: nowrap;
 }
 
-/* Панель «Моды» */
+/* «Mods» panel */
 .mods-panel {
   display: flex;
   flex-direction: column;
@@ -2129,7 +2129,7 @@ button.small.active {
   color: var(--muted);
 }
 
-/* Панель «Моды»: порядок загрузки (перетаскивание строк, ▲▼). */
+/* «Mods» panel: load order (dragging rows, ▲▼). */
 .mod-order {
   white-space: nowrap;
 }
@@ -2157,15 +2157,15 @@ tr[draggable='true'] {
   cursor: grab;
 }
 
-/* Панель «Перевод»: оригинал и поле перевода рядом. */
+/* «Translation» panel: original and translation field side by side. */
 .tr-actions {
   display: inline-flex;
   gap: 4px;
   align-items: center;
   margin-left: auto;
 }
-/* Фиксированная раскладка: тексты (оригинал и перевод) получают всё свободное место поровну,
-   а «Запись», «Поле» и «Статус» — узкие. Так длинный текст не сжимается в узкий столбец. */
+/* Fixed layout: the texts (original and translation) share all free space equally,
+   while «Record», «Field» and «Status» are narrow. So a long text is not squeezed into a narrow column. */
 .tr-table {
   table-layout: fixed;
 }
@@ -2197,7 +2197,7 @@ tr[draggable='true'] {
   width: 100%;
   min-height: 2.2em;
   max-height: 20em;
-  /* высота растёт вместе с текстом (Chromium 123+) */
+  /* height grows with the text (Chromium 123+) */
   field-sizing: content;
   resize: vertical;
 }
@@ -2225,7 +2225,7 @@ tr[draggable='true'] {
   cursor: pointer;
 }
 
-/* Отношения фракций (матрица) */
+/* Faction relations (matrix) */
 .fac-edit {
   display: flex;
   gap: 6px;
@@ -2236,7 +2236,7 @@ tr[draggable='true'] {
 .fac-edit input[type='number'] {
   width: 70px;
 }
-/* «?» со справкой по таблице: открывается при наведении или фокусе */
+/* «?» with table help: opens on hover or focus */
 .fac-help {
   position: relative;
   display: inline-block;
@@ -2414,7 +2414,7 @@ tr[draggable='true'] {
   border-radius: 3px;
 }
 
-/* Сравнение предметов */
+/* Item comparison */
 .cmp-table th.cmp-sort {
   cursor: pointer;
   white-space: nowrap;
@@ -2476,7 +2476,7 @@ input.invalid {
   border-color: var(--error);
 }
 
-/* ── Массовые правки ── */
+/* ── Bulk edits ── */
 .bulk-op input:not([type='checkbox']) { min-width: 9em; }
 .bulk-error { color: var(--error); padding: 2px 8px; }
 .bulk-table .bulk-before { color: var(--deleted); text-decoration: line-through; opacity: 0.8; }
@@ -2496,7 +2496,7 @@ input.invalid {
 .bulk-sample ul { margin: 4px 0; padding-left: 18px; columns: 3; }
 .bulk-skipped ul { margin: 4px 0; padding-left: 18px; }
 
-/* Панель «Графы» (исследования, крафт, состав отрядов и городов). */
+/* «Graphs» panel (research, crafting, squad and town make-up). */
 .graphs-panel .dg-canvas {
   min-height: 200px;
 }
@@ -2584,7 +2584,7 @@ input.invalid {
   width: 64px;
 }
 
-/* Панель «Перепись NPC». */
+/* «NPC census» panel. */
 .census-body {
   display: flex;
   flex: 1;
@@ -2642,7 +2642,7 @@ input.invalid {
   white-space: nowrap;
 }
 
-/* Массовые правки: галочки строк, сортируемые колонки */
+/* Bulk edits: row checkboxes, sortable columns */
 .bulk-table th.bulk-sort { cursor: pointer; user-select: none; }
 .bulk-table th.bulk-sort:hover { text-decoration: underline; }
 .bulk-table .bulk-check { width: 28px; text-align: center; }
@@ -2650,7 +2650,7 @@ input.invalid {
 .bulk-table tr.bulk-off .bulk-after { text-decoration: line-through; }
 .bulk-sample .bulk-table { width: auto; min-width: 360px; }
 
-/* Слияние модов */
+/* Mod merge */
 .mg-panel .table-wrap {
   flex: 1;
   min-height: 0;
@@ -2764,7 +2764,7 @@ input.invalid {
   padding: 4px 6px;
 }
 
-/* Автосохранение, настройки и резервные копии */
+/* Autosave, settings and backups */
 .settings-row {
   display: flex;
   align-items: center;

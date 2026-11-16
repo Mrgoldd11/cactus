@@ -1,6 +1,6 @@
 /**
- * Панели данных: категории, список записей, инспектор записи, «Где в игре», диагностика,
- * изменения ИИ. Каждая — один вызов `registerPanel`.
+ * Data panels: categories, record list, record inspector, «Where in game», diagnostics,
+ * AI changes. Each is one `registerPanel` call.
  */
 import { useMemo, type ReactNode } from 'react';
 import { validateMod } from '@kenshi-editor/core';

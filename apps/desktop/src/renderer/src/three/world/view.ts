@@ -1,7 +1,7 @@
 /**
- * Окно «Мир»: рендер, свет, камера-полёт, рельеф, объекты, подписи городов, подсветка и замеры.
- * Кадр рисуется только когда что-то изменилось (камера, загрузка) — в покое видеокарта отдыхает.
- * Тяжёлое — в фоновых потоках (`WorkerPool`), здесь только сборка объектов three.js.
+ * «World» view: rendering, light, fly camera, terrain, objects, town labels, highlight and measurements.
+ * A frame is drawn only when something changed (camera, loading) — at rest the GPU idles.
+ * Heavy work is in background threads (`WorkerPool`), here only three.js object assembly.
  */
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -20,9 +20,9 @@ export type QualityLevel = 'low' | 'medium' | 'high';
 
 export interface WorldSettings {
   quality: QualityLevel;
-  /** Дальность прорисовки объектов (маркеров), единиц мира. */
+  /** Object (marker) draw distance, world units. */
   drawDistance: number;
-  /** Рисовать границы городов (круг радиусом `Town::getRadius` игры). */
+  /** Draw town borders (a circle with the game's `Town::getRadius` radius). */
   borders: boolean;
   /**
    * Draw buildings known only from the game dump (placed by mods that are not opened here).
@@ -48,7 +48,7 @@ export interface TownLabel {
   sid: string;
   name: string;
   pos: THREE.Vector3;
-  /** Радиус границы города (0 — границы нет). */
+  /** Town border radius (0 — no border). */
   radius: number;
   /** A big town (town type 2): its label is always shown, even over others. */
   major: boolean;
@@ -56,27 +56,27 @@ export interface TownLabel {
 
 export interface WorldStatsView {
   fps: number;
-  /** Среднее время кадра на процессоре, мс. */
+  /** Average CPU frame time, ms. */
   frameMs: number;
-  /** От открытия окна до первой картинки рельефа, мс (undefined — ещё нет). */
+  /** From opening the view to the first terrain image, ms (undefined — not yet). */
   firstFrameMs: number | undefined;
-  /** Память JS (МБ), если браузер её даёт. */
+  /** JS memory (MB), if the browser provides it. */
   heapMb: number | undefined;
   geometries: number;
   textures: number;
   drawCalls: number;
   triangles: number;
-  /** Тайлов с рисунком биома. */
+  /** Tiles with the biome pattern. */
   detailed: number;
   tiles: number;
   tilesDrawn: number;
   models: number;
   markers: number;
   loading: number;
-  /** Загруженных моделей (разных) и записей без модели. */
+  /** Loaded models (distinct) and records without a model. */
   protos: number;
   failed: number;
-  /** Растительность: экземпляров вокруг камеры и нарисовано (в кадре). */
+  /** Vegetation: instances around the camera and drawn (in frame). */
   foliage: number;
   foliageDrawn: number;
   /** Foliage instances standing exactly as in the running game (plugin dump). */
@@ -88,13 +88,13 @@ export interface WorldStatsView {
   dumpBuildingsDrawn: number;
   dumpBuildingsNoModel: number;
   overview: number;
-  /** Где камера (для e2e и «Показать в игре»). */
+  /** Where the camera is (for e2e and «Show in game»). */
   camera: { x: number; y: number; z: number };
-  /** Гизмо на экране (пиксели холста): центр и точка на стрелке X — для e2e. */
+  /** Gizmo on screen (canvas pixels): centre and a point on the X arrow — for e2e. */
   gizmo: string;
 }
 
-/** Правка объектов гизмо: режим, шаг сетки (0 — без), шаг поворота в градусах (0 — без), к земле. */
+/** Gizmo object editing: mode, grid step (0 — none), rotation step in degrees (0 — none), snap to ground. */
 export interface EditSettings {
   mode: 'move' | 'rotate';
   grid: number;
@@ -104,13 +104,13 @@ export interface EditSettings {
 
 export const DEFAULT_EDIT: EditSettings = { mode: 'move', grid: 0, angle: 15, ground: true };
 
-/** Куда поставить экземпляр после перетаскивания. */
+/** Where to put the instance after dragging. */
 export interface EditCommit {
-  /** Позиция экземпляра (y — как в файле: над землёй). */
+  /** Instance position (y — as in the file: above ground). */
   position: Vec3;
-  /** Кватернион в порядке файла (w, x, y, z). */
+  /** Quaternion in file order (w, x, y, z). */
   rotation: Vec4;
-  /** Высота в мире для состояния здания (`world Y pos`). */
+  /** World height for the building state (`world Y pos`). */
   worldY?: number;
 }
 
@@ -139,7 +139,7 @@ export class WorldView {
   private readonly host: HTMLElement;
   private readonly labels: HTMLDivElement;
   private readonly labelEls = new Map<string, HTMLDivElement>();
-  /** Границы городов: по кольцу на город, высота кольца ложится на рельеф. */
+  /** Town borders: one ring per town, the ring height follows the terrain. */
   private readonly borderGroup = new THREE.Group();
   private borderRings: { town: TownLabel; line: THREE.LineLoop }[] = [];
   private bordersDirty = true;
@@ -161,21 +161,21 @@ export class WorldView {
   hovered: WorldObject | undefined;
   selected: WorldObject | undefined;
   settings: WorldSettings;
-  /** Вызывается после выбора кликом (или снятия выбора). */
+  /** Called after selection by click (or clearing the selection). */
   onSelect: (o: WorldObject | undefined) => void = () => undefined;
-  /** Гизмо отпустили: записать правку. false — правка не прошла, объект вернётся на место. */
+  /** The gizmo was released: write the edit. false — the edit failed, the object returns to its place. */
   onCommit: (o: WorldObject, c: EditCommit) => boolean = () => false;
-  /** Клавиша Delete на выбранном объекте. */
+  /** Delete key on the selected object. */
   onRemove: (o: WorldObject) => void = () => undefined;
-  /** Сменился режим гизмо (клавиши G / R). */
+  /** Gizmo mode changed (G / R keys). */
   onEditChange: (e: EditSettings) => void = () => undefined;
-  /** Можно ли править (открыт мод). */
+  /** Whether editing is allowed (a mod is open). */
   editable = false;
   edit: EditSettings = { ...DEFAULT_EDIT };
   readonly gizmo: TransformControls;
   private readonly pivot = new THREE.Object3D();
   private dragStart: { pos: THREE.Vector3; quat: THREE.Quaternion; above: number | undefined } | undefined;
-  /** Последний pointerdown пришёлся на гизмо — щелчок после него не выбирает. */
+  /** The last pointerdown hit the gizmo — the click after it does not select. */
   private gizmoDown = false;
 
   constructor(host: HTMLElement, game: GameInstallInfo, ctx: ModContext, world: WorldIndex, settings: WorldSettings) {
@@ -197,7 +197,7 @@ export class WorldView {
 
     const sky = new THREE.Color(0xc8c2b0);
     this.scene.background = sky;
-    // Дымка зависит от высоты камеры (см. `loop`): сверху весь мир чистый, у земли даль тает.
+    // Fog depends on camera height (see `loop`): from above the whole world is clear, near the ground the distance fades.
     this.fog = new THREE.Fog(sky, 60000, 300000);
     this.scene.fog = this.fog;
     this.scene.add(new THREE.HemisphereLight(0xfff4e0, 0x6b5a45, 1.4));
@@ -209,7 +209,7 @@ export class WorldView {
     this.pool = new WorkerPool(Math.max(2, Math.min(4, (navigator.hardwareConcurrency || 4) - 1)));
     const biomes = readBiomes(ctx);
     this.terrain = new TerrainLod(game, this.pool, q.terrain, biomes);
-    // Пока у растительности нет подробного рельефа, новые тайлы — повод пересчитать её.
+    // While vegetation has no detailed terrain, new tiles are a reason to recompute it.
     this.terrain.onChange = () => { this.bordersDirty = true; this.invalidate(this.foliage.incomplete); };
     this.scene.add(this.terrain.group);
     this.objects = new WorldObjects(game, this.pool, ctx, world, q.objects);
@@ -239,7 +239,7 @@ export class WorldView {
     this.objects.showDumpBuildings = settings.gameBuildings;
     this.dump.onChange = () => { this.invalidate(true); };
 
-    // Рамки подсветки: под мышью — светло-серая, выбранный — ярко-синяя (видны сквозь всё).
+    // Highlight frames: under the mouse — light grey, selected — bright blue (visible through everything).
     const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
     this.hoverBox = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xdddddd, depthTest: false, transparent: true, opacity: 0.8 }));
     this.selectBox = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x3fa9ff, depthTest: false }));
@@ -255,7 +255,7 @@ export class WorldView {
     this.fly.groundAt = (x, z) => this.terrain.heightAt(x, z);
     this.fly.onChange = () => { this.invalidate(true); };
 
-    // Гизмо: стрелки сдвига / кольцо поворота на выбранном объекте.
+    // Gizmo: move arrows / rotation ring on the selected object.
     this.pivot.name = 'pivot';
     this.scene.add(this.pivot);
     this.gizmo = new TransformControls(this.camera, this.renderer.domElement);
@@ -277,7 +277,7 @@ export class WorldView {
     });
     this.gizmo.addEventListener('objectChange', () => { this.onGizmoMove(); });
     this.applyEdit();
-    // Начало — над серединой карты, весь мир в кадре.
+    // Start above the map centre, the whole world in frame.
     this.fly.set(new THREE.Vector3(0, 200000, 160000), new THREE.Vector3(0, 0, 0));
 
     const el = this.renderer.domElement;
@@ -339,7 +339,7 @@ export class WorldView {
     this.scene.add(this.borderGroup);
   }
 
-  /** Кольца ложатся на рельеф там, где он уже загружен; иначе — на высоту центра города. */
+  /** Rings follow the terrain where it is loaded; otherwise they sit at the town centre height. */
   private refreshBorders(): void {
     for (const { town, line } of this.borderRings) {
       const pos = line.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -383,7 +383,7 @@ export class WorldView {
     this.select(this.objects.pick(this.ray(e)));
   };
 
-  /** Двойной клик по земле — подлететь к этой точке (ближе — подробнее). */
+  /** Double-click on the ground — fly to that point (closer — more detail). */
   private readonly onDouble = (e: MouseEvent): void => {
     if (e.button !== 0) return;
     const p = this.groundHit(this.ray(e));
@@ -392,7 +392,7 @@ export class WorldView {
     this.fly.flyTo(p, Math.max(600, Math.min(cam.distanceTo(p) * 0.35, 40000)));
   };
 
-  /** Точка земли под лучом: шаг по лучу, потом уточнение делением пополам. */
+  /** Ground point under the ray: steps along the ray, then refinement by bisection. */
   groundHit(ray: THREE.Ray): THREE.Vector3 | undefined {
     const above = (t: number): number | undefined => {
       const p = ray.at(t, new THREE.Vector3());
@@ -440,7 +440,7 @@ export class WorldView {
     } else if (e.key === 'Escape') this.select(undefined);
   };
 
-  /** Сменить настройки гизмо (режим, сетка, угол, к земле). */
+  /** Change gizmo settings (mode, grid, angle, snap to ground). */
   setEdit(e: EditSettings): void {
     this.edit = e;
     this.applyEdit();
@@ -457,8 +457,8 @@ export class WorldView {
     g.setMode(e.mode === 'move' ? 'translate' : 'rotate');
     g.setTranslationSnap(e.grid > 0 ? e.grid : null);
     g.setRotationSnap(e.angle > 0 ? THREE.MathUtils.degToRad(e.angle) : null);
-    // Поворот — только вокруг вертикали (как в игре). Зелёная стрелка (Y) — вверх-вниз всегда;
-    // «к земле» действует на сдвиг по земле (X/Z): высота над землёй сохраняется.
+    // Rotation only around the vertical (as in the game). The green arrow (Y) is always up-down;
+    // «snap to ground» applies to moving along the ground (X/Z): the height above ground is kept.
     const rotate = e.mode === 'rotate';
     g.showX = !rotate;
     g.showZ = !rotate;
@@ -507,9 +507,9 @@ export class WorldView {
     }
   }
 
-  /** Что записать в файл для объекта, стоящего сейчас в `o.pos`/`o.quat` (раньше — в `from`). */
+  /** What to write to the file for an object now standing at `o.pos`/`o.quat` (previously at `from`). */
   commitOf(o: WorldObject, from: THREE.Vector3): EditCommit {
-    // y экземпляра — над землёй: старая высота + подъём − подъём земли.
+    // Instance y is above ground: old height + lift − ground rise.
     const g0 = this.terrain.heightAt(from.x, from.z);
     const g1 = this.terrain.heightAt(o.pos.x, o.pos.z);
     const y = o.p.position[1] + (o.pos.y - from.y) - (g0 !== undefined && g1 !== undefined ? g1 - g0 : 0);
@@ -519,7 +519,7 @@ export class WorldView {
     return c;
   }
 
-  /** Подтянуть правки мира мода (свои, отмена/повтор, правки ИИ). */
+  /** Pull in the mod world edits (own, undo/redo, AI edits). */
   sync(edits: WorldEdits, changes: readonly WorldChange[]): void {
     const touched = this.objects.sync(edits, changes);
     if (this.selected?.gone) this.select(undefined);
@@ -532,7 +532,7 @@ export class WorldView {
     this.invalidate(true);
   }
 
-  /** Точка земли в середине экрана (куда ставить новый объект). */
+  /** Ground point at the screen centre (where to place a new object). */
   centreGround(): THREE.Vector3 | undefined {
     const rc = new THREE.Raycaster();
     rc.setFromCamera(new THREE.Vector2(0, 0), this.camera);
@@ -565,13 +565,13 @@ export class WorldView {
     this.invalidate();
   }
 
-  /** Перелететь к объекту. */
+  /** Fly to an object. */
   focus(o: WorldObject): void {
     const size = this.objects.boxOf(o).getSize(new THREE.Vector3()).length();
     this.fly.flyTo(o.pos, Math.max(250, size * 2.2));
   }
 
-  /** Перелететь к точке (город): смотрим на землю в этой точке. */
+  /** Fly to a point (town): look at the ground at that point. */
   /** Fly to world coordinates (the height is taken from the terrain). */
   flyToXZ(x: number, z: number, dist = 2500): void {
     this.flyToPoint(new THREE.Vector3(x, this.terrain.heightAt(x, z) ?? 0, z), dist);
@@ -586,7 +586,7 @@ export class WorldView {
 
   private readonly loop = (): void => {
     this.raf = requestAnimationFrame(this.loop);
-    // Вкладка скрыта — не считаем и не рисуем.
+    // Tab hidden — no computing and no drawing.
     if (!this.host.isConnected || this.host.clientWidth === 0) return;
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.last) / 1000);
@@ -594,7 +594,7 @@ export class WorldView {
     if (this.fly.update(dt)) this.objectsDirty = true;
     const t0 = performance.now();
     this.camera.updateMatrixWorld();
-    // LOD рельефа — каждый кадр (дёшево); объекты — не чаще ~6 раз в секунду.
+    // Terrain LOD every frame (cheap); objects no more than ~6 times per second.
     this.terrain.update(this.camera);
     if (this.settings.borders && this.bordersDirty && now - this.lastBorders > 700) {
       this.refreshBorders();
@@ -605,7 +605,7 @@ export class WorldView {
     if (this.objectsDirty && now - this.lastObjects > 150) {
       if (this.foliage.update(this.camera.position)) this.objects.setFoliage(this.foliage.byTarget);
       this.objects.update(this.camera);
-      // Растительность досчитывается по частям — пока не всё, обновляем ещё.
+      // Vegetation is computed in parts — while not done, keep updating.
       this.objectsDirty = this.foliage.incomplete;
       this.lastObjects = now;
       this.dirty = true;
@@ -649,7 +649,7 @@ export class WorldView {
     const w = this.host.clientWidth;
     const h = this.host.clientHeight;
     const cam = this.camera.position;
-    // Сверху видно дальше: подписи — на расстоянии до трёх высот камеры.
+    // From above you see farther: labels within up to three camera heights.
     const reach = Math.max(90000, (cam.y - (this.terrain.heightAt(cam.x, cam.z) ?? 0)) * 3);
     const shown = this.towns
       .map((t) => ({ t, d: t.pos.distanceTo(cam) }))
@@ -683,7 +683,7 @@ export class WorldView {
         el.textContent = t.name;
         el.style.cssText = 'position:absolute;transform:translate(-50%,-100%);color:#fff;text-shadow:0 0 3px #000,0 0 2px #000;white-space:nowrap;pointer-events:auto;cursor:pointer';
         el.dataset['town'] = t.name;
-        // Клик по названию — перелёт к городу.
+        // Click on a name — fly to the town.
         const pos = t.pos;
         el.addEventListener('click', () => { this.flyToPoint(pos); });
         this.labels.appendChild(el);
@@ -733,17 +733,17 @@ export class WorldView {
     };
   }
 
-  /** Гизмо прикреплено к объекту (в типах three `object` всегда есть, на деле — нет). */
+  /** The gizmo is attached to an object (in three types `object` is always present, in practice it is not). */
   private gizmoOn(): boolean {
     return (this.gizmo.object as THREE.Object3D | undefined) !== undefined;
   }
 
-  /** Центр гизмо и точка на стрелке X в пикселях холста ('' — гизмо нет). */
+  /** Gizmo centre and a point on the X arrow in canvas pixels ('' — no gizmo). */
   private gizmoProbe(): string {
     if (!this.gizmoOn()) return '';
     const cam = this.camera;
     const c = this.pivot.position.clone();
-    // Размер гизмо — как в TransformControls: от расстояния до камеры и угла обзора.
+    // Gizmo size as in TransformControls: from the camera distance and the field of view.
     const factor = c.distanceTo(cam.position) * Math.min((1.9 * Math.tan((Math.PI * cam.fov) / 360)) / cam.zoom, 7);
     const ax = c.clone().add(new THREE.Vector3(0.45 * factor * this.gizmo.size / 4, 0, 0));
     const w = this.host.clientWidth;
@@ -755,7 +755,7 @@ export class WorldView {
     return `${px(c)},${px(ax)}`;
   }
 
-  /** Камера: позиция и куда смотрит (для «Показать в игре» и e2e). */
+  /** Camera: position and where it looks (for «Show in game» and e2e). */
   cameraState(): { x: number; y: number; z: number } {
     const p = this.camera.position;
     return { x: Math.round(p.x), y: Math.round(p.y), z: Math.round(p.z) };

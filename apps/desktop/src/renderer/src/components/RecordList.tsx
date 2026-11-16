@@ -1,7 +1,7 @@
 /**
- * Список записей узла: поиск по имени (англ./рус.) и id, фильтр статуса, цвета статусов как в
- * FCS (новая — зелёная, изменённая — жёлтая, удалённая — красная зачёркнутая), «●» — правка
- * после сохранения. Команды: новая, копия, удалить, вернуть, откатить.
+ * Node record list: search by name (English/Russian) and id, status filter, status colours as in
+ * FCS (new — green, changed — yellow, deleted — red struck through), «●» — edit
+ * after save. Commands: new, copy, delete, restore, revert.
  */
 import { useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import type { RecordStatus } from '@kenshi-editor/core';
@@ -36,7 +36,7 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
   const ctx = project.ctx;
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  // Полоса прокрутки списка сужает его строки; шапка получает такой же отступ справа, иначе заголовки съезжают.
+  // The list scrollbar narrows its rows; the header gets the same right padding, otherwise the headings shift.
   const [gutter, setGutter] = useState(0);
 
   const items = useMemo(() => {

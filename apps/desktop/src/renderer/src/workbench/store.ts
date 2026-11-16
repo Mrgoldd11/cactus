@@ -1,4 +1,4 @@
-/** Маленькое общее значение рабочего пространства (например, выбранная категория). */
+/** A small shared workspace value (e.g. the selected category). */
 import { useSyncExternalStore } from 'react';
 
 export class ValueStore<T> {

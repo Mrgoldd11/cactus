@@ -1,6 +1,6 @@
 /**
- * Редактор записи: заголовок (имя, id, тип, статус, слои) и вкладки — поля по схеме fcs.def,
- * ссылки с выбором записи, обратные ссылки, «где в игре», разница с ванилью по полям.
+ * Record editor: header (name, id, type, status, layers) and tabs — fields by the fcs.def schema,
+ * references with record choice, back references, «where in game», per-field difference from vanilla.
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import {
@@ -182,7 +182,7 @@ function TabButton({ tab, cur, set, label, marked }: { tab: Tab; cur: Tab; set: 
   );
 }
 
-// ---------------------------------------------------------------- поля
+// ---------------------------------------------------------------- fields
 
 function displayValue(ctx: ModContext, rec: GameRecord, row: FieldRow, v: ScalarValue | undefined, lang: string): string {
   if (v === undefined) return '';
@@ -192,7 +192,7 @@ function displayValue(ctx: ModContext, rec: GameRecord, row: FieldRow, v: Scalar
   return formatFieldValue(ctx, rec, row.dict, row.key, v, lang);
 }
 
-/** Текст из поля ввода → значение поля; строка — ошибка разбора. */
+/** Text from an input → field value; a string — parse error. */
 function parseValue(row: FieldRow, text: string): ScalarValue | string {
   switch (row.dict) {
     case 'strings':
@@ -446,7 +446,7 @@ function FieldInput({ ctx, rec, row, value, disabled, onSet, onText }: { ctx: Mo
   return input;
 }
 
-// ---------------------------------------------------------------- ссылки
+// ---------------------------------------------------------------- references
 
 function RefsTab({ project, sid, groups, disabled, edit, onGo }: { project: Project; sid: string; groups: RefGroup[]; disabled: boolean; edit: (fn: () => void) => void; onGo: (sid: string) => void }): ReactNode {
   const t = useT();
@@ -637,7 +637,7 @@ function RefLine({ ctx, sid, group, row, disabled, edit, onGo, t }: { ctx: ModCo
   );
 }
 
-// ---------------------------------------------------------------- обратные ссылки
+// ---------------------------------------------------------------- back references
 
 const BACK_LIMIT = 1000;
 
@@ -685,7 +685,7 @@ function BackRefsTab({ project, sid, entries, onGo }: { project: Project; sid: s
   );
 }
 
-// ---------------------------------------------------------------- разница с ванилью
+// ---------------------------------------------------------------- difference from vanilla
 
 function changeCells(ctx: ModContext, rec: GameRecord, c: FieldChange, lang: string): [string, string, string] {
   switch (c.kind) {

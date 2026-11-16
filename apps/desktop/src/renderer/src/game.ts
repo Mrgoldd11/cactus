@@ -1,7 +1,7 @@
 /**
- * Связь окна с игрой (плагин Kenshi Bridge через main): состояние связи, команды и общий
- * журнал трассировки диалога, который читают панель «Игра» и проигрыватель разговора.
- * Тексты — здесь же (en/ru), чтобы не трогать общий словарь.
+ * Window link to the game (Kenshi Bridge plugin via main): link state, commands and the shared
+ * dialogue trace log read by the «Game» panel and the conversation player.
+ * Texts live here too (en/ru), so the shared dictionary stays untouched.
  */
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { gameErrorText, type GameState, type TracePage, type TraceRecord, type Vec3 } from '@kenshi-editor/core';
@@ -176,7 +176,7 @@ export async function gameState(): Promise<GameState | GameReply> {
 export const cameraTo = (pos: Vec3): Promise<GameReply> => gameRequest('camera', { pos });
 export const teleportTo = (pos: Vec3): Promise<GameReply> => gameRequest('teleport', { pos });
 
-// ── Общий журнал трассировки: читается, пока на него кто-то подписан ──
+// ── Shared trace log: read while someone is subscribed to it ──
 
 const KEEP = 300;
 let records: readonly TraceRecord[] = [];
@@ -196,7 +196,7 @@ async function pull(): Promise<void> {
   const r = await gameRequest('trace_get', { since });
   if (!r.ok) return;
   const page = r.result as TracePage;
-  if (page.next < since) records = []; // игра перезапущена — номера пошли заново
+  if (page.next < since) records = []; // game restarted — numbering started over
   since = page.next;
   if (page.items.length) {
     records = [...records, ...page.items].slice(-KEEP);
@@ -228,7 +228,7 @@ function subscribe(cb: () => void): () => void {
   };
 }
 
-/** Записи трассировки и включена ли она (подписка опрашивает игру раз в 2 с). */
+/** Trace records and whether tracing is on (the subscription polls the game every 2 s). */
 export function useGameTrace(): { records: readonly TraceRecord[]; on: boolean } {
   return useSyncExternalStore(subscribe, () => snapshot);
 }
@@ -243,7 +243,7 @@ export async function setGameTrace(on: boolean): Promise<GameReply> {
   return r;
 }
 
-/** Последний выбор игры для персонажа-шаблона `sid` на событие `event`. */
+/** The game's last pick for template character `sid` on event `event`. */
 export function lastTraceFor(list: readonly TraceRecord[], sid: string, event: number): TraceRecord | undefined {
   for (let i = list.length - 1; i >= 0; i--) {
     const r = list[i]!;

@@ -1,19 +1,19 @@
 /**
- * Граф диалога (DIALOGUE_PACKAGE, DIALOGUE, DIALOGUE_LINE) с правкой: реплики узлами (кто говорит,
- * тексты по-русски из перевода игры, условия, действия, очки и шанс), ссылки `dialogs`/`lines`
- * рёбрами, петли — пунктиром.
+ * Dialogue graph (DIALOGUE_PACKAGE, DIALOGUE, DIALOGUE_LINE) with editing: lines as nodes (speaker,
+ * Russian texts from the game translation, conditions, effects, score and chance), `dialogs`/`lines` references
+ * as edges, loops dashed.
  *
- * Правка прямо в графе:
- * - ПКМ по узлу, связи или пустому месту — меню действий (изменить текст, добавить ответ или
- *   реплику, связать, копия, удалить, вставить реплику между, вернуть как в игре…);
- * - двойной клик или F2 — текст прямо в узле (Enter — сохранить, Esc — отмена);
- * - Delete — удалить выделенное (реплики и связи), Ctrl+D — копия, Ctrl+C/Ctrl+V — копировать
- *   и вставить, Shift+рамка или Ctrl+клик — выделить несколько, Esc — снять выделение;
- * - «+» на узле — новый ответ или реплика; протянуть от правого края узла к другому — связь.
- * Всё через команды ядра: одна правка — одна отмена (Ctrl+Z / Ctrl+Y).
- * Метки «новая» / «изменена», убранные из ветки реплики игры. Проверки (битые ссылки, тупики,
- * запертые диалоги, перебивание ванили…) — на узлах и списком. Поиск по тексту, свернуть ветку,
- * показать только ветку, разложить заново, мини-карта.
+ * Editing right in the graph:
+ * - right-click on a node, edge or empty space — effect menu (edit text, add answer or
+ *   line, link, copy, delete, insert line between, restore as in game…);
+ * - double-click or F2 — text right in the node (Enter — save, Esc — cancel);
+ * - Delete — delete selection (lines and links), Ctrl+D — copy, Ctrl+C/Ctrl+V — copy
+ *   and paste, Shift+box or Ctrl+click — multi-select, Esc — clear selection;
+ * - «+» on a node — new answer or line; drag from a node's right edge to another — link.
+ * Everything goes through core commands: one edit — one undo (Ctrl+Z / Ctrl+Y).
+ * Marks «new» / «changed», game lines removed from a branch. Checks (broken references, dead ends,
+ * locked dialogues, vanilla overrides…) — on nodes and as a list. Text search, collapse branch,
+ * show branch only, re-layout, minimap.
  */
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import {
@@ -68,14 +68,14 @@ interface Props {
   sid: string;
   version: number;
   onGo: (sid: string) => void;
-  /** Выбранная реплика (подсвечивается; при выборе извне граф к ней подъезжает). */
+  /** Selected line (highlighted; when selected from outside the graph pans to it). */
   selected?: string | undefined;
-  /** Выбрать реплику или диалог графа; `parent` — откуда к ней пришли. */
+  /** Select a graph line or dialogue; `parent` — where it was reached from. */
   onSelect?: (sid: string, parent?: string) => void;
   onReport?: (err: string | undefined) => void;
-  /** Открыть (или показать) панель «Реплика». */
+  /** Open (or show) the «Line» panel. */
   onShowLine?: () => void;
-  /** Открыта ли панель «Реплика» (кнопка «Открыть реплику» выделяется, если нет). */
+  /** Whether the «Line» panel is open (the «Open line» button is highlighted if not). */
   isLineOpen?: () => boolean;
 }
 
@@ -96,13 +96,13 @@ type LineData = {
   status: string | undefined;
   checks: DialogCheck[];
   removed: number;
-  /** Сколько потомков по дереву (для «свернуть»). */
+  /** How many descendants in the tree (for «collapse»). */
   kids: number;
-  /** Свёрнут: сколько узлов скрыто. */
+  /** Collapsed: how many nodes are hidden. */
   hidden?: number;
   matched: boolean;
   editable: boolean;
-  /** Текст правится прямо в узле; `raw` — текущий первый текст записи. */
+  /** Text is edited right in the node; `raw` — the record's current first text. */
   editing: boolean;
   raw?: string;
   actions: { current: Actions };
@@ -110,12 +110,12 @@ type LineData = {
 type LineNode = Node<LineData, 'line'>;
 
 interface Menu {
-  /** Место меню на холсте (от левого верхнего угла). */
+  /** Menu position on the canvas (from the top-left corner). */
   x: number;
   y: number;
   kind: 'node' | 'edge' | 'pane';
   id?: string;
-  /** Точка графа под мышью (для «новая реплика» и «вставить»). */
+  /** Graph point under the mouse (for «new line» and «paste»). */
   at?: { x: number; y: number };
 }
 
@@ -124,19 +124,19 @@ interface Ask {
   run: () => void;
 }
 
-/** Скопированные реплики (Ctrl+C / «Копировать») — общие для всех графов окна. */
+/** Copied lines (Ctrl+C / «Copy») — shared by all graphs of the window. */
 let clipboard: string[] = [];
 
 export function DialogueGraphTab(props: Props): ReactNode {
   return (
-    // Новый провайдер на каждую запись — стартовый вид заново.
+    // New provider for each record — the initial view starts over.
     <ReactFlowProvider key={props.sid}>
       <GraphView {...props} />
     </ReactFlowProvider>
   );
 }
 
-/** Узлы, скрытые свёрнутыми ветками (потомки по дереву, без петель), и сколько скрыл каждый. */
+/** Nodes hidden by collapsed branches (tree descendants, without loops), and how many each one hid. */
 function hiddenBy(graph: DialogueGraph, collapsed: ReadonlySet<string>): { hidden: Set<string>; count: Map<string, number> } {
   const kids = new Map<string, string[]>();
   for (const e of graph.edges) if (!e.back) kids.set(e.source, [...(kids.get(e.source) ?? []), e.target]);
@@ -181,7 +181,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   const [hit, setHit] = useState(0);
   const [showInfo, setShowInfo] = useState(false);
   const report = onReport ?? (() => undefined);
-  /** Последний узел, выбранный кликом в самом графе (к нему не подъезжаем). */
+  /** The last node selected by a click in the graph itself (no panning to it). */
   const clicked = useRef<string | undefined>(undefined);
 
 
@@ -215,7 +215,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     return { parent, kids };
   }, [graph]);
 
-  // ── что можно с узлом ──
+  // ── what can be done with a node ──
   const isLine = (id: string): boolean => {
     const n = byId.get(id);
     return n !== undefined && !n.missing && n.type === 'DIALOGUE_LINE' && ctx.get(id) !== undefined;
@@ -224,7 +224,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     const n = byId.get(id);
     return n !== undefined && !n.missing && (n.type === 'DIALOGUE' || n.type === 'DIALOGUE_LINE') && ctx.get(id) !== undefined;
   };
-  /** После реплики NPC — ответ игрока, после ответа игрока или в начале диалога — реплика NPC. */
+  /** After an NPC line — a player answer; after a player answer or at dialogue start — an NPC line. */
   const nextSpeaker = (id: string): number => {
     const n = byId.get(id);
     return n?.type === 'DIALOGUE_LINE' && !n.choice ? 1 : 0;
@@ -239,7 +239,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     setSelEdges(new Set());
   };
 
-  /** Новая реплика создана: развернуть родителя, выделить, сразу править текст. */
+  /** A new line was created: expand the parent, select it, edit the text at once. */
   const created = (id: string, parent: string, at?: { x: number; y: number }): void => {
     setCollapsed((c) => {
       const n = new Set(c);
@@ -288,7 +288,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     refocus();
   };
 
-  /** Выделенные в графе реплики (или одна `id`, если её нет в выделении). */
+  /** Lines selected in the graph (or the single `id` if it is not in the selection). */
   const targets = (id?: string): string[] => (id === undefined || selNodes.has(id) ? [...selNodes] : [id]);
 
   const removeSelection = (nodeIds: readonly string[], edgeIds: readonly string[]): void => {
@@ -374,7 +374,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     }
   };
 
-  /** Куда вставлять: единственный выделенный узел, который может вести дальше, иначе корень. */
+  /** Where to paste: the only selected node that can lead further, otherwise the root. */
   const pasteTarget = (): string => {
     const only = selNodes.size === 1 ? [...selNodes][0]! : undefined;
     return only !== undefined && canParent(only) ? only : graph.root;
@@ -406,7 +406,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
       onSelect?.(id, tree.parent.get(id));
     }
     onShowLine?.();
-    // Панель открывается в раскладке окна — перерисовать кнопку после этого.
+    // The panel opens in the window layout — redraw the button after that.
     requestAnimationFrame(() => { setTick((x) => x + 1); });
   };
 
@@ -457,7 +457,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
         },
         selected: selNodes.has(n.id),
         style: { width: NODE_WIDTH },
-        // Размер для мини-карты: `measured` у узлов нет, пока его не пришлёт поле.
+        // Size for the minimap: nodes have no `measured` until the canvas reports it.
         initialWidth: NODE_WIDTH,
         initialHeight: pos.get(n.id)?.height ?? 60,
       };
@@ -476,7 +476,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     return { nodes, edges, pos };
   }, [graph, collapsed, moved, checksByNode, matchSet, selNodes, selEdges, editing, tree, version]);
 
-  // Стартовый вид в читаемом масштабе: граф целиком, если влезает, иначе корень у левого края.
+  // Initial view at a readable zoom: the whole graph if it fits, otherwise the root at the left edge.
   const startView = useRef<(inst: ReactFlowInstance<LineNode>) => void>(() => undefined);
   startView.current = (inst) => {
     const el = canvasRef.current;
@@ -490,7 +490,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   const focusRef = useRef(focus);
   focusRef.current = focus;
 
-  // Реплику выбрали извне (инспектор, поиск, список проверок) — подъехать к ней и выделить.
+  // The line was selected from outside (inspector, search, check list) — pan to it and select it.
   useEffect(() => {
     if (selected === undefined || !byId.has(selected)) return;
     setSelNodes((s) => (s.has(selected) ? s : new Set([selected])));
@@ -499,7 +499,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     focusRef.current(selected);
   }, [selected, nodes]);
 
-  // Меню закрывается щелчком мимо него.
+  // The menu closes on a click outside it.
   useEffect(() => {
     if (!menu) return;
     const h = (e: MouseEvent): void => {
@@ -526,7 +526,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     const i = ((k % matches.length) + matches.length) % matches.length;
     setHit(i);
     const id = matches[i]!;
-    // Найденное в свёрнутой ветке — развернуть.
+    // A hit in a collapsed branch — expand it.
     setCollapsed(new Set());
     clicked.current = undefined;
     const n = byId.get(id);
@@ -617,7 +617,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     }
   };
 
-  // ── меню ──
+  // ── menu ──
   const item = (id: string, label: string, run: () => void, opt: { keys?: string; danger?: boolean; disabled?: boolean } = {}): ReactNode => (
     <button key={id} className={`dg-menu-item${opt.danger ? ' danger' : ''}`} data-testid={`dg-menu-${id}`} disabled={opt.disabled} onClick={run}>
       <span>{label}</span>
@@ -676,7 +676,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
       out.push(item('relayout', t.dgRelayout, () => { setMenu(undefined); relayout(); }));
       out.push(item('fit', t.dgFit, () => { setMenu(undefined); void flow.fitView({ padding: 0.1, maxZoom: 1 }); }));
     }
-    // Разделители не в начале, не в конце и не подряд.
+    // Separators not at the start, not at the end and not in a row.
     return out.filter((x, i, a) => {
       const isSep = (y: ReactNode): boolean => typeof y === 'object' && y !== null && 'key' in y && String(y.key).startsWith('sep');
       if (!isSep(x)) return true;
@@ -838,7 +838,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
           onInit={(inst) => {
             startView.current(inst);
           }}
-          // Колесо листает (как страницу), Ctrl+колесо — масштаб.
+          // The wheel scrolls (like a page), Ctrl+wheel zooms.
           panOnScroll
           proOptions={{ hideAttribution: true }}
         >
@@ -896,7 +896,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   );
 }
 
-/** Правка текста прямо в узле: Enter — сохранить, Shift+Enter — новая строка, Esc — отмена. */
+/** Editing text right in the node: Enter — save, Shift+Enter — new line, Esc — cancel. */
 function InlineText({ sid, value, actions }: { sid: string; value: string; actions: { current: Actions } }): ReactNode {
   const t = useT();
   const [text, setText] = useState(value);
@@ -1065,7 +1065,7 @@ const NODE_TYPES = { line: LineCard };
 
 const MARGIN = 24;
 
-/** Вид при открытии графа (масштаб `INITIAL_ZOOM`) для холста `width`×`height`. */
+/** View when the graph opens (zoom `INITIAL_ZOOM`) for a `width`×`height` canvas. */
 export function initialViewport(pos: ReadonlyMap<string, Placed>, root: string, width: number, height: number): { x: number; y: number; zoom: number } {
   const z = INITIAL_ZOOM;
   let minX = Infinity;
@@ -1087,11 +1087,11 @@ export function initialViewport(pos: ReadonlyMap<string, Placed>, root: string, 
   else {
     const r = pos.get(root);
     const center = r ? r.y + r.height / 2 : minY;
-    // Корень по центру, но без пустоты над верхним узлом.
+    // Root centred, but without empty space above the top node.
     y = Math.min(height / 2 - center * z, MARGIN - minY * z);
   }
   return { x, y, zoom: z };
 }
 
-/** Типы записей, у которых есть вкладка графа. */
+/** Record types that have a graph tab. */
 export const DIALOGUE_GRAPH_TYPES: ReadonlySet<string> = new Set(['DIALOGUE_PACKAGE', 'DIALOGUE', 'DIALOGUE_LINE']);

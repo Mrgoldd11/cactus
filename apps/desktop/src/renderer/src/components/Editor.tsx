@@ -1,6 +1,6 @@
 /**
- * Окно открытого проекта: панель команд, рабочее пространство из панелей (dockview), строка
- * состояния. Навигация по записям — через общий выбор (назад/вперёд), горячие клавиши.
+ * Open project window: command bar, workspace of panels (dockview), status
+ * bar. Navigation through records — via the shared selection (back/forward), hotkeys.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { DockviewApi } from 'dockview-react';
@@ -59,7 +59,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
   const aiPending = aiChangesets.filter((c) => c.status === 'pending').length;
   const apiRef = useRef<DockviewApi | undefined>(undefined);
   const [, setLayoutTick] = useState(0);
-  // Сохранённая раскладка читается до первого показа рабочего пространства.
+  // The saved layout is read before the workspace is first shown.
   const [workspace, setWorkspace] = useState<WorkspaceSettings | undefined | null>(null);
   const [preset, setPreset] = useState<PresetId>('data');
   useEffect(() => {
@@ -70,7 +70,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
     });
   }, []);
 
-  // Автосохранение: по таймеру, только если есть несохранённые правки и они изменились с прошлого раза.
+  // Autosave: on a timer, only if there are unsaved edits and they changed since last time.
   const autosavedVersion = useRef(-1);
   const autosaveWritten = useRef(false);
   const autosaveMinutes = settings.autosaveMinutes;
@@ -80,7 +80,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
     if (!(autosaveMinutes > 0)) return;
     const id = setInterval(() => {
       if (!project.dirty) {
-        // Правки откатили до сохранённого: автосохранение больше не нужно.
+        // Edits were undone back to the saved state: the autosave is no longer needed.
         if (autosaveWritten.current) {
           autosaveWritten.current = false;
           void window.kedit.autosaveClear(project.ref);
@@ -146,12 +146,12 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
     [project, selection, go, report, open, category, onReplace],
   );
 
-  // Записи, которых больше нет (отменили создание), убрать из выбора.
+  // Records that no longer exist (creation undone) are removed from the selection.
   useEffect(() => {
     selection.prune((sid) => project.record(sid) !== undefined);
   }, [selection, project, version]);
 
-  // Пришла новая правка ИИ — показать панель.
+  // A new AI edit arrived — show the panel.
   const aiSeen = useRef(0);
   useEffect(() => {
     if (aiChangesets.length > aiSeen.current) open('ai');

@@ -1,4 +1,4 @@
-/** Сообщения между окном «Мир» и его фоновыми потоками (`worker.ts`). */
+/** Messages between the «World» view and its background threads (`worker.ts`). */
 
 export interface SubmeshArrays {
   index: Uint32Array | Uint16Array;
@@ -23,7 +23,7 @@ export type WorkerReply =
 
 export type ReplyOf<K extends WorkerRequest['type']> = Extract<WorkerReply, { type: K }>;
 
-/** Пул фоновых потоков: запрос — промис ответа (по кругу между потоками). */
+/** Background thread pool: request — promise of the answer (round robin between threads). */
 export class WorkerPool {
   private readonly workers: Worker[] = [];
   private readonly pending = new Map<number, { resolve: (r: WorkerReply) => void; reject: (e: Error) => void }>();

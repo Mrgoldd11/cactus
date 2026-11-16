@@ -1,6 +1,6 @@
 /**
- * Строки интерфейса на трёх языках (en, ru, zh). Сообщения ядра (ошибки правки, проверки) приходят
- * по-русски и показываются как есть.
+ * UI strings in three languages (en, ru, zh). Core messages (edit errors, checks) arrive
+ * in Russian and are shown as they are.
  */
 import { createContext, useContext } from 'react';
 import { errorMessage } from '@kenshi-editor/core';
@@ -16,7 +16,7 @@ import { backupZh, mergeZh } from './i18n-zh-misc.ts';
 
 const en = {
   appTitle: 'Cactus',
-  // стартовый экран
+  // start screen
   gameFolder: 'Game folder',
   detecting: 'Looking for Kenshi…',
   noGameFound: 'Kenshi was not found automatically. Choose the game folder.',
@@ -43,7 +43,7 @@ const en = {
   loadingData: 'Reading game data…',
   open: 'Open',
   recent: 'Recent',
-  // панель
+  // toolbar
   save: 'Save',
   saveAs: 'Save as…',
   undo: 'Undo',
@@ -55,7 +55,7 @@ const en = {
   back: 'Back',
   forward: 'Forward',
   language: 'Language',
-  // дерево и список
+  // tree and list
   categories: 'Categories',
   modChanges: 'Changes in this mod',
   everything: 'Everything',
@@ -77,7 +77,7 @@ const en = {
   delete: 'Delete',
   restore: 'Restore',
   revert: 'Revert to vanilla',
-  // редактор записи
+  // record editor
   noSelection: 'Select a record',
   name: 'Name',
   type: 'Type',
@@ -164,7 +164,7 @@ const en = {
   before: 'Before',
   after: 'After',
   fieldName: 'name',
-  // зависимости и сведения
+  // dependencies and info
   depsHint: 'Mods loaded below this one (their records can be referenced and changed). Order follows data/mods.cfg.',
   depsReloadNote: 'Changing dependencies reloads the data; undo history is cleared.',
   missingDeps: 'Missing dependencies',
@@ -172,7 +172,7 @@ const en = {
   description: 'Description',
   version: 'Version',
   fileName: 'File',
-  // сохранение и статус
+  // saving and status
   saved: 'Saved',
   saveCancelled: 'Save cancelled',
   saveFailed: 'Save failed',
@@ -195,7 +195,7 @@ const en = {
   validation: 'Validation',
   errors: 'errors',
   warnings: 'warnings',
-  // живая связь с ИИ
+  // live AI link
   aiButton: 'AI changes',
   aiChanges: 'AI changes',
   aiServerOff: 'Live link is off',
@@ -209,7 +209,7 @@ const en = {
   aiStatus_accepted: 'accepted',
   'aiStatus_rolled-back': 'rolled back',
   aiStatus_undone: 'undone',
-  // разговор (симуляция выбора диалога)
+  // conversation (dialogue choice simulation)
   tabTalk: 'Talk',
   talkEvent: 'Event',
   talkNone: 'No dialogues for this event.',
@@ -292,7 +292,7 @@ const en = {
   talkAction_attack: 'attack',
   talkAction_trade: 'trade',
   talkAction_recruit: 'recruit',
-  // рабочее пространство
+  // workspace
   windowMenu: 'Window',
   windowPanels: 'Panels',
   windowGroup_mod: 'Mod',
@@ -443,7 +443,7 @@ const en = {
   placeholderSoon: 'Coming in stage 7',
   viewportStub: 'A 3D view of towns and buildings will live here (stage 7). Scene objects will be selected the same way as records, and their components will show in the “Components” panel.',
   componentsStub: 'Components of the selected scene object (stage 7). For now: the record behind the object.',
-  // проигрыватель разговора
+  // conversation player
   plCharacter: 'Character',
   plMode: 'Conditions',
   plModeHint: 'How to treat conditions the editor cannot check (relations, quests, items). You can override any record with “as if”.',
@@ -482,7 +482,7 @@ const en = {
   howtoSays: 'first line',
   plSummary: 'All dialogues of the character (summary)',
   howtoTry: 'Try it in the “Conversation” panel: tick conditions “as if” and click answers.',
-  // редактор диалогов
+  // dialogue editor
   dgSearch: 'Search text or id… (Enter — next)',
   dgNotFound: 'not found',
   dgFit: 'Show all',
@@ -887,7 +887,7 @@ const ru: Strings = {
   talkAction_attack: 'атака',
   talkAction_trade: 'торговля',
   talkAction_recruit: 'найм',
-  // рабочее пространство
+  // workspace
   windowMenu: 'Окно',
   windowPanels: 'Панели',
   windowGroup_mod: 'Мод',
@@ -1038,7 +1038,7 @@ const ru: Strings = {
   placeholderSoon: 'Будет на этапе 7',
   viewportStub: 'Здесь будет 3D-вид городов и построек (этап 7). Объекты сцены выбираются так же, как записи, а их компоненты показываются в панели «Компоненты».',
   componentsStub: 'Компоненты выбранного объекта сцены (этап 7). Пока — запись, которую объект показывает.',
-  // проигрыватель разговора
+  // conversation player
   plCharacter: 'Персонаж',
   plMode: 'Условия',
   plModeHint: 'Как считать условия, которые редактор проверить не может (отношения, квесты, вещи). Любую запись можно переключить галочкой «как будто».',
@@ -1077,7 +1077,7 @@ const ru: Strings = {
   howtoSays: 'первая реплика',
   plSummary: 'Все диалоги персонажа (сводка)',
   howtoTry: 'Попробуйте в панели «Разговор»: отмечайте условия «как будто» и нажимайте ответы.',
-  // редактор диалогов
+  // dialogue editor
   dgSearch: 'Поиск по тексту или id… (Enter — следующее)',
   dgNotFound: 'не найдено',
   dgFit: 'Показать всё',
@@ -1215,7 +1215,7 @@ const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...
 
 export const STRINGS: Record<Lang, Strings> = { en, ru, zh };
 
-/** Язык по набору строк: для заголовков панелей, которым в `title(t)` дают только `Strings`. */
+/** Language by string set: for panel titles that get only `Strings` in `title(t)`. */
 export function langOf(t: Strings): Lang {
   return (Object.keys(STRINGS) as Lang[]).find((l) => STRINGS[l] === t) ?? 'en';
 }

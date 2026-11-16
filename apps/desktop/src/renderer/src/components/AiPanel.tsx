@@ -1,6 +1,6 @@
 /**
- * «Изменения ИИ»: наборы правок, присланные нейросетью через живую связь (MCP →
- * connect_editor → edit). Каждый уже применён в окне; его можно принять или откатить.
+ * «AI changes»: change sets sent by the AI over the live link (MCP →
+ * connect_editor → edit). Each is already applied in the window; it can be accepted or reverted.
  */
 import type { ReactNode } from 'react';
 import { decodeText, formatRecordDiff, type HostedChangeset } from '@kenshi-editor/core';

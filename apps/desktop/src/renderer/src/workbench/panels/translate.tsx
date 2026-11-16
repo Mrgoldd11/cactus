@@ -1,8 +1,8 @@
 /**
- * Панель «Перевод» (как режим перевода в FCS): тексты оригинала — имена и текстовые поля мода,
- * который переводят, — и рядом перевод из редактируемого мода. Редактируемый мод — мод-перевод:
- * зависит от оригинала и задаёт поверх только тексты. Выгрузка в CSV/JSON/PO и загрузка
- * обратно (одна отмена); проверка, что мод-перевод не меняет ничего, кроме текстов.
+ * «Translation» panel (like the translation mode in FCS): original texts — names and text fields of the mod
+ * being translated — and next to them the translation from the edited mod. The edited mod is a translation mod:
+ * it depends on the original and sets only texts on top. Export to CSV/JSON/PO and import
+ * back (one undo); a check that the translation mod changes nothing but texts.
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import {
@@ -31,14 +31,14 @@ import { useWorkbench } from '../context.ts';
 import { Empty } from './common.tsx';
 import { useInstalledMods } from './mods.tsx';
 
-/** Строк за раз (у поля перевода — своё поле ввода): дальше — «Показать ещё». */
+/** Rows at a time (each translation field has its own input): beyond that — «Show more». */
 const PAGE = 200;
 
 type Filter = 'all' | 'todo' | 'done';
 
 interface ImportState {
   report: ApplyTranslationReport;
-  /** Строки файла с изменившимся оригиналом — для «Всё равно применить». */
+  /** File rows whose original has changed — for «Apply anyway». */
   staleRows: TranslationFileRow[];
   otherSource?: string;
 }
@@ -54,7 +54,7 @@ function TranslatePanel(): ReactNode {
   const ctx = project.ctx;
   const { mods } = useInstalledMods(project.bundle.game);
 
-  // Оригиналы — зависимости из заголовка мода (не ваниль), которые загружены.
+  // Originals — dependencies from the mod header (not vanilla) that are loaded.
   const sources = useMemo(() => {
     const loaded = new Set(ctx.layers.map((l) => l.name.toLowerCase()));
     return ctx.info.dependencies.filter((d) => !isVanillaLayer(d) && loaded.has(d.toLowerCase()));

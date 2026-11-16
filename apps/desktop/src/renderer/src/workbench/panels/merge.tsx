@@ -1,9 +1,9 @@
 /**
- * Панель «Слияние модов» (как «Merge» в FCS): выбрать мод-источник — увидеть, чем он отличается
- * от активного (новые, изменённые, удалённые записи), по каждой записи выбрать «игнор / принять /
- * отклонить», по конфликтным полям — чьё значение взять, и слить выбранное одной правкой
- * (одна отмена). Решения («отклонено», «слито оттуда-то и когда») хранятся в файле рядом с модом.
- * Вся логика — в ядре (`model/merge.ts`), панель только показывает и вызывает его.
+ * «Mod merge» panel (like «Merge» in FCS): pick a source mod — see how it differs
+ * from the active one (new, changed, deleted records), for each record choose «ignore / accept /
+ * reject», for conflicting fields — whose value to take, and merge the selection with one edit
+ * (one undo). Decisions («rejected», «merged from there and when») are kept in a file next to the mod.
+ * All logic is in the core (`model/merge.ts`), the panel only shows it and calls it.
  */
 import { useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import {
@@ -34,10 +34,10 @@ import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
 import { Empty } from './common.tsx';
 
-/** Строк в таблице за раз; «Показать ещё» добавляет столько же. */
+/** Table rows at a time; «Show more» adds as many again. */
 const PAGE = 300;
 
-/** То, что панель помнит о слиянии, пока открыт проект (закрыли и снова открыли панель — всё на месте). */
+/** What the panel remembers about the merge while the project is open (close and reopen the panel — everything is still there). */
 interface Session {
   path: string | undefined;
   source: MergeSource | undefined;
@@ -85,7 +85,7 @@ function reasonText(t: Strings, c: MergeChange): string {
   return c.conflict === 'both' ? t.mgReasonBoth : c.conflict === 'mine-deleted' ? t.mgReasonMineDeleted : c.conflict === 'source-deleted' ? t.mgReasonSourceDeleted : '';
 }
 
-/** Что получится, если слить выбранное сейчас (без записи в мод). */
+/** What results if the selection is merged now (without writing to the mod). */
 function previewOf(plan: MergePlan, s: Session): { accepted: number; created: number; changed: number; deleted: number; byClosure: number; toSource: number; toMine: number } {
   const bySid = new Map(plan.changes.map((c) => [c.sid, c]));
   let sids = [...s.accepted].filter((x) => bySid.has(x));
@@ -219,7 +219,7 @@ function MergePanel(): ReactNode {
   const [focus, setFocus] = useState<string | undefined>();
   const [notice, setNotice] = useState<string | undefined>();
 
-  // Установленные моды — для выпадающего списка источника.
+  // Installed mods — for the source dropdown.
   useEffect(() => {
     if (session.mods !== undefined) return;
     let alive = true;
@@ -242,10 +242,10 @@ function MergePanel(): ReactNode {
     } catch (e) {
       return { planError: errorText(e) };
     }
-    // version: список пересчитывается после каждой правки, отмены и сохранения.
+    // version: the list is recomputed after every edit, undo and save.
   }, [ctx, project, session.source, options, version]);
 
-  // Выбор, которого больше нет в списке (слили, отменили, отклонили), снимаем.
+  // A selection no longer in the list (merged, undone, rejected) is cleared.
   useEffect(() => {
     if (!plan) return;
     const have = new Set(plan.changes.filter((c) => !c.rejected && !c.blocked).map((c) => c.sid));

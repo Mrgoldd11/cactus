@@ -1,6 +1,6 @@
 /**
- * Готовые раскладки и размещение панели «по умолчанию». Раскладка — это только какие панели
- * где стоят; сами панели берутся из реестра.
+ * Preset layouts and «default» panel placement. A layout is only which panels
+ * stand where; the panels themselves come from the registry.
  */
 import type { AddPanelOptions, DockviewApi } from 'dockview-react';
 import type { Strings } from '../i18n.ts';
@@ -24,7 +24,7 @@ type Position = AddPanelOptions['position'];
 function add(api: DockviewApi, t: Strings, id: string, position?: Position, extra: Partial<AddPanelOptions> = {}): void {
   const def = panelDef(id);
   if (!def) return;
-  // Соседа нет (панель не зарегистрирована) — просто добавить.
+  // No neighbour (panel not registered) — just add it.
   const ref = position && 'referencePanel' in position ? position.referencePanel : undefined;
   const pos = typeof ref === 'string' && !api.getPanel(ref) ? undefined : position;
   api.addPanel({ id: instanceId(def), component: def.id, title: panelTitle(def, t), params: {}, ...(pos ? { position: pos } : {}), ...extra } as AddPanelOptions);
@@ -42,7 +42,7 @@ const right = (referencePanel: string): Position => ({ referencePanel, direction
 const below = (referencePanel: string): Position => ({ referencePanel, direction: 'below' });
 const within = (referencePanel: string): Position => ({ referencePanel, direction: 'within' });
 
-/** Поставить раскладку (всё прежнее убирается). */
+/** Apply a layout (everything before is removed). */
 export function applyPreset(api: DockviewApi, preset: PresetId, t: Strings): void {
   api.clear();
   if (preset === 'data') {
@@ -64,7 +64,7 @@ export function applyPreset(api: DockviewApi, preset: PresetId, t: Strings): voi
     width(api, 'line', 400);
     height(api, 'player', Math.round(api.height * 0.38));
   } else {
-    // «Мир»: список записей слева, карта по центру, справа выбранный объект и его модель.
+    // «World»: record list on the left, map in the centre, the selected object and its model on the right.
     add(api, t, 'records');
     add(api, t, 'world', right('records'));
     add(api, t, 'inspector', right('world'));
@@ -78,12 +78,12 @@ export function applyPreset(api: DockviewApi, preset: PresetId, t: Strings): voi
   api.getPanel(first)?.api.setActive();
 }
 
-/** Куда встаёт панель области, если в этой области ещё ничего нет. */
+/** Where an area panel goes if that area has nothing yet. */
 const AREA_DIRECTION: Record<PanelArea, 'left' | 'right' | 'below' | 'above'> = { left: 'left', center: 'right', right: 'right', bottom: 'below' };
 
 /**
- * Открыть панель (или показать уже открытую). Встаёт вкладкой к панели той же области,
- * а если таких нет — с нужной стороны окна. `near` — встать вкладкой рядом с этой панелью.
+ * Open a panel (or show an already open one). It becomes a tab next to a panel of the same area,
+ * and if there is none — on the right side of the window. `near` — become a tab next to this panel.
  */
 export function openPanel(api: DockviewApi, t: Strings, id: string, params: PanelParams = {}, near?: string): void {
   const def = panelDef(id);
@@ -105,7 +105,7 @@ export function openPanel(api: DockviewApi, t: Strings, id: string, params: Pane
   api.addPanel({ id: iid, component: def.id, title: panelTitle(def, t), params, position });
 }
 
-/** Все ли панели сохранённой раскладки есть в реестре (иначе раскладку не восстановить). */
+/** Whether all panels of the saved layout are in the registry (otherwise the layout cannot be restored). */
 export function layoutKnown(layout: unknown): boolean {
   if (typeof layout !== 'object' || layout === null) return false;
   const panels = (layout as { panels?: Record<string, { contentComponent?: string }> }).panels;

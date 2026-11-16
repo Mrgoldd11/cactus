@@ -1,14 +1,14 @@
 /**
- * Здания и прочие объекты мира (`0-buildinglist` в зонах).
- *  - Сетка по зонам (64×64): кадр перебирает только зоны в пределах дальности.
- *  - Вдали — коробки-маркеры (одна InstancedMesh на всё), вблизи — настоящие модели:
- *    модель записи (`modelOfRecord`) грузится один раз, её части рисуются InstancedMesh-ами
- *    на все экземпляры этой записи.
- *  - Отсев по пирамиде видимости и лимиты: число моделей рядом, число загруженных моделей
- *    (лишние выгружаются), число маркеров.
- *  - Выбор: луч против коробок объектов (без треугольников — быстро и на тысячах объектов).
- *  - Растительность (`foliage.ts`) рисуется теми же моделями-экземплярами, но не выбирается.
- * Разбор `.mesh` и `.dds` — в фоновом потоке (`WorkerPool`).
+ * Buildings and other world objects (`0-buildinglist` in zones).
+ *  - Grid by zones (64×64): a frame walks only the zones within range.
+ *  - Far away — marker boxes (one InstancedMesh for everything), close up — real models:
+ *    the record model (`modelOfRecord`) is loaded once, its parts are drawn with InstancedMeshes
+ *    for all instances of that record.
+ *  - Frustum culling and limits: number of nearby models, number of loaded models
+ *    (extra ones are unloaded), number of markers.
+ *  - Picking: ray against object boxes (no triangles — fast even on thousands of objects).
+ *  - Vegetation (`foliage.ts`) is drawn with the same instanced models but is not pickable.
+ * Parsing of `.mesh` and `.dds` — in a background thread (`WorkerPool`).
  */
 import * as THREE from 'three';
 import { decodeText, modelOfRecord, zoneOfPath, WORLD_HALF, ZONE_COUNT, ZONE_SIZE, type BuildingPlacement, type DumpBuilding, type Instance, type MapFeature, type ModContext, type Placement, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
@@ -17,28 +17,28 @@ import type { SubmeshArrays, WorkerPool } from './protocol.ts';
 import { averageColour } from './biomes.ts';
 
 export interface ObjectsQuality {
-  /** Дальность маркеров. */
+  /** Marker range. */
   markerDist: number;
-  /** Дальность настоящих моделей. */
+  /** Real model range. */
   modelDist: number;
-  /** Сколько экземпляров рисовать моделями (ближайшие). */
+  /** How many instances to draw as models (the nearest). */
   maxModels: number;
-  /** Сколько разных моделей держать в памяти. */
+  /** How many different models to keep in memory. */
   maxProtos: number;
-  /** Сколько маркеров рисовать. */
+  /** How many markers to draw. */
   maxMarkers: number;
 }
 
 export interface WorldObject {
   index: number;
   p: Placement;
-  /** Состояние здания, если есть. */
+  /** Building state, if any. */
   b?: BuildingPlacement;
   pos: THREE.Vector3;
   quat: THREE.Quaternion;
-  /** Убран правкой мода: не рисуется и не выбирается. */
+  /** Removed by a mod edit: not drawn and not pickable. */
   gone?: boolean;
-  /** Нет состояния здания: высота в мире = земля + y экземпляра, ждём рельеф. */
+  /** No building state: world height = ground + instance y, waiting for terrain. */
   needsGround?: boolean;
 }
 
@@ -67,13 +67,13 @@ const DEFAULT_BOX = new THREE.Box3(new THREE.Vector3(-40, 0, -40), new THREE.Vec
 const COLOR_BUILDING = new THREE.Color(0xd9b26f);
 const COLOR_OTHER = new THREE.Color(0x8f9aa6);
 const GREY = 0xb8b2a6;
-/** Камни без своей текстуры (в игре на них ложится текстура земли). */
+/** Rocks without their own texture (in game the ground texture lies on them). */
 const STONE = 0x8a7c6c;
-/** Рисунок скалы на камнях без своей текстуры: самая частая «отвесная» текстура биомов. */
+/** Rock pattern on rocks without their own texture: the most frequent «cliff» texture of the biomes. */
 const ROCK_DETAIL = 'data/newland/land/textures/CinderRidge-Rockloop_DIF.dds';
-/** Повторов рисунка скалы на единицу мира (как у отвесных склонов земли, чуть мельче). */
+/** Rock pattern repeats per world unit (as on steep ground slopes, slightly finer). */
 const ROCK_TILE = 1 / 90;
-/** Растительность меньше этой доли расстояния до камеры не рисуется. */
+/** Vegetation smaller than this fraction of the camera distance is not drawn. */
 const FOLIAGE_MIN_SIZE = 0.015;
 
 /** Vertex colour tints rgb only: its alpha is a blend weight in the game, not opacity. */
@@ -117,19 +117,19 @@ export class WorldObjects {
   readonly list: WorldObject[] = [];
   private readonly grid = new Map<number, number[]>();
   private readonly byKey = new Map<string, WorldObject>();
-  /** Высота земли (у объектов без состояния здания y экземпляра — над землёй). */
+  /** Ground height (for objects without a building state the instance y is above ground). */
   groundAt: (x: number, z: number) => number | undefined = () => undefined;
-  /** Карта цвета всей земли (X/Z мира → 0..1): ею красятся камни с типом материала TERRAIN. */
+  /** Colour map of the whole ground (world X/Z → 0..1): rocks with material type TERRAIN are coloured by it. */
   groundMap: THREE.Texture | null = null;
   private readonly protos = new Map<string, Proto>();
   private readonly meshCache = new Map<string, Promise<SubmeshArrays[] | null>>();
   private readonly texCache = new Map<string, Promise<THREE.Texture | null>>();
   private markers: THREE.InstancedMesh;
   private markerIds: number[] = [];
-  /** Объекты, нарисованные в последнем обновлении (для выбора). */
+  /** Objects drawn in the last update (for picking). */
   private visible: number[] = [];
   private readonly protoInstances = new Map<string, number[]>();
-  /** Растительность: модель → матрицы (задаёт `setFoliage`). */
+  /** Vegetation: model → matrices (set by `setFoliage`). */
   private foliage = new Map<string, THREE.Matrix4[]>();
   drawnFoliage = 0;
   /** Map features (features.dat): hand-placed huge scenery, drawn as models only, not selectable. */
@@ -156,7 +156,7 @@ export class WorldObjects {
   quality: ObjectsQuality;
   drawnModels = 0;
   drawnMarkers = 0;
-  /** Записей, у которых модели нет или она не прочиталась (рисуются коробкой). */
+  /** Records whose model is missing or unreadable (drawn as a box). */
   failed = 0;
   onChange: () => void = () => undefined;
   private readonly game: GameInstallInfo;
@@ -183,12 +183,12 @@ export class WorldObjects {
     this.group.add(this.markers);
   }
 
-  /** Добавить объект (из мира или новый — правкой мода). */
+  /** Add an object (from the world or a new one — by a mod edit). */
   private add(p: Placement, b: BuildingPlacement | undefined): WorldObject {
     const index = this.list.length;
     const [w, x, y, z] = p.rotation;
-    // y экземпляра — над землёй; высота в мире — `world Y pos` состояния здания,
-    // без него — земля + y (узнаём, когда рельеф загрузится).
+    // Instance y is above ground; world height is the building state `world Y pos`,
+    // without it — ground + y (known once the terrain loads).
     const o: WorldObject = { index, p, pos: new THREE.Vector3(p.position[0], this.heightOf(p, b), p.position[2]), quat: new THREE.Quaternion(x, y, z, w).normalize() };
     if (b) o.b = b;
     if (!b || this.absoluteY(p)) this.lift(o);
@@ -204,8 +204,8 @@ export class WorldObjects {
   }
 
   /**
-   * Подтянуть правки мира мода (свои, отмена, повтор, правки ИИ): что сдвинуто, повёрнуто,
-   * добавлено, убрано. Возвращает затронутые объекты.
+   * Pull in the mod world edits (own, undo, redo, AI edits): what was moved, rotated,
+   * added, removed. Returns the affected objects.
    */
   sync(edits: WorldEdits, changes: readonly WorldChange[]): WorldObject[] {
     const touched = new Set<WorldObject>();
@@ -234,7 +234,7 @@ export class WorldObjects {
         if (o && !o.gone && sameInstance(o.p, inst)) continue;
         touched.add(this.apply(edits, path, sid, key, inst, o, zone));
       }
-      // Объекты, которых в записи больше нет (отменили «поставить», удалили свой).
+      // Objects no longer in the record («place» undone, own object deleted).
       const prefix = objectKey(path, sid, '');
       for (const [k, o] of this.byKey)
         if (k.startsWith(prefix) && !keys.has(o.p.key) && !o.gone) {
@@ -242,7 +242,7 @@ export class WorldObjects {
           touched.add(o);
         }
     }
-    // Высота зданий — из их состояний (`world Y pos`).
+    // Building heights — from their states (`world Y pos`).
     for (const [path, sids] of states)
       for (const o of this.list) {
         if (o.gone || !o.b || o.p.file.toLowerCase() !== path || !o.p.states.some((st) => sids.has(st))) continue;
@@ -287,7 +287,7 @@ export class WorldObjects {
     return b?.worldY ?? p.position[1];
   }
 
-  /** Объект без состояния здания — на высоту земли + y экземпляра (если рельеф уже есть). */
+  /** Object without a building state — at ground height + instance y (if the terrain is there). */
   private lift(o: WorldObject): void {
     const g = this.groundAt(o.p.position[0], o.p.position[2]);
     if (g === undefined) o.needsGround = true;
@@ -299,7 +299,7 @@ export class WorldObjects {
     }
   }
 
-  /** Растительность вокруг камеры (рисуется при следующем `update`). */
+  /** Vegetation around the camera (drawn at the next `update`). */
   setFoliage(m: Map<string, THREE.Matrix4[]>): void {
     this.foliage = m;
   }
@@ -354,7 +354,7 @@ export class WorldObjects {
     return proto && proto.state === 'ready' ? proto.box : DEFAULT_BOX;
   }
 
-  /** Матрица объекта в мире. */
+  /** Object matrix in the world. */
   matrixOf(o: WorldObject, out = new THREE.Matrix4()): THREE.Matrix4 {
     return out.compose(o.pos, o.quat, new THREE.Vector3(1, 1, 1));
   }
@@ -396,7 +396,7 @@ export class WorldObjects {
     if (!t) {
       t = (async () => {
         let bytes = await window.kedit.readGameAsset(this.game, path);
-        // `…_HI.dds` бывает без файла (текстуры высокого качества не у всех) — тогда обычная.
+        // `…_HI.dds` may have no file (not everything has high-quality textures) — then the normal one.
         if (!bytes && /_HI\.dds$/i.test(path)) bytes = await window.kedit.readGameAsset(this.game, path.replace(/_HI(\.dds)$/i, '$1'));
         if (!bytes) return null;
         const r = await this.pool.run<'dds'>({ type: 'dds', bytes, maxSize: 512 }, [bytes.buffer]);
@@ -408,7 +408,7 @@ export class WorldObjects {
     return t;
   }
 
-  /** Диффузная текстура с альфой из `mask` (маска вырезов листвы — альфа карты нормалей). */
+  /** Diffuse texture with alpha from `mask` (foliage cut-out mask — the normal map alpha). */
   private maskedTexture(diffuse: string, mask: string): Promise<THREE.Texture | null> {
     const k = `${diffuse}|${mask}`.toLowerCase();
     let t = this.texCache.get(k);
@@ -433,11 +433,11 @@ export class WorldObjects {
     return t;
   }
 
-  /** Материал камней с типом TERRAIN: цвет земли под ними (карта цвета рельефа по X/Z мира). */
+  /** Material of rocks with type TERRAIN: the ground colour under them (terrain colour map by world X/Z). */
   /**
-   * Камни с типом материала TERRAIN без своей текстуры: цвет — карта земли по X/Z мира,
-   * рисунок — скальная текстура в трёх проекциях (по нормали), поделённая на её средний цвет,
-   * чтобы не менять цвет земли.
+   * Rocks with material type TERRAIN without their own texture: colour — ground map by world X/Z,
+   * pattern — rock texture in three projections (by normal), divided by its average colour
+   * so the ground colour is unchanged.
    */
   private terrainMaterial(rock: THREE.Texture | null): THREE.Material {
     const map = this.groundMap;
@@ -626,7 +626,7 @@ export class WorldObjects {
     return [...this.protos.values()].filter((p) => p.state === 'ready').length;
   }
 
-  /** Пересобрать, что рисуется: дёшево, вызывать при движении камеры (не чаще ~6 раз в секунду). */
+  /** Rebuild what is drawn: cheap, call while the camera moves (no more than ~6 times per second). */
   update(camera: THREE.Camera): void {
     this.tick++;
     const q = this.quality;
@@ -653,7 +653,7 @@ export class WorldObjects {
         }
     near.sort((a, b) => a.d - b.d);
 
-    // Ближайшие — моделями (если модель есть и загружена), остальные — маркерами.
+    // The nearest as models (if the model exists and is loaded), the rest as markers.
     const perProto = new Map<string, number[]>();
     const markers: number[] = [];
     let models = 0;
@@ -674,7 +674,7 @@ export class WorldObjects {
       if (markers.length < q.maxMarkers) markers.push(i);
     }
 
-    // Растительность: модели грузятся тем же порядком, экземпляры — отсев по пирамиде.
+    // Vegetation: models load in the same order, instances are frustum-culled.
     const foliage = new Map<string, THREE.Matrix4[]>();
     let drawnFoliage = 0;
     const at = new THREE.Vector3();
@@ -687,7 +687,7 @@ export class WorldObjects {
       for (const mat of list) {
         at.setFromMatrixPosition(mat);
         sphere.set(at, proto.radius * mat.getMaxScaleOnAxis());
-        // Мелкое вдали не рисуем: на экране оно меньше пары точек, а треугольников много.
+        // Small things far away are not drawn: on screen they are smaller than a couple of pixels, but have many triangles.
         if (sphere.radius < at.distanceTo(cam) * FOLIAGE_MIN_SIZE) continue;
         if (frustum.intersectsSphere(sphere)) shown.push(mat);
       }
@@ -750,7 +750,7 @@ export class WorldObjects {
     this.drawnExtras = drawnExtras;
     this.extraNoModel = extraNoModel;
 
-    // Маркеры.
+    // Markers.
     if (this.markers.instanceMatrix.count < markers.length) this.resizeMarkers(markers.length);
     const m = new THREE.Matrix4();
     const local = new THREE.Matrix4();
@@ -770,7 +770,7 @@ export class WorldObjects {
     if (this.markers.instanceColor) this.markers.instanceColor.needsUpdate = true;
     this.markerIds = markers;
 
-    // Модели.
+    // Models.
     for (const [target, proto] of this.protos) {
       const ids = perProto.get(target) ?? [];
       const extra = foliage.get(target) ?? [];
@@ -817,7 +817,7 @@ export class WorldObjects {
     this.markers = next;
   }
 
-  /** Выгрузить давно не нужные модели сверх лимита (и их файлы из кэша). */
+  /** Unload models not needed for a long time above the limit (and their files from the cache). */
   private trimProtos(): void {
     const ready = [...this.protos.entries()].filter(([, p]) => p.state !== 'loading');
     if (ready.length <= this.quality.maxProtos) return;
@@ -848,7 +848,7 @@ export class WorldObjects {
     }
   }
 
-  /** Объект под лучом (ближайший по коробке) среди нарисованных. */
+  /** Object under the ray (nearest by box) among the drawn ones. */
   pick(ray: THREE.Ray): WorldObject | undefined {
     let best: WorldObject | undefined;
     let bestD = Infinity;
@@ -874,7 +874,7 @@ export class WorldObjects {
     return best;
   }
 
-  /** Объект по ключу экземпляра (файл + владелец + ключ). */
+  /** Object by instance key (file + owner + key). */
   find(file: string, holder: string, key: string): WorldObject | undefined {
     const o = this.byKey.get(objectKey(file, holder, key));
     return o && !o.gone ? o : undefined;

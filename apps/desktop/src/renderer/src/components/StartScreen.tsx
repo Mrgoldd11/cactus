@@ -1,6 +1,6 @@
 /**
- * Стартовый экран: папка игры (найденные Steam/GOG или выбранная вручную), открыть ваниль,
- * создать мод, открыть установленный мод из `mods/` или мастерской, открыть файл .mod.
+ * Start screen: game folder (found Steam/GOG or chosen by hand), open vanilla,
+ * create a mod, open an installed mod from `mods/` or the Workshop, open a .mod file.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { GameInstallInfo, ModEntry, ProjectRequest } from '../../../shared/api.ts';

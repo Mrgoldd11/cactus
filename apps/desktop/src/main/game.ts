@@ -1,7 +1,7 @@
 /**
- * Мост к игре в главном процессе: окно не открывает сокеты само, а просит main.
- * Main раз в 3 с проверяет связь (ping плагина Kenshi Bridge) и рассылает окнам состояние.
- * Окно может отправить только перечисленные команды (`GAME_COMMANDS`).
+ * Game bridge in the main process: the window does not open sockets itself, it asks main.
+ * Every 3 s main checks the link (ping of the Kenshi Bridge plugin) and broadcasts the state to windows.
+ * The window may send only the listed commands (`GAME_COMMANDS`).
  */
 import { BrowserWindow, ipcMain } from 'electron';
 import { GameBridge, GameBridgeError } from '@kenshi-editor/core/node';
@@ -44,7 +44,7 @@ async function request(cmd: string, args: object): Promise<GameReply> {
   }
 }
 
-/** `KEDIT_GAME=0` — не подключаться к игре (тесты окна). */
+/** `KEDIT_GAME=0` — do not connect to the game (window tests). */
 export function startGameLink(): void {
   ipcMain.handle(IPC.getGameStatus, () => status);
   ipcMain.handle(IPC.gameRequest, (_e, cmd: string, args: object) => request(cmd, args));

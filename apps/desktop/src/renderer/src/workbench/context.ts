@@ -1,6 +1,6 @@
 /**
- * Что оболочка даёт панелям: проект, общий выбор, открытие панелей, сообщения в строке
- * состояния. Панель берёт это через `useWorkbench()`, а свою запись — через `useFollowed()`.
+ * What the shell gives panels: the project, the shared selection, opening panels, status bar
+ * messages. A panel gets these through `useWorkbench()`, and its record through `useFollowed()`.
  */
 import { createContext, useContext, type RefObject } from 'react';
 import type { Strings } from '../i18n.ts';
@@ -11,7 +11,7 @@ import { useProjectVersion } from '../hooks.ts';
 import type { ValueStore } from './store.ts';
 
 export interface StatusMessage {
-  /** Текст собирается при показе — сообщение переводится при смене языка. */
+  /** The text is built at display time — the message is translated when the language changes. */
   text: (t: Strings) => string;
   kind: 'info' | 'error';
 }
@@ -19,21 +19,21 @@ export interface StatusMessage {
 export interface Workbench {
   project: Project;
   selection: SelectionService;
-  /** Выбрать запись (и положить в историю «назад/вперёд»). */
+  /** Select a record (and push it to the «back/forward» history). */
   go: (sid: string) => void;
-  /** Ошибка правки — в строку состояния. */
+  /** Edit error — to the status bar. */
   report: (err: string | undefined) => void;
   status: (msg: StatusMessage) => void;
-  /** Открыть (или показать) панель; с `params.sid` у многоэкземплярной — отдельная вкладка. */
+  /** Open (or show) a panel; with `params.sid` a multi-instance panel gets a separate tab. */
   open: (panelId: string, params?: PanelParams) => void;
-  /** Открыта ли где-нибудь панель этого вида. */
+  /** Whether a panel of this kind is open anywhere. */
   hasPanel: (panelId: string) => boolean;
-  /** Окно создания записи. */
+  /** Record creation window. */
   newRecord: () => void;
   searchRef: RefObject<HTMLInputElement | null>;
-  /** Категория в дереве — фильтр списка записей. */
+  /** Category in the tree — filter of the record list. */
   category: ValueStore<string>;
-  /** Пересобрать контекст с другими зависимостями или модами контекста (правки сохраняются). */
+  /** Rebuild the context with other dependencies or context mods (edits are kept). */
   reload: (change: { dependencies?: string[]; contextMods?: string[] }) => Promise<void>;
 }
 
@@ -45,7 +45,7 @@ export function useWorkbench(): Workbench {
   return wb;
 }
 
-/** Подходит ли выбор панели (вид и тип записи). */
+/** Whether the selection suits the panel (kind and record type). */
 export function accepts(project: Project, def: PanelDef, s: Selection): boolean {
   const shows = def.shows;
   if (!shows?.kinds.includes(s.kind)) return false;
@@ -56,18 +56,18 @@ export function accepts(project: Project, def: PanelDef, s: Selection): boolean 
 }
 
 export interface Followed {
-  /** Запись, которую показывает панель. */
+  /** The record the panel shows. */
   sid: string | undefined;
-  /** Весь выбор (у реплики — ещё и диалог). */
+  /** The whole selection (for a line — its dialogue too). */
   item: Selection | undefined;
   pinned: boolean;
-  /** Версия данных проекта: меняется при каждой правке. */
+  /** Project data version: changes with every edit. */
   version: number;
 }
 
 /**
- * Запись панели: закреплённая (`params.sid`) или последний подходящий выбор. Панель
- * перерисовывается при смене выбора и при правках.
+ * The panel's record: pinned (`params.sid`) or the last matching selection. The panel
+ * re-renders when the selection changes and on edits.
  */
 export function useFollowed(def: PanelDef, params: PanelParams): Followed {
   const { project, selection } = useWorkbench();

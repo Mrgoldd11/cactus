@@ -1,12 +1,12 @@
 /**
- * Фоновый поток окна «Мир»: вся тяжёлая работа — не в потоке интерфейса.
- *  - `terrain`: значения карты высот тайла → вершины, нормали, UV (с «юбкой» по краю, чтобы
- *    между тайлами разных уровней не было щелей);
- *  - `mesh`: байты `.mesh` → массивы подмоделей (`parseOgreMesh` из ядра);
- *  - `dds`: байты `.dds` → RGBA (`decodeDds`);
- *  - `png`: байты PNG → уменьшенная картинка RGBA для цвета земли. Свой разбор, а не
- *    `createImageBitmap`: в альфе `colour.I.J` лежит не прозрачность, и браузер затемнил бы цвет.
- * Ответы передаются без копирования (transferable).
+ * Background thread of the «World» view: all heavy work is off the UI thread.
+ *  - `terrain`: tile heightmap values → vertices, normals, UVs (with a «skirt» along the edge so
+ *    there are no gaps between tiles of different levels);
+ *  - `mesh`: `.mesh` bytes → submesh arrays (`parseOgreMesh` from the core);
+ *  - `dds`: `.dds` bytes → RGBA (`decodeDds`);
+ *  - `png`: PNG bytes → downscaled RGBA image for the ground colour. Own decoder, not
+ *    `createImageBitmap`: the alpha of `colour.I.J` is not transparency, and the browser would darken the colour.
+ * Answers are passed without copying (transferable).
  */
 import { HEIGHT_SCALE, TILE_CELLS, TILE_SAMPLES, decodeDds, parseOgreMesh, triangleIndices } from '@kenshi-editor/core';
 import type { WorkerReply, WorkerRequest, SubmeshArrays } from './protocol.ts';
@@ -20,7 +20,7 @@ const scope = self as unknown as Scope;
 function terrain(heights: Uint16Array, size: number, uv: readonly [number, number, number, number]) {
   const n = TILE_SAMPLES;
   const cell = size / TILE_CELLS;
-  // Сетка n×n и юбка по периметру (4·(n−1) вершин, опущенных вниз).
+  // n×n grid and a skirt around the perimeter (4·(n−1) vertices, lowered down).
   const ring = 4 * (n - 1);
   const count = n * n + ring;
   const pos = new Float32Array(count * 3);
@@ -38,7 +38,7 @@ function terrain(heights: Uint16Array, size: number, uv: readonly [number, numbe
       pos[i * 3] = c * cell;
       pos[i * 3 + 1] = y;
       pos[i * 3 + 2] = r * cell;
-      // Нормаль по разностям соседей (на краю — односторонние).
+      // Normal from neighbour differences (one-sided at the edge).
       const dx = (h(c + 1, r) - h(c - 1, r)) / ((Math.min(n - 1, c + 1) - Math.max(0, c - 1)) * cell);
       const dz = (h(c, r + 1) - h(c, r - 1)) / ((Math.min(n - 1, r + 1) - Math.max(0, r - 1)) * cell);
       const len = Math.hypot(dx, 1, dz);
@@ -48,7 +48,7 @@ function terrain(heights: Uint16Array, size: number, uv: readonly [number, numbe
       uvs[i * 2] = uv[0] + (c / TILE_CELLS) * uv[2];
       uvs[i * 2 + 1] = uv[1] + (r / TILE_CELLS) * uv[3];
     }
-  // Периметр по кругу: верх (r=0), правый край, низ, левый край.
+  // Perimeter in a loop: top (r=0), right edge, bottom, left edge.
   const perim: number[] = [];
   for (let c = 0; c < n - 1; c++) perim.push(c);
   for (let r = 0; r < n - 1; r++) perim.push(r * n + n - 1);
@@ -66,7 +66,7 @@ function terrain(heights: Uint16Array, size: number, uv: readonly [number, numbe
   return { pos, nor, uvs, min: min - drop, max };
 }
 
-/** PNG (8 бит, RGB / RGBA, без чересстрочности) → RGBA size×size, альфа = 255. */
+/** PNG (8 bit, RGB / RGBA, non-interlaced) → RGBA size×size, alpha = 255. */
 async function png(bytes: Uint8Array, size: number): Promise<{ width: number; height: number; rgba: Uint8Array }> {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let p = 8;
@@ -91,7 +91,7 @@ async function png(bytes: Uint8Array, size: number): Promise<{ width: number; he
   if (!bpp || !w || !h) throw new Error('PNG: needs RGB or RGBA');
   const stream = new Blob(idat as BlobPart[]).stream().pipeThrough(new DecompressionStream('deflate'));
   const raw = new Uint8Array(await new Response(stream).arrayBuffer());
-  // Снятие фильтров строк.
+  // Undo row filters.
   const stride = w * bpp;
   const img = new Uint8Array(stride * h);
   for (let y = 0; y < h; y++) {
@@ -117,7 +117,7 @@ async function png(bytes: Uint8Array, size: number): Promise<{ width: number; he
       img[row + x] = v & 255;
     }
   }
-  // Уменьшение усреднением (размер — делитель исходного) или как есть.
+  // Downscale by averaging (size — a divisor of the source) or as is.
   const k = Math.max(1, Math.floor(w / size));
   const ow = Math.floor(w / k);
   const oh = Math.floor(h / k);
@@ -159,7 +159,7 @@ scope.onmessage = (e) => {
         const index = triangleIndices(sub);
         if (index.length === 0) continue;
         const g = sub.geometry;
-        // Буферы подмоделей могут делить общий ArrayBuffer — копируем, чтобы передать.
+        // Submesh buffers may share one ArrayBuffer — copy to transfer.
         const s: SubmeshArrays = { index: index.slice(), positions: g.positions.slice() };
         if (g.normals) s.normals = g.normals.slice();
         if (g.uvs) s.uvs = g.uvs.slice();

@@ -1,7 +1,7 @@
 /**
- * Открытый проект в окне: контекст ядра (ModContext) из байтов, присланных main, индекс для
- * быстрого поиска по списку и дерево категорий. Компоненты подписываются на `version`,
- * которая растёт при каждой правке, отмене и сохранении.
+ * Open project in the window: core context (ModContext) from bytes sent by main, an index for
+ * fast list search, and the category tree. Components subscribe to `version`,
+ * which grows with every edit, undo and save.
  */
 import {
   applyExtensionLayers,
@@ -46,7 +46,7 @@ export interface IndexEntry {
   name: string;
   /** Name in the data language ('' — none). */
   localized: string;
-  /** Имя, русское имя и id в нижнем регистре через перевод строки. */
+  /** Name, Russian name and id in lower case, separated by newlines. */
   hay: string;
 }
 
@@ -60,17 +60,17 @@ export interface AppliedExtension {
   plugins: readonly string[];
 }
 
-/** Псевдо-узел дерева «Изменения мода». */
+/** Tree pseudo-node «Mod changes». */
 export const MOD_CHANGES_ID = '__mod__';
 
 /**
- * Разобранные файлы ванили, зависимостей и уровня — общие для всех проектов окна: повторное
- * «Ваниль» или другой мод на той же игре не разбирает их заново. Ключ — путь, размер и время
- * изменения файла (main сверяет его и присылает байты только изменившихся файлов).
+ * Parsed vanilla, dependency and level files — shared by all projects of the window: a repeated
+ * «Vanilla» or another mod on the same game does not parse them again. Key — path, size and
+ * modification time of the file (main checks it and sends bytes only for changed files).
  */
 export const parsedFiles = new ParsedFileCache();
 
-/** Схема с выведенными полями для последнего набора файлов без мода (ваниль ± зависимости). */
+/** Schema with inferred fields for the latest file set without a mod (vanilla ± dependencies). */
 let inferredCache: { key: string; schema: GameSchema } | undefined;
 
 function layerFile(f: NamedBytes): DataFile {
@@ -78,13 +78,13 @@ function layerFile(f: NamedBytes): DataFile {
 }
 
 /**
- * Открыть проект: main присылает только файлы, которых нет в кэше окна. Если кэш успел
- * что-то вытеснить между запросом и разбором — повторить запрос без кэша.
+ * Open a project: main sends only files that are not in the window cache. If the cache
+ * evicted something between the request and parsing — repeat the request without the cache.
  */
 export async function openProject(req: ProjectRequest): Promise<Project> {
   await prefetching?.catch(() => undefined);
   const bundle = await window.kedit.openProject({ ...req, known: parsedFiles.keys() });
-  // Дать окну нарисовать «Загрузка…» до разбора.
+  // Let the window draw «Loading…» before parsing.
   await new Promise((r) => setTimeout(r, 0));
   try {
     return new Project(bundle);
@@ -98,9 +98,9 @@ let prefetching: Promise<void> | undefined;
 let prefetchedFor: string | undefined;
 
 /**
- * Подготовить ваниль в фоне, пока виден стартовый экран: прочитать и разобрать файлы по
- * одному (между ними окно успевает отвечать) и вывести схему. Потом «Ваниль» открывается
- * без разбора. Ошибки здесь не показываются — их покажет само открытие.
+ * Prepare vanilla in the background while the start screen is shown: read and parse files one
+ * at a time (the window stays responsive between them) and infer the schema. Then «Vanilla» opens
+ * without parsing. Errors are not shown here — opening itself will show them.
  */
 export function prefetchVanilla(game: GameInstallInfo): Promise<void> {
   if (prefetchedFor === game.kenshi && prefetching) return prefetching;
@@ -158,16 +158,16 @@ export class Project {
   readonly ctx: ModContext;
   readonly bundle: ProjectBundle;
   readonly tree: CategoryNode[];
-  /** Путь файла мода (куда сохранять); undefined — новый мод, ещё не сохранён. */
+  /** Mod file path (where to save); undefined — new mod, not saved yet. */
   path: string | undefined;
-  /** Откуда файл мода: мастерская (сохранять нельзя — только копия) или копия чужого мода. */
+  /** Where the mod file comes from: the Workshop (cannot be saved — copy only) or a copy of someone else's mod. */
   provenance: ModProvenance | undefined;
   version = 0;
-  /** Решения слияния (отклонённые записи, с чем и когда слито); пишутся в файл рядом с модом. */
+  /** Merge decisions (rejected records, what was merged with what and when); written to a file next to the mod. */
   ledger: MergeLedger;
-  /** Файл слияния рядом с модом не прочитался (повреждён): решения начаты заново. */
+  /** The merge file next to the mod could not be read (damaged): decisions started over. */
   ledgerError: string | undefined;
-  /** Изменения перенесены из прежнего контекста (смена зависимостей) и ещё не сохранены. */
+  /** Changes carried over from the previous context (dependency change) and not saved yet. */
   private carriedDirty: boolean;
   private readonly index = new Map<string, IndexEntry>();
   private ids: string[] = [];
@@ -177,11 +177,11 @@ export class Project {
   private editsPromise: Promise<WorldEdits> | undefined;
   private interiorsPromise: Promise<WorldEdits> | undefined;
   private edits: WorldEdits | undefined;
-  /** Мир по текущим правкам: пересобирается, когда правки мира меняются. */
+  /** World with the current edits: rebuilt when world edits change. */
   private worldCache: { version: number; index: Promise<WorldIndex> } | undefined;
-  /** Номер правки мира (растёт при каждой правке, отмене, сохранении). */
+  /** World edit number (grows with every edit, undo, save). */
   worldVersion = 0;
-  /** Номер правки интерьеров (мир от них не пересобирается). */
+  /** Interior edit number (the world is not rebuilt from them). */
   interiorVersion = 0;
   private translationPromise: Promise<TranslationIndex | undefined> | undefined;
   /** Data language last asked for (the names may still be loading). */
@@ -262,12 +262,12 @@ export class Project {
     return this.index.get(sid);
   }
 
-  /** Итоговая запись; для удалённой модом — запись нижних слоёв. */
+  /** Resulting record; for one deleted by the mod — the record of the lower layers. */
   record(sid: string): GameRecord | undefined {
     return this.ctx.get(sid) ?? this.ctx.lower(sid) ?? this.ctx.delta(sid);
   }
 
-  /** Записи по типам (кэш до следующей правки). */
+  /** Records by type (cached until the next edit). */
   idsByType(): Map<string, string[]> {
     if (this.typeCache?.version === this.version) return this.typeCache.map;
     const map = new Map<string, string[]>();
@@ -282,7 +282,7 @@ export class Project {
     return map;
   }
 
-  /** Записи узла дерева категорий (или «Изменения мода»). */
+  /** Records of a category tree node (or «Mod changes»). */
   idsForNode(node: CategoryNode | typeof MOD_CHANGES_ID): string[] {
     if (node === MOD_CHANGES_ID) return this.ctx.modRecords().map((r) => r.stringId);
     if (node.type === undefined) {
@@ -298,7 +298,7 @@ export class Project {
     });
   }
 
-  /** Все записи (в том числе удалённые модом) в порядке слоёв. */
+  /** All records (including those deleted by the mod) in layer order. */
   allIds(): readonly string[] {
     return this.ids;
   }
@@ -315,12 +315,12 @@ export class Project {
     return this.ctx.modName;
   }
 
-  /** Как мод называется для автосохранений и резервных копий: файл или имя нового мода. */
+  /** What the mod is called for autosaves and backups: the file or the new mod name. */
   get ref(): ModRef {
     return { path: this.path, modName: this.path !== undefined ? (this.path.split(/[\\/]/).pop() ?? this.ctx.modName) : this.ctx.modName };
   }
 
-  /** Текущее состояние мода в байтах .mod (для автосохранения и точки возврата). */
+  /** Current mod state as .mod bytes (for autosave and restore point). */
   currentBytes(): Uint8Array {
     return writeDataFile(this.ctx.buildModFile());
   }
@@ -339,7 +339,7 @@ export class Project {
     });
   }
 
-  /** Моды контекста: лежат слоями под модом, но не записаны в его заголовке. */
+  /** Context mods: layered under the mod but not written in its header. */
   get contextMods(): string[] {
     return this.bundle.contextMods ?? [];
   }
@@ -355,12 +355,12 @@ export class Project {
     for (const fn of this.listeners) fn();
   }
 
-  /** Имя слоя мода в мире: имя файла .mod (папка `leveldata` рядом с ним). */
+  /** Name of the mod layer in the world: the .mod file name (the `leveldata` folder next to it). */
   get modLayer(): string {
     return this.path !== undefined ? (this.path.split(/[\\/]/).pop() ?? this.path) : (/\.mod$/i.test(this.ctx.modName) ? this.ctx.modName : `${this.ctx.modName}.mod`);
   }
 
-  /** Файлы уровня ванили, зависимостей и мода (читаются один раз, десятки мегабайт). */
+  /** Level files of vanilla, dependencies and the mod (read once, tens of megabytes). */
   private worldFiles(): Promise<WorldFile[]> {
     this.worldFilesPromise ??= this.readWorld(false);
     return this.worldFilesPromise;
@@ -371,14 +371,14 @@ export class Project {
     const req = { game: this.bundle.game, modPaths, interiors };
     let files = await window.kedit.loadWorld({ ...req, known: parsedFiles.keys() });
     if (files.some((f) => f.bytes.length === 0 && !parsedFiles.has(f.key))) files = await window.kedit.loadWorld(req);
-    // Файлов уровня тысячи, а кэш вмещает 64: разбор новых вытеснял бы известные main'у файлы,
-    // которые идут дальше по списку (байты им не присланы) → «Нет в кэше». Поэтому сначала
-    // забираем все, что уже разобрано, и только потом разбираем остальное.
+    // There are thousands of level files and the cache holds 64: parsing new ones would evict files main knows about
+    // that come later in the list (their bytes were not sent) → «Not in cache». So first
+    // take everything already parsed, and only then parse the rest.
     const hits = files.map((f) => (f.bytes.length === 0 ? parsedFiles.get(f.key) : undefined));
     return files.map((f, i) => ({ layer: f.layer, path: f.path, file: hits[i] ?? parsedFiles.take(f.key, f.bytes) }));
   }
 
-  /** Правки мира с дочитанными интерьерами (`interiors.level` ванили, зависимостей и мода). */
+  /** World edits with interiors loaded (`interiors.level` of vanilla, dependencies and the mod). */
   interiorEdits(): Promise<WorldEdits> {
     this.interiorsPromise ??= this.worldEdits()
       .then(async (edits) => {
@@ -392,12 +392,12 @@ export class Project {
     return this.interiorsPromise;
   }
 
-  /** Правки мира мода (сдвиг, поворот, новые и удалённые объекты): своя история отмены. */
+  /** Mod world edits (move, rotate, new and deleted objects): their own undo history. */
   worldEdits(): Promise<WorldEdits> {
     this.editsPromise ??= this.worldFiles().then((files) => {
       const edits = new WorldEdits(files, this.modLayer);
       edits.onChange((changed) => {
-        // Правки только интерьеров мир (WorldIndex) не меняют.
+        // Interior-only edits do not change the world (WorldIndex).
         if (changed.length > 0 && changed.every((c) => c.path.toLowerCase() === INTERIORS)) this.interiorVersion++;
         else this.worldVersion++;
         this.bump();
@@ -409,8 +409,8 @@ export class Project {
   }
 
   /**
-   * Мир (города, здания, зоны) ванили, зависимостей и мода — для «Где в игре» и панели «Мир».
-   * С правками мира мода, если они были.
+   * World (towns, buildings, zones) of vanilla, dependencies and the mod — for «Where in game» and the «World» panel.
+   * With the mod world edits, if there were any.
    */
   world(): Promise<WorldIndex> {
     if (this.worldCache?.version !== this.worldVersion) {
@@ -432,7 +432,7 @@ export class Project {
     return this.translationPromise;
   }
 
-  /** Иконка предмета по полю `icon` как data URL (или null). */
+  /** Item icon from the `icon` field as a data URL (or null). */
   icon(iconPath: string): Promise<string | null> {
     let p = this.icons.get(iconPath);
     if (!p) {
@@ -442,7 +442,7 @@ export class Project {
     return p;
   }
 
-  /** Сохранить: в известный путь или с выбором пути (`saveAs`, новый мод). */
+  /** Save: to the known path or with a path choice (`saveAs`, new mod). */
   async save(saveAs = false): Promise<SaveResult> {
     let path = this.path;
     if (saveAs || path === undefined) {
@@ -452,7 +452,7 @@ export class Project {
     }
     const file = this.ctx.buildModFile();
     const mergeStore = this.ledger.hasChanges(this.ctx) ? serializeMergeStore(this.ledger.store(this.ctx)) : undefined;
-    // Файлы уровня: изменённые; при сохранении в другое место — все файлы мода.
+    // Level files: the changed ones; when saving elsewhere — all mod files.
     const edits = this.edits;
     const worldPaths = edits ? (path === this.path ? edits.dirtyFiles() : edits.modFiles()) : [];
     const world = worldPaths.flatMap((p) => {
@@ -480,8 +480,8 @@ export class Project {
   }
 
   /**
-   * Чужой мод из мастерской: скопировать файл в `mods/<имя>/<имя>.mod` (main спросит) и дальше
-   * сохранять в копию. Несохранённые правки остаются — копия байт в байт равна оригиналу.
+   * Someone else's mod from the Workshop: copy the file to `mods/<name>/<name>.mod` (main asks) and from then on
+   * save into the copy. Unsaved edits stay — the copy is byte for byte equal to the original.
    */
   async copyForEditing(): Promise<CopyModResult> {
     if (this.path === undefined) return { ok: false, cancelled: false, error: 'not saved' };
@@ -496,8 +496,8 @@ export class Project {
 }
 
 /**
- * Новый контекст с другими зависимостями или модами контекста; правки мода переносятся
- * (история отмены — нет). Не заданное берётся из прежнего проекта.
+ * New context with other dependencies or context mods; mod edits are carried over
+ * (the undo history is not). Whatever is not given is taken from the previous project.
  */
 export async function reloadProject(p: Project, change: { dependencies?: string[]; contextMods?: string[] }): Promise<Project> {
   if (change.dependencies) p.ctx.setModInfo({ dependencies: change.dependencies });
@@ -519,15 +519,15 @@ export async function reloadProject(p: Project, change: { dependencies?: string[
   return new Project(bundle, { mod, ...(p.path !== undefined ? { path: p.path } : {}), carriedDirty: wasDirty || p.ctx.dirty, provenance: p.provenance, ledger: p.ledger.carry(p.ctx) });
 }
 
-/** Зависимости мода из его заголовка (в том числе ссылки) — по ним собирается контекст. */
+/** Mod dependencies from its header (references included) — the context is built from them. */
 function headerDependencies(mod: DataFile): string[] {
   const h = mod.header;
   return h ? [...splitModList(h.dependencies), ...splitModList(h.references)] : [];
 }
 
 /**
- * Открыть мод с содержимым из автосохранения: файл на диске (если есть) определяет путь и
- * происхождение, а правки и зависимости берутся из байт копии. Мод помечается изменённым.
+ * Open a mod with content from an autosave: the file on disk (if any) sets the path and
+ * origin, while edits and dependencies come from the backup bytes. The mod is marked as changed.
  */
 export async function openRecovered(req: ProjectRequest, bytes: Uint8Array): Promise<Project> {
   const mod = readDataFile(bytes);
@@ -541,8 +541,8 @@ export async function openRecovered(req: ProjectRequest, bytes: Uint8Array): Pro
 }
 
 /**
- * Восстановить старую версию мода как новую правку: текущее состояние сначала уходит в копии
- * (точка возврата), потом окно получает проект с содержимым версии. История отмены начинается заново.
+ * Restore an old mod version as a new edit: the current state first goes to backups
+ * (restore point), then the window gets a project with the version's content. The undo history starts over.
  */
 export async function restoreProject(p: Project, bytes: Uint8Array): Promise<Project> {
   await window.kedit.addRestorePoint(p.ref, p.currentBytes());
@@ -563,7 +563,7 @@ export async function restoreProject(p: Project, bytes: Uint8Array): Promise<Pro
   return new Project(bundle, { mod, ...(p.path !== undefined ? { path: p.path } : {}), carriedDirty: true, provenance: p.provenance, ledger: p.ledger.carry(p.ctx) });
 }
 
-/** Новый контекст с другими зависимостями (моды контекста остаются). */
+/** New context with other dependencies (context mods stay). */
 export function reloadWithDependencies(p: Project, dependencies: string[]): Promise<Project> {
   return reloadProject(p, { dependencies });
 }

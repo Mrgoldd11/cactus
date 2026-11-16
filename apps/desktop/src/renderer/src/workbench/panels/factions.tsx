@@ -1,9 +1,9 @@
 /**
- * Панель «Отношения фракций»: таблица «фракция × фракция» с цветом (враги / нейтралы /
- * союзники). Строка — кто относится, столбец — к кому. Пару выбирают кликом по ячейке или вводом
- * названий в два поля с быстрым списком; правка значения — одной отменой (можно сразу в обе
- * стороны), точка — значение меняет мод (какой — во всплывающей
- * подсказке), фильтр по имени и по моду. Считается по слоям в памяти, без диска.
+ * «Faction relations» panel: a «faction × faction» table with colour (enemies / neutrals /
+ * allies). Row — who relates, column — to whom. A pair is chosen by clicking a cell or typing
+ * names into two fields with a quick list; a value edit is one undo (both
+ * directions at once are possible), a dot — the value is changed by a mod (which one — in the
+ * tooltip), filter by name and by mod. Computed from the layers in memory, no disk.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { factionMatrix, setFactionRelation, type FactionInfo, type RelationCell } from '@kenshi-editor/core';
@@ -14,7 +14,7 @@ import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
 import { Empty } from './common.tsx';
 
-/** Фракций в таблице за раз (строк и столбцов): дальше — уточнить фильтр. */
+/** Factions in the table at a time (rows and columns): beyond that — narrow the filter. */
 const MAX_FACTIONS = 80;
 
 interface Pick {
@@ -33,14 +33,14 @@ function cellTip(t: Strings, from: string, to: string, c: RelationCell, back: nu
   return lines.join('\n');
 }
 
-/** Сколько подсказок показывать в выпадающем списке. */
+/** How many suggestions to show in the dropdown. */
 const COMBO_ROWS = 12;
 
 interface ComboProps {
   value: string | undefined;
   factions: readonly FactionInfo[];
   label: (f: FactionInfo) => string;
-  /** Второе имя (английское при русском интерфейсе и наоборот) — пояснение в подсказках. */
+  /** Second name (English with a Russian UI and vice versa) — a hint in the suggestions. */
   alt: (f: FactionInfo) => string | undefined;
   placeholder: string;
   title: string;
@@ -49,9 +49,9 @@ interface ComboProps {
 }
 
 /**
- * Поле фракции с быстрым списком: печатаете часть названия (англ., рус. или id) — внизу
- * появляются подходящие, ↑↓ и Enter или клик выбирают. Пока поле не в фокусе, показывает
- * выбранную фракцию.
+ * Faction field with a quick list: type part of a name (English, Russian or id) — matching ones
+ * appear below, ↑↓ and Enter or a click choose. While the field is not focused, it shows
+ * the chosen faction.
  */
 function FactionCombo({ value, factions, label, alt, placeholder, title, testId, onChange }: ComboProps): ReactNode {
   const [text, setText] = useState('');
@@ -68,7 +68,7 @@ function FactionCombo({ value, factions, label, alt, placeholder, title, testId,
       const hay = `${f.name}\n${f.localized ?? ''}\n${f.sid}`.toLowerCase();
       if (terms.every((x) => hay.includes(x))) out.push(f);
     }
-    // Названия, начинающиеся с введённого, — выше тех, где оно в середине.
+    // Names starting with the typed text rank above those where it is in the middle.
     const rank = (f: FactionInfo): number => (q !== '' && (label(f).toLowerCase().startsWith(q) || f.name.toLowerCase().startsWith(q)) ? 0 : 1);
     return out.sort((a, b) => rank(a) - rank(b)).slice(0, COMBO_ROWS);
   }, [factions, text, typing, label]);
@@ -103,7 +103,7 @@ function FactionCombo({ value, factions, label, alt, placeholder, title, testId,
           setOpen(true);
         }}
         onBlur={() => {
-          // Набрали название целиком и ушли из поля — считаем выбором, если оно одно.
+          // Typed a full name and left the field — count it as a choice if there is exactly one.
           if (typing) {
             const exact = text.trim().toLowerCase();
             const one = exact === '' ? [] : factions.filter((f) => label(f).toLowerCase() === exact || f.name.toLowerCase() === exact || f.sid === text.trim());
@@ -138,7 +138,7 @@ function FactionCombo({ value, factions, label, alt, placeholder, title, testId,
                 aria-selected={i === cur}
                 className={i === cur ? 'cur' : ''}
                 title={f.sid}
-                // mousedown, а не click: иначе поле успеет потерять фокус и закрыть список раньше.
+                // mousedown, not click: otherwise the field loses focus and closes the list first.
                 onMouseDown={(e) => {
                   e.preventDefault();
                   choose(f);
@@ -164,7 +164,7 @@ function FactionsPanel(): ReactNode {
   const [query, setQuery] = useState('');
   const [onlyLinked, setOnlyLinked] = useState(true);
   const [layer, setLayer] = useState('');
-  // Пара выбирается кликом по ячейке или вводом названий в два поля; правим, когда выбраны обе.
+  // A pair is chosen by clicking a cell or typing names into two fields; we edit when both are chosen.
   const [fromSid, setFromSid] = useState<string | undefined>();
   const [toSid, setToSid] = useState<string | undefined>();
   const pick: Pick | undefined = fromSid !== undefined && toSid !== undefined ? { from: fromSid, to: toSid } : undefined;
@@ -208,7 +208,7 @@ function FactionsPanel(): ReactNode {
   const picked = pick ? matrix.cell(pick.from, pick.to) : undefined;
   useEffect(() => {
     if (picked) setValue(String(picked.value));
-    // значение поля — от выбранной ячейки и после каждой правки
+    // field value — from the selected cell and after every edit
   }, [pick?.from, pick?.to, picked?.value]);
 
   const apply = (v: number | undefined): void => {

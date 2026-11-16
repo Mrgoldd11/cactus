@@ -1,9 +1,9 @@
 /**
- * Панель «Сравнение предметов»: записи одного типа (оружие, арбалеты, броня, предметы,
- * сумки — или любой другой тип) в таблице. Столбцы — поля из схемы (выбор столбцов),
- * сортировка по клику на заголовок, фильтры по имени и по полю (`value>1000`), правка прямо
- * в ячейке (одна правка — один шаг отмены). ▲▼ — наибольшее и наименьшее в столбце, цвет —
- * кто поменял значение: сам мод или другие загруженные моды.
+ * «Item comparison» panel: records of one type (weapons, crossbows, armour, items,
+ * backpacks — or any other type) in a table. Columns — fields from the schema (column choice),
+ * sorting by clicking a header, filters by name and by field (`value>1000`), editing right
+ * in the cell (one edit — one undo step). ▲▼ — the largest and smallest in the column, colour —
+ * who changed the value: the mod itself or other loaded mods.
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { applyOps, COMPARE_TYPES, compareTable, matchesFilter, parseFieldFilter, type CompareColumn, type CompareRow, type FieldFilter } from '@kenshi-editor/core';
@@ -14,7 +14,7 @@ import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
 import { Empty } from './common.tsx';
 
-/** Строк в таблице за раз: дальше — уточнить фильтр. */
+/** Table rows at a time: beyond that — narrow the filter. */
 const MAX_ROWS = 500;
 
 interface Sort {

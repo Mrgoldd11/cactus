@@ -1,5 +1,5 @@
 /**
- * Окна: зависимости мода, сведения о моде, проверка мода, новая запись.
+ * Windows: mod dependencies, mod info, mod check, new record.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { validateMod, formatIssue, type ValidationIssue } from '@kenshi-editor/core';
@@ -255,7 +255,7 @@ export function ValidationModal({ project, onGo, onClose }: { project: Project; 
   );
 }
 
-/** Список проблем проверки мода (окно «Проверка» и панель «Диагностика»). */
+/** List of mod check problems (the «Check» window and the «Diagnostics» panel). */
 export function IssueList({ project, issues, onGo }: { project: Project; issues: readonly ValidationIssue[]; onGo: (sid: string) => void }): ReactNode {
   const lang = useLang();
   const t = useT();

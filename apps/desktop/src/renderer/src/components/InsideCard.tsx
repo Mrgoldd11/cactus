@@ -1,7 +1,7 @@
 /**
- * Карточка «Что внутри» записи (по клику на часть модели или объект сцены): что это, откуда,
- * кто её меняет, на что она ссылается и кто ссылается на неё. Каждая ссылка — переход к записи.
- * Данные — `inspectRecord` из ядра; если связей нет, так и пишем: «пусто».
+ * «What is inside» card of a record (on a click on a model part or scene object): what it is, where it comes from,
+ * who changes it, what it references and who references it. Each reference leads to the record.
+ * Data — `inspectRecord` from the core; if there are no links we say so: «empty».
  */
 import type { ReactNode } from 'react';
 import { inspectRecord, type InsideGroup, type InsideLink } from '@kenshi-editor/core';

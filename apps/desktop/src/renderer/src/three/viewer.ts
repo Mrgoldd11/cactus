@@ -1,7 +1,7 @@
 /**
- * Окно 3D-просмотра: камера вращается вокруг модели (левая кнопка — вращать, средняя или правая
- * — сдвигать, колесо — ближе/дальше), свет «от зрителя», сетка на полу. Рисует только когда
- * что-то изменилось.
+ * 3D preview view: the camera orbits the model (left button — rotate, middle or right
+ * — pan, wheel — closer/farther), light «from the viewer», a grid on the floor. Renders only when
+ * something changed.
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -68,7 +68,7 @@ export class ModelViewer {
     this.renderer.render(this.scene, this.camera);
   }
 
-  /** Показать модель (прежняя убирается, освобождает её вызывающий). */
+  /** Show a model (the previous one is removed, the caller frees it). */
   setModel(obj: THREE.Object3D | undefined): void {
     if (this.model) this.scene.remove(this.model);
     this.model = obj;
@@ -87,7 +87,7 @@ export class ModelViewer {
     return box;
   }
 
-  /** Сетка под моделью: шаг — круглое число под её размер. */
+  /** Grid under the model: step — a round number for its size. */
   private placeGrid(): void {
     if (this.grid) {
       this.scene.remove(this.grid);
@@ -106,8 +106,8 @@ export class ModelViewer {
   }
 
   /**
-   * Камера на всю модель. Без стороны — с прежнего направления (клавиша F); `home` — вид
-   * три четверти; иначе спереди, справа или сверху.
+   * Camera on the whole model. Without a side — from the previous direction (F key); `home` — three-quarter
+   * view; otherwise front, right or top.
    */
   frame(side?: ViewSide | 'home'): void {
     const box = this.bounds();
@@ -145,7 +145,7 @@ export class ModelViewer {
     });
   }
 
-  /** Часть модели под точкой экрана: `userData.source` попавшей подмодели (запись части). */
+  /** Model part under a screen point: `userData.source` of the hit submesh (the part record). */
   pick(clientX: number, clientY: number): string | undefined {
     if (!this.model) return undefined;
     const r = this.renderer.domElement.getBoundingClientRect();
@@ -158,7 +158,7 @@ export class ModelViewer {
     return undefined;
   }
 
-  /** Подсветка: выбранная часть — голубым свечением, под мышью — слабым светлым. */
+  /** Highlight: selected part — blue glow, under the mouse — faint light. */
   highlight(selected: string | undefined, hover: string | undefined): void {
     this.model?.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
@@ -176,7 +176,7 @@ export class ModelViewer {
     this.requestRender();
   }
 
-  /** Иконка: квадрат `size`×`size`, прозрачный фон, без сетки; PNG-байты. */
+  /** Icon: `size`×`size` square, transparent background, no grid; PNG bytes. */
   renderIcon(size: number): Uint8Array {
     const prevSize = this.renderer.getSize(new THREE.Vector2());
     const prevAspect = this.camera.aspect;

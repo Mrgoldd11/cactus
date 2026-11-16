@@ -1,4 +1,4 @@
-/* Связь с игрой (Kenshi Bridge): значок, кнопки «Показать в игре», панель «Игра», «Как было в игре». */
+/* Game link (Kenshi Bridge): icon, «Show in game» buttons, «Game» panel, «How it went in game». */
 .game-link {
   display: inline-flex;
   align-items: center;

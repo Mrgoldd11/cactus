@@ -1,7 +1,7 @@
 /**
- * Рабочее пространство на dockview: панели из реестра, стыковка, вкладки, плавающие группы,
- * «во всё окно», сворачивание, закрепление панели на записи. Раскладка сохраняется в
- * настройках и восстанавливается при следующем запуске.
+ * Workspace on dockview: panels from the registry, docking, tabs, floating groups,
+ * «maximize», collapsing, pinning a panel to a record. The layout is saved in the
+ * settings and restored on the next start.
  */
 import { Component, useEffect, useRef, type ErrorInfo, type FunctionComponent, type ReactNode } from 'react';
 import {
@@ -23,7 +23,7 @@ import { accepts, useWorkbench, WorkbenchContext, type Workbench as WorkbenchVal
 import { useSelectionVersion } from './selection.ts';
 import { applyPreset, layoutKnown, panelTitle, type PresetId } from './layouts.ts';
 
-// Все панели регистрируются сами при загрузке своих файлов: оболочка их не перечисляет.
+// All panels register themselves when their files load: the shell does not list them.
 import.meta.glob('./panels/*.tsx', { eager: true });
 
 const SAVE_DELAY_MS = 300;
@@ -42,7 +42,7 @@ class PanelBoundary extends Component<{ children: ReactNode }, { error?: string 
   }
 }
 
-/** Рамка панели: заголовок вкладки (с именем закреплённой записи), граница ошибок. */
+/** Panel frame: tab title (with the pinned record name), error boundary. */
 function makeFrame(def: PanelDef): FunctionComponent<IDockviewPanelProps<PanelParams>> {
   const Inner = def.component;
   function Frame({ params, api }: IDockviewPanelProps<PanelParams>): ReactNode {
@@ -88,7 +88,7 @@ function toggleCollapse(group: DockviewGroupPanel): void {
     const h = group.api.height;
     group.api.setConstraints({ minimumHeight: HEADER_HEIGHT, maximumHeight: HEADER_HEIGHT });
     group.api.setSize({ height: HEADER_HEIGHT });
-    // Нет соседа сверху/снизу — свернуть некуда.
+    // No neighbour above/below — nowhere to collapse.
     if (group.api.height >= h) {
       group.api.setConstraints({ minimumHeight: 100, maximumHeight: Number.MAX_SAFE_INTEGER });
       return;
@@ -98,7 +98,7 @@ function toggleCollapse(group: DockviewGroupPanel): void {
   }
 }
 
-/** Кнопки справа в заголовке группы: закрепить на записи, свернуть, во всё окно. */
+/** Buttons on the right of the group header: pin to record, collapse, maximize. */
 function HeaderActions({ activePanel, group, containerApi }: IDockviewHeaderActionsProps): ReactNode {
   const t = useT();
   const wb = useWorkbench();
@@ -156,11 +156,11 @@ function HeaderActions({ activePanel, group, containerApi }: IDockviewHeaderActi
 
 interface Props {
   wb: WorkbenchValue;
-  /** Сохранённая раскладка (из настроек) или пусто — тогда ставится `preset`. */
+  /** Saved layout (from settings) or empty — then `preset` is applied. */
   initial: WorkspaceSettings | undefined;
   preset: PresetId;
   onApi: (api: DockviewApi) => void;
-  /** Раскладка изменилась (для меню «Окно»). */
+  /** The layout changed (for the «Window» menu). */
   onChange: () => void;
 }
 

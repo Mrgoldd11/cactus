@@ -1,15 +1,15 @@
 /**
- * Главный процесс: окно, файловые вызовы для окна (IPC), подтверждение записи в папку игры,
- * вопрос о несохранённых изменениях при закрытии, настройки в `userData/settings.json`.
+ * Main process: window, file calls for the window (IPC), confirmation of writes into the game folder,
+ * the unsaved-changes question on close, settings in `userData/settings.json`.
  *
- * Ядро (ModContext) работает в окне: ему нужен синхронный доступ к записям для списка на
- * десятки тысяч строк, отмены и подписки на изменения. Main только читает и пишет файлы.
+ * The core (ModContext) runs in the window: it needs synchronous access to records for a list of
+ * tens of thousands of rows, undo and change subscriptions. Main only reads and writes files.
  *
- * Живая связь с ИИ: main держит WebSocket-сервер на 127.0.0.1 (файл обнаружения `live.json`
- * во временной папке, `KEDIT_LIVE_FILE`; `KEDIT_LIVE=0` — выключить) и передаёт запросы
- * MCP окну — их выполняет `LiveHost` над открытым проектом.
+ * Live AI link: main runs a WebSocket server on 127.0.0.1 (discovery file `live.json`
+ * in the temp folder, `KEDIT_LIVE_FILE`; `KEDIT_LIVE=0` turns it off) and forwards MCP
+ * requests to the window — `LiveHost` executes them on the open project.
  *
- * Меню окна — `menu.ts`, журнал ошибок в файл — `log.ts`, мост к игре (плагин Kenshi Bridge) — `game.ts`.
+ * Window menu — `menu.ts`, error log file — `log.ts`, game bridge (Kenshi Bridge plugin) — `game.ts`.
  */
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
@@ -85,7 +85,7 @@ import {
   writeModOrder,
 } from './service.ts';
 
-// Отдельная папка данных (e2e запускает приложение с чистыми настройками).
+// Separate data folder (e2e starts the app with clean settings).
 if (process.env['KEDIT_USER_DATA']) app.setPath('userData', process.env['KEDIT_USER_DATA']);
 
 const settingsPath = (): string => join(app.getPath('userData'), 'settings.json');
@@ -96,7 +96,7 @@ function isLocaleCode(v: unknown): v is string {
   return typeof v === 'string' && /^[A-Za-z]{2,3}(?:[_-][A-Za-z0-9]{2,8})*$/.test(v);
 }
 
-/** Настройки автосохранения и копий приводятся к допустимым значениям (файл могли править руками). */
+/** Autosave and backup settings are clamped to valid values (the file may have been edited by hand). */
 function sanitizeSettings(s: Settings): Settings {
   const minutes = Number.isFinite(s.autosaveMinutes) && s.autosaveMinutes >= 0 ? Math.min(s.autosaveMinutes, 1440) : DEFAULT_AUTOSAVE_MINUTES;
   const count = Number.isFinite(s.backupCount) && s.backupCount >= 0 ? Math.min(Math.floor(s.backupCount), MAX_BACKUP_COUNT) : DEFAULT_BACKUP_COUNT;
@@ -108,7 +108,7 @@ function loadSettings(): Settings {
   try {
     if (existsSync(settingsPath())) return sanitizeSettings({ ...DEFAULT_SETTINGS, ...(JSON.parse(readFileSync(settingsPath(), 'utf8')) as Partial<Settings>) });
   } catch {
-    // Испорченный файл настроек — начинаем с умолчаний.
+    // Corrupt settings file — start from defaults.
   }
   return { ...DEFAULT_SETTINGS };
 }
@@ -141,7 +141,7 @@ const TEXT_FILTERS: Record<TextFileKind, { name: string; extensions: string[] }>
   po: { name: 'gettext PO (Poedit)', extensions: ['po'] },
 };
 
-/** Выгрузка перевода: диалог и запись; папка игры и мастерская — отказ. */
+/** Translation export: dialog and write; the game folder and the Workshop are refused. */
 async function saveTextFile(e: IpcMainInvokeEvent, defaultName: string, kind: TextFileKind, text: string): Promise<SaveTextResult> {
   const win = windowOf(e);
   const opts = { defaultPath: join(app.getPath('documents'), defaultName), filters: [TEXT_FILTERS[kind]] };
@@ -174,7 +174,7 @@ async function savePngFile(e: IpcMainInvokeEvent, defaultName: string, png: Uint
   }
 }
 
-/** Файл перевода больше этого — не текст выгрузки (защита от случайного выбора). */
+/** A translation file larger than this is not export text (guard against a wrong pick). */
 const MAX_TEXT_FILE = 64 * 1024 * 1024;
 
 async function openTextFile(e: IpcMainInvokeEvent): Promise<{ path: string; text: string } | { error: string } | null> {
@@ -194,7 +194,7 @@ async function openTextFile(e: IpcMainInvokeEvent): Promise<{ path: string; text
 async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<SaveResult> {
   if (!request.path.toLowerCase().endsWith('.mod')) return { ok: false, cancelled: false, error: 'not a .mod path' };
   const req = { ...request, path: modInstallPath(games(), request.path) };
-  // Мастерская — чужие файлы (Steam перезапишет их при обновлении): только копия в mods/.
+  // The Workshop holds other people's files (Steam overwrites them on update): only a copy in mods/.
   if (isWorkshopPath(games(), req.path)) return { ok: false, cancelled: false, workshop: true, error: req.path };
   const win = windowOf(e);
   if (isGamePath(req.path)) {
@@ -213,7 +213,7 @@ async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<Sav
   }
   try {
     const saved = writeMod(req.path, req.bytes, req.mergeStore, req.world ?? [], { dataDir, keep: settings.backupCount });
-    // Правки сохранены в сам мод — автосохранения этого мода больше не нужны.
+    // Edits are saved into the mod itself — this mod's autosaves are no longer needed.
     const done: ModRef[] = [{ path: req.path, modName: basename(req.path) }];
     if (request.path !== req.path) done.push({ path: request.path, modName: basename(request.path) });
     if (req.previousPath !== undefined) done.push({ path: req.previousPath, modName: basename(req.previousPath) });
@@ -238,8 +238,8 @@ async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<Sav
 }
 
 /**
- * Копия чужого мода для правки: `mods/<имя>/<имя>.mod` + файл происхождения. Это запись в папку
- * игры — всегда с подтверждением; оригинал только читается.
+ * Copy of someone else's mod for editing: `mods/<name>/<name>.mod` + origin file. This writes into the game
+ * folder — always with confirmation; the original is only read.
  */
 async function copyModForEditing(e: IpcMainInvokeEvent, game: GameInstallInfo, path: string): Promise<CopyModResult> {
   const known = games().some((g) => resolve(g.kenshi).toLowerCase() === resolve(game.kenshi).toLowerCase());
@@ -272,7 +272,7 @@ async function copyModForEditing(e: IpcMainInvokeEvent, game: GameInstallInfo, p
   }
 }
 
-/** Новый порядок `mods.cfg`: это файл игры — всегда с подтверждением, игра должна быть закрыта. */
+/** New `mods.cfg` order: it is a game file — always with confirmation, the game must be closed. */
 async function saveModOrder(e: IpcMainInvokeEvent, game: GameInstallInfo, names: string[], expected: string[]): Promise<ModOrderResult> {
   const known = [...knownGames, ...(currentGame ? [currentGame] : [])].some((g) => resolve(g.kenshi).toLowerCase() === resolve(game.kenshi).toLowerCase());
   if (!known) return { ok: false, cancelled: false, error: 'unknown game folder' };
@@ -304,7 +304,7 @@ let liveStatus: LiveStatus = { clients: [] };
 const liveWaits = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 let liveRid = 1;
 
-/** Запрос ИИ — окну проекта; ответ придёт по `liveResponse`. */
+/** AI request — to the project window; the answer comes via `liveResponse`. */
 function forwardLive(req: LiveRequestBody): Promise<unknown> {
   const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
   if (!win) return Promise.reject(new Error('The editor window is closed'));
@@ -342,10 +342,10 @@ async function startLive(): Promise<void> {
 }
 
 const dataDir = app.getPath('userData');
-/** Последнее автосохранение окна (чтобы отложить его в копии, если пользователь отказался от правок). */
+/** The window's latest autosave (to set it aside in backups if the user discarded the edits). */
 const autosaveRefs = new Map<number, ModRef>();
 
-/** Папки, в которые автосохранения и копии писать нельзя: игра и мастерская. */
+/** Folders autosaves and backups must not be written to: the game and the Workshop. */
 function forbiddenDirs(): string[] {
   return games().flatMap((g) => [g.kenshi, g.workshop]);
 }
@@ -371,7 +371,7 @@ function recoveryOf(ref: ModRef): RecoveryInfo | null {
   }
 }
 
-/** Копия мода из резервных как отдельный файл (диалог «Сохранить»). */
+/** Copy of a mod from backups as a separate file («Save» dialog). */
 async function exportBackup(e: IpcMainInvokeEvent, ref: ModRef, id: string): Promise<ExportBackupResult> {
   let bytes: Uint8Array | undefined;
   try {
@@ -513,7 +513,7 @@ function registerIpc(): void {
   });
 }
 
-/** Заголовок окна: мод и версия программы (`● ` — есть несохранённые изменения). */
+/** Window title: mod and program version (`● ` — there are unsaved changes). */
 function windowTitle(title = '', dirty = false): string {
   const base = `${APP_TITLE} ${app.getVersion()}`;
   if (!title || title === APP_TITLE) return base;
@@ -537,7 +537,7 @@ function createWindow(): void {
     },
   });
   watchWindow(win.webContents);
-  // Заголовок задаёт main (с версией), а не <title> страницы.
+  // The title is set by main (with the version), not by the page <title>.
   win.on('page-title-updated', (e) => {
     e.preventDefault();
   });
@@ -559,7 +559,7 @@ function createWindow(): void {
     if (choice !== 0) e.preventDefault();
     else {
       dirtyWindows.delete(win.id);
-      // Отказ от правок: автосохранение не удаляем, а откладываем в копии (напоминать при открытии не будет).
+      // Edits discarded: the autosave is not deleted but set aside in backups (no reminder on open).
       const ref = autosaveRefs.get(win.id);
       autosaveRefs.delete(win.id);
       if (ref) {
@@ -588,7 +588,7 @@ void app.whenReady().then(() => {
 });
 
 app.on('will-quit', () => {
-  // Файл обнаружения убирается сразу (синхронно), соединения закрываются следом.
+  // The discovery file is removed at once (synchronously), connections are closed after it.
   void liveServer?.close();
   liveServer = undefined;
   stopGameLink();

@@ -1,7 +1,7 @@
 /**
- * Граф только для просмотра (панель «Графы»): карточки записей и связи между ними на React
- * Flow, раскладка деревом слева направо (общая с графом диалога). Щелчок — выбрать карточку,
- * двойной щелчок — открыть запись. Правки идут из панели, не из графа.
+ * View-only graph («Graphs» panel): record cards and links between them on React
+ * Flow, tree layout from left to right (shared with the dialogue graph). Click — select a card,
+ * double-click — open the record. Edits come from the panel, not from the graph.
  */
 import { memo, useMemo, type ReactNode } from 'react';
 import { Background, Controls, Handle, MarkerType, MiniMap, Position, ReactFlow, ReactFlowProvider, type Edge, type Node, type NodeProps } from '@xyflow/react';
@@ -13,19 +13,19 @@ export const CARD_WIDTH = 240;
 const MAX_LINES = 5;
 
 export interface FlowCard {
-  /** Узел графа (обычно строковый id записи). */
+  /** Graph node (usually a record string id). */
   id: string;
   sid: string;
-  /** Вид: research, station, item, town, squad, char, vendor… — для цвета. */
+  /** Kind: research, station, item, town, squad, char, vendor… — for the colour. */
   kind: string;
   title: string;
   sub?: string;
   lines: string[];
   status?: RecordStatus | undefined;
   missing?: boolean | undefined;
-  /** Совпало с поиском. */
+  /** Matched the search. */
   matched?: boolean;
-  /** Узел, от которого строится граф. */
+  /** The node the graph is built from. */
   root?: boolean;
 }
 
@@ -35,7 +35,7 @@ export interface FlowLink {
   target: string;
   label?: string;
   dashed?: boolean;
-  /** Ссылка в данных (значения можно править). */
+  /** Reference in the data (values can be edited). */
   link?: GraphLink;
 }
 
@@ -72,7 +72,7 @@ interface Props {
   picked?: string | undefined;
   onPick: (id: string) => void;
   onOpen: (sid: string) => void;
-  /** Смена ключа — заново разложить и вписать в окно. */
+  /** Key change — lay out again and fit to the window. */
   layoutKey: string;
 }
 

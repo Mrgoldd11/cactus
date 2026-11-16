@@ -1,10 +1,10 @@
 /**
- * Панель «Внутри»: интерьер здания — раскладка (INSTANCE_COLLECTION в `interiors.level`) с
- * мебелью, сундуками, верстаками, кроватями и точками предметов. Выбор, сдвиг и поворот гизмо,
- * точные координаты, удаление, новый объект из списка записей. Правки — командами ядра в общую
- * историю правок мира (Ctrl+Z / Ctrl+Y в окне), запись — в `interiors.level` мода при сохранении.
- * Открывается из карточки здания в «Мире» или следует за выбранной записью здания.
- * Рендер — `three/interior.ts`; здесь только интерфейс.
+ * «Inside» panel: building interior — the layout (INSTANCE_COLLECTION in `interiors.level`) with
+ * furniture, chests, workbenches, beds and item points. Selection, gizmo move and rotate,
+ * exact coordinates, deletion, a new object from the record list. Edits go through core commands into the shared
+ * world edit history (Ctrl+Z / Ctrl+Y in the view), written to the mod `interiors.level` on save.
+ * Opens from a building card in «World» or follows the selected building record.
+ * Rendering — `three/interior.ts`; here only the UI.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import {
@@ -204,10 +204,10 @@ const zh: InteriorStrings = {
 };
 const INTERIOR_STRINGS: Record<Lang, InteriorStrings> = { en, ru, zh };
 
-/** Что можно поставить в интерьер: мебель и точки предметов. */
+/** What can be placed in an interior: furniture and item points. */
 const PLACE_TYPES = ['BUILDING', 'ITEM_PLACEMENT_GROUP'];
 
-/** Просьба открыть интерьер (кнопка «Внутри» в карточке здания мира): здание и имя раскладки. */
+/** Request to open an interior (the «Inside» button in a world building card): building and layout name. */
 export const interiorRequest = new ValueStore<{ building: string; layout?: string } | undefined>(undefined);
 
 const EDIT_KEY = 'kedit.interior.edit';
@@ -219,12 +219,12 @@ function loadEdit(): InteriorEditSettings {
     const raw = localStorage.getItem(EDIT_KEY);
     if (raw) return { ...DEFAULT_INTERIOR_EDIT, ...(JSON.parse(raw) as Partial<InteriorEditSettings>) };
   } catch {
-    // испорчено — по умолчанию
+    // corrupt — use defaults
   }
   return DEFAULT_INTERIOR_EDIT;
 }
 
-/** Угол поворота вокруг вертикали в градусах (из w, x, y, z). */
+/** Rotation angle around the vertical in degrees (from w, x, y, z). */
 function yawDeg(r: readonly number[]): number {
   const [w = 1, , y = 0] = r;
   const d = (Math.atan2(2 * w * y, 1 - 2 * y * y) * 180) / Math.PI;
@@ -242,7 +242,7 @@ function flags(l: InteriorLayout, s: InteriorStrings): string {
   return [l.exterior && s.exterior, l.shop && s.shop, l.bar && s.bar, l.recruitment && s.recruitment, l.flophouse && s.flophouse].filter(Boolean).join(', ');
 }
 
-/** Поле числа: правка по Enter или при уходе с поля. */
+/** Number field: edit on Enter or when leaving the field. */
 export function NumberField({ value, onCommit, testId, width = 64 }: { value: number; onCommit: (v: number) => void; testId: string; width?: number }): ReactNode {
   const [text, setText] = useState(String(value));
   useEffect(() => { setText(String(value)); }, [value]);
@@ -284,7 +284,7 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
   const [tick, setTick] = useState(0);
   const [loadingModels, setLoadingModels] = useState(0);
   const request = useStore(interiorRequest);
-  /** Новый объект: выбрать, когда окно получит его со списком. */
+  /** New object: select it once the view gets it with the list. */
   const pendingSelect = useRef<string | undefined>(undefined);
 
   const name = (id: string): string => (project.ctx.localizedName(id) ?? project.ctx.name(id)) || id;
@@ -297,14 +297,14 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
       (ed) => { if (!cancelled) setEdits(ed); },
       (e: unknown) => { if (!cancelled) setError(errorText(e)); },
     );
-    // Мир — только для строки «где стоит»; не мешает показу.
+    // The world is only for the «where it stands» line; it does not block showing.
     project.world().then((w) => { if (!cancelled) setWorld(w); }, () => undefined);
     return () => {
       cancelled = true;
     };
   }, [project]);
 
-  // Окно создаётся один раз на проект.
+  // The view is created once per project.
   useEffect(() => {
     if (!host.current) return;
     const v = new InteriorView(host.current, project.bundle.game, project.ctx);
@@ -328,7 +328,7 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
 
   const layouts = useMemo(() => (edits && sid ? interiorLayouts(edits, sid) : []), [edits, sid, tick]);
 
-  // Раскладка: по просьбе карточки мира (имя), иначе прежняя, иначе первая внутренняя.
+  // Layout: as requested by the world card (name), otherwise the previous one, otherwise the first interior.
   useEffect(() => {
     if (layouts.length === 0) {
       setLayout(undefined);
@@ -378,7 +378,7 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
     view.current?.select(undefined);
   }, [layout]);
 
-  // Правки: гизмо пишет командами ядра.
+  // Edits: the gizmo writes via core commands.
   useEffect(() => {
     const v = view.current;
     if (!v) return;

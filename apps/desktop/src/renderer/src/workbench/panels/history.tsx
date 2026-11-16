@@ -1,4 +1,4 @@
-/** Панель «История»: все шаги правки, где вы сейчас, переход к любому шагу щелчком. */
+/** «History» panel: all edit steps, where you are now, jump to any step by clicking. */
 import type { ReactNode } from 'react';
 import { HistoryList } from '../../components/History.tsx';
 import { registerPanel } from '../registry.ts';

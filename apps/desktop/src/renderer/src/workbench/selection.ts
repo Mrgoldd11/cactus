@@ -1,16 +1,16 @@
 /**
- * Общий выбор и контекст рабочего пространства (как выделение в Unity: панели не знают друг о
- * друге, а слушают, что выбрано). Выбор — запись, реплика диалога или объект сцены. Каждая
- * панель берёт последний подходящий ей выбор: граф — последний диалог, «Разговор» — последнего
- * персонажа, инспектор — последнюю запись. История «назад/вперёд» — по выбору записей.
+ * Shared selection and workspace context (like selection in Unity: panels do not know about each
+ * other, they listen to what is selected). A selection is a record, a dialogue line or a scene object. Each
+ * panel takes the latest selection that suits it: the graph — the latest dialogue, «Conversation» — the latest
+ * character, the inspector — the latest record. The «back/forward» history follows record selections.
  */
 import { useSyncExternalStore } from 'react';
 
 export type Selection =
   | { kind: 'record'; sid: string }
-  /** Реплика диалога; `dialog` — в каком диалоге её выбрали (граф, плеер). */
+  /** Dialogue line; `dialog` — in which dialogue it was selected (graph, player). */
   | { kind: 'line'; sid: string; dialog?: string; parent?: string }
-  /** Объект сцены (этап 7: 3D-вид). `sid` — запись, которую объект показывает, если есть. */
+  /** Scene object (stage 7: 3D view). `sid` — the record the object shows, if any. */
   | { kind: 'scene'; id: string; sid?: string };
 
 export type SelectionKind = Selection['kind'];
@@ -24,13 +24,13 @@ function sameSelection(a: Selection, b: Selection): boolean {
   return a.sid === (b as { sid: string }).sid && (a.kind !== 'line' || a.dialog === (b as { dialog?: string }).dialog);
 }
 
-/** Запись, к которой относится выбор (у объекта сцены — если он что-то показывает). */
+/** The record the selection refers to (for a scene object — if it shows something). */
 export function selectionSid(s: Selection): string | undefined {
   return s.kind === 'scene' ? s.sid : s.sid;
 }
 
 export class SelectionService {
-  /** Последние выборы, самый свежий первым, без повторов. */
+  /** Latest selections, newest first, no duplicates. */
   private recentList: Selection[] = [];
   private history: string[] = [];
   private pos = -1;
@@ -45,14 +45,14 @@ export class SelectionService {
     return this.recentList;
   }
 
-  /** Последний выбор, который принимает `accept`. */
+  /** The latest selection that `accept` takes. */
   latest<T extends Selection = Selection>(accept: (s: Selection) => s is T): T | undefined;
   latest(accept?: (s: Selection) => boolean): Selection | undefined;
   latest(accept: (s: Selection) => boolean = () => true): Selection | undefined {
     return this.recentList.find(accept);
   }
 
-  /** Текущая запись истории навигации. */
+  /** Current navigation history entry. */
   get current(): string | undefined {
     return this.history[this.pos];
   }
@@ -65,7 +65,7 @@ export class SelectionService {
     return this.pos < this.history.length - 1;
   }
 
-  /** Выбрать. `history: false` — не класть в «назад/вперёд» (например, наведение в плеере). */
+  /** Select. `history: false` — do not push to «back/forward» (e.g. hover in the player). */
   select(item: Selection, options: { history?: boolean } = {}): void {
     const top = this.recentList[0];
     const sid = selectionSid(item);
@@ -91,7 +91,7 @@ export class SelectionService {
     this.reselect();
   }
 
-  /** Убрать из выбора записи, которых больше нет (после отмены создания и т. п.). */
+  /** Remove records that no longer exist from the selection (after undoing a creation etc.). */
   prune(exists: (sid: string) => boolean): void {
     const keep = this.recentList.filter((s) => {
       const sid = selectionSid(s);
@@ -123,7 +123,7 @@ export class SelectionService {
   }
 }
 
-/** Перерисовываться при каждом изменении выбора; возвращает номер версии выбора. */
+/** Re-render on every selection change; returns the selection version number. */
 export function useSelectionVersion(service: SelectionService): number {
   return useSyncExternalStore(service.subscribe, () => service.version);
 }

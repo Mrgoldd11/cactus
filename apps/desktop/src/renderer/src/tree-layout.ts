@@ -1,6 +1,6 @@
 /**
- * Раскладка графа деревом слева направо (общая для графа диалога и графов этапа 5): столбец —
- * глубина узла, внутри столбца узлы идут в порядке обхода, родитель — по центру своих потомков.
+ * Tree layout of a graph from left to right (shared by the dialogue graph and the stage 5 graphs): column —
+ * node depth, within a column nodes follow the walk order, a parent is centred on its children.
  */
 
 export interface Placed {
@@ -10,17 +10,17 @@ export interface Placed {
 }
 
 export interface TreeLayout {
-  /** Ширина столбца (карточки) и промежутки, px. */
+  /** Column (card) width and gaps, px. */
   width: number;
   columnGap: number;
   rowGap: number;
-  /** Дети узла (только рёбра дерева, без обратных). */
+  /** Node children (tree edges only, no back edges). */
   kids: (id: string) => readonly string[];
   depth: (id: string) => number;
   height: (id: string) => number;
 }
 
-/** Разложить деревья от корней `roots` по очереди сверху вниз. */
+/** Lay out trees from `roots` one after another, top to bottom. */
 export function layoutTree(roots: readonly string[], o: TreeLayout): Map<string, Placed> {
   const out = new Map<string, Placed>();
   let cursor = 0;
@@ -37,7 +37,7 @@ export function layoutTree(roots: readonly string[], o: TreeLayout): Map<string,
     const spans = children.map(place);
     const top = spans[0]!.top;
     const bottom = spans[spans.length - 1]!.bottom;
-    // Родитель по центру потомков, но не выше уже занятого места.
+    // Parent centred on its children, but not above an already taken place.
     const y = Math.max(top, (top + bottom) / 2 - h / 2);
     out.set(id, { x, y, height: h });
     if (y + h + o.rowGap > cursor) cursor = y + h + o.rowGap;
@@ -48,8 +48,8 @@ export function layoutTree(roots: readonly string[], o: TreeLayout): Map<string,
 }
 
 /**
- * Раскладка произвольного графа (узлы могут иметь несколько родителей, бывают циклы): дерево
- * обхода в глубину от узлов без входящих рёбер (в порядке `ids`), остальные рёбра — поперечные.
+ * Layout of an arbitrary graph (nodes may have several parents, cycles happen): a depth-first
+ * walk tree from nodes without incoming edges (in `ids` order), other edges are cross edges.
  */
 export function layoutForest(ids: readonly string[], edges: readonly { source: string; target: string }[], o: Omit<TreeLayout, 'kids' | 'depth'>): Map<string, Placed> {
   const known = new Set(ids);
@@ -80,7 +80,7 @@ export function layoutForest(ids: readonly string[], edges: readonly { source: s
     roots.push(id);
     walk(id, 0);
   }
-  // Циклы без входа извне.
+  // Cycles with no entry from outside.
   for (const id of ids) {
     if (depth.has(id)) continue;
     roots.push(id);

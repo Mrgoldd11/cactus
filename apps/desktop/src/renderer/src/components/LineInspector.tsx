@@ -1,10 +1,10 @@
 /**
- * Инспектор реплики (и диалога): кто говорит, тексты (англ. — правка, рус. — перевод игры),
- * условия и действия с именами из перечислений игры, очки и шанс, что дальше (порядок ответов,
- * связи), где реплика звучит. Всё — командами ядра: одна отмена на правку.
+ * Line (and dialogue) inspector: speaker, texts (English — editable, Russian — game translation),
+ * conditions and effects with names from the game enums, score and chance, what comes next (answer order,
+ * links), where the line is heard. Everything via core commands: one undo per edit.
  *
- * Ванильные реплики правятся так же, как свои: мод хранит разницу поверх игры. «Как в игре»
- * показывает исходную запись, «Вернуть как в игре» убирает правки мода.
+ * Vanilla lines are edited just like your own: the mod stores the difference on top of the game. «As in game»
+ * shows the original record, «Restore as in game» removes the mod edits.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -59,16 +59,16 @@ import { CommitInput } from './widgets.tsx';
 interface Props {
   project: Project;
   sid: string;
-  /** Ветка, из которой реплику выбрали (для копии). */
+  /** The branch the line was selected from (for copy). */
   parent?: string;
   version: number;
   onGo: (sid: string) => void;
-  /** Выбрать реплику (в графе и здесь). */
+  /** Select a line (in the graph and here). */
   onSelect: (sid: string, parent?: string) => void;
   onReport: (err: string | undefined) => void;
 }
 
-/** Поля выбора реплики: [словарь, ключ, enum]. */
+/** Line choice fields: [dictionary, key, enum]. */
 const LINE_FIELDS: readonly { key: string; dict: 'ints' | 'floats'; en?: string }[] = [
   { key: 'score bonus', dict: 'ints' },
   { key: 'chance temporary', dict: 'floats' },
@@ -79,8 +79,8 @@ const LINE_FIELDS: readonly { key: string; dict: 'ints' | 'floats'; en?: string 
 
 const usageCache = new WeakMap<ModContext, DialogEnumUsage>();
 
-/** Какие условия и действия есть в данных (ваниль + зависимости) — считается один раз. */
-/** Подпись поля по ключу строки перевода (ключи собираются из имени поля). */
+/** Which conditions and effects exist in the data (vanilla + dependencies) — computed once. */
+/** Field label by translation string key (keys are built from the field name). */
 function lnText(t: Strings, key: string): string {
   const v = (t as unknown as Record<string, unknown>)[key];
   return typeof v === 'string' ? v : key;
@@ -97,7 +97,7 @@ export function useTranslation(project: Project): TranslationIndex | undefined {
   return useGameTexts(project) ?? undefined;
 }
 
-/** Короткая подпись реплики: текст (рус., если есть) или имя. */
+/** Short line label: text (Russian if present) or name. */
 export function lineCaption(ctx: ModContext, sid: string, tr: TranslationIndex | undefined, lang = 'en'): string {
   const r = ctx.get(sid) ?? ctx.lower(sid);
   if (!r) return sid;
@@ -121,7 +121,7 @@ export function StatusBadge({ status }: { status: string | undefined }): ReactNo
   );
 }
 
-/** Выпадающий список значений enum; `usage` — сколько раз значение есть в данных (используемые первыми). */
+/** Enum value dropdown; `usage` — how many times the value occurs in the data (used ones first). */
 function EnumSelect({ def, value, onChange, usage, testId }: { def: EnumDef; value: number; onChange: (v: number) => void; usage?: Map<number, number>; testId?: string }): ReactNode {
   const t = useT();
   const lang = useLang();
@@ -540,7 +540,7 @@ function ReadOnlyRef({ ctx, r, cat }: { ctx: ModContext; r: Reference; cat: stri
   return <div className="dg-cond mono">{describeDialogAction(ctx, r, cat, lang) ?? r.target}</div>;
 }
 
-/** Ссылки-фильтры и прочие действия (раса, фракция, предметы, отпереть диалог…) — правятся в инспекторе. */
+/** Filter references and other effects (race, faction, items, unlock dialogue…) — edited in the inspector. */
 const OWN_CATEGORIES: ReadonlySet<string> = new Set(['lines', 'conditions', 'effects', 'dialogs']);
 
 function Filters({ ctx, rec, t, onGo }: { ctx: ModContext; rec: GameRecord; t: Strings; onGo: (sid: string) => void }): ReactNode {
@@ -660,7 +660,7 @@ function Next({
   );
 }
 
-/** Запись как в игре (нижние слои): только чтение. */
+/** Record as in game (lower layers): read only. */
 function InGame({ ctx, rec, tr, t }: { ctx: ModContext; rec: GameRecord; tr: TranslationIndex | undefined; t: Strings }): ReactNode {
   const lang = useLang();
   const talker = getEnum(ctx.schema, 'TalkerEnum')!;

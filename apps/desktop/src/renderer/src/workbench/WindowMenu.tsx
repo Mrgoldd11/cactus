@@ -1,6 +1,6 @@
 /**
- * Меню «Окно»: все панели из реестра (галочка — открыта; щелчок открывает или закрывает),
- * готовые раскладки и «Сбросить раскладку».
+ * «Window» menu: all panels from the registry (check mark — open; click opens or closes),
+ * preset layouts and «Reset layout».
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { DockviewApi } from 'dockview-react';
@@ -15,7 +15,7 @@ interface Props {
   onOpen: (panelId: string) => void;
 }
 
-/** Три кнопки раскладок рядом с меню «Окно»: щелчок — сразу переключиться. */
+/** Three layout buttons next to the «Window» menu: click — switch at once. */
 export function LayoutSwitch({ api, preset, onPreset }: Pick<Props, 'api' | 'preset' | 'onPreset'>): ReactNode {
   const t = useT();
   return (

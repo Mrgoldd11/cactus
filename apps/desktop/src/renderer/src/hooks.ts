@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import type { Project } from './project.ts';
 import { errorText } from './i18n.ts';
 
-/** Номер версии проекта: компонент перерисовывается после каждой правки, отмены и сохранения. */
+/** Project version number: the component re-renders after every edit, undo and save. */
 export function useProjectVersion(p: Project): number {
   return useSyncExternalStore(
     (cb) => p.subscribe(cb),
@@ -10,7 +10,7 @@ export function useProjectVersion(p: Project): number {
   );
 }
 
-/** Выполнить правку; ошибку правки (EditError и др.) вернуть текстом. */
+/** Run an edit; return an edit error (EditError etc.) as text. */
 export function tryEdit(fn: () => void): string | undefined {
   try {
     fn();

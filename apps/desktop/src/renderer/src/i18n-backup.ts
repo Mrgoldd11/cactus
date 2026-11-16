@@ -1,4 +1,4 @@
-/** Строки автосохранения, резервных копий и настроек (вливаются в общий словарь `i18n.ts`). */
+/** Autosave, backup and settings strings (merged into the shared dictionary `i18n.ts`). */
 export const backupEn = {
   autosavedAt: (time: string): string => `Autosaved at ${time}`,
   autosaveFailed: (err: string): string => `Autosave failed: ${err}`,

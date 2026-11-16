@@ -1,7 +1,7 @@
 /**
- * Раскладка графа диалога слева направо: столбец — глубина узла, внутри столбца узлы идут в
- * порядке обхода дерева (без обратных рёбер), родитель — по центру своих потомков.
- * Высота узла оценивается по числу строк текста.
+ * Dialogue graph layout from left to right: column — node depth, within a column nodes follow the
+ * tree walk order (without back edges), a parent is centred on its children.
+ * Node height is estimated by the number of text lines.
  */
 import type { DialogueGraph, DialogueGraphNode } from '@kenshi-editor/core';
 import { layoutTree, type Placed } from './tree-layout.ts';
@@ -13,7 +13,7 @@ const COLUMN_GAP = 90;
 const ROW_GAP = 18;
 const CHARS_PER_LINE = 42;
 
-/** Оценка высоты карточки узла (px). */
+/** Estimated node card height (px). */
 export function nodeHeight(n: DialogueGraphNode, maxTexts: number): number {
   let lines = 1;
   for (const t of n.texts.slice(0, maxTexts)) lines += Math.min(4, Math.ceil(Math.max(1, (t.localized ?? t.en).length) / CHARS_PER_LINE));

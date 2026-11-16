@@ -1,12 +1,12 @@
 /**
- * Панель «Моды»: установленные моды (папка `mods/` и мастерская), их место в `mods.cfg`,
- * и какие из них лежат слоями под редактируемым модом («контекст»). Список строится по
- * заголовкам (начало файлов) при открытии панели; сами моды читаются, только когда их
- * включают в контекст — через кэш разобранных файлов, как ваниль.
+ * «Mods» panel: installed mods (the `mods/` folder and the Workshop), their place in `mods.cfg`,
+ * and which of them are layered under the edited mod («context»). The list is built from
+ * headers (file starts) when the panel opens; the mods themselves are read only when they are
+ * added to the context — through the parsed file cache, like vanilla.
  *
- * Порядок загрузки: строки включённых модов можно перетаскивать (или ▲▼), галочка «В игре»
- * включает/выключает мод. Это черновик; «Записать mods.cfg» отправляет его в main, который
- * спрашивает подтверждение (это файл игры), проверяет, что игра закрыта, и оставляет копию.
+ * Load order: rows of enabled mods can be dragged (or ▲▼), the «In game» check mark
+ * enables/disables a mod. This is a draft; «Write mods.cfg» sends it to main, which
+ * asks for confirmation (it is a game file), checks that the game is closed, and keeps a copy.
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { applyModsCfgChange, describeOrderChange, isVanillaLayer, modIndex, placeMod, type ModPlace } from '@kenshi-editor/core';
@@ -17,7 +17,7 @@ import type { Project } from '../../project.ts';
 import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
 
-/** Список модов на игру: читается один раз, «Обновить» читает заново. */
+/** Mod list per game: read once, «Refresh» reads it again. */
 const listCache = new Map<string, Promise<ModEntry[]>>();
 
 export function installedMods(game: GameInstallInfo, refresh = false): Promise<ModEntry[]> {
@@ -51,7 +51,7 @@ export function useInstalledMods(game: GameInstallInfo): { mods: ModEntry[] | un
   return { mods, error, refresh: () => { setTick((n) => n + 1); } };
 }
 
-/** Моды, которые игра грузит: включены и не перекрыты таким же файлом из `mods/`. */
+/** Mods the game loads: enabled and not shadowed by the same file from `mods/`. */
 export function activeMods(mods: readonly ModEntry[]): ModEntry[] {
   return mods.filter((m) => m.enabled && !m.shadowedBy).sort((a, b) => (a.loadIndex ?? 0) - (b.loadIndex ?? 0));
 }
@@ -75,7 +75,7 @@ type Filter = 'all' | 'enabled' | 'context';
 
 type OrderMsg = { text: string; error?: boolean };
 
-/** Порядок `mods.cfg`: записанный (`saved`) и черновик правок (`order`). */
+/** `mods.cfg` order: the written one (`saved`) and the edit draft (`order`). */
 function useModOrder(game: GameInstallInfo): {
   saved: string[] | undefined;
   order: string[] | undefined;
@@ -124,7 +124,7 @@ function ModsPanel(): ReactNode {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [busy, setBusy] = useState(false);
-  // Выбор до «Применить»: имена файлов в контексте.
+  // Choice before «Apply»: file names in the context.
   const current = project.contextMods;
   const [picked, setPicked] = useState<string[]>(current);
   useEffect(() => {
@@ -141,7 +141,7 @@ function ModsPanel(): ReactNode {
       if (filter === 'context' && !pickedSet.has(m.fileName.toLowerCase()) && roleOf(project, m.fileName) !== 'dep') return false;
       return q === '' || `${m.fileName}\n${m.author ?? ''}\n${m.workshopId ?? ''}`.toLowerCase().includes(q);
     });
-    // Места — по черновику порядка (до записи он может отличаться от mods.cfg).
+    // Places follow the order draft (before writing it may differ from mods.cfg).
     const rank = (m: ModEntry): number => {
       const i = order && !m.shadowedBy ? modIndex(order, m.fileName) : -1;
       return i >= 0 ? i : 100_000;
@@ -173,7 +173,7 @@ function ModsPanel(): ReactNode {
         markSaved(order);
         setOrderMsg({ text: t.modsOrderSaved(r.backup ?? '—') });
         refresh();
-        // Зависимости и моды контекста стоят по mods.cfg: пересобрать слои в новом порядке.
+        // Dependencies and context mods follow mods.cfg: rebuild the layers in the new order.
         if (project.bundle.dependencies.length > 1) await reload({ contextMods: project.contextMods });
       } else if (r.stale === true) {
         setOrderMsg({ text: t.modsOrderStale, error: true });

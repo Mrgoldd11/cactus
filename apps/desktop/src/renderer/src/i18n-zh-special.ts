@@ -1,4 +1,4 @@
-/** Китайский (简体中文): специальные редакторы — отношения, сравнение, массовые правки, графы, перепись NPC. */
+/** Chinese (简体中文): special editors — relations, comparison, bulk edits, graphs, NPC census. */
 import type { BulkSentenceArgs, SpecialStrings } from './i18n-special.ts';
 
 const FAC_HELP_ZH: ReadonlyArray<readonly [string, string]> = [
@@ -30,7 +30,7 @@ const GR_VALUES_ZH: Readonly<Record<string, string[]>> = {
 };
 
 export const specialZh: SpecialStrings = {
-  // матрица отношений фракций
+  // faction relation matrix
   panel_factions: '阵营关系',
   factionsHint: '阵营 × 阵营表格：谁是敌人、中立还是盟友。点击单元格可更改数值。',
   facSearch: '筛选阵营…',
@@ -68,7 +68,7 @@ export const specialZh: SpecialStrings = {
   facWhomTip: '对谁（列）。输入名称的一部分，再从列表中选择。',
   facNone: '没有符合筛选条件的阵营。',
   facOpen: '打开记录',
-  // таблицы сравнения
+  // comparison tables
   panel_compare: '物品对比',
   compareHint: '武器、护甲、物品和背包并排比较：可排序、筛选，并直接在单元格中编辑。',
   cmpType: '类型',
@@ -228,7 +228,7 @@ export const specialZh: SpecialStrings = {
   bulkAfter: '之后',
   bulkCap: (n: number) => `显示前 ${n} 条；“应用”会修改所有勾选的行。`,
   bulkSkipped: (n: number) => `已跳过：${n}`,
-  // графы: исследования, крафт, состав отрядов и городов
+  // graphs: research, crafting, squad and town make-up
   panel_graphs: '关系图',
   graphsHint: '研究树、制作（工作台 → 能制作什么 → 用什么材料）、小队与城镇构成。点击节点可查看详情、跳转和链接数值。',
   grResearch: '研究',
@@ -274,7 +274,7 @@ export const specialZh: SpecialStrings = {
   grPick: '点击节点：查看详情、跳转到记录和“游戏中的位置”、链接数值。',
   grMissing: '没有这条记录',
   grValue: (i: number) => `值 ${i + 1}`,
-  // Перепись NPC
+  // NPC census
   panel_census: 'NPC 普查',
   censusHint: '按阵营和城镇列出所有角色：谁最常遇到、谁没有对话、谁已经在 Mod 中',
   ceByFaction: '按阵营',

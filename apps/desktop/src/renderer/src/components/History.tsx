@@ -1,7 +1,7 @@
 /**
- * История правок поверх истории ядра (наборы изменений): кружочки ↶ ↷ в панели команд со
- * списком последних шагов и панель «История». Второй истории нет — всё читается из
- * `ctx.history()`, переход к шагу — `ctx.undoTo / redoTo / goToStep`.
+ * Edit history on top of the core history (change sets): ↶ ↷ round buttons in the command bar with
+ * a list of the latest steps, and the «History» panel. There is no second history — everything is read from
+ * `ctx.history()`, going to a step — `ctx.undoTo / redoTo / goToStep`.
  */
 import type { Lang } from '../../../shared/api.ts';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -29,7 +29,7 @@ export interface Step {
   rollback: boolean;
 }
 
-/** Шаг истории с названием на языке интерфейса. */
+/** History step with a title in the UI language. */
 export function stepOf(project: Project, cs: Changeset, lang: Lang): Step {
   const tr = translations.get(project);
   const d = describeChangeset(project.ctx, cs, tr ? { translation: tr } : {});
@@ -61,7 +61,7 @@ interface ButtonsProps {
   onAll: () => void;
 }
 
-/** ↶ ▾ ↷ ▾: круглые кнопки отмены и повтора; ▾ или правый щелчок — список шагов. */
+/** ↶ ▾ ↷ ▾: round undo and redo buttons; ▾ or right-click — list of steps. */
 export function UndoRedoButtons({ project, status, onAll }: ButtonsProps): ReactNode {
   const t = useT();
   const lang = useLang();
@@ -202,7 +202,7 @@ export function UndoRedoButtons({ project, status, onAll }: ButtonsProps): React
   );
 }
 
-/** Полный список шагов: где вы сейчас, отменённые шаги серые, щелчок — перейти к шагу. */
+/** Full list of steps: where you are now, undone steps grey, click — go to the step. */
 export function HistoryList({ project, status }: { project: Project; status: (m: StatusMessage) => void }): ReactNode {
   const t = useT();
   const lang = useLang();

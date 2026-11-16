@@ -1,17 +1,17 @@
 /**
- * Рельеф всей карты: квадродерево тайлов (`tileBounds` из ядра), уровень выбирается по
- * расстоянию до камеры. Правило без щелей и наложений: тайл делится на четыре, только когда
- * все четыре уже загружены, иначе рисуется он сам (и заказываются дети). Края тайлов
- * опущены «юбкой» — щелей между соседями разного уровня не видно.
+ * Terrain of the whole map: a quadtree of tiles (`tileBounds` from the core), the level is chosen by
+ * distance to the camera. Rule without gaps or overlaps: a tile splits into four only when
+ * all four are already loaded, otherwise it is drawn itself (and the children are requested). Tile edges
+ * are lowered by a «skirt» — no gaps are visible between neighbours of different levels.
  *
- * Высоты читает main (`readTerrainTile`), вершины и нормали считает фоновый поток. Кэш
- * тайлов ограничен числом; выгружаются самые давно не нужные.
+ * Heights are read by main (`readTerrainTile`), vertices and normals are computed by a background thread. The tile
+ * cache is limited by count; the least recently needed ones are unloaded.
  *
- * Цвет земли — `overlaymaps/colour.I.J.png` (8×8 картинок 2048²). Крупные тайлы (уровни 0–2)
- * берут общий обзор 1024² из уменьшенных картинок; мелкие — свою картинку целиком (уровни 3–4
- * — 512², дальше — полная, число полных ограничено).
+ * Ground colour — `overlaymaps/colour.I.J.png` (8×8 images of 2048²). Large tiles (levels 0–2)
+ * take a shared 1024² overview from downscaled images; small ones — their whole own image (levels 3–4
+ * — 512², beyond that — full size, the number of full-size ones is limited).
  *
- * Вблизи (тайлы от уровня 5) на цвет ложится рисунок текстур биома тайла (`biomes.ts`).
+ * Up close (tiles from level 5) the tile's biome texture pattern lies on the colour (`biomes.ts`).
  */
 import * as THREE from 'three';
 import { COLOUR_TILES, TERRAIN_MAX_LEVEL, TILE_CELLS, TILE_SAMPLES, WORLD_HALF, sampleTile, tileBounds, type TileBounds } from '@kenshi-editor/core';
@@ -20,13 +20,13 @@ import type { WorkerPool } from './protocol.ts';
 import { BIOME_MAP_PATH, averageColour, detailMaterial, type Biome, type DetailTexture } from './biomes.ts';
 
 export interface TerrainQuality {
-  /** Тайл делится, если камера ближе `split × сторона`. */
+  /** A tile splits if the camera is closer than `split × side`. */
   split: number;
-  /** Наибольший уровень (до 7 — пиксель карты высот). */
+  /** Highest level (up to 7 — a heightmap pixel). */
   maxLevel: number;
-  /** Сколько тайлов держать в памяти. */
+  /** How many tiles to keep in memory. */
   cache: number;
-  /** Сколько картинок цвета держать в полном размере. */
+  /** How many colour images to keep at full size. */
   fullColour: number;
 }
 
@@ -43,15 +43,15 @@ interface Tile {
   max: number;
   used: number;
   started?: boolean;
-  /** Биом тайла (`index`), null — нет или карта ещё не прочитана. */
+  /** Tile biome (`index`), null — none or the map is not read yet. */
   biome?: number | null;
 }
 
 const OVERVIEW = 1024;
 const COLOUR_PATH = (i: number, j: number): string => `data/newland/land/overlaymaps/colour.${i}.${j}.png`;
-/** С какого уровня тайл лежит в одной картинке цвета. */
+/** From which level a tile lies in a single colour image. */
 const COLOUR_LEVEL = Math.log2(COLOUR_TILES);
-/** С какого уровня на землю ложится рисунок биома. */
+/** From which level the biome pattern lies on the ground. */
 const DETAIL_LEVEL = COLOUR_LEVEL + 2;
 const BIOME_MAP = 1024;
 
@@ -67,14 +67,14 @@ export class TerrainLod {
   private readonly detailMats = new Map<string, { mat: THREE.MeshLambertMaterial; used: number; texs: THREE.Texture[] }>();
   private readonly detailTex = new Map<string, { tex?: DetailTexture; used: number; loading: boolean }>();
   private biomeMap: Uint8Array | undefined;
-  /** Сколько тайлов нарисовано с рисунком биома. */
+  /** How many tiles are drawn with the biome pattern. */
   detailed = 0;
   private inflight = 0;
   private frame = 0;
   private overviewDone = 0;
   private disposed = false;
   quality: TerrainQuality;
-  /** Сколько тайлов нарисовано в последнем кадре и треугольников в них. */
+  /** How many tiles were drawn in the last frame and the triangles in them. */
   drawn = 0;
   missing = false;
   onChange: () => void = () => undefined;
@@ -89,7 +89,7 @@ export class TerrainLod {
     this.quality = quality;
     this.biomes = biomes;
     this.group.name = 'terrain';
-    // Общий индекс сетки и юбки для всех тайлов.
+    // Shared grid and skirt index for all tiles.
     const n = TILE_SAMPLES;
     const idx: number[] = [];
     for (let r = 0; r < TILE_CELLS; r++)
@@ -140,7 +140,7 @@ export class TerrainLod {
     }
   }
 
-  /** Биом, которого в тайле больше всего (по сетке 8×8 точек). */
+  /** The biome most present in the tile (on an 8×8 point grid). */
   private biomeOf(t: Tile): number | null {
     if (t.biome !== undefined) return t.biome;
     const map = this.biomeMap;
@@ -166,7 +166,7 @@ export class TerrainLod {
     return best;
   }
 
-  /** Текстура рисунка земли; undefined — ещё грузится (или её нет). */
+  /** Ground pattern texture; undefined — still loading (or none). */
   private detailTexture(path: string): DetailTexture | undefined {
     const k = path.toLowerCase();
     const have = this.detailTex.get(k);
@@ -205,7 +205,7 @@ export class TerrainLod {
     return undefined;
   }
 
-  /** Цвет + рисунок биома; undefined — рисунка нет или он ещё грузится. */
+  /** Colour + biome pattern; undefined — no pattern or it is still loading. */
   private withDetail(colourKey: string, colour: THREE.MeshLambertMaterial, t: Tile): THREE.Material | undefined {
     const index = this.biomeOf(t);
     const biome = index === null ? undefined : this.biomes.get(index);
@@ -225,7 +225,7 @@ export class TerrainLod {
     return mat;
   }
 
-  /** Обзор цвета: сначала `distant.png`, потом 64 картинки, уменьшенные в фоновом потоке. */
+  /** Colour overview: first `distant.png`, then 64 images downscaled in a background thread. */
   private async loadOverview(): Promise<void> {
     const ctx = this.overviewCanvas.getContext('2d')!;
     try {
@@ -239,7 +239,7 @@ export class TerrainLod {
         this.onChange();
       }
     } catch {
-      // нет — остаётся ровный цвет
+      // none — a flat colour stays
     }
     const cell = OVERVIEW / COLOUR_TILES;
     const queue: [number, number][] = [];
@@ -251,12 +251,12 @@ export class TerrainLod {
           const bytes = await window.kedit.readGameAsset(this.game, COLOUR_PATH(i, j));
           if (!bytes) continue;
           const img = await this.pool.run<'png'>({ type: 'png', bytes, size: cell }, [bytes.buffer]);
-          // `colour.I.J`: I — столбец, J — строка (края соседних картинок совпадают именно так).
+          // `colour.I.J`: I — column, J — row (the edges of neighbouring images match exactly this way).
           ctx.putImageData(new ImageData(new Uint8ClampedArray(img.rgba.buffer as ArrayBuffer), img.width, img.height), i * cell, j * cell);
           this.overviewTex.needsUpdate = true;
           this.onChange();
         } catch {
-          // пропускаем картинку
+          // skip the image
         }
         this.overviewDone++;
       }
@@ -268,7 +268,7 @@ export class TerrainLod {
     return this.overviewDone / (COLOUR_TILES * COLOUR_TILES);
   }
 
-  /** Материал с картинкой цвета для клетки карты (x, y) 0..7; undefined — ещё грузится. */
+  /** Material with a colour image for map cell (x, y) 0..7; undefined — still loading. */
   private colourMaterial(x: number, y: number, full: boolean): THREE.MeshLambertMaterial | undefined {
     const key = `${x}.${y}.${full ? 'f' : 's'}`;
     const have = this.colourMats.get(key);
@@ -291,7 +291,7 @@ export class TerrainLod {
           tex.anisotropy = 8;
           tex.flipY = false;
           tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-          // UV тайла — общие на весь мир (0..1); картинка занимает 1/8 по каждой оси.
+          // Tile UVs are shared across the whole world (0..1); an image takes 1/8 along each axis.
           tex.repeat.set(COLOUR_TILES, COLOUR_TILES);
           tex.offset.set(-x, -y);
           tex.needsUpdate = true;
@@ -299,7 +299,7 @@ export class TerrainLod {
           this.trimColour();
           this.onChange();
         } catch {
-          // нет картинки — остаётся обзор
+          // no image — the overview stays
         } finally {
           this.colourLoading.delete(key);
         }
@@ -327,7 +327,7 @@ export class TerrainLod {
     drop(false, 24);
   }
 
-  /** Рисунки земли: давно не нужные материалы — прочь; текстур держим не больше 40. */
+  /** Ground patterns: materials not needed for a long time go away; at most 40 textures are kept. */
   private trimDetail(): void {
     for (const [k, d] of [...this.detailMats])
       if (this.frame - d.used > 600) {
@@ -345,7 +345,7 @@ export class TerrainLod {
     }
   }
 
-  /** UV тайла в долях всего мира. */
+  /** Tile UV as fractions of the whole world. */
   private uvOf(level: number, tx: number, ty: number): [number, number, number, number] {
     const n = 2 ** level;
     return [tx / n, ty / n, 1 / n, 1 / n];
@@ -424,7 +424,7 @@ export class TerrainLod {
     })();
   }
 
-  /** Расстояние от камеры до коробки тайла. */
+  /** Distance from the camera to the tile box. */
   private distance(t: Tile, cam: THREE.Vector3): number {
     const dx = Math.max(t.b.x - cam.x, 0, cam.x - (t.b.x + t.b.size));
     const dz = Math.max(t.b.z - cam.z, 0, cam.z - (t.b.z + t.b.size));
@@ -432,7 +432,7 @@ export class TerrainLod {
     return Math.hypot(dx, dy, dz);
   }
 
-  /** Выбрать тайлы под камеру и заказать нужные. Вызывать каждый кадр (дёшево). */
+  /** Choose tiles for the camera and request the needed ones. Call every frame (cheap). */
   update(camera: THREE.Camera): void {
     this.frame++;
     const cam = camera.position;
@@ -460,7 +460,7 @@ export class TerrainLod {
     };
     visit(this.tile(0, 0, 0));
 
-    // Заказ: сначала ближние, не больше 6 одновременно.
+    // Requests: nearest first, at most 6 at a time.
     want.sort((a, b) => a.d - b.d);
     for (const { t } of want) {
       if (this.inflight >= 6) break;
@@ -489,7 +489,7 @@ export class TerrainLod {
     }
   }
 
-  /** Биом (`index`) в точке по карте биомов; undefined — карта ещё не прочитана или вне мира. */
+  /** Biome (`index`) at a point by the biome map; undefined — map not read yet or outside the world. */
   biomeAt(x: number, z: number): number | undefined {
     const map = this.biomeMap;
     if (!map || Math.abs(x) >= WORLD_HALF || Math.abs(z) >= WORLD_HALF) return undefined;
@@ -499,8 +499,8 @@ export class TerrainLod {
   }
 
   /**
-   * Высота земли в точке по самому подробному загруженному тайлу; undefined — ещё нет.
-   * `minLevel` — не грубее этого уровня (для того, что ставится на землю вблизи).
+   * Ground height at a point by the most detailed loaded tile; undefined — none yet.
+   * `minLevel` — not coarser than this level (for things placed on the ground close up).
    */
   heightAt(x: number, z: number, minLevel = 0): number | undefined {
     if (Math.abs(x) > WORLD_HALF || Math.abs(z) > WORLD_HALF) return undefined;
@@ -514,7 +514,7 @@ export class TerrainLod {
     return undefined;
   }
 
-  /** Карта цвета всей земли (обзор 1024²; u — X, v — Z мира от −WORLD_HALF до +WORLD_HALF). */
+  /** Colour map of the whole ground (1024² overview; u — X, v — world Z from −WORLD_HALF to +WORLD_HALF). */
   get colourMap(): THREE.Texture {
     return this.overviewTex;
   }

@@ -1,9 +1,9 @@
 /**
- * Панель «Перепись NPC»: все персонажи, сгруппированные по фракции или по городу (вес группы —
- * сколько городов, где живут её персонажи), фильтр уникальные / шаблоны / без пакета диалогов /
- * без клик-диалога / уже в моде. Переходы: к записи, в проигрыватель разговора, в «Где в игре».
- * Правка: дать пакет диалогов выбранным персонажам — одна отмена. Подсчёт — в фоне после
- * открытия панели.
+ * «NPC census» panel: all characters, grouped by faction or by town (group weight —
+ * how many towns its characters live in), filter unique / templates / no dialogue package /
+ * no click dialogue / already in the mod. Jumps: to the record, to the conversation player, to «Where in game».
+ * Edit: give a dialogue package to the selected characters — one undo. Counting runs in the background after
+ * the panel opens.
  */
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { addDialoguePackage, censusNoPackage, npcCensus, type Census, type CensusChar } from '@kenshi-editor/core';
@@ -13,7 +13,7 @@ import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
 import { Empty } from './common.tsx';
 
-/** Строк таблицы за раз. */
+/** Table rows at a time. */
 const MAX_ROWS = 500;
 
 type GroupBy = 'faction' | 'town';
@@ -35,7 +35,7 @@ function CensusPanel(): ReactNode {
   const version = useProjectVersion(project);
   const ctx = project.ctx;
 
-  // Подсчёт после первой отрисовки панели (и после каждой правки) — панель открывается сразу.
+  // Counting after the panel's first render (and after every edit) — the panel opens at once.
   const [census, setCensus] = useState<{ version: number; data: Census } | undefined>();
   useEffect(() => {
     const timer = setTimeout(() => {

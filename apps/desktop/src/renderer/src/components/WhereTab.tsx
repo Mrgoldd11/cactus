@@ -1,7 +1,7 @@
 /**
- * Вкладка «Где в игре»: цепочка обратных ссылок от записи до места в мире (предмет ← список
- * торговца ← отряд ← город) с координатами из файлов уровня. Каждый шаг пути — ссылка на
- * запись с категорией. Мир читается при первом открытии вкладки; до этого — цепочка без координат.
+ * «Where in game» tab: a chain of back references from the record to a place in the world (item ← trader
+ * list ← squad ← town) with coordinates from the level files. Each path step is a link to a
+ * record with its category. The world is read when the tab is first opened; until then — the chain without coordinates.
  */
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {

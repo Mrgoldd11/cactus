@@ -1,8 +1,8 @@
 /**
- * Меню окна на языке интерфейса. Сочетания правки (Ctrl+Z, Ctrl+S и т. п.) обрабатывает само
- * окно — по физической клавише, на любой раскладке (`renderer/src/keys.ts`); пункты «Правка»
- * здесь — стандартные роли для полей ввода. Перезагрузки окна в меню нет: она теряет
- * несохранённые изменения.
+ * Window menu in the UI language. Edit shortcuts (Ctrl+Z, Ctrl+S etc.) are handled by the
+ * window itself — by physical key, on any keyboard layout (`renderer/src/keys.ts`); the «Edit» items
+ * here are standard roles for input fields. There is no window reload in the menu: it loses
+ * unsaved changes.
  */
 import { join } from 'node:path';
 import { app, BrowserWindow, clipboard, dialog, Menu, shell, type MenuItemConstructorOptions } from 'electron';
@@ -32,9 +32,9 @@ function about(lang: Lang): void {
 }
 
 /**
- * Как запустить MCP-сервер этой копии программы. В собранной версии — тот же exe в режиме Node
- * (`ELECTRON_RUN_AS_NODE=1`) и `resources/mcp/kenshi-mcp.mjs`: отдельный Node не нужен.
- * В режиме разработки — `node packages/mcp/bin/kenshi-mcp.js`.
+ * How to start the MCP server of this program copy. In the packaged build — the same exe in Node mode
+ * (`ELECTRON_RUN_AS_NODE=1`) and `resources/mcp/kenshi-mcp.mjs`: no separate Node needed.
+ * In dev mode — `node packages/mcp/bin/kenshi-mcp.js`.
  */
 export function mcpLaunch(): { command: string; args: string[]; env?: Record<string, string> } {
   if (app.isPackaged) return { command: process.execPath, args: [join(process.resourcesPath, 'mcp', 'kenshi-mcp.mjs')], env: { ELECTRON_RUN_AS_NODE: '1' } };

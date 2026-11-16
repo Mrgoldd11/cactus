@@ -1,8 +1,8 @@
 /**
- * Проигрыватель разговора: персонаж + событие → какие диалоги игра рассматривает, какой выбирает и
- * почему; дальше шаг за шагом — реплика NPC, ответы игрока кнопками. «Как будто»: у любой записи с
- * условиями можно отметить, выполнены ли они, — выбор игры пересчитывается сразу.
- * Правило выбора — из кода игры (`playConversation` в ядре, на `chooseOdds`).
+ * Conversation player: character + event → which dialogues the game considers, which it picks and
+ * why; then step by step — the NPC line, player answers as buttons. «What if»: for any record with
+ * conditions you can mark whether they hold — the game's choice is recomputed at once.
+ * The selection rule comes from the game code (`playConversation` in the core, on `chooseOdds`).
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import {
@@ -42,7 +42,7 @@ interface Props {
 
 const pct = (p: number): string => `${String(Math.round(p * 100))}%`;
 
-/** Условия записи одной строкой — как в графе (условия и фильтры). */
+/** A record's conditions on one line — as in the graph (conditions and filters). */
 function conditionsOf(ctx: ModContext, sid: string, tr: TranslationIndex | undefined, lang: string): string[] {
   const n = buildDialogueGraph(ctx, sid, { maxNodes: 1, lang, ...(tr ? { translation: tr } : {}) }).nodes[0];
   const out = n ? [...n.conditions, ...n.filters] : [];
@@ -84,7 +84,7 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
     return out.slice(0, 5000);
   }, [ctx, version]);
 
-  /** Ответы, данные до шага `i`: при перевыборе на шаге `i` дальнейшие ответы теряют смысл. */
+  /** Answers given before step `i`: on a re-pick at step `i` the later answers lose their meaning. */
   const answersBefore = (steps: readonly PlayStep[], i: number): string[] => steps.slice(0, i).flatMap((s) => (s.answered !== undefined ? [s.answered] : []));
 
   const toggle = (id: string, passes: boolean): void => {
@@ -413,7 +413,7 @@ function whyText(o: PlayOption, t: Strings): string {
   }
 }
 
-/** Пример к правилу выбора на выбранном персонаже: сколько диалогов, что выберет игра при условиях и без. */
+/** Example of the selection rule on the chosen character: how many dialogues, what the game picks with and without conditions. */
 export function TalkExample({ project, sid, version }: { project: Project; sid: string | undefined; version: number }): ReactNode {
   const t = useT();
   const lang = useLang();

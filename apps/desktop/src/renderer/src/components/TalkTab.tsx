@@ -1,8 +1,8 @@
 /**
- * Вкладка «Разговор» у CHARACTER: какие диалоги игра рассматривает на событие (по клику — 1),
- * откуда они берутся (персонаж, его пакет, пакеты отряда, пакет фракции), их очки, условия и
- * действия, какой выберет игра и с чего начнётся разговор. Правило выбора — точное, из кода игры
- * (то же, что `kedit talk`); кнопка «Как игра выбирает» показывает его простыми словами.
+ * «Conversation» tab on CHARACTER: which dialogues the game considers for an event (on click — 1),
+ * where they come from (character, its package, squad packages, faction package), their scores, conditions and
+ * effects, which one the game picks and where the conversation starts. The selection rule is exact, from the game code
+ * (same as `kedit talk`); the «How the game chooses» button explains it in plain words.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -328,7 +328,7 @@ function LineView({ l, onGo }: { l: TalkLine; onGo: (sid: string) => void }): Re
   );
 }
 
-/** Кнопка «Как игра выбирает»: окошко с правилами; закрывается повторным кликом, кликом мимо или Esc. */
+/** «How the game chooses» button: a popup with the rules; closes on a second click, a click outside or Esc. */
 function RulesButton(): ReactNode {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -369,7 +369,7 @@ function RulesButton(): ReactNode {
   );
 }
 
-/** Правило выбора простыми словами и что значат пометки (окошко «Как игра выбирает» и панель «Как это работает»). */
+/** The selection rule in plain words and what the marks mean (the «How the game chooses» popup and the «How it works» panel). */
 export function TalkRulesBody(): ReactNode {
   const t = useT();
   return (

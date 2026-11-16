@@ -1,6 +1,6 @@
 /**
- * Мелкие элементы: поле ввода с подтверждением (Enter/выход из поля — применить, Esc —
- * отменить) и модальное окно.
+ * Small elements: an input with confirmation (Enter/leaving the field — apply, Esc —
+ * cancel) and a modal window.
  */
 import { useEffect, useState, type ReactNode } from 'react';
 

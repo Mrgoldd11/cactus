@@ -1,11 +1,11 @@
 /**
- * Камера-полёт как в Unity / Blender:
- *  - правая или левая кнопка + движение мыши — осмотреться;
- *  - средняя кнопка — сдвиг; колесо — вперёд / назад;
- *  - WASD — полёт, Q / E — вниз / вверх, Shift — быстрее (на любой раскладке — по `letterOf`);
- *  - скорость растёт с высотой над землёй;
- *  - `flyTo` — плавный перелёт к точке (клавиша F в окне).
- * Левый клик без движения остаётся щелчком (выбор объекта) — его ловит окно.
+ * Fly camera as in Unity / Blender:
+ *  - right or left button + mouse movement — look around;
+ *  - middle button — pan; wheel — forward / back;
+ *  - WASD — fly, Q / E — down / up, Shift — faster (on any layout — by `letterOf`);
+ *  - speed grows with height above the ground;
+ *  - `flyTo` — smooth flight to a point (F key in the view).
+ * A left click without movement stays a click (object selection) — the view catches it.
  */
 import * as THREE from 'three';
 import { letterOf, isTypingIn } from '../../keys.ts';
@@ -21,12 +21,12 @@ export class FlyControls {
   private fast = false;
   private drag: { button: number; x: number; y: number; moved: boolean } | undefined;
   private flight: { from: THREE.Vector3; to: THREE.Vector3; yaw0: number; yaw1: number; pitch0: number; pitch1: number; t: number; dur: number } | undefined;
-  /** Высота земли под точкой (для скорости и чтобы не уйти под землю). */
+  /** Ground height under a point (for speed and to not go below ground). */
   groundAt: (x: number, z: number) => number | undefined = () => undefined;
   onChange: () => void = () => undefined;
-  /** Множитель скорости (настройка окна). */
+  /** Speed multiplier (view setting). */
   speed = 1;
-  /** Указатель занят другим (гизмо под мышью) — не осматриваемся. */
+  /** The pointer is busy with something else (gizmo under the mouse) — do not look around. */
   blocked: () => boolean = () => false;
   private readonly off: (() => void)[] = [];
 
@@ -62,7 +62,7 @@ export class FlyControls {
       }
     });
     on(window, 'pointerup', () => {
-      // `moved` читает окно в click — сбрасываем после него.
+      // The view reads `moved` in click — reset it after that.
       setTimeout(() => (this.drag = undefined), 0);
     });
     on(
@@ -71,7 +71,7 @@ export class FlyControls {
       (e) => {
         e.preventDefault();
         this.flight = undefined;
-        // Шаг — доля высоты над землёй: к земле подлетаем плавно, не проскакивая её.
+        // Step is a fraction of the height above ground: we approach the ground smoothly, without overshooting it.
         const step = this.step() * 3 * (e.deltaY < 0 ? 1 : -1) * Math.min(3, Math.abs(e.deltaY) / 100);
         this.camera.position.addScaledVector(this.forward(), step);
         this.keepAboveGround();
@@ -98,7 +98,7 @@ export class FlyControls {
     this.apply();
   }
 
-  /** Был ли последний нажатый указатель перетаскиванием (тогда это не щелчок). */
+  /** Whether the last pressed pointer was a drag (then it is not a click). */
   get dragged(): boolean {
     return this.drag?.moved ?? false;
   }
@@ -118,7 +118,7 @@ export class FlyControls {
     this.onChange();
   }
 
-  /** Шаг движения: быстрее высоко над землёй. */
+  /** Movement step: faster high above the ground. */
   private step(): number {
     const g = this.groundAt(this.camera.position.x, this.camera.position.z) ?? 0;
     const above = Math.max(5, this.camera.position.y - g);
@@ -139,7 +139,7 @@ export class FlyControls {
     if (g !== undefined && this.camera.position.y < g + 15) this.camera.position.y = g + 15;
   }
 
-  /** Поставить камеру: позиция и точка, куда смотреть. */
+  /** Place the camera: position and the point to look at. */
   set(position: THREE.Vector3, look: THREE.Vector3): void {
     this.camera.position.copy(position);
     const d = look.clone().sub(position).normalize();
@@ -149,7 +149,7 @@ export class FlyControls {
     this.apply();
   }
 
-  /** Плавно перелететь так, чтобы точка `look` была видна с расстояния `dist`. */
+  /** Fly smoothly so that point `look` is seen from distance `dist`. */
   flyTo(look: THREE.Vector3, dist: number): void {
     const dir = this.forward();
     if (dir.y > -0.35) dir.set(dir.x, -0.6, dir.z).normalize();
@@ -164,14 +164,14 @@ export class FlyControls {
     this.onChange();
   }
 
-  /** Шаг кадра; true — камера сдвинулась. */
+  /** Frame step; true — the camera moved. */
   update(dt: number): boolean {
     const f = this.flight;
     if (f) {
       f.t = Math.min(1, f.t + dt / f.dur);
       const k = f.t < 0.5 ? 2 * f.t * f.t : 1 - (-2 * f.t + 2) ** 2 / 2;
       this.camera.position.lerpVectors(f.from, f.to, k);
-      // Дальний перелёт — с подъёмом, чтобы видеть, куда летим.
+      // A long flight goes up first, so you can see where you are flying.
       this.camera.position.y += Math.sin(Math.PI * k) * Math.min(20000, f.from.distanceTo(f.to) * 0.25);
       this.yaw = f.yaw0 + (f.yaw1 - f.yaw0) * k;
       this.pitch = f.pitch0 + (f.pitch1 - f.pitch0) * k;

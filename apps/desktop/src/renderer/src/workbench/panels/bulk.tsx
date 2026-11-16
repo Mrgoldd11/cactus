@@ -1,7 +1,7 @@
 /**
- * Панель «Массовые правки»: записи одного типа по условиям полей → одна операция над полем
- * (задать, умножить, прибавить, заменить текст, в том числе по regex). Таблица «было → станет»
- * пересчитывается сразу; «Применить» — одна правка (одна отмена на всю пачку).
+ * «Bulk edits» panel: records of one type by field conditions → one operation on a field
+ * (set, multiply, add, replace text, including by regex). The «was → will be» table
+ * is recomputed at once; «Apply» — one edit (one undo for the whole batch).
  */
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { applyBulk, bulkFieldValue, bulkSelect, BULK_KINDS, BULK_REF_KINDS, restrictBulk, enumValue, fieldEnum, COMPARE_TYPES, DICT_FOR_KIND, BULK_NAME_FIELD, parseFieldFilter, previewBulk, type BulkKind, type BulkPreview, type FieldDef, type FieldFilter, type ModContext } from '@kenshi-editor/core';
@@ -11,13 +11,13 @@ import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
 import { Empty } from './common.tsx';
 
-/** Строк предпросмотра за раз (применяется всё). */
+/** Preview rows at a time (everything is applied). */
 const MAX_ROWS = 500;
-/** Подходящих записей, пока операция не заполнена, — сколько можно сортировать и листать. */
+/** Matching records while the operation is not filled in — how many can be sorted and scrolled. */
 const SAMPLE_POOL = 2000;
-/** Строк «подходящих записей» на экране. */
+/** «Matching records» rows on screen. */
 const SAMPLE_ROWS = 20;
-/** Колонок со значениями полей из условий фильтра. */
+/** Columns with field values from the filter conditions. */
 const MAX_COND_COLS = 3;
 
 interface SortState {
@@ -25,7 +25,7 @@ interface SortState {
   dir: 1 | -1;
 }
 
-/** Числа сравниваются как числа, остальное — как текст; пусто всегда в конце. */
+/** Numbers are compared as numbers, the rest as text; empty is always last. */
 function sortRows<T>(rows: T[], sort: SortState | undefined, get: (row: T, col: string) => string): T[] {
   if (!sort) return rows;
   return [...rows].sort((a, b) => {
@@ -38,9 +38,9 @@ function sortRows<T>(rows: T[], sort: SortState | undefined, get: (row: T, col: 
     return d * sort.dir;
   });
 }
-/** Поле считается «классом», если у записей типа не больше стольких разных значений. */
+/** A field counts as a «class» if the records of the type have at most this many distinct values. */
 const MAX_CLASS_VALUES = 24;
-/** Записей типа, просматриваемых при подсчёте классов. */
+/** Records of the type scanned when counting classes. */
 const SCAN_LIMIT = 3000;
 
 interface ValueGroup {
@@ -56,13 +56,13 @@ function parseFilters(text: string): FieldFilter[] {
     .map(parseFieldFilter);
 }
 
-/** Подпись поля: «цена (value)» по-русски, иначе просто ключ. */
+/** Field label: «цена (value)» in Russian, otherwise just the key. */
 function fieldText(t: Strings, key: string): string {
   const ru = t.bulkFieldRu[key];
   return ru ? `${ru} (${key})` : key;
 }
 
-/** Скалярные поля типа по схеме: числа, флаги, текст. */
+/** Scalar fields of the type by schema: numbers, flags, text. */
 function scalarDefs(ctx: ModContext, type: string): FieldDef[] {
   const ts = ctx.schema?.types.get(type);
   return [...(ts?.fields.values() ?? [])].filter((f) => {
@@ -71,13 +71,13 @@ function scalarDefs(ctx: ModContext, type: string): FieldDef[] {
   });
 }
 
-/** Списки ссылок типа по схеме (оружие, предметы в списке торговца…). */
+/** Reference lists of the type by schema (weapons, items in a trader list…). */
 function refDefs(ctx: ModContext, type: string): FieldDef[] {
   const ts = ctx.schema?.types.get(type);
   return [...(ts?.fields.values() ?? [])].filter((f) => f.kind === 'reference');
 }
 
-/** Поля, подходящие операции: числа — «умножить/прибавить», текст — «заменить», любые — «задать», списки — «ссылка». */
+/** Fields that suit the operation: numbers — «multiply/add», text — «replace», any — «set», lists — «reference». */
 function namesFor(kind: BulkKind, defs: readonly FieldDef[], refs: readonly FieldDef[] = []): string[] {
   if ((BULK_REF_KINDS as readonly string[]).includes(kind)) return refs.map((f) => f.name);
   const dict = (f: FieldDef): string | undefined => DICT_FOR_KIND[f.kind];
@@ -111,17 +111,17 @@ function BulkPanel(): ReactNode {
   const [regex, setRegex] = useState(false);
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [value, setValue] = useState('');
-  // Конструктор условия фильтра: поле, сравнение, значение.
+  // Filter condition builder: field, comparison, value.
   const [cField, setCField] = useState('');
   const [cOp, setCOp] = useState('=');
   const [cValue, setCValue] = useState('');
 
   const [refValues, setRefValues] = useState('');
-  // Записи, которым галочку сняли (их «Применить» не тронет); сортировка таблицы.
+  // Records whose check mark was cleared («Apply» leaves them alone); table sorting.
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
   const [sort, setSort] = useState<SortState | undefined>(undefined);
 
-  // Поля типа (скалярные поля схемы и списки ссылок) — для списков и подсказок.
+  // Fields of the type (scalar schema fields and reference lists) — for lists and hints.
   const fieldDefs = useMemo(() => scalarDefs(ctx, type), [ctx, type]);
   const refFieldDefs = useMemo(() => refDefs(ctx, type), [ctx, type]);
   const isRefKind = (BULK_REF_KINDS as readonly string[]).includes(kind);
@@ -141,7 +141,7 @@ function BulkPanel(): ReactNode {
     setKind(next);
     if ((fieldDefs.length > 0 || refFieldDefs.length > 0) && !namesFor(next, fieldDefs, refFieldDefs).includes(field)) setField('');
   };
-  // Классы: enum-поля типа с небольшим числом значений — «skill category: 0 (Katana, Nodachi…), 1 (…)».
+  // Classes: enum fields of the type with few values — «skill category: 0 (Katana, Nodachi…), 1 (…)».
   const valueGroups = useMemo((): ValueGroup[] => {
     const enumFields = fieldDefs.filter((f) => f.kind === 'enum');
     if (enumFields.length === 0) return [];
@@ -176,7 +176,7 @@ function BulkPanel(): ReactNode {
     setFilter((f) => (f.trim() === '' ? name : `${f.trim().replace(/;$/, '')}; ${name}`));
   };
 
-  // Условие по полю: обычное поле, список ссылок (длина / ссылка на запись) или Ref (входящие ссылки).
+  // Field condition: a plain field, a reference list (length / reference to a record) or Ref (incoming references).
   const cGroup = valueGroups.find((g) => g.field === cField);
   const cBool = fieldDefs.find((f) => f.name === cField)?.kind === 'bool';
   const cClass: 'scalar' | 'reflist' | 'refcount' = cField === 'Ref' ? 'refcount' : refFieldDefs.some((f) => f.name === cField) ? 'reflist' : 'scalar';
@@ -197,7 +197,7 @@ function BulkPanel(): ReactNode {
 
   const input = useDeferredValue({ type, search, filter, modOnly, kind, field, find, regex, caseSensitive, value, refValues });
   const inputKey = JSON.stringify(input);
-  // Другие условия — другой набор записей: галочки и сортировка начинаются заново.
+  // Other conditions — another record set: check marks and sorting start over.
   useEffect(() => {
     setExcluded(new Set());
   }, [inputKey]);
@@ -233,7 +233,7 @@ function BulkPanel(): ReactNode {
     }
   }, [ctx, byType, input, version, lang]);
   const p = result.preview;
-  // С учётом снятых галочек: что реально применится.
+  // Taking cleared check marks into account: what will actually be applied.
   const chosen = useMemo(() => (p ? restrictBulk(p, (sid) => !excluded.has(sid)) : undefined), [p, excluded]);
   const total = p?.changes.length ?? 0;
   const nChosen = chosen?.changes.length ?? 0;
@@ -246,13 +246,13 @@ function BulkPanel(): ReactNode {
     setSort((s) => (s?.col !== col ? { col, dir: 1 } : s.dir === 1 ? { col, dir: -1 } : undefined));
   };
   const opKey = !isRefKind && field.trim() !== '' && field !== BULK_NAME_FIELD ? field : '';
-  // Таблица «пока операция не заполнена»: текущее значение меняемого поля и поля из условий.
+  // Table «while the operation is not filled in»: current value of the changed field and the condition fields.
   const sampleCols = [...(opKey !== '' ? [opKey] : []), ...result.condKeys.filter((k) => k !== opKey)];
   const sampleRows = useMemo(() => {
     const rows = (result.sample ?? []).map((sid) => ({ sid, name: ctx.localizedName(sid) ?? ctx.name(sid) ?? sid, cells: Object.fromEntries(sampleCols.map((k) => [k, cell(sid, k)])) }));
     return sortRows(rows, sort, (r, col) => (col === 'name' ? r.name : (r.cells[col] ?? '')));
   }, [ctx, result.sample, sampleCols.join('\n'), sort, version]);
-  // Таблица предпросмотра: было / станет и значения полей из условий.
+  // Preview table: was / will be and the values of the condition fields.
   const tableCols = result.condKeys.filter((k) => k !== p?.changes[0]?.field);
   const tableRows = useMemo(() => {
     const rows = (p?.changes ?? []).map((c) => ({ c, cells: Object.fromEntries(tableCols.map((k) => [k, cell(c.sid, k)])) }));

@@ -1,10 +1,10 @@
 /**
- * Панель «Мир» (этап 7b): весь мир игры в 3D — рельеф с LOD, здания (вдали — коробки, рядом —
- * настоящие модели), подписи городов, полёт камерой, поиск города, клик по объекту — карточка.
- * Правка мира мода: гизмо (сдвиг G / поворот R), сетка и шаг угла, «к земле», удаление,
- * новый объект из списка записей; своя история отмены (Ctrl+Z / Ctrl+Y в окне), запись — в
- * `leveldata` мода при сохранении.
- * Рендер и загрузка — `three/world/*`; здесь только интерфейс.
+ * «World» panel (stage 7b): the whole game world in 3D — terrain with LOD, buildings (far away — boxes, close up —
+ * real models), town labels, camera flight, town search, click on an object — card.
+ * Mod world editing: gizmo (move G / rotate R), grid and angle step, «snap to ground», deletion,
+ * a new object from the record list; own undo history (Ctrl+Z / Ctrl+Y in the view), written to the
+ * mod `leveldata` on save.
+ * Rendering and loading — `three/world/*`; here only the UI.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { formatPosition, newBuildingStates, zoneOfPoint, type BuildingPlacement, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
@@ -234,7 +234,7 @@ const zh: WorldStrings = {
 };
 const WORLD_STRINGS: Record<Lang, WorldStrings> = { en, ru, zh };
 
-/** Что можно поставить в мир из списка «Поставить…». */
+/** What can be placed in the world from the «Place…» list. */
 const PLACE_TYPES = ['BUILDING'];
 const SETTINGS_KEY = 'kedit.world.settings';
 const EDIT_KEY = 'kedit.world.edit';
@@ -246,12 +246,12 @@ function loadEdit(): EditSettings {
     const raw = localStorage.getItem(EDIT_KEY);
     if (raw) return { ...DEFAULT_EDIT, ...(JSON.parse(raw) as Partial<EditSettings>) };
   } catch {
-    // испорчено — по умолчанию
+    // corrupt — use defaults
   }
   return DEFAULT_EDIT;
 }
 
-/** Имя записи для людей (рус., если есть). */
+/** Human-readable record name (Russian if present). */
 function recordName(project: ReturnType<typeof useWorkbench>['project'], sid: string): string {
   return (project.ctx.localizedName(sid) ?? project.ctx.name(sid)) || sid;
 }
@@ -261,7 +261,7 @@ function loadSettings(): WorldSettings {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<WorldSettings>) };
   } catch {
-    // испорчено — по умолчанию
+    // corrupt — use defaults
   }
   return DEFAULT_SETTINGS;
 }
@@ -429,7 +429,7 @@ function WorldPanel(): ReactNode {
     };
   }, [project]);
 
-  // Окно создаётся заново при смене проекта (настройки — на лету).
+  // The view is recreated when the project changes (settings — on the fly).
   useEffect(() => {
     if (!world || !host.current) return;
     const v = new WorldView(host.current, project.bundle.game, project.ctx, world, settings);
@@ -448,7 +448,7 @@ function WorldPanel(): ReactNode {
     };
   }, [world, project]);
 
-  // Правки мира мода: гизмо пишет командами ядра, всё (и отмена, и правки ИИ) — обратно в окно.
+  // Mod world edits: the gizmo writes via core commands, everything (undo and AI edits too) goes back into the view.
   useEffect(() => {
     const v = view.current;
     if (!v || !edits) return;
@@ -492,7 +492,7 @@ function WorldPanel(): ReactNode {
     }
   };
 
-  /** Точная высота над землёй из карточки: тот же шаг «Сдвиг», что у гизмо. */
+  /** Exact height above ground from the card: the same «Move» step as the gizmo. */
   const setHeight = (o: WorldObject, y: number): void => {
     if (!edits) return;
     const [x, y0, z] = o.p.position;
@@ -517,7 +517,7 @@ function WorldPanel(): ReactNode {
     const path = `zone.${z.x}.${z.y}.zone`;
     const holder = edits.holders(path).find((h) => h.endsWith('buildinglist')) ?? '0-buildinglist';
     try {
-      // Здание ставим готовым: без состояния игра делает из него стройплощадку «на продажу».
+      // A building is placed finished: without a state the game turns it into a «for sale» construction site.
       const states = newBuildingStates(project.ctx.get(sid), at.y);
       const key = edits.place(path, holder, sid, [at.x, 0, at.z], [1, 0, 0, 0], states ? { states } : {}, `${s.stepPlace}: ${recordName(project, sid)}`);
       setMessage(undefined);
@@ -534,7 +534,7 @@ function WorldPanel(): ReactNode {
     else edits.undo();
   };
 
-  // Ctrl+Z / Ctrl+Y в окне мира — отмена правок мира (не записей): ловим до общего обработчика.
+  // Ctrl+Z / Ctrl+Y in the world view undo world edits (not records): caught before the shared handler.
   const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (!edits || isTypingIn(e.target)) return;
     const k = shortcut(e);
@@ -585,7 +585,7 @@ function WorldPanel(): ReactNode {
           style={{ width: 200 }}
           onChange={(e) => {
             setQuery(e.target.value);
-            // Выбор из списка подсказок — сразу лететь.
+            // Choosing from the suggestion list — fly there at once.
             if (towns.some((t) => t.name === e.target.value)) flyToTown(e.target.value);
           }}
           onKeyDown={(e) => {

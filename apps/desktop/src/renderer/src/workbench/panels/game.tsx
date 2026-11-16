@@ -1,6 +1,6 @@
 /**
- * Панель «Игра»: запущенная Kenshi через плагин Kenshi Bridge — выбранный персонаж (его шаблон —
- * ссылка на запись), позиция, время, пауза и журнал трассировки диалога.
+ * «Game» panel: running Kenshi via the Kenshi Bridge plugin — the selected character (its template is
+ * a link to the record), position, time, pause and the dialogue trace log.
  */
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { GameState } from '@kenshi-editor/core';

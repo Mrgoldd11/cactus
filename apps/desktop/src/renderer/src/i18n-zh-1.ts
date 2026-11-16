@@ -1,7 +1,7 @@
-/** Китайский (简体中文), часть 1: стартовый экран, список, редактор записи, моды, разговор. */
+/** Chinese (简体中文), part 1: start screen, list, record editor, mods, conversation. */
 export const zh1 = {
   appTitle: 'Cactus',
-  // стартовый экран
+  // start screen
   gameFolder: '游戏文件夹',
   detecting: '正在查找 Kenshi…',
   noGameFound: '未能自动找到 Kenshi，请选择游戏文件夹。',
@@ -28,7 +28,7 @@ export const zh1 = {
   loadingData: '正在读取游戏数据…',
   open: '打开',
   recent: '最近打开',
-  // панель
+  // toolbar
   save: '保存',
   saveAs: '另存为…',
   undo: '撤销',
@@ -40,7 +40,7 @@ export const zh1 = {
   back: '后退',
   forward: '前进',
   language: '语言',
-  // дерево и список
+  // tree and list
   categories: '分类',
   modChanges: '此 Mod 中的更改',
   everything: '全部',
@@ -62,7 +62,7 @@ export const zh1 = {
   delete: '删除',
   restore: '恢复',
   revert: '还原为原版',
-  // редактор записи
+  // record editor
   noSelection: '请选择一条记录',
   name: '名称',
   type: '类型',
@@ -149,7 +149,7 @@ export const zh1 = {
   before: '之前',
   after: '之后',
   fieldName: '名称',
-  // зависимости и сведения
+  // dependencies and info
   depsHint: '加载顺序在此 Mod 之前的 Mod（可以引用并修改它们的记录）。顺序遵循 data/mods.cfg。',
   depsReloadNote: '更改依赖项会重新加载数据；撤销历史将被清空。',
   missingDeps: '缺少的依赖项',
@@ -157,7 +157,7 @@ export const zh1 = {
   description: '描述',
   version: '版本',
   fileName: '文件',
-  // сохранение и статус
+  // saving and status
   saved: '已保存',
   saveCancelled: '已取消保存',
   saveFailed: '保存失败',
@@ -180,7 +180,7 @@ export const zh1 = {
   validation: '检查',
   errors: '个错误',
   warnings: '个警告',
-  // живая связь с ИИ
+  // live AI link
   aiButton: 'AI 的更改',
   aiChanges: 'AI 的更改',
   aiServerOff: '实时连接已关闭',
@@ -194,7 +194,7 @@ export const zh1 = {
   aiStatus_accepted: '已接受',
   'aiStatus_rolled-back': '已回滚',
   aiStatus_undone: '已撤销',
-  // разговор (симуляция выбора диалога)
+  // conversation (dialogue choice simulation)
   tabTalk: '对话',
   talkEvent: '事件',
   talkNone: '此事件没有对话。',
@@ -277,7 +277,7 @@ export const zh1 = {
   talkAction_attack: '攻击',
   talkAction_trade: '交易',
   talkAction_recruit: '招募',
-  // рабочее пространство
+  // workspace
   windowMenu: '窗口',
   windowPanels: '面板',
   windowGroup_mod: '模组',

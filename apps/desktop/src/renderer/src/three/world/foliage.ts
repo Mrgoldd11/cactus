@@ -1,18 +1,18 @@
 /**
- * Растительность и камни вблизи камеры.
+ * Vegetation and rocks near the camera.
  *
- * В файлах игры мест у деревьев и камней нет: игра раскладывает их сама по правилам биома
- * (`biomes.ts` → `FoliageRule`). Здесь — та же идея: мир поделён на клетки, в каждой клетке
- * свой постоянный случайный посев (одна и та же клетка всегда даёт одно и то же), по правилам
- * биома точки: плотность, кучки, высота над морем, склон, размер, сдвиг вниз, обход городов
- * и зданий. Это похоже на игру, но **не те же места**, что в игре.
+ * The game files have no positions for trees and rocks: the game places them itself by biome rules
+ * (`biomes.ts` → `FoliageRule`). Here — the same idea: the world is split into cells, each cell has
+ * its own fixed random seed (the same cell always gives the same result), by the rules of the
+ * point's biome: density, clumps, height above sea, slope, size, downward offset, avoiding towns
+ * and buildings. It looks like the game, but **not the same positions** as in the game.
  *
- * Чтобы не лагало: только клетки в небольшом круге вокруг камеры, предел числа экземпляров,
- * посчитанные клетки — в кэше, новых клеток за раз — немного. Высота берётся только с
- * подробных тайлов рельефа; пока их нет, клетка ждёт (`incomplete`).
+ * To avoid lag: only cells in a small circle around the camera, a cap on the instance count,
+ * computed cells are cached, only a few new cells at a time. Height is taken only from
+ * detailed terrain tiles; until they exist, the cell waits (`incomplete`).
  *
- * Не проверено: единица плотности (считаем «штук на зону 4608²») и единица склона
- * (считаем 100 × тангенс угла).
+ * Not verified: the density unit (we assume «pieces per 4608² zone») and the slope unit
+ * (we assume 100 × tangent of the angle).
  */
 import * as THREE from 'three';
 import { TERRAIN_MAX_LEVEL, WORLD_HALF, ZONE_SIZE } from '@kenshi-editor/core';
@@ -20,9 +20,9 @@ import type { Biome, FoliageRule } from './biomes.ts';
 import type { DumpFoliageZone } from './dump.ts';
 
 export interface FoliageQuality {
-  /** Радиус круга с растительностью вокруг камеры; 0 — выключено. */
+  /** Radius of the vegetation circle around the camera; 0 — off. */
   radius: number;
-  /** Предел экземпляров. */
+  /** Instance cap. */
   maxInstances: number;
 }
 
@@ -51,7 +51,7 @@ const NEW_CELLS_PER_UPDATE = 16;
 const MAX_CACHED = 600;
 const UP = new THREE.Vector3(0, 1, 0);
 
-/** Постоянный генератор случайных чисел (mulberry32). */
+/** Deterministic random number generator (mulberry32). */
 function rng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -68,7 +68,7 @@ function cellSeed(ix: number, iz: number): number {
 }
 
 export class FoliageScatter {
-  /** Что рисовать: модель → матрицы. */
+  /** What to draw: model → matrices. */
   readonly byTarget = new Map<string, THREE.Matrix4[]>();
   count = 0;
   /** How many of them stand exactly where the game put them (zones with a dump). */
@@ -76,7 +76,7 @@ export class FoliageScatter {
   /** Game dump: zones that have it take foliage from it instead of the random scatter. */
   dump: FoliageDumpSource | undefined;
   private dumpVersion = -1;
-  /** Есть клетки, для которых ещё нет подробного рельефа или очередь новых клеток. */
+  /** There are cells without detailed terrain yet, or a queue of new cells. */
   incomplete = false;
   quality: FoliageQuality;
   private readonly cells = new Map<string, { items: Item[]; used: number; fromGame: number }>();
@@ -100,7 +100,7 @@ export class FoliageScatter {
     }
   }
 
-  /** Пересчитать набор вокруг камеры. true — набор изменился. */
+  /** Recompute the set around the camera. true — the set changed. */
   update(cam: THREE.Vector3): boolean {
     this.tick++;
     if (this.dump && this.dump.version !== this.dumpVersion) {
@@ -111,7 +111,7 @@ export class FoliageScatter {
     }
     const r = this.quality.radius;
     const g = this.ground.heightAt(cam.x, cam.z);
-    // Высоко над землёй растительность не видна — не тратим время.
+    // High above the ground vegetation is not visible — do not waste time.
     if (r <= 0 || g === undefined || cam.y - g > r * 1.2) return this.set([], '');
     const cx = Math.floor(cam.x / CELL);
     const cz = Math.floor(cam.z / CELL);
@@ -183,7 +183,7 @@ export class FoliageScatter {
     for (const [k] of list.slice(0, this.cells.size - MAX_CACHED)) this.cells.delete(k);
   }
 
-  /** Склон в точке: 100 × тангенс угла; undefined — рельефа ещё нет. */
+  /** Slope at a point: 100 × tangent of the angle; undefined — no terrain yet. */
   private ground3(x: number, z: number): { h: number; slope: number; normal: THREE.Vector3 } | undefined {
     const e = 18;
     const h = this.ground.heightAt(x, z, MIN_LEVEL);
@@ -212,7 +212,7 @@ export class FoliageScatter {
     return false;
   }
 
-  /** Посев клетки; undefined — подробного рельефа здесь ещё нет. */
+  /** Cell seeding; undefined — no detailed terrain here yet. */
   private makeCell(ix: number, iz: number): { items: Item[]; fromGame: number } | undefined {
     const x0 = ix * CELL;
     const z0 = iz * CELL;
@@ -243,7 +243,7 @@ export class FoliageScatter {
     if (dumped.size > 0 && dumped.size === zones) return { items, fromGame };
     const inDumped = (x: number, z: number): boolean => dumped.size > 0 && dumped.has(Math.floor(z / ZONE_SIZE) * 4096 + Math.floor(x / ZONE_SIZE));
     if (this.ground.heightAt(x0 + CELL / 2, z0 + CELL / 2, MIN_LEVEL) === undefined) return undefined;
-    // Какие биомы есть в клетке (сетка 4×4).
+    // Which biomes are in the cell (4×4 grid).
     const present = new Set<number>();
     for (let j = 0; j < 4; j++)
       for (let i = 0; i < 4; i++) {

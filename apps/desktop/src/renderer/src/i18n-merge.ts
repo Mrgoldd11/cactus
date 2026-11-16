@@ -1,4 +1,4 @@
-/** Строки панели «Слияние модов» (вливаются в общий словарь `i18n.ts`). */
+/** «Mod merge» panel strings (merged into the shared dictionary `i18n.ts`). */
 export interface MergeCountsView {
   new: number;
   changed: number;

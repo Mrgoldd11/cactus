@@ -1,5 +1,5 @@
 /**
- * Корень окна: язык и настройки, поиск игры, стартовый экран или открытый проект.
+ * Window root: language and settings, game lookup, start screen or open project.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { dataLocaleFor, LANGS, type GameInstallInfo, type Lang, type ModRef, type ProjectRequest, type RecoveryInfo, type Settings } from '../../shared/api.ts';
@@ -35,7 +35,7 @@ export function App(): ReactNode {
     setLiveProject(project);
   }, [project]);
 
-  // Пока виден стартовый экран — готовить ваниль в фоне, чтобы «Ваниль» открылась сразу.
+  // While the start screen is shown — prepare vanilla in the background so «Vanilla» opens at once.
   useEffect(() => {
     if (!game || project || loading) return;
     const id = setTimeout(() => {
@@ -77,7 +77,7 @@ export function App(): ReactNode {
     });
   };
 
-  /** Открыть проект; `recovered` — байты автосохранения, из которых восстановить правки. */
+  /** Open a project; `recovered` — autosave bytes to restore the edits from. */
   const load = (request: ProjectRequest, recovered?: Uint8Array): void => {
     setLoading(true);
     setError(undefined);
@@ -95,7 +95,7 @@ export function App(): ReactNode {
     })();
   };
 
-  /** Перед открытием мода: нет ли автосохранения новее файла (после сбоя) — предложить восстановить. */
+  /** Before opening a mod: is there an autosave newer than the file (after a crash) — offer to restore. */
   const open = (req: ProjectRequest): void => {
     const ref: ModRef =
       req.modPath !== undefined
@@ -131,7 +131,7 @@ export function App(): ReactNode {
         } else if (choice === 'as-is') await window.kedit.keepAutosave(r.ref);
         else await window.kedit.autosaveClear(r.ref);
       } catch {
-        // Копия недоступна — открываем мод как есть.
+        // Backup unavailable — open the mod as it is.
       }
       load(r.req);
     })();
@@ -151,7 +151,7 @@ export function App(): ReactNode {
         onClose={() => {
           if (project.dirty) {
             if (!window.confirm(lang.t.unsavedChanges)) return;
-            // Отказ от правок: автосохранение уходит в резервные копии, а не пропадает.
+            // Edits discarded: the autosave goes to backups instead of being lost.
             void window.kedit.keepAutosave(project.ref).catch(() => undefined);
           }
           window.kedit.setDirty(false, 'Cactus');
@@ -209,7 +209,7 @@ export function App(): ReactNode {
   );
 }
 
-/** Выпадающий список языков: кнопка с текущим языком, под ней блоки с остальными. */
+/** Language dropdown: a button with the current language, the other languages in blocks below it. */
 export function LangSwitch({ lang, onLang }: { lang: Lang; onLang: (l: Lang) => void }): ReactNode {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLSpanElement>(null);

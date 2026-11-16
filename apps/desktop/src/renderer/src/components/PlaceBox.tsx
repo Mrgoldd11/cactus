@@ -1,7 +1,7 @@
 /**
- * Поле «Поставить…» с выпадающим списком: клик по полю (или по стрелке) раскрывает весь список
- * записей нужных типов — его можно листать, а набранный текст сужает его (рус./англ. имя и id).
- * Список виртуальный: тысячи записей не тормозят. ↑/↓ — выбрать, Enter — поставить, Esc — закрыть.
+ * «Place…» field with a dropdown: a click on the field (or the arrow) opens the whole list of
+ * records of the needed types — it can be scrolled, and typed text narrows it (Russian/English name and id).
+ * The list is virtual: thousands of records do not slow it down. ↑/↓ — choose, Enter — place, Esc — close.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { IndexEntry, Project } from '../project.ts';
@@ -9,16 +9,16 @@ import { VirtualList } from './VirtualList.tsx';
 
 interface Props {
   project: Project;
-  /** Типы записей, которые можно ставить (`BUILDING`, …). */
+  /** Record types that can be placed (`BUILDING`, …). */
   types: readonly string[];
   placeholder: string;
   title?: string;
-  /** Подпись «ничего не найдено» и «n из m». */
+  /** «Nothing found» label and «n of m». */
   emptyText: string;
   countText: (shown: number, total: number) => string;
-  /** Подпись справа от имени (тип, id…). */
+  /** Label right of the name (type, id…). */
   detail?: (e: IndexEntry) => string;
-  /** `data-testid` поля; у списка — с суффиксом `-hits`. */
+  /** Field `data-testid`; the list has it with the `-hits` suffix. */
   testId: string;
   onPick: (sid: string) => void;
 }
@@ -35,7 +35,7 @@ export function PlaceBox({ project, types, placeholder, title, emptyText, countT
   const wrap = useRef<HTMLSpanElement>(null);
   const input = useRef<HTMLInputElement>(null);
 
-  // Закрыть по клику мимо.
+  // Close on a click outside.
   useEffect(() => {
     if (!open) return;
     const away = (e: MouseEvent): void => {

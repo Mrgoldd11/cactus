@@ -1,6 +1,6 @@
 /**
- * Выбор записи для ссылки: поиск по имени (англ./рус.) и id, по умолчанию только записи
- * нужного по схеме типа. Удалённые модом записи не предлагаются.
+ * Record choice for a reference: search by name (English/Russian) and id, by default only records
+ * of the type the schema requires. Records deleted by the mod are not offered.
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { useT } from '../i18n.ts';

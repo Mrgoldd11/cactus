@@ -1,6 +1,6 @@
 /**
- * Файловая часть главного процесса без Electron: поиск игры, список модов, чтение всего,
- * что нужно окну для контекста, запись мода. Подтверждения и диалоги — в `index.ts`.
+ * File side of the main process without Electron: game lookup, mod list, reading everything
+ * the window needs for its context, writing the mod. Confirmations and dialogs — in `index.ts`.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -52,7 +52,7 @@ export function gameFromDir(dir: string): GameInstallInfo | undefined {
   return { kenshi: g.kenshi, workshop: g.workshop, source: 'manual' };
 }
 
-/** Мод с заголовком (читается только начало файла). */
+/** Mod with header (only the start of the file is read). */
 export function describeMod(path: string, source: ModEntry['source'], extra: Partial<ModEntry> = {}): ModEntry {
   const entry: ModEntry = { fileName: basename(path), path, source, ...extra };
   const h = readModSummary(path);
@@ -65,14 +65,14 @@ export function describeMod(path: string, source: ModEntry['source'], extra: Par
   return entry;
 }
 
-/** Порядок загрузки как есть в `mods.cfg` (вместе со строками, для которых нет файла). */
+/** Load order as it is in `mods.cfg` (including lines that have no file). */
 export function readModOrder(game: GameInstallInfo): string[] {
   return readModsCfgText(game).names;
 }
 
 /**
- * Записать порядок загрузки (подтверждение спрашивает `index.ts`). `expected` — порядок,
- * который видело окно: если файл с тех пор поменяли (лаунчер, другая программа) — не писать.
+ * Write the load order (`index.ts` asks for confirmation). `expected` — the order the
+ * window saw: if the file has changed since (launcher, another program) — do not write.
  */
 export function writeModOrder(game: GameInstallInfo, names: readonly string[], expected: readonly string[]): ModOrderResult {
   const now = readModOrder(game);
@@ -83,7 +83,7 @@ export function writeModOrder(game: GameInstallInfo, names: readonly string[], e
   return { ok: true, path: r.path, changed: r.changed, ...(r.backup !== undefined ? { backup: r.backup } : {}) };
 }
 
-/** Моды из `mods/` и мастерской с заголовками; порядок `mods.cfg` — в `loadIndex`. */
+/** Mods from `mods/` and the Workshop with headers; `mods.cfg` order — in `loadIndex`. */
 export function listMods(game: GameInstallInfo): ModEntry[] {
   return listInstalledMods(game).mods.map((m) =>
     describeMod(m.path, m.source, {
@@ -106,7 +106,7 @@ function readNamed(name: string, path: string): NamedBytes {
   return { name, path, bytes: readFileSync(path) };
 }
 
-/** Файл, который окно может держать в кэше: байты — только если окно его ещё не знает. */
+/** A file the window may keep cached: bytes only if the window does not know it yet. */
 function readCached(name: string, path: string, known: ReadonlySet<string>): NamedBytes {
   const { key, bytes } = readIfUnknown(path, known);
   return { name, path, key, bytes: bytes ?? new Uint8Array() };
@@ -116,7 +116,7 @@ function readOptional(path: string): string | undefined {
   return existsSync(path) ? readFileSync(path, 'utf8') : undefined;
 }
 
-/** Байты ванили, зависимостей и мода, тексты схемы и перевода — для контекста в окне. */
+/** Bytes of vanilla, dependencies and the mod, schema and translation texts — for the window context. */
 export function loadProject(req: ProjectRequest): ProjectBundle {
   const game = req.game;
   const plan = planModLoad(game, {
@@ -164,7 +164,7 @@ export function loadProject(req: ProjectRequest): ProjectBundle {
   return bundle;
 }
 
-/** Откуда файл мода: из мастерской (сохранять нельзя) или копия чужого мода (`.kedit-origin.json`). */
+/** Where the mod file comes from: the Workshop (cannot be saved) or a copy of someone else's mod (`.kedit-origin.json`). */
 export function provenanceOf(game: GameInstallInfo, path: string): ModProvenance | undefined {
   if (isInWorkshop(game, path)) {
     const id = workshopIdOf(game, path);
@@ -184,31 +184,31 @@ export function provenanceOf(game: GameInstallInfo, path: string): ModProvenance
   };
 }
 
-/** Путь в мастерской Steam: туда не пишем никогда. */
+/** Path in the Steam Workshop: never written to. */
 export function isWorkshopPath(games: readonly GameInstallInfo[], path: string): boolean {
   return games.some((g) => isInWorkshop(g, path));
 }
 
-/** План копии чужого мода (ничего не пишет). */
+/** Plan for copying someone else's mod (writes nothing). */
 export function planCopy(game: GameInstallInfo, path: string): ModCopyPlan {
   return planModCopy(game, path);
 }
 
-/** Скопировать мод в `mods/<имя>/<имя>.mod` (после подтверждения в main). */
+/** Copy the mod to `mods/<name>/<name>.mod` (after confirmation in main). */
 export function copyMod(game: GameInstallInfo, path: string): { path: string; provenance?: ModProvenance } {
   const plan = copyModForEditing(game, path);
   const provenance = provenanceOf(game, plan.dest);
   return { path: plan.dest, ...(provenance ? { provenance } : {}) };
 }
 
-/** Нужно ли подтверждение: путь в папке игры или мастерской. */
+/** Whether confirmation is needed: path in the game folder or the Workshop. */
 export function needsConfirmation(game: GameInstallInfo | undefined, path: string): boolean {
   return game !== undefined && isInGameFolders(game, path);
 }
 
 /**
- * Путь для окна «Сохранить как»: если папки ещё нет (новый мод, `mods/<имя>/`), Windows
- * открывает «Документы» — тогда предлагаем ближайшую существующую папку выше с тем же именем файла.
+ * Path for the «Save as» dialog: if the folder does not exist yet (new mod, `mods/<name>/`), Windows
+ * opens «Documents» — so we suggest the nearest existing folder above, with the same file name.
  */
 export function saveDialogDefaultPath(path: string): string {
   let dir = dirname(path);
@@ -221,8 +221,8 @@ export function saveDialogDefaultPath(path: string): string {
 }
 
 /**
- * Лаунчер видит мод только как `mods/<имя>/<имя>.mod`. Файл, сохранённый прямо в `mods/`,
- * кладём в свою папку: `mods/X.mod` → `mods/X/X.mod`. Остальные пути не меняются.
+ * The launcher sees a mod only as `mods/<name>/<name>.mod`. A file saved directly into `mods/`
+ * goes into its own folder: `mods/X.mod` → `mods/X/X.mod`. Other paths are unchanged.
  */
 export function modInstallPath(games: readonly GameInstallInfo[], path: string): string {
   const dir = resolve(dirname(path)).toLowerCase();
@@ -235,8 +235,8 @@ export function modInstallPath(games: readonly GameInstallInfo[], path: string):
 }
 
 /**
- * Записать мод безопасно (`safeSaveMod`: временный файл → проверка → копия прежней версии в
- * папку данных → замена), потом файл слияния и файлы уровня.
+ * Write the mod safely (`safeSaveMod`: temp file → check → copy of the previous version into the
+ * data folder → replace), then the merge file and level files.
  */
 export function writeMod(
   path: string,
@@ -253,7 +253,7 @@ export function writeMod(
   const dir = join(dirname(path), 'leveldata');
   mkdirSync(dir, { recursive: true });
   for (const f of world) {
-    // Сначала во временный файл, потом на место: игра не увидит половину файла.
+    // Temp file first, then into place: the game never sees half a file.
     const target = join(dir, f.path);
     writeFileSync(`${target}.tmp`, f.bytes);
     renameSync(`${target}.tmp`, target);
@@ -261,12 +261,12 @@ export function writeMod(
   return saved;
 }
 
-/** Имя файла уровня без папок: `zone.42.22.zone`, `leveldata.level`, `interiors.level`. */
+/** Level file name without folders: `zone.42.22.zone`, `leveldata.level`, `interiors.level`. */
 export function isLevelFileName(name: string): boolean {
   return /^(zone\.-?\d+\.-?\d+\.zone|leveldata\.level|interiors\.level)$/i.test(name);
 }
 
-/** Файл решений слияния рядом с модом (сначала во временный файл, потом на место). */
+/** Merge decisions file next to the mod (temp file first, then into place). */
 function writeMergeStoreText(modPath: string, text: string): void {
   const p = mergeStorePath(modPath);
   const tmp = `${p}.tmp`;
@@ -274,7 +274,7 @@ function writeMergeStoreText(modPath: string, text: string): void {
   renameSync(tmp, p);
 }
 
-/** Мод-источник слияния: только `.mod` / `.base`, только чтение; рядом — данные уровня (если есть). */
+/** Merge source mod: only `.mod` / `.base`, read only; level data next to it (if any). */
 export function readMergeSourceBytes(path: string): MergeSourceResult {
   if (!/\.(mod|base)$/i.test(path)) return { ok: false, error: 'not a .mod / .base file' };
   try {
@@ -286,10 +286,10 @@ export function readMergeSourceBytes(path: string): MergeSourceResult {
   }
 }
 
-/** Файлы уровня ванили и модов, сырыми байтами (разбирает окно). */
+/** Level files of vanilla and mods, as raw bytes (the window parses them). */
 export function loadWorldBytes(req: WorldRequest): WorldFileBytes[] {
   const known = new Set(req.known ?? []);
-  // С `interiors` — только `interiors.level` (дочитываются по запросу панели «Внутри»).
+  // With `interiors` — only `interiors.level` (loaded on demand by the «Inside» panel).
   const only = req.interiors === true;
   return listWorldFiles(worldDirs(req.game, req.modPaths), { interiors: only }).filter((f) => (f.path.toLowerCase() === 'interiors.level') === only).map((f) => {
     const { key, bytes } = readIfUnknown(f.full, known);
@@ -300,8 +300,8 @@ export function loadWorldBytes(req: WorldRequest): WorldFileBytes[] {
 const ICON_TYPES: Readonly<Record<string, string>> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
 
 /**
- * Иконка по полю `icon` (`.\data\items\icons\katana.png`, относительно папки игры) как
- * data URL. Только картинки внутри папки игры; иначе null.
+ * Icon from the `icon` field (`.\data\items\icons\katana.png`, relative to the game folder) as
+ * a data URL. Only images inside the game folder; otherwise null.
  */
 export function readIconDataUrl(game: GameInstallInfo, iconPath: string): string | null {
   const mime = ICON_TYPES[extname(iconPath).toLowerCase()];
@@ -315,13 +315,13 @@ export function readIconDataUrl(game: GameInstallInfo, iconPath: string): string
 
 // `.dat` — map features (`data/newland/land/features.dat`).
 const ASSET_TYPES = new Set(['.mesh', '.dds', '.png', '.material', '.skeleton', '.dat']);
-/** Больше этого — не модель и не текстура игры. */
+/** Larger than this — not a game model or texture. */
 const MAX_ASSET = 256 * 1024 * 1024;
 
 /**
- * Файл модели или текстуры по пути из записи (`.\data\items\a.mesh`). Пути в записях модов
- * тоже идут от папки игры (`.\mods\<мод>\…`); не нашёлся — пробуем тот же путь от папки
- * мастерской. Только чтение, только внутри этих двух папок.
+ * Model or texture file by the path from a record (`.\data\items\a.mesh`). Paths in mod records
+ * also start from the game folder (`.\mods\<mod>\…`); if not found — try the same path from the
+ * Workshop folder. Read only, only inside these two folders.
  */
 export function readGameAsset(game: GameInstallInfo, relPath: string): Uint8Array | null {
   if (!ASSET_TYPES.has(extname(relPath).toLowerCase())) return null;
@@ -334,7 +334,7 @@ export function readGameAsset(game: GameInstallInfo, relPath: string): Uint8Arra
     try {
       if (existsSync(full) && statSync(full).size <= MAX_ASSET) return readFileSync(full);
     } catch {
-      // нет доступа — как нет файла
+      // no access — same as no file
     }
   }
   // The game (Ogre) finds resources by file name, so records with a stale folder still work
@@ -377,7 +377,7 @@ function assetIndex(root: string): Map<string, string> {
 
 const heightmaps = new Map<string, Promise<Heightmap | null>>();
 
-/** Тайл рельефа из `data/newland/land/fullmap.tif` (файл открыт один раз, читается кусками). */
+/** Terrain tile from `data/newland/land/fullmap.tif` (the file is opened once and read in chunks). */
 export async function readTerrainTile(game: GameInstallInfo, level: number, tx: number, ty: number): Promise<Uint16Array | null> {
   const path = heightmapPath(game.kenshi);
   let hm = heightmaps.get(path);
@@ -390,7 +390,7 @@ export async function readTerrainTile(game: GameInstallInfo, level: number, tx: 
   return map ? map.readTile(level, tx, ty) : null;
 }
 
-/** Перевод текстов записей (реплик) игры; null — файла нет. */
+/** Translation of game record texts (lines); null — no file. */
 export function readTranslationBytes(game: GameInstallInfo, locale: string): Uint8Array | null {
   const path = translationFilePath(game, locale);
   return existsSync(path) ? readFileSync(path) : null;

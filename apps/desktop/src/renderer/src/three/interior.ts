@@ -1,9 +1,9 @@
 /**
- * Окно «Внутри»: модель интерьера здания (фон, мышью не выбирается) и объекты раскладки —
- * мебель, сундуки, верстаки, точки предметов. Камера — как в «Модели» (вращать, сдвигать,
- * колесо); клик — выбрать объект, гизмо — сдвиг (G) / поворот вокруг вертикали (R) с шагом
- * сетки и угла, Del — удалить, F — к выбранному, Esc — снять выбор. Координаты объектов — от
- * начала модели здания, как в файле игры.
+ * «Inside» view: the building interior model (background, not selectable by mouse) and layout objects —
+ * furniture, chests, workbenches, item points. Camera as in «Model» (rotate, pan,
+ * wheel); click — select an object, gizmo — move (G) / rotate around the vertical (R) with grid
+ * and angle step, Del — delete, F — to selection, Esc — clear selection. Object coordinates are from the
+ * building model origin, as in the game file.
  */
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -15,21 +15,21 @@ import { ModelViewer } from './viewer.ts';
 
 export interface InteriorEditSettings {
   mode: 'move' | 'rotate';
-  /** Шаг сетки (0 — без привязки). */
+  /** Grid step (0 — no snapping). */
   grid: number;
-  /** Шаг угла в градусах (0 — без привязки). */
+  /** Angle step in degrees (0 — no snapping). */
   angle: number;
 }
 
 export const DEFAULT_INTERIOR_EDIT: InteriorEditSettings = { mode: 'move', grid: 0, angle: 15 };
 
-/** Объект раскладки для окна. */
+/** Layout object for the view. */
 export interface InteriorItem {
   key: string;
   target: string;
   kind: InteriorKind;
   position: [number, number, number];
-  /** w, x, y, z — как в файле. */
+  /** w, x, y, z — as in the file. */
   rotation: [number, number, number, number];
 }
 
@@ -38,7 +38,7 @@ interface Entry {
   group: THREE.Group;
 }
 
-/** Цвет коробки объекта без модели: точка предметов — жёлтая, прочее — серо-синее. */
+/** Box colour of an object without a model: item point — yellow, others — grey-blue. */
 const MARKER: Record<InteriorKind, number> = { furniture: 0x8fa3b8, items: 0xe0b040, other: 0x9a8fb8 };
 const MARKER_SIZE = 6;
 
@@ -46,11 +46,11 @@ export class InteriorView {
   readonly viewer: ModelViewer;
   readonly gizmo: TransformControls;
   onSelect: (key: string | undefined) => void = () => undefined;
-  /** Конец перетаскивания: записать сдвиг. false — не вышло, объект вернётся на место. */
+  /** End of drag: write the move. false — failed, the object returns to its place. */
   onCommit: (key: string, position: [number, number, number], rotation: [number, number, number, number]) => boolean = () => false;
   onRemove: (key: string) => void = () => undefined;
   onEditChange: (e: InteriorEditSettings) => void = () => undefined;
-  /** Модели объектов дочитаны (для e2e и строки состояния). */
+  /** Object models are loaded (for e2e and the status bar). */
   onLoaded: () => void = () => undefined;
   edit: InteriorEditSettings = DEFAULT_INTERIOR_EDIT;
   editable = false;
@@ -112,7 +112,7 @@ export class InteriorView {
     el.addEventListener('keydown', this.onKey);
   }
 
-  /** Модель интерьера здания — фон. */
+  /** Building interior model — background. */
   async setBuilding(sid: string | undefined): Promise<void> {
     if (sid === this.backdropSid) return;
     this.backdropSid = sid;
@@ -130,7 +130,7 @@ export class InteriorView {
     }
     const group = built?.group ?? new THREE.Group();
     group.name = '__model';
-    // Фон полупрозрачный: мебель за стенами видно и её можно выбрать.
+    // The background is semi-transparent: furniture behind walls is visible and can be selected.
     group.traverse((o) => {
       if (o instanceof THREE.Mesh) for (const m of [o.material].flat() as THREE.MeshStandardMaterial[]) {
         m.transparent = true;
@@ -144,7 +144,7 @@ export class InteriorView {
     if (group.children.length === 0) this.frameObjects();
   }
 
-  /** Объекты раскладки: новые строятся, сдвинутые переставляются, пропавшие убираются. */
+  /** Layout objects: new ones are built, moved ones repositioned, missing ones removed. */
   sync(items: readonly InteriorItem[]): void {
     const seen = new Set<string>();
     for (const item of items) {
@@ -165,7 +165,7 @@ export class InteriorView {
     this.refreshBoxes();
   }
 
-  /** Сколько моделей объектов ещё читается. */
+  /** How many object models are still loading. */
   get loading(): number {
     return this.pending;
   }
@@ -267,7 +267,7 @@ export class InteriorView {
     g.setMode(e.mode === 'move' ? 'translate' : 'rotate');
     g.setTranslationSnap(e.grid > 0 ? e.grid : null);
     g.setRotationSnap(e.angle > 0 ? THREE.MathUtils.degToRad(e.angle) : null);
-    // Поворот — только вокруг вертикали, как в игре.
+    // Rotation only around the vertical, as in the game.
     const rotate = e.mode === 'rotate';
     g.showX = !rotate;
     g.showZ = !rotate;
@@ -312,7 +312,7 @@ export class InteriorView {
     return undefined;
   }
 
-  /** Точка под серединой экрана (модель или объект), иначе — точка, вокруг которой камера. */
+  /** Point under the screen centre (model or object), otherwise the point the camera orbits. */
   centrePoint(): [number, number, number] {
     this.ray.setFromCamera(new THREE.Vector2(0, 0), this.viewer.camera);
     const targets: THREE.Object3D[] = [this.root];
@@ -323,7 +323,7 @@ export class InteriorView {
     return [p.x, p.y, p.z];
   }
 
-  /** Камера к объекту (с прежнего направления). */
+  /** Camera to an object (from the previous direction). */
   focus(key: string): void {
     const e = this.entries.get(key);
     if (!e) return;
@@ -338,7 +338,7 @@ export class InteriorView {
     v.requestRender();
   }
 
-  /** Камера на все объекты (когда модели здания нет). */
+  /** Camera on all objects (when there is no building model). */
   private frameObjects(): void {
     const box = new THREE.Box3().setFromObject(this.root);
     if (box.isEmpty()) return;
@@ -351,7 +351,7 @@ export class InteriorView {
     v.requestRender();
   }
 
-  /** Центр гизмо в пикселях холста ('' — гизмо нет): для e2e. */
+  /** Gizmo centre in canvas pixels ('' — no gizmo): for e2e. */
   gizmoProbe(): string {
     const e = this.selectedEntry();
     if (!e || (this.gizmo.object as THREE.Object3D | undefined) === undefined) return '';
@@ -418,7 +418,7 @@ export class InteriorView {
   }
 }
 
-/** Коробка на месте объекта без модели (точка предметов, модель не нашлась). */
+/** Box in place of an object without a model (item point, model not found). */
 function marker(kind: InteriorKind): THREE.Mesh {
   const m = new THREE.Mesh(
     new THREE.BoxGeometry(MARKER_SIZE, MARKER_SIZE, MARKER_SIZE).translate(0, MARKER_SIZE / 2, 0),

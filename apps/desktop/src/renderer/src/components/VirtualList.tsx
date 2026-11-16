@@ -1,6 +1,6 @@
 /**
- * Список с виртуальной прокруткой: строки одной высоты, в DOM — только видимые (плюс запас).
- * Держит десятки тысяч записей без задержек.
+ * List with virtual scrolling: rows of equal height, only the visible ones (plus a margin) are in the DOM.
+ * Holds tens of thousands of records without lag.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -8,11 +8,11 @@ interface Props<T> {
   items: readonly T[];
   rowHeight: number;
   renderRow: (item: T, index: number) => ReactNode;
-  /** Индекс строки, которую надо держать видимой (выбранная). */
+  /** Index of the row to keep visible (the selected one). */
   scrollToIndex?: number;
   className?: string;
   testId?: string;
-  /** Ширина полосы прокрутки (0 — её нет): шапка над списком добавляет её справа, чтобы колонки совпадали. */
+  /** Scrollbar width (0 — none): the header above the list adds it on the right so the columns line up. */
   onGutter?: (width: number) => void;
 }
 
@@ -44,7 +44,7 @@ export function VirtualList<T>({ items, rowHeight, renderRow, scrollToIndex, cla
       setHeight(el.clientHeight);
       gutterRef.current?.(el.offsetWidth - el.clientWidth);
     };
-    // Полоса появляется и исчезает вместе с числом строк: следим и за самим списком, и за его содержимым.
+    // The scrollbar appears and disappears with the row count: watch both the list itself and its content.
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     if (el.firstElementChild) ro.observe(el.firstElementChild);

@@ -1,4 +1,4 @@
-/** Мост для окна: только перечисленные вызовы `KeditApi`, без доступа к Node. */
+/** Bridge for the window: only the listed `KeditApi` calls, no Node access. */
 import { contextBridge, ipcRenderer } from 'electron';
 import type { LiveRequestBody } from '@kenshi-editor/core';
 import { IPC, type GameLinkStatus, type KeditApi, type LiveReply, type LiveStatus } from '../shared/api.ts';

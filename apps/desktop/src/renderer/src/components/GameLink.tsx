@@ -1,6 +1,6 @@
 /**
- * Связь с игрой в окне: значок в строке состояния, кнопки «Показать в игре» / «Перенести сюда»
- * для точек из «Где в игре» и блок «Как было в игре» в проигрывателе разговора.
+ * Game link in the window: status bar icon, «Show in game» / «Move here» buttons
+ * for points from «Where in game» and the «How it went in game» block in the conversation player.
  */
 import { useState, type ReactNode } from 'react';
 import './game.css';
@@ -8,7 +8,7 @@ import type { TraceRecord, Vec3 } from '@kenshi-editor/core';
 import { useLang } from '../i18n.ts';
 import { cameraTo, lastTraceFor, replyError, setGameTrace, teleportTo, useGameLink, useGameT, useGameTrace } from '../game.ts';
 
-/** Значок связи с игрой (строка состояния). */
+/** Game link icon (status bar). */
 export function GameIndicator(): ReactNode {
   const g = useGameT();
   const s = useGameLink();
@@ -27,7 +27,7 @@ export function GameIndicator(): ReactNode {
 
 const fmt = (p: Vec3): string => p.map((v) => String(Math.round(v))).join(', ');
 
-/** Кнопки для точки мира: камера (сразу) и телепорт выбранного (с подтверждением). */
+/** Buttons for a world point: camera (at once) and teleport of the selected (with confirmation). */
 export function ShowInGame({ pos }: { pos: Vec3 }): ReactNode {
   const g = useGameT();
   const lang = useLang();
@@ -58,7 +58,7 @@ export function ShowInGame({ pos }: { pos: Vec3 }): ReactNode {
   );
 }
 
-/** Кандидаты одной записи трассировки: выбранный, отсеянные условиями, до кого не дошла очередь. */
+/** Candidates of one trace record: the chosen one, those filtered out by conditions, those never reached. */
 export function TraceView({ rec, onGo, name }: { rec: TraceRecord; onGo?: (sid: string) => void; name?: (sid: string) => string }): ReactNode {
   const g = useGameT();
   return (
@@ -83,7 +83,7 @@ export function TraceView({ rec, onGo, name }: { rec: TraceRecord; onGo?: (sid: 
   );
 }
 
-/** «Как было в игре» рядом с расчётом редактора: последний выбор игры для персонажа на событие. */
+/** «How it went in game» next to the editor's result: the game's last pick for the character on the event. */
 export function AsInGame({ sid, event, editorChoice, onGo, name }: { sid: string; event: number; editorChoice: string | undefined; onGo: (sid: string) => void; name: (sid: string) => string }): ReactNode {
   const g = useGameT();
   const s = useGameLink();

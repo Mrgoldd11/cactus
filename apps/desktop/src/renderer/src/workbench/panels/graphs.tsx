@@ -1,9 +1,9 @@
 /**
- * Панель «Графы»: дерево исследований (что нужно → что открывает, цена, чертежи), крафт
- * (станок → что делает → из чего) и состав отрядов и городов (кто, сколько, шанс, торговцы).
- * Щелчок по узлу — подробности, переход к записи и в «Где в игре», правка значений связи
- * (сколько, шанс, приоритет…) одной отменой. Данные — из ядра (`researchGraph`,
- * `craftingStations`, `townComposition`, `squadComposition`), раскладка — общая с графом диалога.
+ * «Graphs» panel: research tree (what is needed → what it unlocks, cost, blueprints), crafting
+ * (station → what it makes → from what) and squad and town make-up (who, how many, chance, traders).
+ * Click on a node — details, jump to the record and to «Where in game», edit link values
+ * (amount, chance, priority…) with one undo. Data comes from the core (`researchGraph`,
+ * `craftingStations`, `townComposition`, `squadComposition`), the layout is shared with the dialogue graph.
  */
 import { useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -26,11 +26,11 @@ import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
 import { Empty } from './common.tsx';
 
-/** Узлов в графе за раз (дальше — уточнить фильтр). */
+/** Nodes in the graph at a time (beyond that — narrow the filter). */
 const MAX_NODES = 400;
-/** Пунктов в списке выбора станка, города, отряда. */
+/** Items in the station, town, squad choice list. */
 const MAX_OPTIONS = 400;
-/** Глубина ингредиентов (из чего сделан ингредиент…). */
+/** Ingredient depth (what an ingredient is made of…). */
 const INGREDIENT_DEPTH = 3;
 
 type Mode = 'research' | 'craft' | 'squads';
@@ -54,7 +54,7 @@ function card(name: Namer, r: GraphRef, kind: string, lines: string[] = [], sub?
   return c;
 }
 
-/** Собирает граф без повторов узлов и рёбер, с пределом на число узлов. */
+/** Builds a graph without duplicate nodes and edges, with a cap on the node count. */
 class FlowBuilder {
   readonly cards: FlowCard[] = [];
   readonly links: FlowLink[] = [];
@@ -191,7 +191,7 @@ function compositionFlow(ctx: ModContext, kind: FocusKind, sid: string, t: Strin
   return b.done();
 }
 
-/** Значения одной ссылки: поля ввода и «Применить». */
+/** Values of one link: inputs and «Apply». */
 function LinkEditor({ l, title, onApply }: { l: GraphLink; title: string; onApply: (values: number[]) => void }): ReactNode {
   const t = useT();
   const n = Math.max(1, Math.min(3, l.arity));
@@ -293,7 +293,7 @@ function GraphsPanel(): ReactNode {
   const byId = new Map(flow.cards.map((c) => [c.id, c]));
   const found = q !== '' ? flow.cards.filter((c) => c.matched).length : undefined;
 
-  // Списки выбора: по поиску (в режимах крафта и состава поиск фильтрует список).
+  // Choice lists: by search (in crafting and make-up modes the search filters the list).
   const stationOptions = sortedStations.filter((s) => q === '' || mode !== 'craft' || textMatch(q, s.name, s.localized, s.sid, ...s.products.flatMap((p) => [p.name, p.localized]))).slice(0, MAX_OPTIONS);
   const focusOptions = focusIds.filter((f) => q === '' || textMatch(q, f.label, f.sid, ctx.name(f.sid))).slice(0, MAX_OPTIONS);
 

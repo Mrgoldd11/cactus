@@ -1,8 +1,8 @@
 /**
- * Панель «Модель»: 3D-модель выбранной записи (оружие, броня, здание, часть здания, предмет)
- * из файлов игры. Мышь — как в Blender/Unity: левая кнопка вращает, средняя/правая сдвигает,
- * колесо приближает; F — показать целиком, цифры 1/3/7 (основные или на цифровом блоке) — вид
- * спереди/справа/сверху. Можно сохранить картинку модели как иконку (PNG с прозрачным фоном).
+ * «Model» panel: 3D model of the selected record (weapon, armour, building, building part, item)
+ * from the game files. Mouse as in Blender/Unity: left button rotates, middle/right pans,
+ * wheel zooms; F — show all, digits 1/3/7 (main row or numpad) — front/right/top
+ * view. The model image can be saved as an icon (PNG with a transparent background).
  */
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { modelOfRecord, type RecordModel } from '@kenshi-editor/core';
@@ -78,7 +78,7 @@ const zh: ModelStrings = {
 };
 const MODEL_STRINGS: Record<Lang, ModelStrings> = { en, ru, zh };
 
-/** Типы записей, у которых в игре бывает модель. */
+/** Record types that can have a model in the game. */
 const MODEL_TYPES = [
   'WEAPON',
   'CROSSBOW',
@@ -113,7 +113,7 @@ function ModelPanel({ def, params }: PanelProps): ReactNode {
   const [info, setInfo] = useState<{ model: RecordModel; triangles: number; missing: string[] } | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [saved, setSaved] = useState<string | undefined>();
-  /** Выбранная кликом часть модели (запись части или сама запись) и часть под мышью. */
+  /** Model part selected by click (the part record or the record itself) and the part under the mouse. */
   const [picked, setPicked] = useState<string | undefined>();
   const [hover, setHover] = useState<string | undefined>();
   const down = useRef<{ x: number; y: number } | undefined>(undefined);
@@ -171,7 +171,7 @@ function ModelPanel({ def, params }: PanelProps): ReactNode {
     return () => {
       cancelled = true;
     };
-    // modelKey описывает модель целиком; version — правки записи.
+    // modelKey describes the whole model; version — record edits.
   }, [modelKey, sid, version, project]);
 
   useEffect(() => {
@@ -261,7 +261,7 @@ function ModelPanel({ def, params }: PanelProps): ReactNode {
         onPointerUp={(e) => {
           const d = down.current;
           down.current = undefined;
-          // Клик без перетаскивания левой кнопкой — выбрать часть (мимо модели — снять выбор).
+          // A left-button click without dragging — select a part (outside the model — clear the selection).
           if (e.button !== 0 || !d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
           setPicked(viewer.current?.pick(e.clientX, e.clientY));
         }}
