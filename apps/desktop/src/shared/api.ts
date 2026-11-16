@@ -401,6 +401,9 @@ export interface KeditApi {
   addRestorePoint(ref: ModRef, bytes: Uint8Array): Promise<void>;
   /** «Save» dialog and writing a backup as a separate file (into the game — with confirmation, into the Workshop — never). */
   exportBackup(ref: ModRef, id: string): Promise<ExportBackupResult>;
+  /** Ignored validation problems of the mod (`issueKey` values), kept in the editor's data folder. */
+  readIgnoreList(ref: ModRef): Promise<string[]>;
+  writeIgnoreList(ref: ModRef, keys: string[]): Promise<void>;
   /** Whether there are unsaved changes (main asks when the window closes). */
   setDirty(dirty: boolean, title: string): void;
   /** Handler of AI requests to the open project (one per window; a new one replaces the previous). */
@@ -451,6 +454,8 @@ export const IPC = {
   readBackup: 'kedit:read-backup',
   addRestorePoint: 'kedit:add-restore-point',
   exportBackup: 'kedit:export-backup',
+  readIgnoreList: 'kedit:read-ignore-list',
+  writeIgnoreList: 'kedit:write-ignore-list',
   liveRequest: 'kedit:live-request',
   liveResponse: 'kedit:live-response',
   liveStatus: 'kedit:live-status',

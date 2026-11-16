@@ -3,7 +3,6 @@
  * AI changes. Each is one `registerPanel` call.
  */
 import { useMemo, type ReactNode } from 'react';
-import { validateMod } from '@kenshi-editor/core';
 import { useT } from '../../i18n.ts';
 import { tryEdit, useProjectVersion } from '../../hooks.ts';
 import { MOD_CHANGES_ID } from '../../project.ts';
@@ -14,7 +13,7 @@ import { RecordList } from '../../components/RecordList.tsx';
 import { RecordEditor } from '../../components/RecordEditor.tsx';
 import { WhereTab } from '../../components/WhereTab.tsx';
 import { AiPanel } from '../../components/AiPanel.tsx';
-import { IssueList } from '../../components/Modals.tsx';
+import { IssueFixer } from '../../components/IssueFixer.tsx';
 import { registerPanel, type PanelProps } from '../registry.ts';
 import { useFollowed, useWorkbench } from '../context.ts';
 import { useSelectionVersion } from '../selection.ts';
@@ -88,15 +87,10 @@ function WherePanel({ def, params }: PanelProps): ReactNode {
 }
 
 function DiagnosticsPanel(): ReactNode {
-  const { project, go } = useWorkbench();
-  const version = useProjectVersion(project);
-  const t = useT();
-  const issues = useMemo(() => validateMod(project.ctx), [project, version]);
-  const errors = issues.filter((i) => i.severity === 'error').length;
+  const { project, go, report } = useWorkbench();
   return (
     <div className="panel-scroll panel-pad" data-testid="diagnostics">
-      {issues.length > 0 && <div className="pane-title">{`${errors} ${t.errors}, ${issues.length - errors} ${t.warnings}`}</div>}
-      <IssueList project={project} issues={issues} onGo={go} />
+      <IssueFixer project={project} onGo={go} onReport={report} />
     </div>
   );
 }

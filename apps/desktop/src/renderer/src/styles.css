@@ -848,11 +848,41 @@ tr.fs-removed td:first-child {
   margin: 0;
   padding-left: 16px;
 }
-.issues li.error button {
+.issues li.error button.link {
   color: var(--error);
 }
-.issues li.warning button {
+.issues li.warning button.link {
   color: var(--changed);
+}
+.issue-fixer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.issue-group {
+  margin: 4px 0;
+}
+.issue-group-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.issues.fixable {
+  list-style: none;
+  padding-left: 4px;
+}
+.issues.fixable li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.issues.fixable li.ignored {
+  opacity: 0.55;
+}
+.issues .issue-actions {
+  display: inline-flex;
+  gap: 4px;
 }
 
 /* where in game */

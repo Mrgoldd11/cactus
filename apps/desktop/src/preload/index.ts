@@ -38,6 +38,8 @@ const api: KeditApi = {
   readBackup: (ref, id) => ipcRenderer.invoke(IPC.readBackup, ref, id),
   addRestorePoint: (ref, bytes) => ipcRenderer.invoke(IPC.addRestorePoint, ref, bytes),
   exportBackup: (ref, id) => ipcRenderer.invoke(IPC.exportBackup, ref, id),
+  readIgnoreList: (ref) => ipcRenderer.invoke(IPC.readIgnoreList, ref),
+  writeIgnoreList: (ref, keys) => ipcRenderer.invoke(IPC.writeIgnoreList, ref, keys),
   setDirty: (dirty, title) => {
     ipcRenderer.send(IPC.setDirty, dirty, title);
   },

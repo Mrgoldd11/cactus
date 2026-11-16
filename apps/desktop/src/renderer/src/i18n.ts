@@ -7,6 +7,7 @@ import { errorMessage } from '@kenshi-editor/core';
 import type { Lang } from '../../shared/api.ts';
 import { backupEn, backupRu } from './i18n-backup.ts';
 import { searchEn, searchRu, searchZh } from './i18n-search.ts';
+import { fixesEn, fixesRu, fixesZh } from './i18n-fixes.ts';
 import { extensionsEn, extensionsRu, extensionsZh } from './i18n-extensions.ts';
 import { mergeEn, mergeRu } from './i18n-merge.ts';
 import { specialEn, specialRu } from './i18n-special.ts';
@@ -616,6 +617,7 @@ const en = {
   ...backupEn,
   ...searchEn,
   ...extensionsEn,
+  ...fixesEn,
 };
 
 export type Strings = typeof en;
@@ -1212,9 +1214,10 @@ const ru: Strings = {
   ...backupRu,
   ...searchRu,
   ...extensionsRu,
+  ...fixesRu,
 };
 
-const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh, ...searchZh };
+const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh, ...searchZh, ...fixesZh };
 
 export const STRINGS: Record<Lang, Strings> = { en, ru, zh };
 

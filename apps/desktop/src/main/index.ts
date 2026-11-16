@@ -24,6 +24,8 @@ import {
   keepAutosaveAsBackup,
   listBackups,
   listGameDump,
+  loadIgnoreList,
+  saveIgnoreList,
   MAX_BACKUP_COUNT,
   readAutosave,
   readBackup,
@@ -427,6 +429,11 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.listBackups, (_e, ref: ModRef): BackupItem[] => listBackups(dataDir, ref));
   ipcMain.handle(IPC.readBackup, (_e, ref: ModRef, id: string) => readBackup(dataDir, ref, id) ?? null);
+  ipcMain.handle(IPC.readIgnoreList, (_e, ref: ModRef): string[] => loadIgnoreList(dataDir, ref).ignored);
+  ipcMain.handle(IPC.writeIgnoreList, (_e, ref: ModRef, keys: unknown) => {
+    const ignored = Array.isArray(keys) ? keys.filter((k): k is string => typeof k === 'string') : [];
+    saveIgnoreList(dataDir, ref, { version: 1, ignored });
+  });
   ipcMain.handle(IPC.addRestorePoint, (_e, ref: ModRef, bytes: Uint8Array) => {
     addBackup(dataDir, ref, bytes, 'restore-point', settings.backupCount);
   });
