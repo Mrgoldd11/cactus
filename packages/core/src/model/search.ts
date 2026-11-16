@@ -18,6 +18,8 @@ export interface FieldFilter {
   key: string;
   op: FilterOp;
   value?: string;
+  /** The key was quoted (`"type"=…`): a field of that name, never a keyword or a path through references. */
+  literal?: boolean;
 }
 
 export interface SearchQuery {
@@ -33,6 +35,8 @@ export interface SearchQuery {
   anywhere?: string;
   /** Only records the mod defines (new, changed, deleted). */
   modOnly?: boolean;
+  /** Search-box syntax (`parseSearchQuery`): words and `;`-separated conditions, all must match. */
+  query?: string;
 }
 
 export interface SearchHit {
@@ -46,17 +50,104 @@ export interface SearchHit {
 /**
  * `key=value`, `key!=value`, `key~text` (or `key:text`), `key!:text` (does not contain), `key?pattern`
  * (regular expression, case-insensitive), `key>=3`, `key?` (field present). As in the FCS search.
+ * Keywords: `type` (record type), `state` (base/new/changed/deleted/mod), `ref` (a referenced record;
+ * with a number — how many records reference this one). `list.key=…` — some record of the reference
+ * list `list` matches `key=…` (any depth). A quoted key (`"type"=…`) is always a plain field.
  */
 export function parseFieldFilter(text: string): FieldFilter {
   const exists = /^(.+)\?$/.exec(text);
-  if (exists) return { key: exists[1]!.trim(), op: 'exists' };
+  if (exists) return withKey(exists[1]!, { op: 'exists' });
   const m = /^(.+?)(!=|!:|!~|<=|>=|=|~|:|\?|<|>)(.*)$/.exec(text);
   if (!m) throw new UiTextError({ en: `Cannot read condition “${text}”: use key=value, key~text, key>number or key?`, ru: `Не понял условие «${text}»: нужно ключ=значение, ключ~текст, ключ>число или ключ?`, zh: `无法理解条件 “${text}”：应为 键=值、键~文本、键>数字 或 键?` });
   const raw = m[2]!;
   const op: FilterOp = raw === ':' ? '~' : raw === '!:' ? '!~' : raw === '?' ? 'regex' : (raw as FilterOp);
   const value = m[3]!.trim();
   if (op === 'regex') regexOf(value);
-  return { key: m[1]!.trim(), op, value };
+  return withKey(m[1]!, { op, value });
+}
+
+function withKey(rawKey: string, rest: Omit<FieldFilter, 'key'>): FieldFilter {
+  const key = rawKey.trim();
+  const quoted = /^"(.+)"$/.exec(key);
+  return quoted ? { key: quoted[1]!, ...rest, literal: true } : { key, ...rest };
+}
+
+const CONDITION = /!=|!:|!~|<=|>=|=|~|:|\?|<|>/;
+
+/** Parsed search-box text: plain words (lowercase) and conditions. */
+export interface ParsedQuery {
+  /** Every word must be in the name, the translated name or the string id. */
+  words: string[];
+  filters: FieldFilter[];
+}
+
+/**
+ * Search-box syntax shared by the record list, `kedit find --query` and MCP `find` `query`:
+ * parts separated by `;`; a part with an operator is a condition (`parseFieldFilter`), any other
+ * part is plain words. Text without operators is plain words only, exactly as before.
+ * Throws UiTextError on an unreadable condition or a bad regular expression.
+ */
+export function parseSearchQuery(text: string): ParsedQuery {
+  const { errors, ...parsed } = parseSearchQueryParts(text);
+  if (errors.length) throw errors[0];
+  return parsed;
+}
+
+/** Like `parseSearchQuery`, but unreadable conditions are skipped and returned as `errors` (for live typing). */
+export function parseSearchQueryParts(text: string): ParsedQuery & { errors: unknown[] } {
+  const words: string[] = [];
+  const filters: FieldFilter[] = [];
+  const errors: unknown[] = [];
+  for (const part of text.split(';')) {
+    const p = part.trim();
+    if (!p) continue;
+    if (!CONDITION.test(p)) {
+      words.push(...p.toLowerCase().split(/\s+/).filter(Boolean));
+      continue;
+    }
+    try {
+      filters.push(parseFieldFilter(p));
+    } catch (e) {
+      errors.push(e);
+    }
+  }
+  return { words, filters, errors };
+}
+
+type Keyword = 'type' | 'state' | 'ref';
+
+function keywordOf(key: string): Keyword | undefined {
+  const k = key.toLowerCase();
+  return k === 'type' || k === 'state' || k === 'ref' ? k : undefined;
+}
+
+/**
+ * Condition keys that are neither keywords nor fields of any schema type (each step of a `list.key` path is
+ * checked). Empty without a schema. For a hint near the search box: such a condition matches nothing.
+ */
+export function unknownFilterKeys(ctx: ModContext, filters: readonly FieldFilter[]): string[] {
+  const schema = ctx.schema;
+  if (!schema) return [];
+  const known = (k: string): boolean => {
+    if (k === 'name') return true;
+    for (const t of schema.types.values()) if (t.fields.has(k)) return true;
+    return false;
+  };
+  const out: string[] = [];
+  for (const f of filters) {
+    if (!f.literal && keywordOf(f.key)) continue;
+    if (known(f.key)) continue;
+    if (f.literal) {
+      out.push(f.key);
+      continue;
+    }
+    const steps = f.key.split('.').map((s) => s.replace(/^"(.+)"$/, '$1'));
+    if (steps.length > 1 && /^v[012]$/.test(steps[steps.length - 1]!)) steps.pop();
+    // A keyword as the last step of a path (`vendors.type=ITEM`) is the target's record type.
+    if (steps.length > 1 && keywordOf(steps[steps.length - 1]!) && !/"$/.test(f.key)) steps.pop();
+    if (!steps.every(known)) out.push(f.key);
+  }
+  return out;
 }
 
 const regexCache = new Map<string, RegExp>();
@@ -124,6 +215,8 @@ function fieldValues(ctx: ModContext, rec: GameRecord, key: string): string[] | 
   }
   const refs = rec.refs.get(key);
   if (refs) return refs.flatMap((r) => [r.target, ctx.name(r.target) ?? '']);
+  // `name` is not a field: the record name and its translation.
+  if (key === 'name') return [decodeText(rec.name), ctx.localizedName(rec.stringId) ?? ''];
   return undefined;
 }
 
@@ -135,7 +228,6 @@ const REF_VALUE = /^(.+)\.v([012])$/;
  * value (at least one), `Ref>0` — how many records reference this one. undefined — not such a condition.
  */
 function matchRefs(ctx: ModContext, rec: GameRecord, f: FieldFilter): boolean | undefined {
-  if (f.key === 'Ref') return compare(String(ctx.referencesTo(rec.stringId).length), f.op === 'exists' ? '>=' : f.op, f.op === 'exists' ? '0' : (f.value ?? ''));
   const v = REF_VALUE.exec(f.key);
   if (v) {
     const list = rec.refs.get(v[1]!);
@@ -149,14 +241,89 @@ function matchRefs(ctx: ModContext, rec: GameRecord, f: FieldFilter): boolean | 
   return undefined;
 }
 
-export function matchesFilter(ctx: ModContext, rec: GameRecord, f: FieldFilter): boolean {
-  const special = matchRefs(ctx, rec, f);
-  if (special !== undefined) return special;
+const NEGATIVE: readonly FilterOp[] = ['!=', '!~'];
+
+/** Positive operators need one matching value, negative ones — all values. */
+function anyOrAll(values: readonly string[], f: FieldFilter): boolean {
+  if (f.op === 'exists') return values.length > 0;
+  return NEGATIVE.includes(f.op) ? values.every((v) => compare(v, f.op, f.value ?? '')) : values.some((v) => compare(v, f.op, f.value ?? ''));
+}
+
+/** `type`, `state`, `ref` conditions. */
+function matchKeyword(ctx: ModContext, rec: GameRecord, kw: Keyword, f: FieldFilter): boolean {
+  switch (kw) {
+    case 'type': {
+      // Type names compare case-insensitively: `type=character` works too.
+      const g = { ...f, value: (f.value ?? '').toUpperCase() };
+      return anyOrAll([ctx.typeName(rec.type).toUpperCase(), String(rec.type)], g);
+    }
+    case 'state': {
+      const st = ctx.status(rec.stringId) ?? 'base';
+      const g = { ...f, value: (f.value ?? '').toLowerCase() };
+      return anyOrAll(st === 'base' ? [st] : [st, 'mod'], g);
+    }
+    case 'ref': {
+      // A number or `ref?`: how many records reference this one (FCS `Ref>0`); text: a record this one references.
+      const count = (): number => ctx.referencesTo(rec.stringId).length;
+      if (f.op === 'exists') return count() > 0;
+      if (NUMERIC_OPS.includes(f.op) || ((f.op === '=' || f.op === '!=') && /^\d+$/.test(f.value ?? ''))) return compare(String(count()), f.op, f.value ?? '');
+      const values: string[] = [];
+      for (const list of rec.refs.values()) for (const r of list) values.push(r.target, ctx.name(r.target) ?? '', ctx.localizedName(r.target) ?? '');
+      return anyOrAll(values, f);
+    }
+  }
+}
+
+/** Record by string id, or its last state in the lower layers if the mod deleted it. */
+function recordOf(ctx: ModContext, sid: string): GameRecord | undefined {
+  return ctx.get(sid) ?? ctx.lower(sid);
+}
+
+/** Paths deeper than this stop matching: a guard against absurd keys, not a real limit. */
+const MAX_PATH_DEPTH = 8;
+
+/**
+ * `list.key…` path: the condition `key…` on the records of the reference list `list` (recursively).
+ * undefined — the key is not such a path.
+ */
+function matchPath(ctx: ModContext, rec: GameRecord, f: FieldFilter, depth: number): boolean | undefined {
+  const dot = f.key.indexOf('.');
+  if (dot <= 0 || dot === f.key.length - 1) return undefined;
+  const list = rec.refs.get(f.key.slice(0, dot));
+  const negative = NEGATIVE.includes(f.op);
+  if (!list || list.length === 0) return negative;
+  // `list."type"` — the rest is a plain field of the target, not a keyword.
+  const rest = f.key.slice(dot + 1);
+  const quoted = /^"(.+)"$/.exec(rest);
+  const sub: FieldFilter = quoted ? { ...f, key: quoted[1]!, literal: true } : { ...f, key: rest };
+  const test = (sid: string): boolean => {
+    const target = recordOf(ctx, sid);
+    // A broken reference has no properties: only a negative condition holds.
+    return target ? matchFilterAt(ctx, target, sub, depth + 1) : negative;
+  };
+  return negative ? list.every((r) => test(r.target)) : list.some((r) => test(r.target));
+}
+
+function matchFilterAt(ctx: ModContext, rec: GameRecord, f: FieldFilter, depth: number): boolean {
+  if (!f.literal) {
+    const kw = keywordOf(f.key);
+    if (kw) return matchKeyword(ctx, rec, kw, f);
+    const special = matchRefs(ctx, rec, f);
+    if (special !== undefined) return special;
+  }
   const values = fieldValues(ctx, rec, f.key);
+  if (values === undefined && !f.literal && depth < MAX_PATH_DEPTH) {
+    const path = matchPath(ctx, rec, f, depth);
+    if (path !== undefined) return path;
+  }
   if (f.op === 'exists') return values !== undefined && (!rec.refs.has(f.key) || values.length > 0);
-  if (values === undefined) return f.op === '!=' || f.op === '!~';
-  if (f.op === '!=' || f.op === '!~') return values.every((v) => compare(v, f.op, f.value ?? ''));
-  return values.some((v) => compare(v, f.op, f.value ?? ''));
+  if (values === undefined) return NEGATIVE.includes(f.op);
+  return anyOrAll(values, f);
+}
+
+/** Does the record satisfy the condition (keywords, reference counts and values, `list.key` paths, fields). */
+export function matchesFilter(ctx: ModContext, rec: GameRecord, f: FieldFilter): boolean {
+  return matchFilterAt(ctx, rec, f, 0);
 }
 
 /** All record contents as one lowercase string — for the "anywhere" search. */
@@ -179,6 +346,7 @@ export function searchRecords(ctx: ModContext, q: SearchQuery): SearchHit[] {
   const text = q.text?.toLowerCase();
   const anywhere = q.anywhere?.toLowerCase();
   const statuses = q.status ? new Set(q.status) : undefined;
+  const parsed = q.query !== undefined ? parseSearchQuery(q.query) : undefined;
   const ids = q.modOnly ? ctx.modRecords().map((r) => r.stringId) : ctx.allStringIds();
   const out: SearchHit[] = [];
   for (const sid of ids) {
@@ -197,6 +365,11 @@ export function searchRecords(ctx: ModContext, q: SearchQuery): SearchHit[] {
       if (!ok) continue;
     }
     if (q.fields && !q.fields.every((f) => matchesFilter(ctx, rec, f))) continue;
+    if (parsed) {
+      const hay = `${name}\n${ru ?? ''}\n${sid}`.toLowerCase();
+      if (!parsed.words.every((w) => hay.includes(w))) continue;
+      if (!parsed.filters.every((f) => matchesFilter(ctx, rec, f))) continue;
+    }
     if (anywhere !== undefined && !recordHaystack(ctx, rec).includes(anywhere)) continue;
     const hit: SearchHit = { stringId: sid, type: ctx.typeName(rec.type), name, status };
     if (ru !== undefined) hit.localizedName = ru;

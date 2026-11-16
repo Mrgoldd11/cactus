@@ -117,6 +117,36 @@ test('vanilla: search, field edit, undo, save to a temp folder', async () => {
     // Search in Russian works too: «Катана».
     await page.getByTestId('search').fill('катана');
     await expect(page.getByTestId('record-list').locator(`[data-sid="${KATANA}"]`)).toBeVisible();
+
+    // Operator search (the core syntax of `kedit find --query`): type, numbers, words, a path through references.
+    const list = page.getByTestId('record-list');
+    const search = page.getByTestId('search');
+    await search.fill('type=WEAPON; weight kg>10');
+    await expect(page.getByTestId('list-count')).toHaveText(/: 4$/);
+    await expect(list.locator('[data-sid="478-gamedata.base"]')).toBeVisible();
+    await expect(list.locator(`[data-sid="${KATANA}"]`)).toHaveCount(0);
+    await search.fill('katana; type=WEAPON');
+    await expect(page.getByTestId('list-count')).toHaveText(/: 3$/);
+    await expect(list.locator(`[data-sid="${KATANA}"]`)).toBeVisible();
+    await search.fill('type=CHARACTER; vendors.weapons:katana');
+    await expect(list.locator('[data-sid="51731-rebirth.mod"]')).toBeVisible();
+    await expect(page.getByTestId('search-hint')).toHaveCount(0);
+    // A bad regular expression and an unknown field give a hint; the other conditions still filter.
+    await search.fill('type=WEAPON; name?([; weight kgg>1');
+    await expect(page.getByTestId('search-hint')).toContainText('([');
+    await expect(page.getByTestId('search-hint')).toContainText('weight kgg');
+    await search.fill('type=WEAPON; name?([');
+    await expect(list.locator(`[data-sid="${KATANA}"]`)).toBeVisible();
+    // The help lists the syntax; an example goes into the box.
+    await page.getByTestId('search-help').click();
+    await expect(page.getByTestId('search-help-popover')).toBeVisible();
+    await page.screenshot({ path: join(shots, '02b-search-operators.png') });
+    await page.getByTestId('search-help-popover').locator('button', { hasText: 'weight kg>10' }).click();
+    await expect(search).toHaveValue('type=WEAPON; weight kg>10');
+    await expect(page.getByTestId('list-count')).toHaveText(/: 4$/);
+    await page.getByTestId('search-help').click();
+    await expect(page.getByTestId('search-help-popover')).toHaveCount(0);
+
     await selectRecord(page, 'katana', KATANA);
 
     await page.getByTestId('field-filter').fill('cut damage');

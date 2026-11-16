@@ -113,7 +113,8 @@ What it can do:
   reloaded when they change;
 - on the left, a category tree as in the FCS (`fcs_layout.def`) plus **Changes in this mod**,
   **All** and **Other types**; the record list is virtual, search works by English or
-  translated name and by id, with a status filter; status colours as in the FCS: new — green,
+  translated name and by id and understands conditions (see [Search syntax](#search-syntax)),
+  with a status filter; status colours as in the FCS: new — green,
   changed — yellow, deleted — red and struck out, `●` — changed since the last save;
 - fields follow the `fcs.def` schema: hints from its descriptions, drop-down lists for enums,
   an **inferred** mark for fields that `fcs.def` does not describe, a **Vanilla** column and
@@ -189,6 +190,31 @@ barman; the live MCP link; on a temporary "game folder" — mods as layers, conf
 order, copying a workshop mod and the **Translation** panel (typing a translation, CSV export,
 import back, undo). Screenshots go to `out/screenshots/`.
 
+## Search syntax
+
+The search box of the record list, `kedit find --query "…"` and the MCP `find` tool (`query`)
+share one syntax. Plain words are looked up in the name, the translated name and the string id
+(every word must match). Conditions are separated by `;`:
+
+| Form | Meaning |
+| --- | --- |
+| `key=value`, `key!=value` | equal / not equal (numbers compare as numbers) |
+| `key>n`, `key<n`, `key>=n`, `key<=n` | numeric comparison; on a reference list — how many entries it has |
+| `key:text`, `key!:text` | contains / does not contain (case-insensitive) |
+| `key?pattern`, `key?` | regular expression (case-insensitive) / the field is set |
+| `type=WEAPON` | record type (`type:dialog`, `type!=ITEM` work too) |
+| `state=new` | `base`, `new`, `changed`, `deleted`, or `mod` (anything the mod touches) |
+| `ref=Katana`, `ref>0` | references a record (id or name) / is referenced by more than 0 records |
+| `name?^hive` | the record name or its translation |
+| `list.key=…` | some record in the reference list `list` matches `key=…`; paths can go deeper |
+| `list.v0>50` | a reference value v0/v1/v2 |
+| `"type"=…` | a real field called `type` (quotes turn off keywords and paths) |
+
+Examples: `bandit; type=CHARACTER`, `type=WEAPON; weight kg>10`, `state=mod`,
+`type=CHARACTER; vendors.weapons:katana` (traders whose shop lists sell katanas). A broken
+condition (bad regular expression, unknown field) shows a hint under the box and the other
+conditions keep filtering; the `?` button next to the box lists the syntax.
+
 ## kedit (CLI)
 
 ```bash
@@ -198,8 +224,11 @@ node packages/cli/bin/kedit.js --help
 ```text
 Commands:
   find [text] [TYPE]      records by name (English or translated) or id; TYPE — name or number
-      --type TYPE  --field key=value (~ substring, != < > <= >=, key? — field is set; may repeat)
+      --type TYPE  --field key=value (~ or : substring, !: not, ?regex, != < > <= >=, key? — field is set; may repeat)
       --status new,changed,deleted,base  --anywhere text  --exact  --mod-only
+      --query "Q"  the record list search syntax: words and conditions split by ;
+                   keywords type= state= ref= (ref>N — referenced by N records), list.key=… — through references
+                   e.g. --query "bandit; type=CHARACTER; vendors.value>500"
   show <id|name>...       fields and references (with target names)  --layers  --max-refs N
   tree <id|name>          dialogue tree (dialogs/lines)  --full  --depth N  --max-nodes N
   mod <file.mod> [text]   records of a mod file with status; text — substring anywhere  --brief

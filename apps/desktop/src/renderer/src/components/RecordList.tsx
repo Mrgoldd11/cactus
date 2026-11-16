@@ -1,11 +1,12 @@
 /**
- * Node record list: search by name (English/Russian) and id, status filter, status colours as in
+ * Node record list: search by name (English/Russian) and id plus operator conditions
+ * (`parseSearchQueryParts` from core — the same syntax as `kedit find --query` and MCP `find`), status filter, status colours as in
  * FCS (new — green, changed — yellow, deleted — red struck through), «●» — edit
  * after save. Commands: new, copy, delete, restore, revert.
  */
-import { useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
-import type { RecordStatus } from '@kenshi-editor/core';
-import { useDataLocale, useT } from '../i18n.ts';
+import { useDeferredValue, useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { matchesFilter, parseSearchQueryParts, unknownFilterKeys, type RecordStatus } from '@kenshi-editor/core';
+import { errorText, useDataLocale, useT } from '../i18n.ts';
 import { tryEdit } from '../hooks.ts';
 import type { IndexEntry, Project } from '../project.ts';
 import { VirtualList } from './VirtualList.tsx';
@@ -35,12 +36,21 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
   const grid = hasTr ? '' : ' no-tr';
   const ctx = project.ctx;
   const [query, setQuery] = useState('');
+  // Filtering tens of thousands of records may lag behind typing; the box itself stays responsive.
+  const deferredQuery = useDeferredValue(query);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   // The list scrollbar narrows its rows; the header gets the same right padding, otherwise the headings shift.
   const [gutter, setGutter] = useState(0);
 
+  const parsed = useMemo(() => {
+    const p = parseSearchQueryParts(deferredQuery);
+    return { ...p, unknown: unknownFilterKeys(ctx, p.filters) };
+  }, [ctx, deferredQuery]);
+
   const items = useMemo(() => {
-    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const terms = parsed.words;
+    const filters = parsed.filters;
     const out: IndexEntry[] = [];
     for (const sid of ids) {
       const e = project.entry(sid);
@@ -49,10 +59,21 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
         const st = ctx.status(sid);
         if (statusFilter === 'mod' ? st === 'base' : st !== statusFilter) continue;
       }
-      if (terms.every((term) => e.hay.includes(term))) out.push(e);
+      if (!terms.every((term) => e.hay.includes(term))) continue;
+      if (filters.length) {
+        // Records deleted by the mod are matched by their last state in the lower layers.
+        const rec = ctx.get(sid) ?? ctx.lower(sid);
+        if (!rec || !filters.every((f) => matchesFilter(ctx, rec, f))) continue;
+      }
+      out.push(e);
     }
     return out.sort((a, b) => (a.hay < b.hay ? -1 : a.hay > b.hay ? 1 : 0));
-  }, [project, ctx, ids, query, statusFilter, version]);
+  }, [project, ctx, ids, parsed, statusFilter, version]);
+
+  const hints = [
+    ...parsed.errors.map((e) => t.searchBadCondition(errorText(e))),
+    ...(parsed.unknown.length ? [t.searchUnknownKeys(parsed.unknown.join(', '))] : []),
+  ];
 
   const selIndex = selected !== undefined ? items.findIndex((e) => e.sid === selected) : -1;
   const selStatus = selected !== undefined ? ctx.status(selected) : undefined;
@@ -81,6 +102,17 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
             if (e.key === 'Escape') setQuery('');
           }}
         />
+        <button
+          className={`search-help-btn${helpOpen ? ' active' : ''}`}
+          data-testid="search-help"
+          title={t.searchHelpTip}
+          aria-expanded={helpOpen}
+          onClick={() => {
+            setHelpOpen(!helpOpen);
+          }}
+        >
+          ?
+        </button>
         <select
           data-testid="status-filter"
           value={statusFilter}
@@ -95,6 +127,35 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
           ))}
         </select>
       </div>
+      {helpOpen && (
+        <div className="search-help" data-testid="search-help-popover">
+          <div className="search-help-title">{t.searchHelpTitle}</div>
+          <div>{t.searchHelpIntro}</div>
+          <div>{t.searchHelpOps}</div>
+          <div>{t.searchHelpKeywords}</div>
+          <div>{t.searchHelpPath}</div>
+          <div className="search-help-title">{t.searchHelpExamples}</div>
+          {t.searchHelpEx.map(([q, what]) => (
+            <button
+              key={q}
+              className="search-help-ex"
+              onClick={() => {
+                setQuery(q);
+                searchRef.current?.focus();
+              }}
+            >
+              <code>{q}</code> — {what}
+            </button>
+          ))}
+        </div>
+      )}
+      {hints.length > 0 && (
+        <div className="search-hint" data-testid="search-hint">
+          {hints.map((h) => (
+            <div key={h}>{h}</div>
+          ))}
+        </div>
+      )}
       <div className="list-actions">
         <button data-testid="new-record" onClick={onNew}>
           + {t.newRecord}

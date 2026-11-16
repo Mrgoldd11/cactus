@@ -6,6 +6,7 @@ import { createContext, useContext } from 'react';
 import { errorMessage } from '@kenshi-editor/core';
 import type { Lang } from '../../shared/api.ts';
 import { backupEn, backupRu } from './i18n-backup.ts';
+import { searchEn, searchRu, searchZh } from './i18n-search.ts';
 import { extensionsEn, extensionsRu, extensionsZh } from './i18n-extensions.ts';
 import { mergeEn, mergeRu } from './i18n-merge.ts';
 import { specialEn, specialRu } from './i18n-special.ts';
@@ -60,7 +61,7 @@ const en = {
   modChanges: 'Changes in this mod',
   everything: 'Everything',
   otherTypes: 'Other types',
-  search: 'Search by name (English or translated) or id',
+  search: 'Name, translation or id; conditions: type=WEAPON; weight kg>10',
   statusAll: 'All',
   statusMod: 'In mod',
   status_base: 'vanilla',
@@ -613,6 +614,7 @@ const en = {
   ...specialEn,
   ...mergeEn,
   ...backupEn,
+  ...searchEn,
   ...extensionsEn,
 };
 
@@ -661,7 +663,7 @@ const ru: Strings = {
   modChanges: 'Изменения мода',
   everything: 'Всё',
   otherTypes: 'Прочие типы',
-  search: 'Поиск по имени (английскому или переводу) или id',
+  search: 'Имя, перевод или id; условия: type=WEAPON; weight kg>10',
   statusAll: 'Все',
   statusMod: 'В моде',
   status_base: 'ваниль',
@@ -1208,10 +1210,11 @@ const ru: Strings = {
   ...specialRu,
   ...mergeRu,
   ...backupRu,
+  ...searchRu,
   ...extensionsRu,
 };
 
-const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh };
+const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh, ...searchZh };
 
 export const STRINGS: Record<Lang, Strings> = { en, ru, zh };
 

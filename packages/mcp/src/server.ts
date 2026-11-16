@@ -229,11 +229,17 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
       inputSchema: {
         text: z.string().optional().describe('Substring of name or id'),
         type: z.union([z.string(), z.number()]).optional().describe('Type: name (DIALOGUE) or number'),
-        fields: z.array(z.string()).optional().describe('Conditions: key=val, key~substring (or key:substring), key!:substring (does not contain), key?regexp, != < > <= >=, key? (field exists); for references: list>5, list.v0=4, Ref>0'),
+        fields: z.array(z.string()).optional().describe('Conditions: key=val, key~substring (or key:substring), key!:substring (does not contain), key?regexp, != < > <= >=, key? (field exists); for references: list>5, list.v0=4, ref>0, list.key=… (through references); keywords type, state, ref'),
         status: z.array(z.enum(['base', 'new', 'changed', 'deleted'])).optional(),
         anywhere: z.string().optional().describe('Substring anywhere in the record'),
         exact: z.boolean().optional().describe('Exact name match only'),
         mod_only: z.boolean().optional().describe('Mod records only'),
+        query: z
+          .string()
+          .optional()
+          .describe(
+            'Search-box syntax of the Cactus record list: plain words and conditions separated by ; (same operators as fields). Keywords: type=CHARACTER, state=new|changed|deleted|mod, ref=target id or name (ref>N — referenced by N records). list.key=… — some record of reference list `list` matches key=… (any depth). Quoted key ("type"=…) — a plain field. Example: "bandit; type=CHARACTER; vendors.value>500"',
+          ),
         offset,
         limit: limit(30),
       },
@@ -251,6 +257,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
             anywhere: a.anywhere,
             exact: a.exact,
             modOnly: a.mod_only,
+            query: a.query === '' ? undefined : a.query,
           }),
         );
         return paged(hits, a.offset ?? 0, a.limit ?? 30, (h) => [formatHit(h)]);
@@ -507,7 +514,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
       inputSchema: {
         type: z.union([z.string(), z.number()]).describe('Record type: name (WEAPON) or number'),
         text: z.string().optional().describe('Substring of name (English or translated) or id'),
-        fields: z.array(z.string()).optional().describe('Conditions: key=val, key~substring (or key:substring), key!:substring (does not contain), key?regexp, != < > <= >=, key? (field exists); for references: list>5, list.v0=4, Ref>0'),
+        fields: z.array(z.string()).optional().describe('Conditions: key=val, key~substring (or key:substring), key!:substring (does not contain), key?regexp, != < > <= >=, key? (field exists); for references: list>5, list.v0=4, ref>0, list.key=… (through references); keywords type, state, ref'),
         mod_only: z.boolean().optional().describe('Only records that already exist in the mod'),
         op: z.enum(['set', 'mul', 'add', 'replace', 'refAdd', 'refRemove']),
         field: z.string().describe('Field key (for replace it can be name)'),

@@ -35,6 +35,8 @@ import {
   formatEnum,
   recordToJson,
   parseFieldFilter,
+  parseSearchQuery,
+  unknownFilterKeys,
   readDataFile,
   recordsEqual,
   refLabel,
@@ -372,6 +374,63 @@ describe('search', () => {
     expect(ids({ anywhere: 'z' })).toEqual(['A', 'Z']);
     expect(ids({ text: 'shield', exact: true })).toEqual(['Y']);
     expect(() => parseFieldFilter('просто текст')).toThrow();
+  });
+
+  it('search-box syntax: words and conditions split by ;, bad regex throws', () => {
+    expect(parseSearchQuery('  Bandit  hat ')).toEqual({ words: ['bandit', 'hat'], filters: [] });
+    expect(parseSearchQuery('band; money>15;; type=CHARACTER')).toEqual({
+      words: ['band'],
+      filters: [
+        { key: 'money', op: '>', value: '15' },
+        { key: 'type', op: '=', value: 'CHARACTER' },
+      ],
+    });
+    expect(parseSearchQuery('"type"=x').filters).toEqual([{ key: 'type', op: '=', value: 'x', literal: true }]);
+    expect(() => parseSearchQuery('name?([')).toThrow(/regular expression/);
+  });
+
+  it('keywords type/state/ref, list.key paths, quoted keys, query in searchRecords', () => {
+    const ctx = newCtx();
+    ctx.setField('X', 'ints', 'value', 100);
+    ctx.setField('Z', 'strings', 'type', encodeText('cloth'));
+    const q = (query: string): string[] => searchRecords(ctx, { query }).map((h) => h.stringId);
+    expect(q('type=item')).toEqual(['X', 'Y', 'Z']);
+    expect(q('type!=ITEM')).toEqual(['A']);
+    expect(q('type:char')).toEqual(['A']);
+    expect(q('state=changed')).toEqual(['X', 'Z']);
+    expect(q('state=mod')).toEqual(['X', 'Z']);
+    expect(q('state!=mod')).toEqual(['A', 'Y']);
+    // ref with text: records referencing a target (id or name); with a number — incoming reference count.
+    expect(q('ref=Hat')).toEqual(['A']);
+    expect(q('ref:swo')).toEqual(['A']);
+    expect(q('ref>0')).toEqual(['X', 'Z']);
+    expect(q('Ref=0')).toEqual(['A', 'Y']);
+    // Recursion: A.vendors = [X, Z]; X has value 100.
+    expect(q('vendors.value>50')).toEqual(['A']);
+    expect(q('vendors.value>500')).toEqual([]);
+    expect(q('vendors.value!=7')).toEqual(['A', 'X', 'Y', 'Z']);
+    expect(q('vendors.type=item')).toEqual(['A']);
+    expect(q('vendors."type"=cloth')).toEqual(['A']);
+    expect(q('vendors.vendors.value>1')).toEqual([]);
+    // The keyword wins over a field named "type"; quotes reach the field.
+    expect(q('"type"=cloth')).toEqual(['Z']);
+    expect(q('type=cloth')).toEqual([]);
+    expect(q('band; money>15')).toEqual(['A']);
+    expect(q('band; money>25')).toEqual([]);
+    expect(q('sw')).toEqual(['X']);
+  });
+
+  it('two-level path and unknown keys', () => {
+    const schema = buildGameSchema(parseFcsDef(['[CHARACTER]', 'money: 0', 'vendors: ITEM (1,0,0)', '[ITEM]', 'value: 0', 'parts: ITEM (1,0,0)', ''].join('\n')));
+    const ctx = new ModContext({ layers: layers(), modName: 'test.mod', schema });
+    ctx.addReference('Z', 'parts', 'X');
+    ctx.setField('X', 'ints', 'value', 9);
+    const q = (query: string): string[] => searchRecords(ctx, { query }).map((h) => h.stringId);
+    expect(q('vendors.parts.value=9')).toEqual(['A']);
+    expect(q('parts.value=9')).toEqual(['Z']);
+    const unknown = (s: string): string[] => unknownFilterKeys(ctx, parseSearchQuery(s).filters);
+    expect(unknown('money>1; type=ITEM; state=new; ref>0; vendors.parts.value=1; vendors.v0=1; vendors.type=ITEM; vendors."value"=1')).toEqual([]);
+    expect(unknown('monee>1; vendors.nope=1; "type"=x')).toEqual(['monee', 'vendors.nope', 'type']);
   });
 });
 

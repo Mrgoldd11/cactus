@@ -45,7 +45,7 @@ export const zh1 = {
   modChanges: '此 Mod 中的更改',
   everything: '全部',
   otherTypes: '其他类型',
-  search: '按名称（英文或译名）或 ID 搜索',
+  search: '名称、译名或 ID；条件：type=WEAPON; weight kg>10',
   statusAll: '全部',
   statusMod: '在 Mod 中',
   status_base: '原版',

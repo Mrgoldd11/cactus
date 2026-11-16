@@ -82,8 +82,11 @@ export const HELP = `kedit — Kenshi data: search, view, check and build mods
 
 Commands:
   find [text] [TYPE]      records by name (English or translated) or id; TYPE — name or number
-      --type TYPE  --field key=value (~ substring, != < > <= >=, key? — field is set; may repeat)
+      --type TYPE  --field key=value (~ or : substring, !: not, ?regex, != < > <= >=, key? — field is set; may repeat)
       --status new,changed,deleted,base  --anywhere text  --exact  --mod-only
+      --query "Q"  the record list search syntax: words and conditions split by ;
+                   keywords type= state= ref= (ref>N — referenced by N records), list.key=… — through references
+                   e.g. --query "bandit; type=CHARACTER; vendors.value>500"
   show <id|name>...       fields and references (with target names)  --layers  --max-refs N
   tree <id|name>          dialogue tree (dialogs/lines)  --full  --depth N  --max-nodes N
   mod <file.mod> [text]   records of a mod file with status; text — substring anywhere  --brief
@@ -136,8 +139,11 @@ export const HELP_RU = `kedit — данные Kenshi: поиск, просмо�
 
 Команды:
   find [текст] [ТИП]      записи по имени (англ. или рус.) или id; ТИП — имя или номер
-      --type ТИП  --field ключ=знач (~ подстрока, != < > <= >=, ключ? — поле есть; можно несколько)
+      --type ТИП  --field ключ=знач (~ или : подстрока, !: нет, ?регвыр, != < > <= >=, ключ? — поле есть; можно несколько)
       --status new,changed,deleted,base  --anywhere текст  --exact  --mod-only
+      --query "З"  синтаксис поиска списка записей: слова и условия через ;
+                   ключевые слова type= state= ref= (ref>N — на запись ссылаются N записей), список.ключ=… — через ссылки
+                   напр. --query "bandit; type=CHARACTER; vendors.value>500"
   show <id|имя>...        поля и ссылки (с именами целей)  --layers  --max-refs N
   tree <id|имя>           дерево диалога (dialogs/lines)  --full  --depth N  --max-nodes N
   mod <файл.mod> [текст]  записи файла мода со статусом; текст — подстрока где угодно  --brief
@@ -232,6 +238,7 @@ const OPTIONS = {
   add: { type: 'string' },
   replace: { type: 'string' },
   find: { type: 'string' },
+  query: { type: 'string', short: 'q' },
   with: { type: 'string' },
   regex: { type: 'boolean' },
   case: { type: 'boolean' },
@@ -369,6 +376,7 @@ const COMMANDS: Record<string, Handler> = {
       ...(status ? { status: status as RecordStatus[] } : {}),
       ...(v.anywhere !== undefined ? { anywhere: v.anywhere } : {}),
       ...(v['mod-only'] ? { modOnly: true } : {}),
+      ...(v.query !== undefined ? { query: v.query } : {}),
     });
     c.paged(hits, (h) => [formatHit(h)]);
     return 0;
