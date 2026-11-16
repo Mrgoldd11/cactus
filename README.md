@@ -244,6 +244,9 @@ Commands:
       --status added,changed,removed  only records with these changes
   diff <a.mod> <b.mod>    difference of two files
   validate                broken references, fields outside the schema, wrong kind; exit code 1 on errors
+      --fix  preview of fixes (--kind remove-ref|revert|remove-record|new-id, --code CODE,…); --apply — write into --out or --mod (one edit)
+  cleanup                 what can be removed from the mod (--mod): obsolete fields, no-op changes, orphans, invalid references…
+      --group obsolete-field,no-op,deleted-base,orphaned,invalid-refs,undefined-type;  preview by default, --apply — write (one edit)
   schema [TYPE]           record types / fields of a type with descriptions from fcs.def  --enum NAME
       --mod M  with the schema extensions of the mod and its dependencies (FCS Extended files), marked [extension NAME]
   bulk <TYPE> [text]      bulk edit of records of a type (text — substring of name or id), conditions --field, --mod-only
@@ -282,6 +285,29 @@ Common:
 Besides what the help line says, `validate` also reports dialogues without lines, dangling
 references to records removed by dependencies, and an added dialogue that overrides a vanilla
 one with arrest, attack, trade or recruit (at an equal or higher score).
+
+### Fixing problems and cleaning up a mod
+
+`validate` also finds the FCS error kinds: a reference to a deleted or missing record, a wrong
+target type, too many references in a list, a record whose type changed between layers, a value
+of the wrong type, a string id taken by another mod. Each problem gets fixes from the core:
+remove the invalid references, revert the change, remove the record, or (for a taken id) give the
+record a new id. Fixes only touch what the mod adds or changes — never vanilla or other mods.
+
+- **Window:** the **Diagnostics** panel has a fix button on every problem, checkboxes with
+  "Fix selected", "Fix all" per kind, "Ignore" (kept per mod in the editor data folder, not in
+  the mod; "Show ignored" brings them back) and "Rescan". The **Mod cleanup** panel (Window menu)
+  lists what can be removed — obsolete fields, no-op changes, records deleted by a lower layer,
+  orphaned records, invalid references, records of an undefined type — grouped, with the rule of
+  each group and a checkbox per group and per item. Every fix or cleanup is one undo step.
+- **CLI:** `kedit validate --mod M --fix` and `kedit cleanup --mod M` show a preview; `--apply`
+  writes (into `--out` or the mod; never into the workshop, into the game folder only with `--force`).
+- **MCP:** the `fix` and `cleanup` tools preview by default and change the mod only with `apply: true`.
+
+Orphaned records are proposed conservatively: only records the mod creates of a type that lives
+inside another record (`OWNED:` in `fcs.def` — dialogue lines, conditions, effects) when nothing
+references them. Mods loaded after this one are not looked at, so a record used only by a later
+mod can still be proposed — untick it.
 
 Translating someone else's mod from the command line: export the texts, translate the file in
 Excel or Poedit, build the translation mod (it depends on the original and keeps only texts):
@@ -359,6 +385,7 @@ descriptions and parameters are in English.
 
 - data tools: `open_mod`, `find`, `show`, `inspect`, `tree`, `refs`, `where`, `talk`, `diff`,
   `validate`, `touched`, `conflicts`, `schema` — as in the CLI;
+- fixes: `fix` (validation problems) and `cleanup` — preview, applied only with `apply: true`;
 - editing: `edit` (a batch of operations, as in a JSON plan, as one change set, `$aliases` for
   new records; for the dialogue graph — `addLine`, `insertLine`, `link`, `unlink`, `setText`,
   `duplicateLine`, `deleteLines`, `revertLine`, `addCondition`, `addEffect`, `removeAction`;
