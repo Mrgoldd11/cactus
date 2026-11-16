@@ -59,7 +59,7 @@ describe('массовые правки', () => {
     expect(applyBulk(ctx, p)).toBe(2);
     expect(ctx.get('k')!.ints.get('value')).toBe(150);
     expect(ctx.history().undo).toHaveLength(1);
-    expect(describeChangeset(ctx, ctx.history().undo[0]!).en).toBe('Bulk edit WEAPON.value: × 1.5 (records: 2)');
+    expect(describeChangeset(ctx, ctx.history().undo[0]!).text.en).toBe('Bulk edit WEAPON.value: × 1.5 (records: 2)');
     ctx.undo();
     expect(ctx.get('k')!.ints.get('value')).toBe(100);
     expect(ctx.get('s')!.ints.get('value')).toBe(80);
@@ -95,9 +95,9 @@ describe('массовые правки', () => {
 
   it('ошибки ввода и пропуски', () => {
     const ctx = make();
-    expect(() => previewBulk(ctx, { type: 'WEAPON' }, { kind: 'mul', field: 'value', value: 'abc' })).toThrow(/число/);
-    expect(() => previewBulk(ctx, { type: 'WEAPON' }, { kind: 'replace', field: 'description', find: '(', regex: true, value: '' })).toThrow(/регулярное/);
-    expect(() => previewBulk(ctx, { type: 'NOPE' }, { kind: 'set', field: 'value', value: '1' })).toThrow(/тип/);
+    expect(() => previewBulk(ctx, { type: 'WEAPON' }, { kind: 'mul', field: 'value', value: 'abc' })).toThrow(/a number/);
+    expect(() => previewBulk(ctx, { type: 'WEAPON' }, { kind: 'replace', field: 'description', find: '(', regex: true, value: '' })).toThrow(/regular expression/);
+    expect(() => previewBulk(ctx, { type: 'NOPE' }, { kind: 'set', field: 'value', value: '1' })).toThrow(/record type/);
     const skip = previewBulk(ctx, { type: 'WEAPON' }, { kind: 'mul', field: 'description', value: '2' });
     expect(skip.changes).toHaveLength(0);
     expect(skip.skipped).toHaveLength(3);
@@ -131,7 +131,7 @@ describe('массовые правки', () => {
     expect(ids('description:sharp')).toEqual(['k', 's']);
     expect(ids('description!:sharp')).toEqual(['c']);
     expect(ids('description?^A .*sabre$')).toEqual(['s']);
-    expect(() => parseFieldFilter('description?(')).toThrow(/регулярное/);
+    expect(() => parseFieldFilter('description?(')).toThrow(/regular expression/);
     expect(parseFieldFilter('value?')).toEqual({ key: 'value', op: 'exists' });
     expect(parseFieldFilter('value~5').op).toBe('~');
   });
@@ -191,8 +191,8 @@ describe('массовые правки ссылок и условия по сс
 
   it('ссылки: ошибки — нет цели, нет списка', () => {
     const ctx = makeVendors();
-    expect(() => previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: 'Nothing here' })).toThrow(/не найдена/);
-    expect(() => previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: '' })).toThrow(/на какую запись/);
+    expect(() => previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: 'Nothing here' })).toThrow(/not found/);
+    expect(() => previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: '' })).toThrow(/record to reference/);
     const p = previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'nope', value: 'k' });
     expect(p.changes).toHaveLength(0);
     expect(p.skipped).toHaveLength(3);

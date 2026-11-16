@@ -97,11 +97,11 @@ describe('интерьеры', () => {
   it('без addFiles интерьеры не правятся', () => {
     const e = new WorldEdits([], 'My Mod.mod');
     expect(e.isLoaded(INTERIORS)).toBe(false);
-    expect(() => interiorLayouts(e)).toThrow(/не прочитаны/);
+    expect(() => interiorLayouts(e)).toThrow(/not read yet/);
     expect(() => e.place(INTERIORS, LAYOUT, 'BED', [0, 0, 0], [1, 0, 0, 0])).toThrow(/addFiles/);
     e.addFiles([]);
     expect(e.isLoaded(INTERIORS)).toBe(true);
-    expect(() => { e.addFiles([]); }).toThrow(/уже прочитан/);
+    expect(() => { e.addFiles([]); }).toThrow(/already read/);
   });
 
   it('раскладки здания и объекты', () => {
@@ -158,8 +158,8 @@ describe('интерьеры', () => {
     const st = e.record(INTERIORS, c.state)!;
     expect(decodeText(st.strings.get('name')!)).toBe('house');
     expect(st.bools.get('is inside building')).toBe(true);
-    expect(() => placeInterior(e, types, LAYOUT, 'GUY', [0, 0, 0], [1, 0, 0, 0])).toThrow(/мебель/);
-    expect(() => placeInterior(e, types, 'NOPE', 'BED', [0, 0, 0], [1, 0, 0, 0])).toThrow(/Нет раскладки/);
+    expect(() => placeInterior(e, types, LAYOUT, 'GUY', [0, 0, 0], [1, 0, 0, 0])).toThrow(/furniture/);
+    expect(() => placeInterior(e, types, 'NOPE', 'BED', [0, 0, 0], [1, 0, 0, 0])).toThrow(/No layout/);
   });
 
   it('сдвиг: этаж и высота в состоянии; по горизонтали — состояние не трогаем', () => {

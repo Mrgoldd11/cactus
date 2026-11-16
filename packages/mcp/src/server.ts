@@ -447,7 +447,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
   /** Step title in plain words (English: MCP texts are English), as in the editor window. */
   const title = (ctx: ModContext, cs: Changeset): string => {
     const tr = session.translation();
-    return `#${String(cs.id)} ${describeChangeset(ctx, cs, tr ? { translation: tr } : {}).en}`;
+    return `#${String(cs.id)} ${describeChangeset(ctx, cs, tr ? { translation: tr } : {}).text.en}`;
   };
   server.registerTool(
     'edit',

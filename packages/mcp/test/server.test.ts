@@ -229,7 +229,7 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect((await call('history')).text).not.toContain('#1');
     // Без выбора слить нельзя; сам себя и неизвестный источник — понятная ошибка.
     expect((await call('merge', { source: 'Other', apply: true })).isError).toBe(true);
-    expect((await call('merge', { source: 'My' })).text).toContain('сам в себя');
+    expect((await call('merge', { source: 'My' })).text).toContain('into itself');
     expect((await call('merge', { source: 'Нет-такого' })).isError).toBe(true);
 
     const ok = await call('merge', { source: 'Other', apply: true, all: true, conflicts: 'source' });

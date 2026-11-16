@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { formatPosition, newBuildingStates, zoneOfPoint, type BuildingPlacement, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
-import { langOf, useLang } from '../../i18n.ts';
+import { errorText, langOf, useLang } from '../../i18n.ts';
 import { isTypingIn, shortcut } from '../../keys.ts';
 import { ShowInGame } from '../../components/GameLink.tsx';
 import { useGameLink } from '../../game.ts';
@@ -421,7 +421,7 @@ function WorldPanel(): ReactNode {
         setEdits(ed);
       },
       (e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setError(errorText(e));
       },
     );
     return () => {
@@ -462,7 +462,7 @@ function WorldPanel(): ReactNode {
         setMessage(undefined);
         return true;
       } catch (e) {
-        setMessage(e instanceof Error ? e.message : String(e));
+        setMessage(errorText(e));
         return false;
       }
     };
@@ -488,7 +488,7 @@ function WorldPanel(): ReactNode {
     try {
       edits.remove(o.p.file, o.p.holder, o.p.key, `${s.stepRemove}: ${recordName(project, o.p.target)}`);
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : String(e));
+      setMessage(errorText(e));
     }
   };
 
@@ -501,7 +501,7 @@ function WorldPanel(): ReactNode {
       edits.move(o.p.file, o.p.holder, o.p.key, [x, y, z], [q.w, q.x, q.y, q.z], o.b ? { worldY: o.pos.y + (y - y0) } : {}, `${s.stepMove}: ${recordName(project, o.p.target)}`);
       setMessage(undefined);
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : String(e));
+      setMessage(errorText(e));
     }
   };
 
@@ -524,7 +524,7 @@ function WorldPanel(): ReactNode {
       const o = v.objects.find(path, holder, key);
       if (o) v.select(o);
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : String(e));
+      setMessage(errorText(e));
     }
   };
 

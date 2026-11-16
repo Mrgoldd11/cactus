@@ -6,6 +6,7 @@
  * по тексту (`id: "$guard"`, `target: "$guard"`).
  */
 import { encodeText } from '../text.ts';
+import { mapUi, UiTextError } from '../ui-text.ts';
 import { itemTypeName } from '../format/item-types.ts';
 import { DICT_FOR_KIND, findField } from '../schema/game-schema.ts';
 import type { ModContext, ModInfo } from './context.ts';
@@ -88,7 +89,7 @@ const DICT_ALIASES: Record<string, ScalarDict> = {
 
 export function parseDictName(name: string): ScalarDict {
   const d = DICT_ALIASES[name.toLowerCase()];
-  if (!d) throw new EditError(`Неизвестный вид поля «${name}»: bool, int, float, str, file, vec3, vec4`);
+  if (!d) throw new EditError({ en: `Unknown field kind «${name}»: bool, int, float, str, file, vec3, vec4`, ru: `Неизвестный вид поля «${name}»: bool, int, float, str, file, vec3, vec4`, zh: `未知的字段类型 «${name}»：bool, int, float, str, file, vec3, vec4` });
   return d;
 }
 
@@ -108,7 +109,7 @@ export function fieldDict(ctx: ModContext, stringId: string, key: string, value?
   if (typeof value === 'number') return Number.isInteger(value) ? 'ints' : 'floats';
   if (Array.isArray(value)) return value.length === 4 ? 'vec4s' : 'vec3s';
   if (value !== undefined) return 'strings';
-  throw new EditError(`Не знаю вид поля ${key} у ${stringId}: укажите dict`);
+  throw new EditError({ en: `Unknown kind of field ${key} on ${stringId}: give dict`, ru: `Не знаю вид поля ${key} у ${stringId}: укажите dict`, zh: `不知道 ${stringId} 的字段 ${key} 的类型：请指定 dict` });
 }
 
 /** Имя значения enum-поля (`DR_ONCE_ONLY`, `ONCE_ONLY`, «один раз») → число; прочее как есть. */
@@ -118,14 +119,14 @@ function enumInput(ctx: ModContext, stringId: string, key: string, value: JsonSc
   const def = rec && fieldEnum(ctx.schema, ctx.typeName(rec.type), key, rec);
   if (!def) return value;
   const n = parseEnumValue(def, value);
-  if (n === undefined) throw new EditError(`В ${def.name} нет значения «${value}»`);
+  if (n === undefined) throw new EditError({ en: `${def.name} has no value «${value}»`, ru: `В ${def.name} нет значения «${value}»`, zh: `${def.name} 中没有值 «${value}»` });
   return n;
 }
 
 /** Значение из JSON в значение словаря. */
 export function coerceValue<D extends ScalarDict>(dict: D, value: JsonScalar, key = ''): ScalarValueMap[D] {
   const bad = (): never => {
-    throw new EditError(`Значение ${JSON.stringify(value)} не подходит для ${dict}${key ? ` (${key})` : ''}`);
+    throw new EditError({ en: `Value ${JSON.stringify(value)} does not fit ${dict}${key ? ` (${key})` : ''}`, ru: `Значение ${JSON.stringify(value)} не подходит для ${dict}${key ? ` (${key})` : ''}`, zh: `值 ${JSON.stringify(value)} 不适用于 ${dict}${key ? `（${key}）` : ''}` });
   };
   const num = (): number => {
     const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
@@ -195,12 +196,12 @@ export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = defaul
   const id = (s: string): string => {
     if (!s.startsWith('$')) return s;
     const v = aliases[s];
-    if (v === undefined) throw new EditError(`Псевдоним ${s} не определён выше`);
+    if (v === undefined) throw new EditError({ en: `Alias ${s} is not defined above`, ru: `Псевдоним ${s} не определён выше`, zh: `别名 ${s} 未在前面定义` });
     return v;
   };
   const alias = (name: string | undefined, sid: string): void => {
     if (name === undefined) return;
-    if (!name.startsWith('$')) throw new EditError(`Псевдоним должен начинаться с $: ${name}`);
+    if (!name.startsWith('$')) throw new EditError({ en: `An alias must start with $: ${name}`, ru: `Псевдоним должен начинаться с $: ${name}`, zh: `别名必须以 $ 开头：${name}` });
     aliases[name] = sid;
   };
   ctx.transaction(label, () => {
@@ -208,8 +209,9 @@ export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = defaul
       try {
         applyOne(op);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        throw new EditError(`Операция ${i + 1} (${op.op}): ${msg}`);
+        const inner = e instanceof UiTextError ? e.texts : { en: e instanceof Error ? e.message : String(e) };
+        const head = { en: `Operation ${i + 1} (${op.op})`, ru: `Операция ${i + 1} (${op.op})`, zh: `操作 ${i + 1}（${op.op}）` };
+        throw new EditError(mapUi([head, inner], ([h, m], lang) => `${h!}${lang === 'zh' ? '：' : ': '}${m!}`));
       }
     }
   });
@@ -310,7 +312,7 @@ export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = defaul
       }
       case 'setText': {
         const texts = op.texts ?? (op.text !== undefined ? [op.text] : undefined);
-        if (!texts) throw new EditError('нужен text или texts');
+        if (!texts) throw new EditError({ en: 'text or texts is required', ru: 'нужен text или texts', zh: '需要 text 或 texts' });
         setLineTexts(ctx, id(op.id), texts);
         break;
       }
@@ -325,7 +327,7 @@ export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = defaul
       case 'deleteLines': {
         const lines = (op.lines ?? []).map(id);
         const links = (op.links ?? []).map((l) => ({ parent: id(l.parent), child: id(l.child) }));
-        if (!lines.length && !links.length) throw new EditError('нужны lines или links');
+        if (!lines.length && !links.length) throw new EditError({ en: 'lines or links is required', ru: 'нужны lines или links', zh: '需要 lines 或 links' });
         deleteGraphItems(ctx, { lines, links });
         for (const s of [...lines, ...links.map((l) => l.parent)]) touched.add(s);
         return;
@@ -366,7 +368,7 @@ export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = defaul
     if (/^-?\d+$/.test(v.trim())) return Number(v);
     const def = getEnum(ctx.schema, name);
     const n = def && parseEnumValue(def, v);
-    if (n === undefined) throw new EditError(`В ${name} нет значения «${v}»`);
+    if (n === undefined) throw new EditError({ en: `${name} has no value «${v}»`, ru: `В ${name} нет значения «${v}»`, zh: `${name} 中没有值 «${v}»` });
     return n;
   }
 

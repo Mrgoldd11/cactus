@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { applyModsCfgChange, describeOrderChange, isVanillaLayer, modIndex, placeMod, type ModPlace } from '@kenshi-editor/core';
 import type { GameInstallInfo, ModEntry } from '../../../../shared/api.ts';
-import { useT, type Strings } from '../../i18n.ts';
+import { errorText, type Strings, useT } from '../../i18n.ts';
 import { useProjectVersion } from '../../hooks.ts';
 import type { Project } from '../../project.ts';
 import { registerPanel } from '../registry.ts';
@@ -41,7 +41,7 @@ export function useInstalledMods(game: GameInstallInfo): { mods: ModEntry[] | un
         if (alive) setMods(m);
       },
       (e: unknown) => {
-        if (alive) setError(e instanceof Error ? e.message : String(e));
+        if (alive) setError(errorText(e));
       },
     );
     return () => {

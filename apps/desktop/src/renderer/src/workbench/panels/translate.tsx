@@ -22,7 +22,7 @@ import {
   type TranslationRow,
 } from '@kenshi-editor/core';
 import type { TextFileKind } from '../../../../shared/api.ts';
-import { useT } from '../../i18n.ts';
+import { errorText, useT } from '../../i18n.ts';
 import { tryEdit, useProjectVersion } from '../../hooks.ts';
 import { CommitInput } from '../../components/widgets.tsx';
 import { registerPanel } from '../registry.ts';
@@ -128,7 +128,7 @@ function TranslatePanel(): ReactNode {
       try {
         parsed = parseTranslationFile(f.text);
       } catch (e) {
-        const err = e instanceof Error ? e.message : String(e);
+        const err = errorText(e);
         status({ kind: 'error', text: (tt) => tt.trImportError(err) });
         return;
       }

@@ -9,6 +9,7 @@
  * с последнего сохранения» — это «снимок не тот же объект, что был сохранён».
  */
 import { decodeText, encodeText } from '../text.ts';
+import { UiTextError } from '../ui-text.ts';
 import { itemTypeId, itemTypeName } from '../format/item-types.ts';
 import { joinModList, splitModList } from '../format/helpers.ts';
 import { emptyRecord, FileType, type DataFile, type GameRecord, type Instance, type ModHeader, type Reference } from '../format/types.ts';
@@ -112,7 +113,7 @@ export interface ChangeEvent {
 }
 
 /** Ошибка команды правки (неизвестная запись, занятый id и т. п.). */
-export class EditError extends Error {
+export class EditError extends UiTextError {
   override name = 'EditError';
 }
 
@@ -188,7 +189,7 @@ export class ModContext {
     }
     this.originalFile = options.mod;
     for (const rec of options.mod?.records ?? []) {
-      if (this.deltas.has(rec.stringId)) throw new EditError(`В моде две записи с id ${rec.stringId}`);
+      if (this.deltas.has(rec.stringId)) throw new EditError({ en: `The mod has two records with id ${rec.stringId}`, ru: `В моде две записи с id ${rec.stringId}`, zh: `Mod 中有两条 ID 为 ${rec.stringId} 的记录` });
       this.deltas.set(rec.stringId, rec);
       this.originals.set(rec.stringId, rec);
       this.order.push(rec.stringId);
@@ -414,7 +415,7 @@ export class ModContext {
 
   /** Отменить последнюю правку; возвращает её или undefined. */
   undo(): Changeset | undefined {
-    if (this.depth > 0) throw new EditError('Нельзя отменять внутри транзакции');
+    if (this.depth > 0) throw new EditError({ en: 'Cannot undo inside a transaction', ru: 'Нельзя отменять внутри транзакции', zh: '不能在事务内撤销' });
     const cs = this.undoStack.pop();
     if (!cs) return undefined;
     this.revertOps(cs.ops);
@@ -423,7 +424,7 @@ export class ModContext {
   }
 
   redo(): Changeset | undefined {
-    if (this.depth > 0) throw new EditError('Нельзя повторять внутри транзакции');
+    if (this.depth > 0) throw new EditError({ en: 'Cannot redo inside a transaction', ru: 'Нельзя повторять внутри транзакции', zh: '不能在事务内重做' });
     const cs = this.redoStack.pop();
     if (!cs) return undefined;
     const changed: string[] = [];
@@ -447,8 +448,8 @@ export class ModContext {
    * действующей правки нет — EditError, ничего не меняется. Возвращает отменённые (новые первыми).
    */
   undoTo(id: number): Changeset[] {
-    if (this.depth > 0) throw new EditError('Нельзя отменять внутри транзакции');
-    if (!this.undoStack.some((c) => c.id === id)) throw new EditError(`Правки ${id} нет среди действующих`);
+    if (this.depth > 0) throw new EditError({ en: 'Cannot undo inside a transaction', ru: 'Нельзя отменять внутри транзакции', zh: '不能在事务内撤销' });
+    if (!this.undoStack.some((c) => c.id === id)) throw new EditError({ en: `Edit ${id} is not among the applied edits`, ru: `Правки ${id} нет среди действующих`, zh: `编辑 ${id} 不在已生效的编辑中` });
     const out: Changeset[] = [];
     for (;;) {
       const cs = this.undo()!;
@@ -459,8 +460,8 @@ export class ModContext {
 
   /** Повторить отменённые правки до `id` включительно. Возвращает повторённые по порядку. */
   redoTo(id: number): Changeset[] {
-    if (this.depth > 0) throw new EditError('Нельзя повторять внутри транзакции');
-    if (!this.redoStack.some((c) => c.id === id)) throw new EditError(`Правки ${id} нет среди отменённых`);
+    if (this.depth > 0) throw new EditError({ en: 'Cannot redo inside a transaction', ru: 'Нельзя повторять внутри транзакции', zh: '不能在事务内重做' });
+    if (!this.redoStack.some((c) => c.id === id)) throw new EditError({ en: `Edit ${id} is not among the undone edits`, ru: `Правки ${id} нет среди отменённых`, zh: `编辑 ${id} 不在已撤销的编辑中` });
     const out: Changeset[] = [];
     for (;;) {
       const cs = this.redo()!;
@@ -497,9 +498,9 @@ export class ModContext {
    * EditError, ничего не меняется. Правку, уже отменённую через undo, откатывать нечего.
    */
   rollbackChangeset(id: number): Changeset {
-    if (this.depth > 0) throw new EditError('Нельзя откатывать внутри транзакции');
+    if (this.depth > 0) throw new EditError({ en: 'Cannot roll back inside a transaction', ru: 'Нельзя откатывать внутри транзакции', zh: '不能在事务内回滚' });
     const cs = this.findChangeset(id);
-    if (!cs) throw new EditError(this.redoStack.some((c) => c.id === id) ? `Правка ${id} уже отменена` : `Правки ${id} нет в истории`);
+    if (!cs) throw new EditError(this.redoStack.some((c) => c.id === id) ? { en: `Edit ${id} is already undone`, ru: `Правка ${id} уже отменена`, zh: `编辑 ${id} 已被撤销` } : { en: `Edit ${id} is not in the history`, ru: `Правки ${id} нет в истории`, zh: `历史中没有编辑 ${id}` });
     // Состояние после правки: последняя операция по каждой записи.
     const last = new Map<string, Slot | undefined>();
     let info: ModInfo | undefined;
@@ -509,7 +510,7 @@ export class ModContext {
     }
     const later = [...last].filter(([sid, after]) => this.deltas.get(sid) !== after?.delta).map(([sid]) => sid);
     if (info !== undefined && this.modInfo !== info) later.push('заголовок мода');
-    if (later.length > 0) throw new EditError(`Нельзя откатить «${cs.label}»: позже изменены ${later.join(', ')}`);
+    if (later.length > 0) throw new EditError({ en: `Cannot roll back «${cs.label}»: changed later: ${later.join(', ')}`, ru: `Нельзя откатить «${cs.label}»: позже изменены ${later.join(', ')}`, zh: `无法回滚 «${cs.label}»：之后又修改了 ${later.join('、')}` });
     const next = this.nextChangesetId;
     this.transaction(`откат: ${cs.label}`, () => {
       for (const op of [...cs.ops].reverse()) {
@@ -518,7 +519,7 @@ export class ModContext {
       }
     });
     const done = this.undoStack.at(-1);
-    if (done?.id !== next) throw new EditError(`Откат «${cs.label}» ничего не изменил`);
+    if (done?.id !== next) throw new EditError({ en: `Rolling back «${cs.label}» changed nothing`, ru: `Откат «${cs.label}» ничего не изменил`, zh: `回滚 «${cs.label}» 没有改变任何内容` });
     return done;
   }
 
@@ -604,7 +605,7 @@ export class ModContext {
 
   private require(stringId: string): GameRecord {
     const rec = this.get(stringId);
-    if (!rec) throw new EditError(`Записи ${stringId} нет`);
+    if (!rec) throw new EditError({ en: `No record ${stringId}`, ru: `Записи ${stringId} нет`, zh: `没有记录 ${stringId}` });
     return rec;
   }
 
@@ -621,7 +622,7 @@ export class ModContext {
   }
 
   private checkFree(stringId: string): void {
-    if (this.has(stringId) || this.deltas.has(stringId)) throw new EditError(`Запись ${stringId} уже есть`);
+    if (this.has(stringId) || this.deltas.has(stringId)) throw new EditError({ en: `Record ${stringId} already exists`, ru: `Запись ${stringId} уже есть`, zh: `记录 ${stringId} 已存在` });
   }
 
   /** Поставить итоговое значение записи: в мод попадёт разница с нижними слоями. */
@@ -655,7 +656,7 @@ export class ModContext {
   editRecord(stringId: string, mutate: (draft: GameRecord) => void, label = `правка ${stringId}`): void {
     const draft = cloneRecord(this.require(stringId));
     mutate(draft);
-    if (draft.stringId !== stringId) throw new EditError('Строковый id меняется командой changeStringIds');
+    if (draft.stringId !== stringId) throw new EditError({ en: 'The string id is changed with changeStringIds', ru: 'Строковый id меняется командой changeStringIds', zh: '字符串 ID 需用 changeStringIds 修改' });
     this.transaction(label, () => {
       this.putResolved(stringId, draft);
     });
@@ -836,13 +837,13 @@ export class ModContext {
    */
   changeStringIds(mapping: ReadonlyMap<string, string>): void {
     for (const [from, to] of mapping) {
-      if (this.status(from) !== 'new') throw new EditError(`Менять id можно только у новых записей мода: ${from}`);
+      if (this.status(from) !== 'new') throw new EditError({ en: `Only new records of the mod can change their id: ${from}`, ru: `Менять id можно только у новых записей мода: ${from}`, zh: `只有 Mod 的新记录可以修改 ID：${from}` });
       if (from !== to && (this.lowerEntries.has(to) || (this.deltas.has(to) && !mapping.has(to)))) {
-        throw new EditError(`Id ${to} уже занят`);
+        throw new EditError({ en: `Id ${to} is already taken`, ru: `Id ${to} уже занят`, zh: `ID ${to} 已被占用` });
       }
     }
     const targets = new Set(mapping.values());
-    if (targets.size !== mapping.size) throw new EditError('Два id переименовываются в один');
+    if (targets.size !== mapping.size) throw new EditError({ en: 'Two ids are renamed to the same one', ru: 'Два id переименовываются в один', zh: '两个 ID 被重命名为同一个' });
     const remap = (s: string): string => mapping.get(s) ?? s;
     this.transaction('смена id', () => {
       const moved = [...mapping.keys()]

@@ -21,6 +21,7 @@ import { applyLayer, cloneRecord, instanceEqual, recordsEqual } from '../model/r
 import { decodeText, encodeText } from '../text.ts';
 import { zoneOfPoint } from './terrain.ts';
 import { zoneOfPath, type WorldFile } from './world.ts';
+import { UiTextError } from '../ui-text.ts';
 
 /** Экземпляр-«удаление»: так нижний слой теряет объект. */
 export function removedInstance(): Instance {
@@ -95,7 +96,7 @@ export function checkZone(path: string, position: Vec3): void {
   if (!zone) return;
   const z = zoneOfPoint(position[0], position[2]);
   if (z.x !== zone.x || z.y !== zone.y)
-    throw new Error(`Точка ${Math.round(position[0])} ${Math.round(position[2])} — в зоне ${z.x}.${z.y}, а объект из зоны ${zone.x}.${zone.y}. Перенести в другую зону: удалить и поставить заново`);
+    throw new UiTextError({ en: `Point ${Math.round(position[0])} ${Math.round(position[2])} is in zone ${z.x}.${z.y}, but the object is from zone ${zone.x}.${zone.y}. To move it to another zone, remove it and place it again`, ru: `Точка ${Math.round(position[0])} ${Math.round(position[2])} — в зоне ${z.x}.${z.y}, а объект из зоны ${zone.x}.${zone.y}. Перенести в другую зону: удалить и поставить заново`, zh: `点 ${Math.round(position[0])} ${Math.round(position[2])} 位于区域 ${z.x}.${z.y}，而对象属于区域 ${zone.x}.${zone.y}。要移到其他区域，请删除后重新放置` });
 }
 
 /** Мод `My Mod.mod` → `My Mod`. */
@@ -132,7 +133,7 @@ export class WorldEdits {
    * файлы теперь прочитаны полностью, даже если ни в одном слое их нет.
    */
   addFiles(files: readonly WorldFile[], paths: readonly string[] = LAZY_LEVEL_FILES): void {
-    for (const p of [...paths, ...files.map((f) => f.path)]) if (!this.unread.has(p.toLowerCase())) throw new Error(`Файл ${p} уже прочитан`);
+    for (const p of [...paths, ...files.map((f) => f.path)]) if (!this.unread.has(p.toLowerCase())) throw new UiTextError({ en: `File ${p} is already read`, ru: `Файл ${p} уже прочитан`, zh: `文件 ${p} 已读取` });
     this.add(files);
     for (const p of paths) this.unread.delete(p.toLowerCase());
   }
@@ -194,7 +195,7 @@ export class WorldEdits {
 
   private modFile(path: string): ModLevelFile {
     const k = path.toLowerCase();
-    if (this.unread.has(k)) throw new Error(`${path} ещё не прочитан: сначала addFiles`);
+    if (this.unread.has(k)) throw new UiTextError({ en: `${path} is not read yet: call addFiles first`, ru: `${path} ещё не прочитан: сначала addFiles`, zh: `${path} 尚未读取：请先调用 addFiles` });
     let f = this.mod.get(k);
     if (!f) {
       const lowerPath = this.lowerFiles.get(k)?.[0]?.path ?? path;
@@ -330,7 +331,7 @@ export class WorldEdits {
    */
   move(path: string, holder: string, key: string, position: Vec3, rotation: Vec4, options: MoveOptions = {}, label = 'Сдвиг объекта'): void {
     const cur = this.instance(path, holder, key);
-    if (!cur) throw new Error(`Нет объекта ${key} в ${holder} (${path})`);
+    if (!cur) throw new UiTextError({ en: `No object ${key} in ${holder} (${path})`, ru: `Нет объекта ${key} в ${holder} (${path})`, zh: `${holder}（${path}）中没有对象 ${key}` });
     checkZone(path, position);
     this.transaction(label, () => {
       this.setInstance(path, holder, key, { target: cur.target, position: [...position], rotation: [...rotation], states: cur.states.map((s) => s.slice()) });
@@ -357,7 +358,7 @@ export class WorldEdits {
     if (key === undefined) {
       do key = `${++n}-${this.modBase}-INGAME`;
       while (taken(key));
-    } else if (taken(key)) throw new Error(`Ключ ${key} уже занят`);
+    } else if (taken(key)) throw new UiTextError({ en: `Key ${key} is already taken`, ru: `Ключ ${key} уже занят`, zh: `键 ${key} 已被占用` });
     checkZone(path, position);
     const k = key;
     const newId = (): string => {
@@ -379,7 +380,7 @@ export class WorldEdits {
         this.holderRecord(path, holder, options.holderType ?? 'INSTANCE_COLLECTION'),
       );
       for (const st of states) {
-        if (this.record(path, st.stringId)) throw new Error(`Запись ${st.stringId} уже есть в ${path}`);
+        if (this.record(path, st.stringId)) throw new UiTextError({ en: `Record ${st.stringId} already exists in ${path}`, ru: `Запись ${st.stringId} уже есть в ${path}`, zh: `${path} 中已有记录 ${st.stringId}` });
         this.change(path, st.stringId, () => undefined, () => st);
       }
     });
@@ -388,7 +389,7 @@ export class WorldEdits {
 
   /** Убрать экземпляр: свой новый — стираем, из нижних слоёв — пишем «удаление». */
   remove(path: string, holder: string, key: string, label = 'Удаление объекта'): void {
-    if (!this.instance(path, holder, key)) throw new Error(`Нет объекта ${key} в ${holder} (${path})`);
+    if (!this.instance(path, holder, key)) throw new UiTextError({ en: `No object ${key} in ${holder} (${path})`, ru: `Нет объекта ${key} в ${holder} (${path})`, zh: `${holder}（${path}）中没有对象 ${key}` });
     const lo = this.lower(path).get(holder)?.instances.get(key);
     const cur = this.instance(path, holder, key)!;
     this.transaction(label, () => {
@@ -416,7 +417,7 @@ export class WorldEdits {
    */
   editState(path: string, sid: string, edit: (rec: GameRecord) => void, label = `Правка ${sid}`): void {
     const cur = this.record(path, sid);
-    if (!cur) throw new Error(`Нет записи ${sid} в ${path}`);
+    if (!cur) throw new UiTextError({ en: `No record ${sid} in ${path}`, ru: `Нет записи ${sid} в ${path}`, zh: `${path} 中没有记录 ${sid}` });
     this.transaction(label, () => {
       this.change(path, sid, edit, () => cloneRecord(cur));
       this.dropEmpty(path, sid);

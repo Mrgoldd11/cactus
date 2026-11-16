@@ -154,7 +154,7 @@ describe('графы этапа 5', () => {
     const l = squadComposition(ctx, 'sq')!.members[1]!.link;
     setLinkValues(ctx, l, [3, 6]);
     expect(ctx.history().undo).toHaveLength(1);
-    expect(describeChangeset(ctx, ctx.history().undo[0]!).ru).toBe('Изменено «squad» у «Guards»');
+    expect(describeChangeset(ctx, ctx.history().undo[0]!).text.ru).toBe('Изменено «squad» у «Guards»');
     expect(squadComposition(ctx, 'sq')!.members[1]).toMatchObject({ sid: 'guard', min: 3, max: 6 });
     const saved = readDataFile(writeDataFile(ctx.buildModFile()));
     expect(saved.records.map((r) => r.stringId)).toEqual(['sq']);
@@ -164,10 +164,10 @@ describe('графы этапа 5', () => {
     expect(ctx.history().undo).toHaveLength(1);
     expect(() => {
       setLinkValues(ctx, { from: 'sq', category: 'squad', target: 'boss' }, [1]);
-    }).toThrow(/нет ссылки/);
+    }).toThrow(/has no reference/);
     expect(() => {
       setLinkValues(ctx, l, [1.5]);
-    }).toThrow(/целое/);
+    }).toThrow(/integer/);
     ctx.undo();
     expect(ctx.modRecords()).toHaveLength(0);
   });

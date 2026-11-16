@@ -61,33 +61,33 @@ describe('названия шагов истории', () => {
   it('реплики, связи, текст — по-человечески на двух языках', () => {
     const ctx = ctxOf();
     const a = addLine(ctx, 'L', { speaker: 1, text: 'Who are you?' });
-    expect(last(ctx)).toMatchObject({ ru: 'Добавлен ответ игрока „Who are you?“', en: 'Added player answer „Who are you?“', ai: false });
+    expect(last(ctx)).toMatchObject({ text: { ru: 'Добавлен ответ игрока „Who are you?“', en: 'Added player answer „Who are you?“' }, ai: false });
     addLine(ctx, a, { speaker: 0, text: '' });
-    expect(last(ctx).ru).toBe('Добавлена реплика NPC');
+    expect(last(ctx).text.ru).toBe('Добавлена реплика NPC');
     setLineTexts(ctx, 'L', ['Beep won the fight, and now everyone is happy!']);
-    expect(last(ctx).ru).toBe('Изменён текст реплики „Beep won the fight, and now eve…“');
-    expect(last(ctx).en).toBe('Changed line text „Beep won the fight, and now eve…“');
+    expect(last(ctx).text.ru).toBe('Изменён текст реплики „Beep won the fight, and now eve…“');
+    expect(last(ctx).text.en).toBe('Changed line text „Beep won the fight, and now eve…“');
     unlinkLine(ctx, 'L', 'P');
-    expect(last(ctx)).toMatchObject({ ru: 'Удалена связь', en: 'Removed link' });
+    expect(last(ctx)).toMatchObject({ text: { ru: 'Удалена связь', en: 'Removed link' } });
     linkLine(ctx, 'L', 'P');
-    expect(last(ctx).ru).toBe('Добавлена связь');
+    expect(last(ctx).text.ru).toBe('Добавлена связь');
     deleteGraphItems(ctx, { lines: ['P'] });
-    expect(last(ctx).ru).toMatch(/^Удален/);
+    expect(last(ctx).text.ru).toMatch(/^Удален/);
   });
 
   it('поля записи, ИИ, откат, своя метка', () => {
     const ctx = ctxOf();
     ctx.editRecord('K', (d) => d.ints.set('damage', 20));
-    expect(last(ctx)).toMatchObject({ ru: 'Изменено «damage» у «Katana» → 20', en: 'Changed «damage» on «Katana» → 20' });
+    expect(last(ctx)).toMatchObject({ text: { ru: 'Изменено «damage» у «Katana» → 20', en: 'Changed «damage» on «Katana» → 20' } });
     ctx.renameRecord('K', 'Long katana');
-    expect(last(ctx).ru).toBe('Переименовано в «Long katana»');
+    expect(last(ctx).text.ru).toBe('Переименовано в «Long katana»');
     applyOps(ctx, [{ op: 'set', id: 'K', field: 'damage', value: 30 }], 'ИИ: урон катаны');
-    expect(last(ctx)).toMatchObject({ ru: 'ИИ: урон катаны', en: 'AI: урон катаны', ai: true });
+    expect(last(ctx)).toMatchObject({ text: { ru: 'ИИ: урон катаны', en: 'AI: урон катаны' }, ai: true });
     const ai = ctx.history().undo.at(-1)!;
     ctx.rollbackChangeset(ai.id);
-    expect(last(ctx)).toMatchObject({ ru: 'Откат: ИИ: урон катаны', ai: true, rollback: true });
+    expect(last(ctx)).toMatchObject({ text: { ru: 'Откат: ИИ: урон катаны', en: 'Rollback: AI: урон катаны', zh: '回滚：AI：урон катаны' }, ai: true, rollback: true });
     ctx.transaction('Skeleton Cannibal Friend', () => { ctx.editRecord('K', (d) => d.ints.set('damage', 1)); });
-    expect(last(ctx).ru).toBe('Skeleton Cannibal Friend');
+    expect(last(ctx).text.ru).toBe('Skeleton Cannibal Friend');
   });
 });
 

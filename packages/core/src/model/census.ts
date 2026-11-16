@@ -130,10 +130,10 @@ export function npcCensus(ctx: ModContext, options: CensusOptions = {}): Census 
  */
 export function addDialoguePackage(ctx: ModContext, chars: readonly string[], pkg: string): number {
   const p = ctx.get(pkg);
-  if (!p || itemTypeName(p.type) !== 'DIALOGUE_PACKAGE') throw new EditError(`${pkg} — не пакет диалогов`);
+  if (!p || itemTypeName(p.type) !== 'DIALOGUE_PACKAGE') throw new EditError({ en: `${pkg} is not a dialogue package`, ru: `${pkg} — не пакет диалогов`, zh: `${pkg} 不是对话包` });
   const todo = [...new Set(chars)].filter((sid) => {
     const c = ctx.get(sid);
-    if (!c || itemTypeName(c.type) !== 'CHARACTER') throw new EditError(`${sid} — не персонаж`);
+    if (!c || itemTypeName(c.type) !== 'CHARACTER') throw new EditError({ en: `${sid} is not a character`, ru: `${sid} — не персонаж`, zh: `${sid} 不是角色` });
     return !(c.refs.get('dialogue package') ?? []).some((r) => r.target === pkg);
   });
   if (todo.length === 0) return 0;

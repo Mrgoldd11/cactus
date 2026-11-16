@@ -78,7 +78,7 @@ describe('порядок загрузки (mods.cfg) без диска', () => {
   it('изменения mods.cfg: move только для включённых, enable/disable, описание «было → стало»', () => {
     const l = ['A.mod', 'B.mod', 'C.mod'];
     expect(applyModsCfgChange(l, { op: 'move', name: 'C.mod', place: { top: true } })).toEqual(['C.mod', 'A.mod', 'B.mod']);
-    expect(() => applyModsCfgChange(l, { op: 'move', name: 'D.mod', place: { top: true } })).toThrow(/включите/);
+    expect(() => applyModsCfgChange(l, { op: 'move', name: 'D.mod', place: { top: true } })).toThrow(/enable it first/);
     expect(applyModsCfgChange(l, { op: 'enable', name: 'D.mod' })).toEqual([...l, 'D.mod']);
     expect(applyModsCfgChange(l, { op: 'enable', name: 'D.mod', place: { after: 'A.mod' } })).toEqual(['A.mod', 'D.mod', 'B.mod', 'C.mod']);
     expect(applyModsCfgChange(l, { op: 'enable', name: 'b.mod' })).toEqual(l);

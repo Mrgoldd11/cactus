@@ -1,4 +1,5 @@
 export * from './text.ts';
+export * from './ui-text.ts';
 export * from './vanilla.ts';
 export * from './format/binary.ts';
 export * from './format/types.ts';

@@ -220,7 +220,7 @@ describe('правка диалогов', () => {
     ctx.undo();
     expect(ctx.get(n)).toBeUndefined();
     expect(targets(ctx, 'L')).toEqual(['P1', 'P2']);
-    expect(() => insertLineBetween(ctx, 'P2', 'L', { speaker: 0 })).toThrow(/нет/);
+    expect(() => insertLineBetween(ctx, 'P2', 'L', { speaker: 0 })).toThrow(/no such link/);
 
     // Две новые реплики и связь петли — одна отмена; связи удаляемых реплик не мешают.
     const a = addLine(ctx, 'P2', { speaker: 0, text: 'a' });
@@ -234,7 +234,7 @@ describe('правка диалогов', () => {
     expect(targets(ctx, 'P2')).toEqual([a]);
     expect(targets(ctx, a)).toEqual([c]);
     expect(targets(ctx, 'P1')).toEqual(['L']);
-    expect(() => { deleteGraphItems(ctx, { lines: ['D'] }); }).toThrow(/не реплика/);
+    expect(() => { deleteGraphItems(ctx, { lines: ['D'] }); }).toThrow(/is not a line/);
 
     const [x, y] = duplicateLines(ctx, [{ sid: 'P1', parent: 'L' }, { sid: 'P2', parent: 'L' }]);
     expect(targets(ctx, 'L')).toEqual(['P1', 'P2', x, y]);
@@ -287,7 +287,7 @@ describe('правка диалогов', () => {
     unlinkLine(ctx, 'L', 'P1');
     linkLine(ctx, 'L', 'P1');
     expect(targets(ctx, 'L')).toEqual(['P1', 'P2']);
-    expect(() => { revertLine(ctx, addLine(ctx, 'L', { speaker: 1, text: 'x' })); }).toThrow(/нет в игре/);
+    expect(() => { revertLine(ctx, addLine(ctx, 'L', { speaker: 1, text: 'x' })); }).toThrow(/not in the game/);
   });
 
   it('какие условия и действия есть в данных', () => {

@@ -183,7 +183,7 @@ describe('симулятор разговора', () => {
   it('без диалогов и не персонаж', () => {
     const ctx = ctxOf();
     expect(formatTalk(simulateTalk(ctx, 'OTHER')).join('\n')).toContain('диалогов на это событие нет');
-    expect(() => simulateTalk(ctx, 'PK')).toThrow(/не персонаж/);
+    expect(() => simulateTalk(ctx, 'PK')).toThrow(/is not a character/);
   });
 });
 

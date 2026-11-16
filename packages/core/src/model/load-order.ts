@@ -1,3 +1,4 @@
+import { UiTextError } from '../ui-text.ts';
 /**
  * Порядок загрузки модов (`data/mods.cfg`) без файловой системы: разбор, перестановка,
  * включение и выключение. Строка ниже — слой позже — её значения побеждают.
@@ -49,7 +50,7 @@ export function placeMod(names: readonly string[], name: string, place: ModPlace
   else {
     const ref = 'after' in place ? place.after : place.before;
     const j = modIndex(rest, ref);
-    if (j < 0) throw new Error(`Мода нет в порядке загрузки: ${ref}`);
+    if (j < 0) throw new UiTextError({ en: `The mod is not in the load order: ${ref}`, ru: `Мода нет в порядке загрузки: ${ref}`, zh: `Mod 不在加载顺序中：${ref}` });
     at = 'after' in place ? j + 1 : j;
   }
   return [...rest.slice(0, at), entry, ...rest.slice(at)];
@@ -76,7 +77,7 @@ export type ModsCfgChange =
 export function applyModsCfgChange(names: readonly string[], change: ModsCfgChange): string[] {
   switch (change.op) {
     case 'move':
-      if (modIndex(names, change.name) < 0) throw new Error(`Мода нет в порядке загрузки: ${change.name} (сначала включите его)`);
+      if (modIndex(names, change.name) < 0) throw new UiTextError({ en: `The mod is not in the load order: ${change.name} (enable it first)`, ru: `Мода нет в порядке загрузки: ${change.name} (сначала включите его)`, zh: `Mod 不在加载顺序中：${change.name}（请先启用）` });
       return placeMod(names, change.name, change.place);
     case 'enable':
       return modIndex(names, change.name) >= 0 && change.place === undefined ? [...names] : placeMod(names, change.name, change.place ?? { bottom: true });

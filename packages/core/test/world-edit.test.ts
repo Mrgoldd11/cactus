@@ -153,7 +153,7 @@ describe('правки мира в моде', () => {
     });
     expect(() => {
       ed.move(ZONE, '0-buildinglist', '2-base', [5000, 0, 0], [1, 0, 0, 0]);
-    }).toThrow(/зоне 33\.32/);
+    }).toThrow(/zone 33\.32/);
     ed.move(ZONE, '0-buildinglist', '1-base', [10, 2, 10], [1, 0, 0, 0], { worldY: 7 });
     ed.undo();
     expect(seen).toEqual([

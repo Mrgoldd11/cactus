@@ -33,7 +33,7 @@ export interface Step {
 export function stepOf(project: Project, cs: Changeset, lang: Lang): Step {
   const tr = translations.get(project);
   const d = describeChangeset(project.ctx, cs, tr ? { translation: tr } : {});
-  return { cs, text: inLang(d, lang), ai: d.ai, rollback: d.rollback };
+  return { cs, text: inLang(d.text, lang), ai: d.ai, rollback: d.rollback };
 }
 
 function StepMarks({ step, t }: { step: Step; t: Strings }): ReactNode {

@@ -20,7 +20,7 @@ import {
   type WorldEdits,
   type WorldIndex,
 } from '@kenshi-editor/core';
-import { langOf, useLang } from '../../i18n.ts';
+import { errorText, langOf, useLang } from '../../i18n.ts';
 import { isTypingIn, shortcut } from '../../keys.ts';
 import { PlaceBox } from '../../components/PlaceBox.tsx';
 import type { Lang } from '../../../../shared/api.ts';
@@ -294,7 +294,7 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
     setError(undefined);
     project.interiorEdits().then(
       (ed) => { if (!cancelled) setEdits(ed); },
-      (e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); },
+      (e: unknown) => { if (!cancelled) setError(errorText(e)); },
     );
     // Мир — только для строки «где стоит»; не мешает показу.
     project.world().then((w) => { if (!cancelled) setWorld(w); }, () => undefined);
@@ -403,7 +403,7 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
       setMessage(undefined);
       return true;
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : String(e));
+      setMessage(errorText(e));
       return false;
     }
   };

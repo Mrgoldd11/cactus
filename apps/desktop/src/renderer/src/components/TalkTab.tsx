@@ -14,7 +14,7 @@ import {
   type TalkLine,
   type TalkSimulation,
 } from '@kenshi-editor/core';
-import { useT, type Strings } from '../i18n.ts';
+import { errorText, type Strings, useT } from '../i18n.ts';
 import { recordName, useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
 
@@ -35,7 +35,7 @@ export function TalkTab({ project, sid, version, onGo }: Props): ReactNode {
     try {
       return simulateTalk(project.ctx, sid, event, translation ? { translation } : {});
     } catch (e) {
-      return e instanceof Error ? e.message : String(e);
+      return errorText(e);
     }
   }, [project, sid, event, version, translation]);
 

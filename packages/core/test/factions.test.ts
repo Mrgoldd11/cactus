@@ -102,15 +102,15 @@ describe('матрица отношений', () => {
     expect(m.cell('uc', 'hn').value).toBe(20);
     expect(m.cell('hn', 'uc').touches).toEqual([{ layer: 'My.mod', value: 20 }]);
     const t = describeChangeset(ctx, ctx.history().undo.at(-1)!);
-    expect(t.ru).toBe('Отношение «Holy Nation» ⇄ «United Cities»: 20');
-    expect(t.en).toBe('Relation «Holy Nation» ⇄ «United Cities»: 20');
+    expect(t.text.ru).toBe('Отношение «Holy Nation» ⇄ «United Cities»: 20');
+    expect(t.text.en).toBe('Relation «Holy Nation» ⇄ «United Cities»: 20');
 
     setFactionRelation(ctx, 'dc', 'hn', 75);
     expect(factionMatrix(ctx).cell('dc', 'hn')).toMatchObject({ value: 75, explicit: true, kind: 'ally' });
     setFactionRelation(ctx, 'hn', 'dc', undefined);
     m = factionMatrix(ctx);
     expect(m.cell('hn', 'dc')).toMatchObject({ value: 0, explicit: false });
-    expect(describeChangeset(ctx, ctx.history().undo.at(-1)!).en).toBe('Relation «Holy Nation» → «Deadcat»: default');
+    expect(describeChangeset(ctx, ctx.history().undo.at(-1)!).text.en).toBe('Relation «Holy Nation» → «Deadcat»: default');
 
     // В мод — только изменённые ссылки; снятие ванильной — маркер «убрать».
     const saved = readDataFile(writeDataFile(ctx.buildModFile()));
@@ -126,9 +126,9 @@ describe('матрица отношений', () => {
 
   it('ошибки: не фракция, значение вне диапазона', () => {
     const ctx = ctxOf();
-    expect(() => { setFactionRelation(ctx, 'hn', 'nope', 1); }).toThrow(/нет/);
+    expect(() => { setFactionRelation(ctx, 'hn', 'nope', 1); }).toThrow(/No record/);
     expect(() => { setFactionRelation(ctx, 'hn', 'uc', 101); }).toThrow(/−100/);
-    expect(() => { setFactionRelation(ctx, 'hn', 'uc', 1.5); }).toThrow(/целое/);
+    expect(() => { setFactionRelation(ctx, 'hn', 'uc', 1.5); }).toThrow(/integer/);
     expect(ctx.history().undo).toHaveLength(0);
   });
 });

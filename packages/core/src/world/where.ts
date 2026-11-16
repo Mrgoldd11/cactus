@@ -16,6 +16,7 @@ import { itemTypeName } from '../format/item-types.ts';
 import type { GameRecord, Vec3 } from '../format/types.ts';
 import type { ModContext } from '../model/context.ts';
 import { formatPosition, type BuildingPlacement, type Placement, type TownPlacement, type WorldIndex, type ZoneCoord } from './world.ts';
+import { UiTextError } from '../ui-text.ts';
 
 export type WhereRole = 'placed' | 'sold' | 'carried' | 'lying' | 'loot' | 'member' | 'lives' | 'says' | 'related';
 
@@ -387,7 +388,7 @@ export function whereInGame(ctx: ModContext, id: string, options: WhereOptions =
   const maxDepth = options.maxDepth ?? 10;
   const sampleSize = options.instanceSample ?? 5;
   const rootRec = ctx.get(id);
-  if (!rootRec) throw new Error(`Нет записи «${id}»`);
+  if (!rootRec) throw new UiTextError({ en: `No record «${id}»`, ru: `Нет записи «${id}»`, zh: `没有记录 «${id}»` });
   const w = new WhereWalker(ctx, world);
 
   const decorate = (node: WhereNode, rec: GameRecord): void => {

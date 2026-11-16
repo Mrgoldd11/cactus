@@ -23,6 +23,7 @@ import { cloneRecord } from '../model/record-ops.ts';
 import { decodeText, encodeText } from '../text.ts';
 import type { WorldEdits } from './edit.ts';
 import type { BuildingPlacement, WorldIndex } from './world.ts';
+import { UiTextError } from '../ui-text.ts';
 
 export const INTERIORS = 'interiors.level';
 
@@ -90,7 +91,7 @@ function layoutOf(sid: string, rec: GameRecord): InteriorLayout {
 }
 
 function requireLoaded(edits: WorldEdits): void {
-  if (!edits.isLoaded(INTERIORS)) throw new Error('Интерьеры ещё не прочитаны');
+  if (!edits.isLoaded(INTERIORS)) throw new UiTextError({ en: 'Interiors are not read yet', ru: 'Интерьеры ещё не прочитаны', zh: '内部布局尚未读取' });
 }
 
 /** Раскладки здания (или все, без `building`): сначала внутренние, по имени. */
@@ -139,7 +140,7 @@ function objectOf(edits: WorldEdits, types: RecordTypes, key: string, inst: Inst
 export function layoutObjects(edits: WorldEdits, types: RecordTypes, layout: string): InteriorObject[] {
   requireLoaded(edits);
   const rec = edits.record(INTERIORS, layout);
-  if (!rec) throw new Error(`Нет раскладки ${layout}`);
+  if (!rec) throw new UiTextError({ en: `No layout ${layout}`, ru: `Нет раскладки ${layout}`, zh: `没有布局 ${layout}` });
   const out: InteriorObject[] = [];
   for (const [key, inst] of rec.instances) if (inst.target !== '') out.push(objectOf(edits, types, key, inst));
   return out;
@@ -218,10 +219,10 @@ export function placeInterior(
   label = 'Новый объект в интерьере',
 ): InteriorPlaceResult {
   requireLoaded(edits);
-  if (!interiorLayout(edits, layout)) throw new Error(`Нет раскладки ${layout}`);
+  if (!interiorLayout(edits, layout)) throw new UiTextError({ en: `No layout ${layout}`, ru: `Нет раскладки ${layout}`, zh: `没有布局 ${layout}` });
   const head = types.headline(target);
   const type = itemTypeName(head?.type ?? -1);
-  if (type !== 'BUILDING' && type !== 'ITEM_PLACEMENT_GROUP') throw new Error(`${target}: внутрь ставят мебель (BUILDING) и точки предметов (ITEM_PLACEMENT_GROUP), а это ${type || 'неизвестная запись'}`);
+  if (type !== 'BUILDING' && type !== 'ITEM_PLACEMENT_GROUP') throw new UiTextError({ en: `${target}: inside go furniture (BUILDING) and item points (ITEM_PLACEMENT_GROUP), and this is ${type || 'an unknown record'}`, ru: `${target}: внутрь ставят мебель (BUILDING) и точки предметов (ITEM_PLACEMENT_GROUP), а это ${type || 'неизвестная запись'}`, zh: `${target}：内部只能放置家具（BUILDING）和物品点（ITEM_PLACEMENT_GROUP），而这是 ${type || '未知记录'}` });
   const floor = floorAt(layoutObjects(edits, types, layout), position[1]);
   const tpl = templateOf(edits, layout, target, type === 'BUILDING' ? 'GAMESTATE_BUILDING' : 'ITEM_PLACEMENT_GROUP');
   const owner = ownerOf(edits, layout);
@@ -269,7 +270,7 @@ export function placeInterior(
 export function moveInterior(edits: WorldEdits, types: RecordTypes, layout: string, key: string, position: Vec3, rotation: Vec4, label = 'Сдвиг объекта в интерьере'): void {
   requireLoaded(edits);
   const cur = layoutObject(edits, types, layout, key);
-  if (!cur) throw new Error(`Нет объекта ${key} в раскладке ${layout}`);
+  if (!cur) throw new UiTextError({ en: `No object ${key} in layout ${layout}`, ru: `Нет объекта ${key} в раскладке ${layout}`, zh: `布局 ${layout} 中没有对象 ${key}` });
   const dy = position[1] - cur.position[1];
   const floor = cur.floor === undefined ? undefined : floorAt(layoutObjects(edits, types, layout), position[1], key);
   edits.transaction(label, () => {

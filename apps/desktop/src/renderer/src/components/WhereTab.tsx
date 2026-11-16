@@ -15,7 +15,7 @@ import {
   type WhereStep,
   type WorldIndex,
 } from '@kenshi-editor/core';
-import { inLang, useLang, useT } from '../i18n.ts';
+import { errorText, inLang, useLang, useT } from '../i18n.ts';
 import type { Project } from '../project.ts';
 import { ShowInGame } from './GameLink.tsx';
 
@@ -42,7 +42,7 @@ export function WhereTab({ project, sid, version, onGo }: Props): ReactNode {
         if (alive) setWorld(w);
       },
       (e: unknown) => {
-        if (alive) setWorldError(e instanceof Error ? e.message : String(e));
+        if (alive) setWorldError(errorText(e));
       },
     );
     return () => {
@@ -58,7 +58,7 @@ export function WhereTab({ project, sid, version, onGo }: Props): ReactNode {
     try {
       return whereInGame(project.ctx, sid, world ? { world } : {});
     } catch (e) {
-      return e instanceof Error ? e.message : String(e);
+      return errorText(e);
     }
   }, [project, sid, version, world]);
 

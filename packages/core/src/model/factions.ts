@@ -174,8 +174,8 @@ function factionName(ctx: ModContext, sid: string): string {
 
 function requireFaction(ctx: ModContext, sid: string): void {
   const rec = ctx.get(sid);
-  if (!rec) throw new EditError(`Записи ${sid} нет`);
-  if (itemTypeName(rec.type) !== FACTION_TYPE) throw new EditError(`${sid} — не фракция (${itemTypeName(rec.type)})`);
+  if (!rec) throw new EditError({ en: `No record ${sid}`, ru: `Записи ${sid} нет`, zh: `没有记录 ${sid}` });
+  if (itemTypeName(rec.type) !== FACTION_TYPE) throw new EditError({ en: `${sid} is not a faction (${itemTypeName(rec.type)})`, ru: `${sid} — не фракция (${itemTypeName(rec.type)})`, zh: `${sid} 不是派系（${itemTypeName(rec.type)}）` });
 }
 
 export interface SetRelationOptions {
@@ -209,7 +209,7 @@ function putRelation(ctx: ModContext, from: string, to: string, value: number | 
 export function setFactionRelation(ctx: ModContext, from: string, to: string, value: number | undefined, options: SetRelationOptions = {}): void {
   requireFaction(ctx, from);
   requireFaction(ctx, to);
-  if (value !== undefined && (!Number.isInteger(value) || value < -100 || value > 100)) throw new EditError(`Отношение — целое от −100 до 100, а не ${value}`);
+  if (value !== undefined && (!Number.isInteger(value) || value < -100 || value > 100)) throw new EditError({ en: `A relation is an integer from −100 to 100, not ${value}`, ru: `Отношение — целое от −100 до 100, а не ${value}`, zh: `关系值应为 −100 到 100 的整数，而不是 ${value}` });
   const both = (options.both ?? false) && from !== to;
   ctx.transaction(relationLabel(ctx, from, to, value, both), () => {
     putRelation(ctx, from, to, value);

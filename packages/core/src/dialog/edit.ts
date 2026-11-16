@@ -16,6 +16,7 @@
  * копией — см. `setLineOrder`. «Как в игре» возвращают `revertLine` и `revertLinks`.
  */
 import { decodeText, encodeText } from '../text.ts';
+import { uiText, type UiText } from '../ui-text.ts';
 import { itemTypeId, itemTypeName } from '../format/item-types.ts';
 import type { GameRecord, Reference } from '../format/types.ts';
 import { EditError, type ModContext } from '../model/context.ts';
@@ -28,16 +29,18 @@ export type ActionCategory = (typeof OWNED_ACTION_CATEGORIES)[number];
 const LINE = 'DIALOGUE_LINE';
 const ACTION = 'DIALOG_ACTION';
 const PARENT_TYPES: ReadonlySet<string> = new Set(['DIALOGUE', LINE]);
+const DIALOGUE_OR_LINE: UiText = { en: 'dialogue or line', ru: 'диалог или реплика', zh: '对话或台词' };
+const A_LINE: UiText = { en: 'line', ru: 'реплика', zh: '台词' };
 
 function typeOf(ctx: ModContext, sid: string): string | undefined {
   const r = ctx.get(sid);
   return r ? itemTypeName(r.type) : undefined;
 }
 
-function need(ctx: ModContext, sid: string, types: ReadonlySet<string>, what: string): GameRecord {
+function need(ctx: ModContext, sid: string, types: ReadonlySet<string>, what: UiText): GameRecord {
   const r = ctx.get(sid);
-  if (!r) throw new EditError(`Нет записи ${sid}`);
-  if (!types.has(itemTypeName(r.type))) throw new EditError(`${sid} — не ${what}`);
+  if (!r) throw new EditError({ en: `No record ${sid}`, ru: `Нет записи ${sid}`, zh: `没有记录 ${sid}` });
+  if (!types.has(itemTypeName(r.type))) throw new EditError({ en: `${sid} is not a ${what.en}`, ru: `${sid} — не ${uiText(what, 'ru')}`, zh: `${sid} 不是${uiText(what, 'zh')}` });
   return r;
 }
 
@@ -76,7 +79,7 @@ export function createLine(ctx: ModContext, line: NewLine): string {
 
 /** Новая реплика в конце ветки `parent` (диалог или реплика). Возвращает её id. */
 export function addLine(ctx: ModContext, parent: string, line: NewLine): string {
-  need(ctx, parent, PARENT_TYPES, 'диалог или реплика');
+  need(ctx, parent, PARENT_TYPES, DIALOGUE_OR_LINE);
   return ctx.transaction('новая реплика', () => {
     const sid = createLine(ctx, line);
     ctx.addReference(parent, 'lines', sid, ctx.refDefaults(parent, 'lines'));
@@ -108,7 +111,7 @@ export function linkLine(ctx: ModContext, parent: string, child: string): void {
 
 /** Убрать связь (сама реплика остаётся). */
 export function unlinkLine(ctx: ModContext, parent: string, child: string): void {
-  if (!isLinked(ctx, parent, child)) throw new EditError('такой связи нет');
+  if (!isLinked(ctx, parent, child)) throw new EditError({ en: 'there is no such link', ru: 'такой связи нет', zh: '没有这个连接' });
   ctx.removeReference(parent, 'lines', child);
 }
 
@@ -151,7 +154,7 @@ export function orderCopies(ctx: ModContext, parent: string, order: readonly str
 export function setLineOrder(ctx: ModContext, parent: string, order: readonly string[]): Map<string, string> {
   const list = ctx.get(parent)?.refs.get('lines') ?? [];
   const byTarget = new Map(list.map((r) => [r.target, r]));
-  if (order.length !== list.length || new Set(order).size !== byTarget.size || order.some((t) => !byTarget.has(t))) throw new EditError('новый порядок должен содержать те же реплики');
+  if (order.length !== list.length || new Set(order).size !== byTarget.size || order.some((t) => !byTarget.has(t))) throw new EditError({ en: 'the new order must contain the same lines', ru: 'новый порядок должен содержать те же реплики', zh: '新顺序必须包含相同的台词' });
   const copies = new Set(orderCopies(ctx, parent, order));
   const replaced = new Map<string, string>();
   ctx.transaction('порядок реплик', () => {
@@ -189,7 +192,7 @@ export function moveCopies(ctx: ModContext, parent: string, child: string, dir: 
 /** Сдвинуть реплику на место вверх (-1) или вниз (1). Возвращает замены копиями. */
 export function moveLine(ctx: ModContext, parent: string, child: string, dir: -1 | 1): Map<string, string> {
   const order = swapped(ctx, parent, child, dir);
-  if (!order) throw new EditError('дальше двигать некуда');
+  if (!order) throw new EditError({ en: 'cannot move any further', ru: 'дальше двигать некуда', zh: '无法再移动' });
   return setLineOrder(ctx, parent, order);
 }
 
@@ -221,7 +224,7 @@ function ownedActions(ctx: ModContext, sid: string): string[] {
  * копия встаёт в ту же ветку последней.
  */
 export function duplicateLine(ctx: ModContext, sid: string, parent?: string): string {
-  need(ctx, sid, new Set([LINE]), 'реплика');
+  need(ctx, sid, new Set([LINE]), A_LINE);
   return ctx.transaction('копия реплики', () => {
     const copySid = ctx.allocateStringId();
     ctx.duplicateRecord(sid, { stringId: copySid, name: `${LINE}${numberOf(copySid)}` });
@@ -246,7 +249,7 @@ export function duplicateLine(ctx: ModContext, sid: string, parent?: string): st
  * Реплика из игры помечается удалённой (мод её убирает); `lineParents` — кого это заденет.
  */
 export function deleteLine(ctx: ModContext, sid: string): void {
-  need(ctx, sid, new Set([LINE]), 'реплика');
+  need(ctx, sid, new Set([LINE]), A_LINE);
   ctx.transaction('удалить реплику', () => {
     const owned = ownedActions(ctx, sid);
     ctx.deleteRecord(sid, { removeReferences: true });
@@ -259,7 +262,7 @@ export function deleteLine(ctx: ModContext, sid: string): void {
  * `parent → новая → child`). Одна отмена. Возвращает id новой реплики.
  */
 export function insertLineBetween(ctx: ModContext, parent: string, child: string, line: NewLine): string {
-  if (!isLinked(ctx, parent, child)) throw new EditError('такой связи нет');
+  if (!isLinked(ctx, parent, child)) throw new EditError({ en: 'there is no such link', ru: 'такой связи нет', zh: '没有这个连接' });
   return ctx.transaction('вставить реплику', () => {
     const sid = addLine(ctx, parent, line);
     linkLine(ctx, sid, child);
@@ -280,7 +283,7 @@ export interface LineLink {
  */
 export function deleteGraphItems(ctx: ModContext, items: { lines?: readonly string[]; links?: readonly LineLink[] }): void {
   const lines = [...new Set(items.lines ?? [])].filter((s) => ctx.get(s) !== undefined);
-  for (const s of lines) need(ctx, s, new Set([LINE]), 'реплика');
+  for (const s of lines) need(ctx, s, new Set([LINE]), A_LINE);
   const gone = new Set(lines);
   const links = (items.links ?? []).filter((l) => !gone.has(l.parent) && !gone.has(l.child) && isLinked(ctx, l.parent, l.child));
   if (lines.length === 0 && links.length === 0) return;
@@ -292,7 +295,7 @@ export function deleteGraphItems(ctx: ModContext, items: { lines?: readonly stri
 
 /** Копии реплик (каждая — в ветку своего `parent`) одной отменой; id копий по порядку. */
 export function duplicateLines(ctx: ModContext, items: readonly { sid: string; parent?: string | undefined }[]): string[] {
-  for (const i of items) need(ctx, i.sid, new Set([LINE]), 'реплика');
+  for (const i of items) need(ctx, i.sid, new Set([LINE]), A_LINE);
   return ctx.transaction(items.length === 1 ? 'копия реплики' : 'копии реплик', () => items.map((i) => duplicateLine(ctx, i.sid, i.parent)));
 }
 
@@ -367,7 +370,7 @@ const OWNER_TYPES: ReadonlySet<string> = new Set(['DIALOGUE', LINE]);
 
 /** Добавить условие реплике или диалогу. Возвращает id записи условия. */
 export function addCondition(ctx: ModContext, owner: string, spec: ConditionSpec): string {
-  need(ctx, owner, OWNER_TYPES, 'диалог или реплика');
+  need(ctx, owner, OWNER_TYPES, DIALOGUE_OR_LINE);
   return ctx.transaction('новое условие', () => {
     const a = createNamed(ctx, ACTION);
     ctx.editRecord(a, (d) => {
@@ -384,7 +387,7 @@ export function addCondition(ctx: ModContext, owner: string, spec: ConditionSpec
 
 /** Добавить действие реплике. Возвращает id записи действия. */
 export function addEffect(ctx: ModContext, owner: string, spec: EffectSpec): string {
-  need(ctx, owner, new Set([LINE]), 'реплика');
+  need(ctx, owner, new Set([LINE]), A_LINE);
   return ctx.transaction('новое действие', () => {
     const a = createNamed(ctx, ACTION);
     ctx.editRecord(a, (d) => {
@@ -404,7 +407,7 @@ function ownAction(ctx: ModContext, owner: string, cat: ActionCategory, action: 
   const others = ctx.referencesTo(action).some((e) => e.source !== owner);
   if (!others) return action;
   const ref = ctx.get(owner)?.refs.get(cat)?.find((r) => r.target === action);
-  if (!ref) throw new EditError(`у ${owner} нет ${action} в ${cat}`);
+  if (!ref) throw new EditError({ en: `${owner} has no ${action} in ${cat}`, ru: `у ${owner} нет ${action} в ${cat}`, zh: `${owner} 的 ${cat} 中没有 ${action}` });
   const copy = ctx.allocateStringId();
   ctx.duplicateRecord(action, { stringId: copy, name: `${ACTION}${numberOf(copy)}` });
   const list = ctx.get(owner)!.refs.get(cat)!.map((r) => (r.target === action ? { ...r, target: copy } : { ...r }));
@@ -414,7 +417,7 @@ function ownAction(ctx: ModContext, owner: string, cat: ActionCategory, action: 
 
 function refOf(ctx: ModContext, owner: string, cat: ActionCategory, action: string): Reference {
   const ref = ctx.get(owner)?.refs.get(cat)?.find((r) => r.target === action);
-  if (!ref) throw new EditError(`у ${owner} нет ${action} в ${cat}`);
+  if (!ref) throw new EditError({ en: `${owner} has no ${action} in ${cat}`, ru: `у ${owner} нет ${action} в ${cat}`, zh: `${owner} 的 ${cat} 中没有 ${action}` });
   return ref;
 }
 
@@ -494,7 +497,7 @@ export function dialogEnumUsage(ctx: ModContext): DialogEnumUsage {
  */
 export function revertLine(ctx: ModContext, sid: string): void {
   const st = ctx.status(sid);
-  if (st === 'new' || st === undefined) throw new EditError('этой реплики нет в игре — возвращать не к чему');
+  if (st === 'new' || st === undefined) throw new EditError({ en: 'this line is not in the game — nothing to revert to', ru: 'этой реплики нет в игре — возвращать не к чему', zh: '游戏中没有这条台词——无可恢复' });
   if (st === 'base') return;
   const mine = OWNED_ACTION_CATEGORIES.flatMap((c) => (ctx.get(sid)?.refs.get(c) ?? []).map((r) => r.target));
   ctx.transaction('как в игре', () => {

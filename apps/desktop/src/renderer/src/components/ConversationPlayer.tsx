@@ -24,7 +24,7 @@ import {
   type PlayStep,
   type TranslationIndex,
 } from '@kenshi-editor/core';
-import { useT, type Strings } from '../i18n.ts';
+import { errorText, type Strings, useT } from '../i18n.ts';
 import type { Project } from '../project.ts';
 import { lineCaption, useTranslation } from './LineInspector.tsx';
 import { partsText } from './TalkTab.tsx';
@@ -65,7 +65,7 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
     try {
       return playConversation(ctx, sid, { event, mode, assume, answers, prefer });
     } catch (e) {
-      return e instanceof Error ? e.message : String(e);
+      return errorText(e);
     }
   }, [ctx, sid, event, mode, assume, answers, prefer, version]);
 

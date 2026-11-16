@@ -3,6 +3,7 @@
  * по-русски и показываются как есть.
  */
 import { createContext, useContext } from 'react';
+import { errorMessage } from '@kenshi-editor/core';
 import type { Lang } from '../../shared/api.ts';
 import { backupEn, backupRu } from './i18n-backup.ts';
 import { extensionsEn, extensionsRu, extensionsZh } from './i18n-extensions.ts';
@@ -1228,4 +1229,16 @@ export function inLang<T>(texts: Partial<Record<Lang, T>> & { en: T }, lang: Lan
 /** Data language (game locale code) or undefined — record names only in the original. */
 export function useDataLocale(): string | undefined {
   return useContext(LangContext).dataLocale;
+}
+
+let errorLang: Lang = 'en';
+
+/** Interface language for error texts shown outside React components (App sets it). */
+export function setErrorLang(lang: Lang): void {
+  errorLang = lang;
+}
+
+/** Message of an error in the interface language: core errors carry a text for every language. */
+export function errorText(e: unknown): string {
+  return errorMessage(e, errorLang);
 }

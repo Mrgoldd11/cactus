@@ -32,9 +32,10 @@ import type { ModContext } from './context.ts';
 import { diffRecordStates, type FieldChange } from './diff.ts';
 import { formatFieldChange, formatFieldValue, formatRefValues, refLabel } from './present.ts';
 import { applyLayer, cloneRecord, isRemovalMarker, isRemovedRef, refValuesEqual, SCALAR_DICTS, scalarEqual, scalarMap } from './record-ops.ts';
+import { UiTextError } from '../ui-text.ts';
 
 /** Ошибка слияния с понятным сообщением (нельзя слить этот мод, плохой файл-спутник…). */
-export class MergeError extends Error {
+export class MergeError extends UiTextError {
   override name = 'MergeError';
 }
 
@@ -121,17 +122,17 @@ export function parseMergeStore(text: string): MergeStore {
   try {
     raw = JSON.parse(text);
   } catch {
-    throw new MergeError('Файл слияния (.kedit-merge.json) повреждён: не читается как JSON. Исправьте или удалите его — тогда отклонённые записи покажутся снова.');
+    throw new MergeError({ en: 'The merge file (.kedit-merge.json) is damaged: it does not read as JSON. Fix or delete it — then the rejected records show again.', ru: 'Файл слияния (.kedit-merge.json) повреждён: не читается как JSON. Исправьте или удалите его — тогда отклонённые записи покажутся снова.', zh: '合并文件（.kedit-merge.json）已损坏：无法作为 JSON 读取。请修复或删除它——之后被拒绝的记录会重新显示。' });
   }
   const o = (typeof raw === 'object' ? raw : null) as { version?: unknown; sources?: unknown; log?: unknown } | null;
   if (o === null || o.version !== 1 || typeof o.sources !== 'object' || o.sources === null) {
-    throw new MergeError('Файл слияния (.kedit-merge.json) другого формата или повреждён.');
+    throw new MergeError({ en: 'The merge file (.kedit-merge.json) has another format or is damaged.', ru: 'Файл слияния (.kedit-merge.json) другого формата или повреждён.', zh: '合并文件（.kedit-merge.json）格式不同或已损坏。' });
   }
   const out = emptyMergeStore();
   for (const [k, s] of Object.entries(o.sources)) {
     const st = s as Partial<MergeSourceState> | undefined;
     if (!st || typeof st.name !== 'string' || !isRecordOfStrings(st.baseline ?? {}) || !isRecordOfStrings(st.rejected ?? {})) {
-      throw new MergeError(`Файл слияния (.kedit-merge.json): повреждена запись об источнике «${k}».`);
+      throw new MergeError({ en: `The merge file (.kedit-merge.json): the entry about source «${k}» is damaged.`, ru: `Файл слияния (.kedit-merge.json): повреждена запись об источнике «${k}».`, zh: `合并文件（.kedit-merge.json）：关于来源 «${k}» 的条目已损坏。` });
     }
     out.sources[k] = { name: st.name, baseline: { ...(st.baseline ?? {}) }, rejected: { ...(st.rejected ?? {}) } };
   }
@@ -378,14 +379,21 @@ const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCas
  * активного мода или ваниль: их записи уже входят в ваши слои.
  */
 export function checkMergeSource(ctx: ModContext, sourceName: string): void {
-  if (same(sourceName, ctx.modName)) throw new MergeError(`Нельзя слить мод «${sourceName}» сам в себя.`);
+  if (same(sourceName, ctx.modName)) throw new MergeError({ en: `Cannot merge mod «${sourceName}» into itself.`, ru: `Нельзя слить мод «${sourceName}» сам в себя.`, zh: `不能将 Mod «${sourceName}» 合并到它自身。` });
   const layer = ctx.layers.find((l) => same(l.name, sourceName)) ?? ctx.info.dependencies.find((d) => same(d, sourceName));
   if (layer !== undefined) {
     const name = typeof layer === 'string' ? layer : layer.name;
-    throw new MergeError(
-      `Мод «${name}» открыт как зависимость «${ctx.modName}» (или входит в игру): его записи уже подключены слоем и сливать их нельзя. ` +
+    throw new MergeError({
+      en:
+        `Mod «${name}» is open as a dependency of «${ctx.modName}» (or is part of the game): its records are already loaded as a layer and cannot be merged. ` +
+        'Remove it from the dependencies in the mod header if you want to move its data into your mod.',
+      ru:
+        `Мод «${name}» открыт как зависимость «${ctx.modName}» (или входит в игру): его записи уже подключены слоем и сливать их нельзя. ` +
         'Уберите его из зависимостей в заголовке мода, если хотите перенести его данные в свой мод.',
-    );
+      zh:
+        `Mod «${name}» 已作为 «${ctx.modName}» 的依赖项打开（或属于游戏本体）：它的记录已作为图层载入，不能合并。` +
+        '如果想把它的数据移到你的 Mod 中，请从 Mod 头部的依赖项中移除它。',
+    });
   }
 }
 

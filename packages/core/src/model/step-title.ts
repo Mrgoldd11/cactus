@@ -11,10 +11,11 @@ import { translatedText, type TranslationIndex } from '../locale/translation.ts'
 import type { Changeset, ModContext } from './context.ts';
 import type { RecordDiff } from './diff.ts';
 import { changesetDiff, formatScalar } from './present.ts';
+import { mapUi, uiText, type UiText } from '../ui-text.ts';
 
 export interface StepTitle {
-  ru: string;
-  en: string;
+  /** The title in the interface languages; non-English titles quote line texts in the data language. */
+  text: UiText;
   /** Правка пришла от ИИ (живая связь MCP). */
   ai: boolean;
   /** Откат другой правки. */
@@ -22,18 +23,30 @@ export interface StepTitle {
 }
 
 export interface StepTitleOptions {
-  /** Перевод реплик игры: русское название шага цитирует русский текст реплики. */
+  /** Translation of the game texts: non-English titles quote the line text in that language. */
   translation?: TranslationIndex;
 }
 
+const ROLLBACK: UiText = { en: 'Rollback: ', ru: 'Откат: ', zh: '回滚：' };
 const AI_PREFIX = 'ИИ: ';
 const ROLLBACK_PREFIX = 'откат: ';
 const LINE = 'DIALOGUE_LINE';
 const QUOTE_MAX = 32;
 
-interface Pair {
-  ru: string;
+/** A title in every language the core has texts for. */
+type Pair = { en: string; ru: string; zh: string };
+
+const EMPTY: Pair = { en: '', ru: '', zh: '' };
+
+/** Same text in every language (names, ids, labels shown as they are). */
+function same(s: string): Pair {
+  return { en: s, ru: s, zh: s };
+}
+
+/** Text quoted from the data: `en` is the text as in the data, `tr` its translation. */
+interface Quoted {
   en: string;
+  tr: string;
 }
 
 function short(s: string): string {
@@ -72,26 +85,28 @@ class Describer {
     return itemTypeName(this.rec(d).type) === LINE;
   }
 
-  /** Первый непустой текст реплики: русский (если есть перевод) и как в данных. */
-  lineText(rec: GameRecord | undefined): Pair {
-    if (!rec) return { ru: '', en: '' };
+  /** Первый непустой текст реплики: как в данных и в переводе (если он есть). */
+  lineText(rec: GameRecord | undefined): Quoted {
+    if (!rec) return { en: '', tr: '' };
     for (let i = 0; rec.strings.has(`text${i}`); i++) {
       const en = decodeText(rec.strings.get(`text${i}`)!);
       if (en.trim() === '') continue;
-      return { ru: translatedText(this.options.translation, rec.stringId, `text${i}`, en) ?? en, en };
+      return { tr: translatedText(this.options.translation, rec.stringId, `text${i}`, en) ?? en, en };
     }
-    return { ru: '', en: '' };
+    return { en: '', tr: '' };
+  }
+
+  /** Quoted line text for every language. */
+  quoted(t: Quoted): Pair {
+    return { en: quote(t.en), ru: quote(t.tr), zh: quote(t.tr) };
   }
 
   /** Имя записи для названия: у реплики — её текст. */
   recordName(rec: GameRecord): Pair {
-    if (itemTypeName(rec.type) === LINE) {
-      const t = this.lineText(rec);
-      return { ru: quote(t.ru), en: quote(t.en) };
-    }
+    if (itemTypeName(rec.type) === LINE) return this.quoted(this.lineText(rec));
     const en = decodeText(rec.name) || rec.stringId;
-    const ru = this.ctx.localizedName(rec.stringId) ?? en;
-    return { ru: ` «${short(ru)}»`, en: ` «${short(en)}»` };
+    const tr = this.ctx.localizedName(rec.stringId) ?? en;
+    return { en: ` «${short(en)}»`, ru: ` «${short(tr)}»`, zh: ` «${short(tr)}»` };
   }
 
   added(): RecordDiff[] {
@@ -120,7 +135,7 @@ class Describer {
     const rec = d?.after;
     const t = this.lineText(rec);
     const player = (rec?.ints.get('speaker') ?? 0) !== 0;
-    const what: Pair = player ? { ru: 'ответ игрока', en: 'player answer' } : { ru: 'реплика NPC', en: 'NPC line' };
+    const what: Pair = player ? { ru: 'ответ игрока', en: 'player answer', zh: '玩家回答' } : { ru: 'реплика NPC', en: 'NPC line', zh: 'NPC 台词' };
     const ru = {
       add: player ? 'Добавлен' : 'Добавлена',
       insert: player ? 'Вставлен' : 'Вставлена',
@@ -128,20 +143,22 @@ class Describer {
       paste: player ? 'Вставлен' : 'Вставлена',
     }[verb];
     const en = { add: 'Added', insert: 'Inserted', copy: 'Copied', paste: 'Pasted' }[verb];
-    const tail: Pair = verb === 'insert' ? { ru: ' между репликами', en: ' between lines' } : { ru: '', en: '' };
-    return { ru: `${ru} ${what.ru}${quote(t.ru)}${tail.ru}`, en: `${en} ${what.en}${quote(t.en)}${tail.en}` };
+    const zh = { add: '添加了', insert: '插入了', copy: '复制了', paste: '粘贴了' }[verb];
+    const tail: Pair = verb === 'insert' ? { ru: ' между репликами', en: ' between lines', zh: '（在台词之间）' } : EMPTY;
+    const q = this.quoted(t);
+    return { ru: `${ru} ${what.ru}${q.ru}${tail.ru}`, en: `${en} ${what.en}${q.en}${tail.en}`, zh: `${zh}${what.zh}${q.zh}${tail.zh}` };
   }
 
   lineTextChanged(d: RecordDiff): Pair {
-    const t = this.lineText(d.after);
-    return { ru: `Изменён текст реплики${quote(t.ru)}`, en: `Changed line text${quote(t.en)}` };
+    const q = this.quoted(this.lineText(d.after));
+    return { ru: `Изменён текст реплики${q.ru}`, en: `Changed line text${q.en}`, zh: `修改了台词文本${q.zh}` };
   }
 
   linkTitle(added: boolean, n: number): Pair {
-    if (n === 1) return added ? { ru: 'Добавлена связь', en: 'Added link' } : { ru: 'Удалена связь', en: 'Removed link' };
+    if (n === 1) return added ? { ru: 'Добавлена связь', en: 'Added link', zh: '添加了连接' } : { ru: 'Удалена связь', en: 'Removed link', zh: '删除了连接' };
     return added
-      ? { ru: `Добавлено ${n} ${plural(n, 'связь', 'связи', 'связей')}`, en: `Added ${n} links` }
-      : { ru: `Удалено ${n} ${plural(n, 'связь', 'связи', 'связей')}`, en: `Removed ${n} links` };
+      ? { ru: `Добавлено ${n} ${plural(n, 'связь', 'связи', 'связей')}`, en: `Added ${n} links`, zh: `添加了 ${n} 个连接` }
+      : { ru: `Удалено ${n} ${plural(n, 'связь', 'связи', 'связей')}`, en: `Removed ${n} links`, zh: `删除了 ${n} 个连接` };
   }
 
   /** По одной лишь разнице, когда метка ничего не говорит. */
@@ -153,8 +170,11 @@ class Describer {
     if (this.diffs.length === 1) {
       const d = this.diffs[0]!;
       const name = this.recordName(this.rec(d));
-      if (d.change === 'added') return this.isLine(d) ? this.newLine(d, 'add') : { ru: `Создана запись${name.ru}`, en: `Created record${name.en}` };
-      if (d.change === 'removed') return this.isLine(d) ? { ru: `Удалена реплика${name.ru}`, en: `Deleted line${name.en}` } : { ru: `Удалена запись${name.ru}`, en: `Deleted record${name.en}` };
+      if (d.change === 'added') return this.isLine(d) ? this.newLine(d, 'add') : { ru: `Создана запись${name.ru}`, en: `Created record${name.en}`, zh: `创建了记录${name.zh}` };
+      if (d.change === 'removed')
+        return this.isLine(d)
+          ? { ru: `Удалена реплика${name.ru}`, en: `Deleted line${name.en}`, zh: `删除了台词${name.zh}` }
+          : { ru: `Удалена запись${name.ru}`, en: `Deleted record${name.en}`, zh: `删除了记录${name.zh}` };
       const fields = d.fields;
       const linkFields = fields.filter((f) => f.kind === 'ref' && f.category === 'lines');
       if (linkFields.length === fields.length) {
@@ -162,29 +182,34 @@ class Describer {
         const minus = this.links(-1).length;
         if (plus > 0 && minus === 0) return this.linkTitle(true, plus);
         if (minus > 0 && plus === 0) return this.linkTitle(false, minus);
-        return { ru: 'Изменены связи реплики', en: 'Changed line links' };
+        return { ru: 'Изменены связи реплики', en: 'Changed line links', zh: '修改了台词的连接' };
       }
       if (this.isLine(d) && fields.every((f) => f.kind === 'field' && f.dict === 'strings' && /^text\d+$/.test(f.key))) return this.lineTextChanged(d);
       if (fields.length === 1 && fields[0]!.kind === 'name') {
         const after = decodeText(d.after!.name);
-        return { ru: `Переименовано в «${short(after)}»`, en: `Renamed to «${short(after)}»` };
+        return { ru: `Переименовано в «${short(after)}»`, en: `Renamed to «${short(after)}»`, zh: `重命名为 «${short(after)}»` };
       }
       if (fields.length === 1) {
         const f = fields[0]!;
         const key = f.kind === 'field' || f.kind === 'instance' ? f.key : f.kind === 'ref' || f.kind === 'refOrder' ? f.category : f.kind;
         const value = f.kind === 'field' && f.after !== undefined ? ` → ${short(formatScalar(f.dict, f.after))}` : '';
-        return { ru: `Изменено «${key}» у${name.ru}${value}`, en: `Changed «${key}» on${name.en}${value}` };
+        return { ru: `Изменено «${key}» у${name.ru}${value}`, en: `Changed «${key}» on${name.en}${value}`, zh: `修改了${name.zh} 的 «${key}»${value}` };
       }
       return {
         ru: `Изменено ${fields.length} ${plural(fields.length, 'поле', 'поля', 'полей')} у${name.ru}`,
         en: `Changed ${fields.length} fields on${name.en}`,
+        zh: `修改了${name.zh} 的 ${fields.length} 个字段`,
       };
     }
     const parts: Pair[] = [];
-    if (added.length) parts.push({ ru: `создано ${added.length}`, en: `${added.length} created` });
-    if (changed.length) parts.push({ ru: `изменено ${changed.length}`, en: `${changed.length} changed` });
-    if (removed.length) parts.push({ ru: `удалено ${removed.length}`, en: `${removed.length} deleted` });
-    return { ru: `Записи: ${parts.map((p) => p.ru).join(', ')}`, en: `Records: ${parts.map((p) => p.en).join(', ')}` };
+    if (added.length) parts.push({ ru: `создано ${added.length}`, en: `${added.length} created`, zh: `创建 ${added.length}` });
+    if (changed.length) parts.push({ ru: `изменено ${changed.length}`, en: `${changed.length} changed`, zh: `修改 ${changed.length}` });
+    if (removed.length) parts.push({ ru: `удалено ${removed.length}`, en: `${removed.length} deleted`, zh: `删除 ${removed.length}` });
+    return {
+      ru: `Записи: ${parts.map((p) => p.ru).join(', ')}`,
+      en: `Records: ${parts.map((p) => p.en).join(', ')}`,
+      zh: `记录：${parts.map((p) => p.zh).join('，')}`,
+    };
   }
 
   /** Название по метке транзакции; undefined — метка не из команд ядра. */
@@ -199,52 +224,55 @@ class Describer {
         return this.newLine(lineAdded, 'copy');
       case 'копии реплик': {
         const n = this.added().filter((d) => this.isLine(d)).length;
-        return { ru: `Скопировано ${n} ${plural(n, 'реплика', 'реплики', 'реплик')}`, en: `Copied ${n} lines` };
+        return { ru: `Скопировано ${n} ${plural(n, 'реплика', 'реплики', 'реплик')}`, en: `Copied ${n} lines`, zh: `复制了 ${n} 条台词` };
       }
       case 'удалить реплику': {
         const gone = this.removed().find((d) => this.isLine(d));
-        const t = this.lineText(gone?.before);
-        return { ru: `Удалена реплика${quote(t.ru)}`, en: `Deleted line${quote(t.en)}` };
+        const q = this.quoted(this.lineText(gone?.before));
+        return { ru: `Удалена реплика${q.ru}`, en: `Deleted line${q.en}`, zh: `删除了台词${q.zh}` };
       }
       case 'удалить выделенное': {
         const lines = this.removed().filter((d) => this.isLine(d)).length;
         const links = this.links(-1).length;
         const ru: string[] = [];
         const en: string[] = [];
+        const zh: string[] = [];
         if (lines) {
           ru.push(`${lines} ${plural(lines, 'реплика', 'реплики', 'реплик')}`);
           en.push(`${lines} ${lines === 1 ? 'line' : 'lines'}`);
+          zh.push(`${lines} 条台词`);
         }
         if (links && !lines) {
           ru.push(`${links} ${plural(links, 'связь', 'связи', 'связей')}`);
           en.push(`${links} ${links === 1 ? 'link' : 'links'}`);
+          zh.push(`${links} 个连接`);
         }
-        return { ru: `Удалено: ${ru.join(', ') || 'выделенное'}`, en: `Deleted: ${en.join(', ') || 'selection'}` };
+        return { ru: `Удалено: ${ru.join(', ') || 'выделенное'}`, en: `Deleted: ${en.join(', ') || 'selection'}`, zh: `已删除：${zh.join('，') || '所选内容'}` };
       }
       case 'порядок реплик':
-        return { ru: 'Изменён порядок реплик', en: 'Changed line order' };
+        return { ru: 'Изменён порядок реплик', en: 'Changed line order', zh: '修改了台词顺序' };
       case 'как в игре':
-        return { ru: 'Возвращено как в игре', en: 'Reverted to game version' };
+        return { ru: 'Возвращено как в игре', en: 'Reverted to game version', zh: '恢复为游戏原样' };
       case 'новое условие':
-        return { ru: 'Добавлено условие', en: 'Added condition' };
+        return { ru: 'Добавлено условие', en: 'Added condition', zh: '添加了条件' };
       case 'новое действие':
-        return { ru: 'Добавлено действие', en: 'Added action' };
+        return { ru: 'Добавлено действие', en: 'Added action', zh: '添加了动作' };
       case 'условие':
-        return { ru: 'Изменено условие', en: 'Changed condition' };
+        return { ru: 'Изменено условие', en: 'Changed condition', zh: '修改了条件' };
       case 'действие':
-        return { ru: 'Изменено действие', en: 'Changed action' };
+        return { ru: 'Изменено действие', en: 'Changed action', zh: '修改了动作' };
       case 'убрать условие':
-        return { ru: 'Убрано условие', en: 'Removed condition' };
+        return { ru: 'Убрано условие', en: 'Removed condition', zh: '移除了条件' };
       case 'убрать действие':
-        return { ru: 'Убрано действие', en: 'Removed action' };
+        return { ru: 'Убрано действие', en: 'Removed action', zh: '移除了动作' };
       case 'смена id':
-        return { ru: 'Сменены id записей', en: 'Changed record ids' };
+        return { ru: 'Сменены id записей', en: 'Changed record ids', zh: '修改了记录 ID' };
       case 'заголовок мода':
-        return { ru: 'Изменён заголовок мода', en: 'Changed mod header' };
+        return { ru: 'Изменён заголовок мода', en: 'Changed mod header', zh: '修改了 Mod 头信息' };
     }
     if (/: текст$/.test(label)) {
       const d = this.diffs.find((x) => this.isLine(x));
-      return d ? this.lineTextChanged(d) : { ru: 'Изменён текст реплики', en: 'Changed line text' };
+      return d ? this.lineTextChanged(d) : { ru: 'Изменён текст реплики', en: 'Changed line text', zh: '修改了台词文本' };
     }
     const relation = /^отношение («.*») (→|⇄) («.*»): (сброс|-?\d+)$/s.exec(label);
     if (relation) {
@@ -253,32 +281,48 @@ class Describer {
       return {
         ru: `Отношение ${a} ${arrow} ${b}: ${reset ? 'по умолчанию' : v}`,
         en: `Relation ${a} ${arrow} ${b}: ${reset ? 'default' : v}`,
+        zh: `关系 ${a} ${arrow} ${b}：${reset ? '默认' : v}`,
       };
     }
     const bulk = /^массово: (\S+) (.*) \((\d+) записей\)$/s.exec(label);
     if (bulk) {
       const [, field, what, n] = bulk;
       const en = what!.replace(/^замена /, 'replace ').replace(/^\+ ссылка /, 'add reference ').replace(/^− ссылка /, 'remove reference ');
-      return { ru: `Массовая правка ${field}: ${what} (записей: ${n})`, en: `Bulk edit ${field}: ${en} (records: ${n})` };
+      const zh = what!.replace(/^замена /, '替换 ').replace(/^\+ ссылка /, '添加引用 ').replace(/^− ссылка /, '移除引用 ');
+      return { ru: `Массовая правка ${field}: ${what} (записей: ${n})`, en: `Bulk edit ${field}: ${en} (records: ${n})`, zh: `批量编辑 ${field}：${zh}（记录：${n}）` };
     }
     const merge = /^слияние: (.*) \((\d+) записей\)$/s.exec(label);
-    if (merge) return { ru: `Слияние с «${merge[1]!}»: записей ${merge[2]!}`, en: `Merge from «${merge[1]!}»: ${merge[2]!} records` };
+    if (merge)
+      return { ru: `Слияние с «${merge[1]!}»: записей ${merge[2]!}`, en: `Merge from «${merge[1]!}»: ${merge[2]!} records`, zh: `从 «${merge[1]!}» 合并：${merge[2]!} 条记录` };
+    const pkg = /^Пакет диалогов («.*») → (?:(«.*»)|(\d+) персонажам)$/s.exec(label);
+    if (pkg) {
+      const [, p, one, n] = pkg;
+      return {
+        ru: label,
+        en: `Dialogue package ${p!} → ${one ?? `${n!} characters`}`,
+        zh: `对话包 ${p!} → ${one ?? `${n!} 个角色`}`,
+      };
+    }
+    const tr = /^перевод (\S+): (.*)$/s.exec(label);
+    if (tr) return { ru: label, en: `Translation ${tr[1]!}: ${tr[2]!}`, zh: `翻译 ${tr[1]!}：${tr[2]!}` };
+    const trFile = /^перевод из файла \((\d+)\)$/.exec(label);
+    if (trFile) return { ru: label, en: `Translation from file (${trFile[1]!})`, zh: `从文件导入翻译（${trFile[1]!}）` };
     const created = /^создать «(.*)»$/s.exec(label);
     if (created) {
       const d = this.added()[0];
-      const name = d ? this.recordName(d.after!) : { ru: ` «${created[1]!}»`, en: ` «${created[1]!}»` };
-      return { ru: `Создана запись${name.ru}`, en: `Created record${name.en}` };
+      const name = d ? this.recordName(d.after!) : same(` «${created[1]!}»`);
+      return { ru: `Создана запись${name.ru}`, en: `Created record${name.en}`, zh: `创建了记录${name.zh}` };
     }
     if (/^копия /.test(label)) {
       const d = this.added()[0];
-      const name = d ? this.recordName(d.after!) : { ru: '', en: '' };
-      return { ru: `Создана копия${name.ru}`, en: `Created copy${name.en}` };
+      const name = d ? this.recordName(d.after!) : EMPTY;
+      return { ru: `Создана копия${name.ru}`, en: `Created copy${name.en}`, zh: `创建了副本${name.zh}` };
     }
     if (/^удалить /.test(label)) {
       const d = this.removed()[0];
       if (d && this.isLine(d)) return this.byLabel('удалить реплику');
-      const name = d ? this.recordName(d.before!) : { ru: '', en: '' };
-      return { ru: `Удалена запись${name.ru}`, en: `Deleted record${name.en}` };
+      const name = d ? this.recordName(d.before!) : EMPTY;
+      return { ru: `Удалена запись${name.ru}`, en: `Deleted record${name.en}`, zh: `删除了记录${name.zh}` };
     }
     return undefined;
   }
@@ -314,18 +358,18 @@ export function describeChangeset(ctx: ModContext, cs: Changeset, options: StepT
 function describeLabel(ctx: ModContext, cs: Changeset, label: string, options: StepTitleOptions): StepTitle {
   if (label.startsWith(AI_PREFIX)) {
     const title = label.slice(AI_PREFIX.length);
-    return { ru: `ИИ: ${title}`, en: `AI: ${title}`, ai: true, rollback: false };
+    return { text: { ru: `ИИ: ${title}`, en: `AI: ${title}`, zh: `AI：${title}` }, ai: true, rollback: false };
   }
   if (label.startsWith(ROLLBACK_PREFIX)) {
     // Разница отката обратна исходной правке, поэтому название — по метке исходной.
     const inner = describeLabel(ctx, { ...cs, ops: [] }, label.slice(ROLLBACK_PREFIX.length), options);
-    return { ru: `Откат: ${inner.ru}`, en: `Rollback: ${inner.en}`, ai: inner.ai, rollback: true };
+    return { text: mapUi([inner.text], ([t], lang) => `${uiText(ROLLBACK, lang)}${t!}`), ai: inner.ai, rollback: true };
   }
   const d = new Describer(ctx, changesetDiff(ctx, cs), options);
   const info = cs.ops.some((op) => op.kind === 'info');
   const pair = d.byLabel(label) ?? (technical(label, cs) || label === '' ? d.generic() : undefined);
-  if (pair) return { ...pair, ai: false, rollback: false };
-  if (info && cs.ops.every((op) => op.kind === 'info')) return { ru: 'Изменён заголовок мода', en: 'Changed mod header', ai: false, rollback: false };
+  if (pair) return { text: pair, ai: false, rollback: false };
+  if (info && cs.ops.every((op) => op.kind === 'info')) return { text: { ru: 'Изменён заголовок мода', en: 'Changed mod header', zh: '修改了 Mod 头信息' }, ai: false, rollback: false };
   // Своя метка (скрипт сборки, команда CLI) — показать как есть.
-  return { ru: label, en: label, ai: false, rollback: false };
+  return { text: same(label), ai: false, rollback: false };
 }

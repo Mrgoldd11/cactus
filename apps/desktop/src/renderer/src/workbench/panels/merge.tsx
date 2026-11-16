@@ -26,7 +26,7 @@ import {
   type MergeSource,
 } from '@kenshi-editor/core';
 import { LOCALE, type ModEntry } from '../../../../shared/api.ts';
-import { useLang, useT, type Strings } from '../../i18n.ts';
+import { errorText, type Strings, useLang, useT } from '../../i18n.ts';
 import { tryEdit, useProjectVersion } from '../../hooks.ts';
 import type { Project } from '../../project.ts';
 import { registerPanel } from '../registry.ts';
@@ -239,7 +239,7 @@ function MergePanel(): ReactNode {
     try {
       return { plan: planMerge(ctx, session.source, project.ledger, options) };
     } catch (e) {
-      return { planError: e instanceof Error ? e.message : String(e) };
+      return { planError: errorText(e) };
     }
     // version: список пересчитывается после каждой правки, отмены и сохранения.
   }, [ctx, project, session.source, options, version]);
@@ -286,7 +286,7 @@ function MergePanel(): ReactNode {
       session.source = { name: r.name, file };
       session.levelData = r.levelData;
     } catch (e) {
-      session.error = e instanceof Error ? e.message : String(e);
+      session.error = errorText(e);
     }
     force();
   };

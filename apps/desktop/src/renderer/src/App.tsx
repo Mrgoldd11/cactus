@@ -3,7 +3,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { dataLocaleFor, LANGS, type GameInstallInfo, type Lang, type ModRef, type ProjectRequest, type RecoveryInfo, type Settings } from '../../shared/api.ts';
-import { LangContext, STRINGS } from './i18n.ts';
+import { errorText, LangContext, setErrorLang, STRINGS } from './i18n.ts';
 import { openProject, openRecovered, prefetchVanilla, type Project } from './project.ts';
 import { setLiveProject } from './live.ts';
 import { StartScreen } from './components/StartScreen.tsx';
@@ -48,6 +48,7 @@ export function App(): ReactNode {
 
   const dataLocale = dataLocaleFor(settings.lang, settings.dataLocale);
   const lang = useMemo(() => ({ lang: settings.lang, t: STRINGS[settings.lang], dataLocale }), [settings.lang, dataLocale]);
+  setErrorLang(settings.lang);
 
   // The data language changed while a project is open: load the names of the new locale.
   useEffect(() => {
@@ -87,7 +88,7 @@ export function App(): ReactNode {
         setProject(p);
         p.bump();
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(errorText(e));
       } finally {
         setLoading(false);
       }

@@ -38,6 +38,7 @@ import {
   type WorldFile,
 } from '@kenshi-editor/core';
 import type { CopyModResult, GameInstallInfo, KeditApi, ModProvenance, ModRef, NamedBytes, ProjectBundle, ProjectRequest, SaveResult } from '../../shared/api.ts';
+import { errorText } from './i18n.ts';
 
 export interface IndexEntry {
   sid: string;
@@ -209,7 +210,7 @@ export class Project {
       try {
         this.ledger = new MergeLedger(parseMergeStore(bundle.mergeStore));
       } catch (e) {
-        this.ledgerError = e instanceof Error ? e.message : String(e);
+        this.ledgerError = errorText(e);
       }
     }
     for (const sid of this.ctx.allStringIds()) this.reindex(sid);

@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { modelOfRecord, type RecordModel } from '@kenshi-editor/core';
-import { langOf, useLang } from '../../i18n.ts';
+import { errorText, langOf, useLang } from '../../i18n.ts';
 import type { Lang } from '../../../../shared/api.ts';
 import { shortcut } from '../../keys.ts';
 import { registerPanel, type PanelProps } from '../registry.ts';
@@ -166,7 +166,7 @@ function ModelPanel({ def, params }: PanelProps): ReactNode {
       .catch((e: unknown) => {
         if (cancelled) return;
         setState('error');
-        setError(e instanceof Error ? e.message : String(e));
+        setError(errorText(e));
       });
     return () => {
       cancelled = true;

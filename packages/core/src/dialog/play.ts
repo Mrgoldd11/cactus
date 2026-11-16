@@ -23,6 +23,7 @@ import type { ModContext } from '../model/context.ts';
 import { CHOICE_SPEAKERS } from '../model/dialogue-graph.ts';
 import { alwaysPasses, chooseOdds, chooseOrder, dialogueScore, isEmptyNode, type ChooseEnv } from '../model/dialogue-score.ts';
 import { EVENT_TALK, squadIndex, talkSources, type SquadIndex, type TalkSource } from './talk.ts';
+import { UiTextError } from '../ui-text.ts';
 
 /** Почему вариант выбран или нет. */
 export type PlayWhy =
@@ -191,8 +192,8 @@ function answersAfter(ctx: ModContext, sid: string, env: ChooseEnv): { answers: 
 /** Диалоги персонажа на событие (без повторов) с источниками. */
 export function playStartList(ctx: ModContext, character: string, event = EVENT_TALK, squads?: SquadIndex): Map<string, TalkSource[]> {
   const c = ctx.get(character);
-  if (!c) throw new Error(`нет записи ${character}`);
-  if (itemTypeName(c.type) !== 'CHARACTER') throw new Error(`${character} — не персонаж (${itemTypeName(c.type)})`);
+  if (!c) throw new UiTextError({ en: `no record ${character}`, ru: `нет записи ${character}`, zh: `没有记录 ${character}` });
+  if (itemTypeName(c.type) !== 'CHARACTER') throw new UiTextError({ en: `${character} is not a character (${itemTypeName(c.type)})`, ru: `${character} — не персонаж (${itemTypeName(c.type)})`, zh: `${character} 不是角色（${itemTypeName(c.type)}）` });
   const out = new Map<string, TalkSource[]>();
   for (const s of talkSources(ctx, c, event, squads ?? squadIndex(ctx))) {
     const had = out.get(s.dialog);

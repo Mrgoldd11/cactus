@@ -206,7 +206,7 @@ describe('контекст: команды и история', () => {
     ctx.undo();
     expect(ctx.has(sid)).toBe(false);
     expect(ctx.info.lastId).toBe(0);
-    expect(() => ctx.createRecord(ITEM, 'x', { stringId: 'A' })).toThrow(/уже есть/);
+    expect(() => ctx.createRecord(ITEM, 'x', { stringId: 'A' })).toThrow(/already exists/);
   });
 
   it('duplicateRecord копирует итоговую запись', () => {
@@ -291,7 +291,7 @@ describe('контекст: команды и история', () => {
     expect(ctx.modRecords().map((r) => `${r.stringId}=${decodeText(r.name)}`)).toEqual([`${q}=P`, `${p}=Q`, 'A=Bandit 2']);
     expect(targets(ctx.get(q), 'next')).toEqual([p]);
     expect(targets(ctx.get('A'), 'vendors')).toEqual(['X', 'Z', q]);
-    expect(() => { ctx.changeStringIds(new Map([['A', 'B']])); }).toThrow(/только у новых/);
+    expect(() => { ctx.changeStringIds(new Map([['A', 'B']])); }).toThrow(/Only new records/);
     ctx.undo();
     expect(targets(ctx.get(p), 'next')).toEqual([q]);
   });
@@ -475,7 +475,7 @@ describe('правки данными (applyOps)', () => {
         { op: 'set', id: 'A', field: 'money', value: 1 },
         { op: 'set', id: 'A', field: 'money', value: 'много' },
       ]),
-    ).toThrow(/Операция 2/);
+    ).toThrow(/Operation 2/);
     expect(ctx.dirty).toBe(false);
     expect(() => applyOps(ctx, [{ op: 'rename', id: '$nope', name: 'x' }])).toThrow(EditError);
     expect(() => coerceValue('ints', 1.5)).toThrow(EditError);

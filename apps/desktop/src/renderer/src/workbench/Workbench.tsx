@@ -16,7 +16,7 @@ import {
 import 'dockview-react/dist/styles/dockview.css';
 import { decodeText } from '@kenshi-editor/core';
 import type { WorkspaceSettings } from '../../../shared/api.ts';
-import { useT } from '../i18n.ts';
+import { errorText, useT } from '../i18n.ts';
 import { useProjectVersion } from '../hooks.ts';
 import { allPanels, panelDef, type PanelDef, type PanelParams } from './registry.ts';
 import { accepts, useWorkbench, WorkbenchContext, type Workbench as WorkbenchValue } from './context.ts';
@@ -31,7 +31,7 @@ const SAVE_DELAY_MS = 300;
 class PanelBoundary extends Component<{ children: ReactNode }, { error?: string }> {
   override state: { error?: string } = {};
   static getDerivedStateFromError(e: unknown): { error: string } {
-    return { error: e instanceof Error ? e.message : String(e) };
+    return { error: errorText(e) };
   }
   override componentDidCatch(e: unknown, info: ErrorInfo): void {
     console.error(e, info.componentStack);

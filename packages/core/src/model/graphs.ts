@@ -341,10 +341,10 @@ export function townComposition(ctx: ModContext, sid: string): TownComposition |
  */
 export function setLinkValues(ctx: ModContext, l: Pick<GraphLink, 'from' | 'category' | 'target'>, values: readonly number[]): void {
   const rec = ctx.get(l.from);
-  if (!rec) throw new EditError(`Нет записи ${l.from}`);
+  if (!rec) throw new EditError({ en: `No record ${l.from}`, ru: `Нет записи ${l.from}`, zh: `没有记录 ${l.from}` });
   const cur = refs(rec, l.category).find((r) => r.target === l.target);
-  if (!cur) throw new EditError(`У ${l.from} нет ссылки ${l.category} → ${l.target}`);
-  for (const v of values) if (!Number.isInteger(v)) throw new EditError(`Значение ссылки — целое число, а не ${v}`);
+  if (!cur) throw new EditError({ en: `${l.from} has no reference ${l.category} → ${l.target}`, ru: `У ${l.from} нет ссылки ${l.category} → ${l.target}`, zh: `${l.from} 没有引用 ${l.category} → ${l.target}` });
+  for (const v of values) if (!Number.isInteger(v)) throw new EditError({ en: `A reference value is an integer, not ${v}`, ru: `Значение ссылки — целое число, а не ${v}`, zh: `引用值应为整数，而不是 ${v}` });
   const next = [values[0] ?? cur.v0, values[1] ?? cur.v1, values[2] ?? cur.v2];
   if (next[0] === cur.v0 && next[1] === cur.v1 && next[2] === cur.v2) return;
   ctx.addReference(l.from, l.category, l.target, next);

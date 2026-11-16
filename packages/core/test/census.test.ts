@@ -94,7 +94,7 @@ describe('перепись NPC', () => {
     const ctx = make();
     expect(addDialoguePackage(ctx, ['guard', 'boss', 'cop'], 'pk')).toBe(2);
     expect(ctx.history().undo).toHaveLength(1);
-    expect(describeChangeset(ctx, ctx.history().undo[0]!).ru).toBe('Пакет диалогов «Talk» → 2 персонажам');
+    expect(describeChangeset(ctx, ctx.history().undo[0]!).text.ru).toBe('Пакет диалогов «Talk» → 2 персонажам');
     const c = npcCensus(ctx);
     expect(c.chars.filter((x) => x.status).map((x) => [x.sid, x.status])).toEqual([
       ['guard', 'changed'],
@@ -108,7 +108,7 @@ describe('перепись NPC', () => {
     // Повтор — некому добавлять; не пакет — ошибка.
     expect(addDialoguePackage(ctx, ['guard'], 'pk')).toBe(0);
     expect(ctx.history().undo).toHaveLength(1);
-    expect(() => addDialoguePackage(ctx, ['guard'], 'd1')).toThrow(/не пакет/);
+    expect(() => addDialoguePackage(ctx, ['guard'], 'd1')).toThrow(/not a dialogue package/);
     ctx.undo();
     expect(ctx.modRecords()).toHaveLength(0);
   });

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { DockviewApi } from 'dockview-react';
 import type { Lang, Settings, WorkspaceSettings } from '../../../shared/api.ts';
-import { useT } from '../i18n.ts';
+import { errorText, useT } from '../i18n.ts';
 import { isTypingIn, shortcut } from '../keys.ts';
 import { useProjectVersion, tryEdit } from '../hooks.ts';
 import { MOD_CHANGES_ID, reloadProject, reloadWithDependencies, restoreProject, type Project } from '../project.ts';
@@ -139,7 +139,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
       category,
       reload: (change) =>
         reloadProject(project, change).then(onReplace, (e: unknown) => {
-          const msg = e instanceof Error ? e.message : String(e);
+          const msg = errorText(e);
           setStatus({ text: () => msg, kind: 'error' });
         }),
     }),
@@ -212,7 +212,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
         setStatus({ text: (s) => s.backupRestored(when), kind: 'info' });
       },
       (e: unknown) => {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errorText(e);
         setStatus({ text: () => msg, kind: 'error' });
       },
     );
@@ -258,7 +258,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
   const applyDeps = (deps: string[]): void => {
     setModal(undefined);
     void reloadWithDependencies(project, deps).then(onReplace, (e: unknown) => {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorText(e);
       setStatus({ text: () => msg, kind: 'error' });
     });
   };

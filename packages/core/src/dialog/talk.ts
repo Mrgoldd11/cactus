@@ -33,6 +33,7 @@ import {
   type ScorePart,
 } from '../model/dialogue-score.ts';
 import { formatEnumValue, refValueEnum } from '../model/enums.ts';
+import { UiTextError } from '../ui-text.ts';
 
 /** Событие «игрок заговорил со мной» (EV_PLAYER_TALK_TO_ME). */
 export const EVENT_TALK = 1;
@@ -336,8 +337,8 @@ const others = (odds: ReadonlyMap<string, number>, me: string): string[] =>
 
 export function simulateTalk(ctx: ModContext, character: string, event = EVENT_TALK, options: TalkOptions = {}): TalkSimulation {
   const c = ctx.get(character);
-  if (!c) throw new Error(`нет записи ${character}`);
-  if (itemTypeName(c.type) !== 'CHARACTER') throw new Error(`${character} — не персонаж (${itemTypeName(c.type)})`);
+  if (!c) throw new UiTextError({ en: `no record ${character}`, ru: `нет записи ${character}`, zh: `没有记录 ${character}` });
+  if (itemTypeName(c.type) !== 'CHARACTER') throw new UiTextError({ en: `${character} is not a character (${itemTypeName(c.type)})`, ru: `${character} — не персонаж (${itemTypeName(c.type)})`, zh: `${character} 不是角色（${itemTypeName(c.type)}）` });
   const sq = options.squads ?? squadIndex(ctx);
   const byDialog = new Map<string, TalkCandidate>();
   for (const s of talkSources(ctx, c, event, sq)) {

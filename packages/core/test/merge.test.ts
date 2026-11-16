@@ -241,8 +241,8 @@ describe('слияние: применение', () => {
     expect(r).toMatchObject({ created: 1, changed: 2, deleted: 1 });
     expect(ctx.history().undo).toHaveLength(1);
     const cs = ctx.history().undo[0]!;
-    expect(describeChangeset(ctx, cs).ru).toBe('Слияние с «Source.mod»: записей 4');
-    expect(describeChangeset(ctx, cs).en).toBe('Merge from «Source.mod»: 4 records');
+    expect(describeChangeset(ctx, cs).text.ru).toBe('Слияние с «Source.mod»: записей 4');
+    expect(describeChangeset(ctx, cs).text.en).toBe('Merge from «Source.mod»: 4 records');
     // Изменённая запись ванили в моде — только поле value.
     const delta = ctx.delta('k')!;
     expect([...delta.ints.keys()]).toEqual(['value']);
@@ -358,9 +358,9 @@ describe('слияние: допустимость источника и фай�
   it('зависимость активного мода и сам мод слить нельзя — понятное сообщение', () => {
     const { ctx } = make({ mine: (c) => { c.setModInfo({ dependencies: ['Dep.mod'] }); } });
     expect(() => { checkMergeSource(ctx, 'Dep.mod'); }).toThrow(MergeError);
-    expect(() => { checkMergeSource(ctx, 'dep.MOD'); }).toThrow(/открыт как зависимость/);
-    expect(() => { checkMergeSource(ctx, 'Mine.mod'); }).toThrow(/сам в себя/);
-    expect(() => { checkMergeSource(ctx, 'gamedata.base'); }).toThrow(/зависимость/);
+    expect(() => { checkMergeSource(ctx, 'dep.MOD'); }).toThrow(/open as a dependency/);
+    expect(() => { checkMergeSource(ctx, 'Mine.mod'); }).toThrow(/into itself/);
+    expect(() => { checkMergeSource(ctx, 'gamedata.base'); }).toThrow(/dependency/);
     expect(() => { checkMergeSource(ctx, 'Free.mod'); }).not.toThrow();
     expect(() => planMerge(ctx, { name: 'Dep.mod', file: modFile([]) }, new MergeLedger())).toThrow(MergeError);
   });

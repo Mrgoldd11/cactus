@@ -131,7 +131,7 @@ describe('помощник перевода', () => {
     expect(po.rows.map((r) => [r.id, r.field, r.original, r.translation])).toEqual(parsed.rows.map((r) => [r.id, r.field, r.original, r.translation]));
     // Excel с русской локалью сохраняет через «;».
     expect(parseCsv('id;field;translation\r\nV;description;"a;b"\r\n')).toEqual([['id', 'field', 'translation'], ['V', 'description', 'a;b']]);
-    expect(() => parseTranslationFile('a,b\n1,2')).toThrow('id, field и translation');
+    expect(() => parseTranslationFile('a,b\n1,2')).toThrow('id, field and translation');
   });
 
   it('оригинал обновился: строка с устаревшим оригиналом не применяется; чужие id — в отчёт', () => {

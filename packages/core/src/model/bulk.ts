@@ -5,6 +5,7 @@
  * выражены обычными операциями `set`/`rename` — их же отправляет MCP в окно редактора.
  */
 import { decodeText } from '../text.ts';
+import type { UiText } from '../ui-text.ts';
 import type { GameRecord } from '../format/types.ts';
 import { DICT_FOR_KIND, findField } from '../schema/game-schema.ts';
 import { EditError, type ModContext } from './context.ts';
@@ -81,7 +82,7 @@ export interface BulkPreview {
 /** Записи типа по условиям, без удалённых модом; порядок — как в слоях. */
 export function bulkSelect(ctx: ModContext, query: BulkQuery): GameRecord[] {
   const type = typeof query.type === 'number' ? query.type : /^\d+$/.test(query.type) ? Number(query.type) : ctx.typeId(query.type.toUpperCase());
-  if (type === undefined) throw new EditError(`Неизвестный тип записи «${String(query.type)}»`);
+  if (type === undefined) throw new EditError({ en: `Unknown record type «${String(query.type)}»`, ru: `Неизвестный тип записи «${String(query.type)}»`, zh: `未知的记录类型 «${String(query.type)}»` });
   const text = query.text?.trim().toLowerCase();
   const out: GameRecord[] = [];
   for (const sid of query.ids ?? ctx.allStringIds()) {
@@ -103,18 +104,18 @@ export function bulkSelect(ctx: ModContext, query: BulkQuery): GameRecord[] {
 /** Регулярное выражение для замены (всегда глобальное). */
 function pattern(op: BulkOperation): RegExp {
   const find = op.find ?? '';
-  if (find === '') throw new EditError('Замена текста: укажите, что искать');
+  if (find === '') throw new EditError({ en: 'Text replace: give the text to find', ru: 'Замена текста: укажите, что искать', zh: '替换文本：请指定要查找的内容' });
   const flags = `g${op.caseSensitive ? '' : 'i'}u`;
   try {
     return new RegExp(op.regex ? find : find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
   } catch (e) {
-    throw new EditError(`Неверное регулярное выражение «${find}»: ${(e as Error).message}`);
+    throw new EditError({ en: `Invalid regular expression «${find}»: ${(e as Error).message}`, ru: `Неверное регулярное выражение «${find}»: ${(e as Error).message}`, zh: `无效的正则表达式 «${find}»：${(e as Error).message}` });
   }
 }
 
-function number(text: string, what: string): number {
+function number(text: string, what: UiText): number {
   const n = Number(text.trim().replace('−', '-').replace(',', '.'));
-  if (text.trim() === '' || !Number.isFinite(n)) throw new EditError(`${what}: нужно число, а не «${text}»`);
+  if (text.trim() === '' || !Number.isFinite(n)) throw new EditError({ en: `${what.en}: a number is needed, not «${text}»`, ru: `${what.ru ?? what.en}: нужно число, а не «${text}»`, zh: `${what.zh ?? what.en}：需要数字，而不是 «${text}»` });
   return n;
 }
 
@@ -147,14 +148,14 @@ export function bulkLabel(typeName: string, op: BulkOperation, count: number): s
  * неверный regex, неизвестный тип) — исключение `EditError`.
  */
 export function previewBulk(ctx: ModContext, query: BulkQuery, op: BulkOperation): BulkPreview {
-  if (!BULK_KINDS.includes(op.kind)) throw new EditError(`Неизвестная операция «${op.kind as string}»: ${BULK_KINDS.join(', ')}`);
+  if (!BULK_KINDS.includes(op.kind)) throw new EditError({ en: `Unknown operation «${op.kind as string}»: ${BULK_KINDS.join(', ')}`, ru: `Неизвестная операция «${op.kind as string}»: ${BULK_KINDS.join(', ')}`, zh: `未知操作 «${op.kind as string}»：${BULK_KINDS.join(', ')}` });
   const key = op.field.trim();
-  if (key === '') throw new EditError('Укажите поле');
+  if (key === '') throw new EditError({ en: 'Choose a field', ru: 'Укажите поле', zh: '请指定字段' });
   const recs = bulkSelect(ctx, query);
   const typeName = typeof query.type === 'number' ? ctx.typeName(query.type) : query.type.toUpperCase();
   if (op.kind === 'refAdd' || op.kind === 'refRemove') return previewRefs(ctx, recs, typeName, op, key);
   const re = op.kind === 'replace' ? pattern(op) : undefined;
-  const factor = op.kind === 'mul' || op.kind === 'add' ? number(op.value, op.kind === 'mul' ? 'Умножить на' : 'Прибавить') : 0;
+  const factor = op.kind === 'mul' || op.kind === 'add' ? number(op.value, op.kind === 'mul' ? { en: 'Multiply by', ru: 'Умножить на', zh: '乘以' } : { en: 'Add', ru: 'Прибавить', zh: '加上' }) : 0;
   const changes: BulkChange[] = [];
   const skipped: BulkSkip[] = [];
   const ops: EditOp[] = [];
@@ -223,12 +224,12 @@ function refText(ctx: ModContext, ref: { target: string; v0: number; v1: number;
 /** Цель ссылки по id или имени (англ./рус.); неоднозначность и отсутствие — понятная ошибка. */
 function refTarget(ctx: ModContext, spec: string): string {
   const text = spec.trim();
-  if (text === '') throw new EditError('Укажите, на какую запись ссылка (id или имя)');
+  if (text === '') throw new EditError({ en: 'Give the record to reference (id or name)', ru: 'Укажите, на какую запись ссылка (id или имя)', zh: '请指定引用的记录（ID 或名称）' });
   const hit = lookupRecord(ctx, text);
   if (hit.stringId !== undefined) return hit.stringId;
-  if (hit.candidates.length === 0) throw new EditError(`Запись «${text}» не найдена`);
+  if (hit.candidates.length === 0) throw new EditError({ en: `Record «${text}» not found`, ru: `Запись «${text}» не найдена`, zh: `未找到记录 «${text}»` });
   const list = hit.candidates.slice(0, 5).map((c) => `${c.stringId} «${c.localizedName ?? c.name}»`).join(', ');
-  throw new EditError(`«${text}» подходит нескольким записям (${hit.candidates.length}): ${list}${hit.candidates.length > 5 ? '…' : ''}. Укажите точнее или id`);
+  throw new EditError({ en: `«${text}» matches several records (${hit.candidates.length}): ${list}${hit.candidates.length > 5 ? '…' : ''}. Be more precise or give the id`, ru: `«${text}» подходит нескольким записям (${hit.candidates.length}): ${list}${hit.candidates.length > 5 ? '…' : ''}. Укажите точнее или id`, zh: `«${text}» 匹配多条记录（${hit.candidates.length}）：${list}${hit.candidates.length > 5 ? '…' : ''}。请更精确或使用 ID` });
 }
 
 /** Добавить ссылку (или обновить её значения) / убрать ссылку во всех подходящих записях. */
@@ -285,7 +286,7 @@ function applyProbe(ctx: ModContext, rec: GameRecord, dict: ScalarDict, key: str
   if (dict === 'ints' && !/^-?\d+$/.test(trimmed)) {
     const def = fieldEnum(ctx.schema, ctx.typeName(rec.type), key, rec);
     const n = def ? parseEnumValue(def, trimmed) : undefined;
-    if (n === undefined) throw new EditError(`«${trimmed}» — не число${def ? ` и не значение ${def.name}` : ''}`);
+    if (n === undefined) throw new EditError({ en: `«${trimmed}» is not a number${def ? ` nor a value of ${def.name}` : ''}`, ru: `«${trimmed}» — не число${def ? ` и не значение ${def.name}` : ''}`, zh: `«${trimmed}» 不是数字${def ? `，也不是 ${def.name} 的值` : ''}` });
     return n;
   }
   if (dict === 'ints' || dict === 'floats' || dict === 'bools') return coerceValue(dict, trimmed.replace(',', '.'), key);

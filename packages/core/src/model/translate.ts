@@ -108,7 +108,7 @@ function recordTexts(rec: GameRecord, lower: GameRecord | undefined): TextEntry[
  */
 export function layerTexts(layers: readonly ConflictLayer[], source: string): TextEntry[] {
   const index = layers.findIndex((l) => l.name.toLowerCase() === source.toLowerCase());
-  if (index < 0) throw new EditError(`Мода ${source} нет среди слоёв`);
+  if (index < 0) throw new EditError({ en: `Mod ${source} is not among the layers`, ru: `Мода ${source} нет среди слоёв`, zh: `Mod ${source} 不在图层中` });
   const own = new Map<string, GameRecord>();
   for (const r of layers[index]!.file.records) own.set(r.stringId, r);
   const lower = lowerRecords(layers, index, new Set(own.keys()));
@@ -214,7 +214,7 @@ export function translationExtras(ctx: ModContext, sources: readonly string[]): 
  */
 export function setTranslation(ctx: ModContext, id: string, field: string, text: string): void {
   const lower = ctx.lower(id);
-  if (!ctx.get(id)) throw new EditError(`Записи ${id} нет`);
+  if (!ctx.get(id)) throw new EditError({ en: `No record ${id}`, ru: `Записи ${id} нет`, zh: `没有记录 ${id}` });
   ctx.editRecord(id, (d) => {
     if (field === NAME_FIELD) {
       d.name = text === '' && lower ? lower.name : keep(text, lower?.name);
@@ -306,7 +306,7 @@ function parseTranslationPo(text: string): ParsedTranslationFile {
     if (bar <= 0) continue;
     rows.push({ id: e.msgctxt.slice(0, bar), field: e.msgctxt.slice(bar + 1), original: e.msgid, translation: e.msgstr[0] ?? '' });
   }
-  if (rows.length === 0 && po.entries.length > 0) throw new EditError('Файл перевода: в PO нет строк с msgctxt «id|поле» — это не выгрузка редактора');
+  if (rows.length === 0 && po.entries.length > 0) throw new EditError({ en: 'Translation file: the PO has no entries with msgctxt «id|field» — it is not an editor export', ru: 'Файл перевода: в PO нет строк с msgctxt «id|поле» — это не выгрузка редактора', zh: '翻译文件：PO 中没有 msgctxt 为 «id|字段» 的条目——这不是编辑器导出的文件' });
   const source = po.headers.get('X-Kedit-Source');
   return { ...(source ? { source } : {}), rows };
 }
@@ -369,15 +369,15 @@ export function parseTranslationFile(text: string): ParsedTranslationFile {
     try {
       data = JSON.parse(t);
     } catch (e) {
-      throw new EditError(`Файл перевода: неверный JSON (${(e as Error).message})`, { cause: e });
+      throw new EditError({ en: `Translation file: invalid JSON (${(e as Error).message})`, ru: `Файл перевода: неверный JSON (${(e as Error).message})`, zh: `翻译文件：无效的 JSON（${(e as Error).message}）` }, { cause: e });
     }
     const d = data as { format?: unknown; source?: unknown; rows?: unknown };
-    if (d.format !== TRANSLATION_JSON_FORMAT || !Array.isArray(d.rows)) throw new EditError(`Файл перевода: ожидался JSON с format "${TRANSLATION_JSON_FORMAT}" и rows`);
+    if (d.format !== TRANSLATION_JSON_FORMAT || !Array.isArray(d.rows)) throw new EditError({ en: `Translation file: expected JSON with format "${TRANSLATION_JSON_FORMAT}" and rows`, ru: `Файл перевода: ожидался JSON с format "${TRANSLATION_JSON_FORMAT}" и rows`, zh: `翻译文件：应为含 format "${TRANSLATION_JSON_FORMAT}" 和 rows 的 JSON` });
     const rows: TranslationFileRow[] = [];
     for (const [n, x] of (d.rows as unknown[]).entries()) {
       const r = x as Record<string, unknown>;
       if (typeof r['id'] !== 'string' || typeof r['field'] !== 'string' || typeof r['translation'] !== 'string') {
-        throw new EditError(`Файл перевода: строка ${n + 1} без id, field или translation`);
+        throw new EditError({ en: `Translation file: row ${n + 1} has no id, field or translation`, ru: `Файл перевода: строка ${n + 1} без id, field или translation`, zh: `翻译文件：第 ${n + 1} 行缺少 id、field 或 translation` });
       }
       const row: TranslationFileRow = { id: r['id'], field: r['field'], translation: r['translation'] };
       if (typeof r['original'] === 'string') row.original = r['original'];
@@ -392,7 +392,7 @@ export function parseTranslationFile(text: string): ParsedTranslationFile {
   const head = (table[0] ?? []).map((h) => h.trim().toLowerCase());
   const col = (name: string): number => head.indexOf(name);
   const [ci, cf, ct] = [col('id'), col('field'), col('translation')];
-  if (ci < 0 || cf < 0 || ct < 0) throw new EditError('Файл перевода: в CSV нужны колонки id, field и translation');
+  if (ci < 0 || cf < 0 || ct < 0) throw new EditError({ en: 'Translation file: the CSV needs columns id, field and translation', ru: 'Файл перевода: в CSV нужны колонки id, field и translation', zh: '翻译文件：CSV 需要 id、field 和 translation 列' });
   const co = col('original');
   const cty = col('type');
   const cr = col('record');

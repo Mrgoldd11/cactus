@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { Project } from './project.ts';
+import { errorText } from './i18n.ts';
 
 /** Номер версии проекта: компонент перерисовывается после каждой правки, отмены и сохранения. */
 export function useProjectVersion(p: Project): number {
@@ -15,6 +16,6 @@ export function tryEdit(fn: () => void): string | undefined {
     fn();
     return undefined;
   } catch (e) {
-    return e instanceof Error ? e.message : String(e);
+    return errorText(e);
   }
 }
