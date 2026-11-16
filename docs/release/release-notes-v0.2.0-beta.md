@@ -36,13 +36,12 @@ Download `Cactus-0.2.0-beta-win-x64.zip`, unzip to a simple folder (e.g. `C:\Cac
 - **Window** menu reorganised into four sections (Data, Dialogues, World, Mod) with monochrome icons; some panels got clearer names.
 - Dialogue graph of a character: a "1 of N" switcher goes through all of the character's dialogues, starting with the one the game picks when you talk to them.
 - World map hides overlapping labels of small settlements; the Graphs minimap draws its cards.
-- Interface-language fixes for enum labels and quotes, narrow-window layout, empty states.
-- Messages from the core (edit errors, history steps, "where in game", talk, validation, merge, bulk edit and more) are translated into all three interface languages.
+- Fixes in labels, narrow-window layout and empty panels.
+- Editor messages (errors, history steps, check results) now follow the interface language.
 - Dropping a file on the main window no longer navigates away from the editor.
 - Help → About states the licence correctly (free to use, closed source).
 - CLI: `kedit find --query "…"` (same syntax as the search box), `kedit validate --fix`, `kedit cleanup`; English output by default, `--lang en|ru|zh` (or `KEDIT_LANG`) and `--data-locale` for game texts.
-- MCP: `find` with `query`, new `fix` and `cleanup` tools (preview first, change the mod only with `apply: true`); server messages are in English.
-- Public documentation is in English.
+- MCP: `find` with `query`, new `fix` and `cleanup` tools (preview first, change the mod only with `apply: true`).
 
 ## Known limitations (Beta)
 - **Workshop publishing is unofficial.** Like the FCS, Cactus talks to Steam under Kenshi's own app id (233860). Steam allows this technically, but Lo-Fi Games have not endorsed it. Steam must be running and logged in to an account that owns Kenshi. Publishing has been tested end to end against a simulated Steam; **try it first on a Private test item.** Not there yet: "update the mod's info from Steam", an ownership pre-check, and a BBCode preview of the description.
