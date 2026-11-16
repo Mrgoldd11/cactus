@@ -1,5 +1,5 @@
 /** Bridge for the window: only the listed `KeditApi` calls, no Node access. */
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { LiveRequestBody, UploaderMessage } from '@kenshi-editor/core';
 import { IPC, type GameLinkStatus, type KeditApi, type LiveReply, type LiveStatus } from '../shared/api.ts';
 
@@ -58,6 +58,8 @@ const api: KeditApi = {
   getLiveStatus: () => ipcRenderer.invoke(IPC.getLiveStatus),
   publishPrepare: (modPath) => ipcRenderer.invoke(IPC.publishPrepare, modPath),
   publishChoosePreview: () => ipcRenderer.invoke(IPC.publishChoosePreview),
+  publishPreviewFromPath: (path) => ipcRenderer.invoke(IPC.publishPreviewFromPath, path),
+  pathForFile: (file) => webUtils.getPathForFile(file),
   publishStart: (req) => ipcRenderer.invoke(IPC.publishStart, req),
   publishCancel: () => ipcRenderer.invoke(IPC.publishCancel),
   onPublishEvent: (cb) => {

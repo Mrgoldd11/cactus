@@ -7,7 +7,7 @@
  * Nothing here talks to Steam; only the child does, and only when `KEDIT_FAKE_STEAM` is unset.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { BrowserWindow, clipboard, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import {
@@ -217,6 +217,18 @@ async function choosePreview(deps: PublishDeps, e: IpcMainInvokeEvent): Promise<
   return preview(path);
 }
 
+/** A picture dropped on the publish window: same file types as the picker, real pictures only. */
+function previewFromPath(path: unknown): PublishPreview | null {
+  if (typeof path !== 'string' || !/\.(png|jpe?g|gif)$/i.test(path)) return null;
+  try {
+    if (!statSync(path).isFile()) return null;
+    const p = preview(path);
+    return p?.format ? p : null;
+  } catch {
+    return null;
+  }
+}
+
 async function openPage(id: string): Promise<boolean> {
   if (!isPublishedId(id)) return false;
   const u = workshopUrls(id);
@@ -233,6 +245,7 @@ async function openPage(id: string): Promise<boolean> {
 export function registerPublishIpc(deps: PublishDeps): void {
   ipcMain.handle(IPC.publishPrepare, (_e, modPath: string) => prepare(deps, modPath));
   ipcMain.handle(IPC.publishChoosePreview, (e) => choosePreview(deps, e));
+  ipcMain.handle(IPC.publishPreviewFromPath, (_e, path: unknown) => previewFromPath(path));
   ipcMain.handle(IPC.publishStart, (e, r: PublishStartRequest) => start(deps, e, r));
   ipcMain.handle(IPC.publishCancel, () => {
     cancel();

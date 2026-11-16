@@ -2957,3 +2957,7 @@ input.invalid {
   font-size: 11px;
   color: var(--muted);
 }
+.publish-preview.drag-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: 4px;
+}

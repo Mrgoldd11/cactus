@@ -198,12 +198,32 @@ test('publish: new item, then update, with the fake Steam', async () => {
     await page.getByTestId('pub-save').click();
     await expect.poll(async () => codes(page)).not.toContain('error:unsaved');
 
+    // Drag and drop: a file that is not on disk (no path) is refused, the drop zone says so.
+    await page.getByTestId('pub-preview-drop').evaluate((el) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File(['x'], 'pic.png', { type: 'image/png' }));
+      el.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      el.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    });
+    await expect(page.getByTestId('pub-drop-refused')).toBeVisible();
+    await expect(page.getByTestId('pub-thumb')).toHaveCount(0);
+    // A real dropped path goes through main: only real PNG/JPEG/GIF files are taken.
+    const fakePng = join(userData, 'not-a-picture.png');
+    writeFileSync(fakePng, 'hello');
+    const fromPath = (p: string): Promise<string | null> =>
+      page.evaluate(async (q) => (await window.kedit.publishPreviewFromPath(q))?.format ?? null, p);
+    expect(await fromPath(pngPath)).toBe('png');
+    expect(await fromPath(fakePng)).toBeNull();
+    expect(await fromPath(join(userData, 'fake-steam.log'))).toBeNull();
+    expect(await fromPath(join(userData, 'missing.png'))).toBeNull();
+
     // Preview from the file dialog.
     await app.evaluate(({ dialog }, p) => {
       dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [p] });
     }, pngPath);
     await page.getByTestId('pub-choose-preview').click();
     await expect(page.getByTestId('pub-thumb')).toBeVisible();
+    await expect(page.getByTestId('pub-drop-refused')).toHaveCount(0);
     await page.getByTestId('pub-tag-Gameplay').check();
     await page.getByTestId('pub-change-note').fill('First version.');
     await expect(page.getByTestId('pub-next')).toBeEnabled();

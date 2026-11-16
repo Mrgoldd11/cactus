@@ -464,6 +464,10 @@ export interface KeditApi {
   /** Publish window: read `_<mod>.info`, preview, upload file list, Steam presence. */
   publishPrepare(modPath: string): Promise<PublishPrep>;
   publishChoosePreview(): Promise<PublishPreview | null>;
+  /** Preview from a picture dropped on the window; null when it is not a PNG/JPEG/GIF file. */
+  publishPreviewFromPath(path: string): Promise<PublishPreview | null>;
+  /** Disk path of a dropped file ('' for files that do not come from disk). */
+  pathForFile(file: File): string;
   /** Start the uploader process; its messages come through `onPublishEvent`. */
   publishStart(req: PublishStartRequest): Promise<PublishStartResult>;
   publishCancel(): Promise<void>;
@@ -523,6 +527,7 @@ export const IPC = {
   gameRequest: 'kedit:game-request',
   publishPrepare: 'kedit:publish-prepare',
   publishChoosePreview: 'kedit:publish-choose-preview',
+  publishPreviewFromPath: 'kedit:publish-preview-from-path',
   publishStart: 'kedit:publish-start',
   publishCancel: 'kedit:publish-cancel',
   publishEvent: 'kedit:publish-event',

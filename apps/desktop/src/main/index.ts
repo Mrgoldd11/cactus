@@ -580,6 +580,11 @@ function createWindow(): void {
       }
     }
   });
+  // A file dropped outside a drop zone would make Chromium open it in place of the editor
+  // (unsaved edits lost). The app never navigates by itself, so other pages are refused.
+  win.webContents.on('will-navigate', (e) => {
+    e.preventDefault();
+  });
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
   if (devUrl) void win.loadURL(devUrl);
   else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'));

@@ -2,7 +2,7 @@
  * «Publish to Steam Workshop» window: form → confirm → progress → result.
  * The upload itself runs in a separate process started by the main process (`main/publish.ts`).
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { canPublish, checkPublish, PUBLISH_ERROR_TEXTS, sizeText, uiText, validateMod, WORKSHOP_TAGS, EXCLUDE_REASON_TEXTS, type PublishStage, type UploaderMessage, type UploadPhase } from '@kenshi-editor/core';
 import type { PublishPrep, PublishPreview, PublishStartResult } from '../../../shared/api.ts';
 import { useLang, useT, type Strings } from '../i18n.ts';
@@ -37,6 +37,8 @@ export function PublishModal({ project, onSave, onReport, onClose }: Props): Rea
   const [tags, setTags] = useState<string[]>([]);
   const [visibility, setVisibility] = useState(2);
   const [preview, setPreview] = useState<PublishPreview | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [dropRefused, setDropRefused] = useState(false);
   const [step, setStep] = useState<Step>('form');
   const [stage, setStage] = useState<PublishStage | 'start'>('start');
   const [progress, setProgress] = useState<{ phase: UploadPhase; done: number; total: number } | undefined>();
@@ -128,7 +130,21 @@ export function PublishModal({ project, onSave, onReport, onClose }: Props): Rea
 
   const choosePreview = async (): Promise<void> => {
     const p = await window.kedit.publishChoosePreview();
+    if (p) {
+      setPreview(p);
+      setDropRefused(false);
+    }
+  };
+
+  /** A picture dragged from the desktop or Explorer onto the preview area. */
+  const dropPreview = async (e: DragEvent): Promise<void> => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    const path = file ? window.kedit.pathForFile(file) : '';
+    const p = path ? await window.kedit.publishPreviewFromPath(path) : null;
     if (p) setPreview(p);
+    setDropRefused(!p);
   };
 
   const start = async (): Promise<void> => {
@@ -242,7 +258,19 @@ export function PublishModal({ project, onSave, onReport, onClose }: Props): Rea
           </select>
 
           <span>{t.pubPreview}</span>
-          <div className="publish-preview">
+          <div
+            className={`publish-preview${dragOver ? ' drag-over' : ''}`}
+            data-testid="pub-preview-drop"
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'copy';
+              setDragOver(true);
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false);
+            }}
+            onDrop={(e) => void dropPreview(e)}
+          >
             {preview?.dataUrl ? <img src={preview.dataUrl} alt="" data-testid="pub-thumb" /> : <div className="publish-thumb-empty muted">{t.pubNoPreview}</div>}
             <div>
               {preview && (
@@ -253,6 +281,12 @@ export function PublishModal({ project, onSave, onReport, onClose }: Props): Rea
               <button className="small" onClick={() => void choosePreview()} data-testid="pub-choose-preview">
                 {t.pubChoosePreview}
               </button>
+              <div className="muted small">{t.pubDropPreview}</div>
+              {dropRefused && (
+                <div className="small error" data-testid="pub-drop-refused">
+                  {t.pubDropRefused}
+                </div>
+              )}
             </div>
           </div>
 
