@@ -1,8 +1,8 @@
 /**
- * `kedit merge <источник> --mod M` — слияние: что мод-источник меняет относительно вашего мода.
- * По умолчанию только предпросмотр. Запись — с `--apply` и явным выбором (`--only`, `--type`,
- * `--kind` или `--all`); пишется в `--out` или в сам `--mod`, рядом — файл решений
- * `<мод>.kedit-merge.json`. В мастерскую не пишем никогда, в папку игры — с `--force`.
+ * `kedit merge <source> --mod M` — merge: what the source mod changes relative to your mod.
+ * By default only a preview. Writing — with `--apply` and an explicit selection (`--only`, `--type`,
+ * `--kind` or `--all`); written into `--out` or the `--mod` itself, with the decision file
+ * `<mod>.kedit-merge.json` next to it. Never writes into the Workshop, into the game folder — with `--force`.
  */
 import { basename, resolve } from 'node:path';
 import {
@@ -23,7 +23,7 @@ import { detectLevelData, isInGameFolders, isInWorkshop, loadMergeLedger, readMe
 import { UsageError, type Workspace } from './workspace.ts';
 
 export interface MergeRequest {
-  /** Источник: имя установленного мода или путь. */
+  /** Source: installed mod name or a path. */
   source: string;
   mod: string;
   only: string[];
@@ -87,7 +87,7 @@ function merge(ws: Workspace, ctx: ModContext, r: MergeRequest, limit: number, o
     if (!r.force && isInGameFolders(ws.paths, target)) throw new UsageError({ en: `${target} is in the game folder; writing there needs --force`, ru: `${target} — в папке игры; запись туда только с --force` });
   }
 
-  // Отклонить / вернуть: меняет только файл решений.
+  // Reject / restore: changes only the decision file.
   if (r.reject.length > 0 || r.unreject.length > 0) {
     const done = rejectMerge(ctx, source, ledger, r.reject, options);
     unrejectMerge(ledger, source, r.unreject);

@@ -1,7 +1,7 @@
 /**
- * Перепись NPC: фракция (своя, отряда или города), города через отряды (в том числе жители
- * фракции), группы с весом «сколько городов», отметка «уже в моде» и выдача пакета диалогов
- * одной отменой.
+ * NPC census: faction (own, squad or town), towns via squads (including faction
+ * residents), groups weighted by "how many towns", the "already in mod" mark and granting a dialogue package
+ * as one undo.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -66,14 +66,14 @@ function make(): ModContext {
   });
 }
 
-describe('перепись NPC', () => {
-  it('фракция, города через отряды и жителей фракции, клик-диалоги, группы с весом', () => {
+describe('NPC census', () => {
+  it('faction, towns via squads and faction residents, click dialogues, weighted groups', () => {
     const c = npcCensus(make());
     const by = new Map(c.chars.map((x) => [x.sid, x]));
     expect(by.get('boss')).toMatchObject({ unique: true, factions: ['fac'], towns: ['a', 'b'], squads: ['sq'], packages: ['pk'], talks: 1 });
-    // Своей фракции нет и у отряда нет — берётся фракция городов.
+    // No own faction and none on the squad — the towns' faction is taken.
     expect(by.get('guard')).toMatchObject({ unique: false, factions: ['fac'], towns: ['a', 'b'], talks: 0 });
-    // Жители фракции живут во всех её городах.
+    // Faction residents live in all of its towns.
     expect(by.get('cop')!.towns).toEqual(['a', 'b']);
     expect(by.get('hermit')).toMatchObject({ factions: [], towns: [], squads: [] });
     expect(censusNoPackage(by.get('guard')!)).toBe(true);
@@ -90,7 +90,7 @@ describe('перепись NPC', () => {
     ]);
   });
 
-  it('пакет диалогов выбранным: одна отмена, «уже в моде», в моде только ссылки', () => {
+  it('dialogue package to the selected: one undo, "already in mod", only references in the mod', () => {
     const ctx = make();
     expect(addDialoguePackage(ctx, ['guard', 'boss', 'cop'], 'pk')).toBe(2);
     expect(ctx.history().undo).toHaveLength(1);
@@ -105,7 +105,7 @@ describe('перепись NPC', () => {
       ['guard', ['dialogue package']],
       ['cop', ['dialogue package']],
     ]);
-    // Повтор — некому добавлять; не пакет — ошибка.
+    // Repeat — nobody to add to; not a package — error.
     expect(addDialoguePackage(ctx, ['guard'], 'pk')).toBe(0);
     expect(ctx.history().undo).toHaveLength(1);
     expect(() => addDialoguePackage(ctx, ['guard'], 'd1')).toThrow(/not a dialogue package/);

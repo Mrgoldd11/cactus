@@ -1,7 +1,7 @@
 /**
- * Пакет `@kedit/core`: собрать во временную папку, положить в `node_modules` проекта вне
- * рабочей области и проверить, что он грузится из обычного .mjs и из .ts (Node сам убирает
- * типы), а TypeScript видит его типы.
+ * The `@kedit/core` package: build it into a temp folder, put it into the `node_modules` of a project outside
+ * the workspace and check that it loads from a plain .mjs and from .ts (Node strips the
+ * types itself), and that TypeScript sees its types.
  */
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -16,15 +16,15 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe('пакет @kedit/core', () => {
-  it('импорты .ts в .d.ts → .js', () => {
+describe('@kedit/core package', () => {
+  it('.ts imports in .d.ts → .js', () => {
     expect(fixDeclarationImports("export * from './text.ts';\nimport type { X } from '../a/b.ts';\ntype Y = import('./c.ts').Y;")).toBe(
       "export * from './text.js';\nimport type { X } from '../a/b.js';\ntype Y = import('./c.js').Y;",
     );
     expect(fixDeclarationImports("import { a } from 'node:fs';")).toBe("import { a } from 'node:fs';");
   });
 
-  it('собирается и работает из папки вне рабочей области (.mjs, .ts, типы)', () => {
+  it('builds and works from a folder outside the workspace (.mjs, .ts, types)', () => {
     const pkg = buildPackage(join(root, 'pkg'));
     const manifest = JSON.parse(readFileSync(join(pkg.dir, 'package.json'), 'utf8')) as { name: string; private: boolean; exports: Record<string, unknown> };
     expect(manifest.name).toBe('@kedit/core');
@@ -60,7 +60,7 @@ describe('пакет @kedit/core', () => {
     );
     expect(execFileSync(process.execPath, ['b.ts'], { cwd: proj, encoding: 'utf8' }).trim()).toBe('1-my.mod 0.5');
 
-    // Типы: строгий tsc над скриптом проекта; ошибка типа должна ловиться.
+    // Types: strict tsc over the project script; a type error must be caught.
     const typesNode = resolve(import.meta.dirname, '../../../node_modules/@types');
     writeFileSync(
       join(proj, 'tsconfig.json'),

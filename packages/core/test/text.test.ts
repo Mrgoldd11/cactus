@@ -3,17 +3,17 @@ import { bytesEqual, decodeIdentifier, decodeText, detectEncoding, encodeText, f
 
 const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
 
-describe('кодировки', () => {
-  it('распознаёт ASCII и UTF-8', () => {
+describe('encodings', () => {
+  it('detects ASCII and UTF-8', () => {
     expect(isAscii(utf8('Hello'))).toBe(true);
     expect(isAscii(utf8('Привет'))).toBe(false);
     expect(isValidUtf8(utf8('Привет, мир — 日本'))).toBe(true);
-    expect(isValidUtf8(new Uint8Array([0xcf, 0xf0, 0xe8]))).toBe(false); // «При» в cp1251
-    expect(isValidUtf8(new Uint8Array([0xed, 0xa0, 0x80]))).toBe(false); // суррогат
-    expect(isValidUtf8(new Uint8Array([0xc0, 0x80]))).toBe(false); // избыточная запись
+    expect(isValidUtf8(new Uint8Array([0xcf, 0xf0, 0xe8]))).toBe(false); // "При" in cp1251
+    expect(isValidUtf8(new Uint8Array([0xed, 0xa0, 0x80]))).toBe(false); // surrogate
+    expect(isValidUtf8(new Uint8Array([0xc0, 0x80]))).toBe(false); // overlong encoding
   });
 
-  it('auto: UTF-8, а если не UTF-8 — cp1251', () => {
+  it('auto: UTF-8, and if not UTF-8 — cp1251', () => {
     expect(decodeText(utf8('Скверное место'))).toBe('Скверное место');
     const cp = encodeText('Скверное место', 'cp1251');
     expect(cp.length).toBe('Скверное место'.length);
@@ -22,13 +22,13 @@ describe('кодировки', () => {
     expect(decodeText(cp, 'cp1251')).toBe('Скверное место');
   });
 
-  it('cp1251 туда и обратно, ошибка на символе вне кодировки', () => {
+  it('cp1251 there and back, error on a character outside the encoding', () => {
     const text = 'Ёжик №5 «кавычки» — тире';
     expect(decodeText(encodeText(text, 'cp1251'), 'cp1251')).toBe(text);
     expect(() => encodeText('日本', 'cp1251')).toThrow(RangeError);
   });
 
-  it('идентификаторы не в UTF-8 читаются как latin1', () => {
+  it('non-UTF-8 identifiers are read as latin1', () => {
     expect(decodeIdentifier(utf8('123-mod.mod'))).toEqual({ text: '123-mod.mod', latin1: false });
     const raw = new Uint8Array([0x31, 0x2d, 0xe9]);
     const id = decodeIdentifier(raw);

@@ -1,7 +1,7 @@
 /**
- * MCP: инструменты мира — list_in_area, place, move, remove, world_history, world_undo, интерьеры
- * (interior, interior_place / _move / _remove) и запись файлов уровня мода инструментом save.
- * Синтетическая «папка игры» с одной зоной и одним интерьером ванили.
+ * MCP: world tools — list_in_area, place, move, remove, world_history, world_undo, interiors
+ * (interior, interior_place / _move / _remove) and writing the mod level files with the save tool.
+ * A synthetic "game folder" with one zone and one vanilla interior.
  */
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -44,7 +44,7 @@ beforeEach(async () => {
       }),
     ],
   });
-  // Интерьер здания X: раскладка «Hall» с одним объектом (Y) на этаже 0.
+  // Interior of building X: layout "Hall" with one object (Y) on floor 0.
   writeDataFileSync(join(dir, 'interiors.level'), {
     fileType: FileType.Data,
     lastId: 11,
@@ -75,13 +75,13 @@ async function call(name: string, args: Record<string, unknown> = {}): Promise<{
   return { text: r.content.map((c) => c.text).join('\n'), isError: r.isError ?? false };
 }
 
-describe('kenshi-mcp: мир', () => {
-  it('поворот вокруг вертикали: градусы ↔ кватернион', () => {
+describe('kenshi-mcp: world', () => {
+  it('rotation around the vertical: degrees ↔ quaternion', () => {
     expect(yawOf(turn([1, 0, 0, 0], 90))).toBe(90);
     expect(yawOf(turn(turn([1, 0, 0, 0], 90), -135))).toBe(315);
   });
 
-  it('инструменты мира помечены: чтение и правка', async () => {
+  it('world tools are marked: reading and editing', async () => {
     const tools = (await client.listTools()).tools;
     const hint = (n: string): boolean | undefined => tools.find((t) => t.name === n)?.annotations?.readOnlyHint;
     expect(hint('list_in_area')).toBe(true);
@@ -90,7 +90,7 @@ describe('kenshi-mcp: мир', () => {
     for (const n of ['place', 'move', 'remove', 'world_undo', 'interior_place', 'interior_move', 'interior_remove']) expect(hint(n)).toBe(false);
   });
 
-  it('list_in_area → place / move / remove → отмена → save пишет leveldata', async () => {
+  it('list_in_area → place / move / remove → undo → save writes leveldata', async () => {
     const list = await call('list_in_area', { x: 100, z: 200, radius: 100 });
     expect(list.text).toContain('Around 100 200 (zone 32.32), radius 100: objects 2');
     expect(list.text).toContain(`${ZONE}|0-buildinglist|1-base — Меч (X) · 0 m · x 100 y 2 z 200 · 0° · building "Kiosk"`);
@@ -136,7 +136,7 @@ describe('kenshi-mcp: мир', () => {
     expect((await call('world_history')).text).not.toContain('not saved');
   });
 
-  it('interior: раскладки, объекты, переход из мира; правки в interiors.level мода', async () => {
+  it('interior: layouts, objects, jump from the world; edits in the mod interiors.level', async () => {
     const world = await call('interior', { building: `${ZONE}|0-buildinglist|1-base` });
     expect(world.isError, world.text).toBe(false);
     expect(world.text).toContain('"Меч" (X): layouts 1');
@@ -171,7 +171,7 @@ describe('kenshi-mcp: мир', () => {
     expect(hall.instances.get(key)!.target).toBe(bed);
     const st = file.records.find((r) => r.stringId === `${key}-S23`)!;
     expect(decodeText(st.strings.get('name')!)).toBe('Bed');
-    // Зона не тронута: файла зоны у мода нет.
+    // The zone is untouched: the mod has no zone file.
     expect(saved.text).not.toContain(ZONE);
   });
 });

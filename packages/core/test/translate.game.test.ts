@@ -1,6 +1,6 @@
 /**
- * Помощник перевода на настоящем RUS-патче мастерской: «Expanded Vanilla Armor RUS» поверх
- * «Expanded Vanilla Armor». Без игры или без этих модов тесты пропускаются.
+ * Translation helper on a real Workshop RUS patch: "Expanded Vanilla Armor RUS" on top of
+ * "Expanded Vanilla Armor". Without the game or these mods the tests are skipped.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -27,7 +27,7 @@ let vanillaCache: Layer[] | undefined;
 const vanilla = (): Layer[] => (vanillaCache ??= loadVanillaLayers(paths));
 
 describe.skipIf(!rusPath || !origPath)('перевод: RUS-патч мастерской', () => {
-  it('статусы и проверка патча: почти всё переведено, кроме текстов ничего не меняет', () => {
+  it('patch statuses and check: almost everything translated, changes nothing but texts', () => {
     const { ctx } = loadModContext({ paths, modPath: rusPath!, vanilla: vanilla(), schema: false, po: false });
     expect(ctx.info.dependencies).toContain(ORIG);
     const s = summarizeTranslation(translationRows(ctx, ORIG));
@@ -35,11 +35,11 @@ describe.skipIf(!rusPath || !origPath)('перевод: RUS-патч масте�
     expect(s.done / s.total).toBeGreaterThan(0.9);
     const ex = translationExtras(ctx, [ORIG]);
     expect(ex.nonText).toEqual([]);
-    // Дописанные описания там, где у оригинала пусто.
+    // Descriptions added where the original has none.
     for (const o of ex.orphans) expect(o.field).toBe('description');
   });
 
-  it('CSV и PO: выгрузка патча → загрузка в пустой мод-перевод даёт те же тексты', () => {
+  it('CSV and PO: patch export → import into an empty translation mod gives the same texts', () => {
     const { ctx } = loadModContext({ paths, modPath: rusPath!, vanilla: vanilla(), schema: false, po: false });
     const rows = translationRows(ctx, ORIG);
     for (const file of [formatTranslationCsv(rows), formatTranslationPo(ORIG, rows)]) {
@@ -56,7 +56,7 @@ describe.skipIf(!rusPath || !origPath)('перевод: RUS-патч масте�
       }
       expect(bad).toEqual([]);
       expect(rep.applied).toBe(rows.filter((r) => r.translation !== undefined).length);
-      // Мод-перевод — только тексты.
+      // A translation mod — texts only.
       expect(translationExtras(fresh, [ORIG]).nonText).toEqual([]);
     }
   });

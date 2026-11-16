@@ -1,7 +1,7 @@
 /**
- * Слияние модов: список изменений (новые / изменённые / удалённые), конфликты по полям,
- * рекурсивный выбор и «исправить ссылки», «отклонить и не показывать», повторное слияние,
- * отмена одной правкой, файл-спутник и запись в мод только разницы.
+ * Mod merging: change list (new / changed / deleted), field conflicts,
+ * recursive selection and "fix references", "reject and hide", repeated merging,
+ * undo as one edit, sidecar file and writing only the diff into the mod.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -55,7 +55,7 @@ function weapon(sid: string, name: string, value: number, flags = 0): GameRecord
   return r;
 }
 
-/** Изменение записи ванили в источнике: только то, что поменялось. */
+/** Change to a vanilla record in the source: only what changed. */
 function weaponDelta(sid: string, name: string, fields: Record<string, number>): GameRecord {
   const r = emptyRecord(WEAPON, sid, encodeText(name));
   for (const [k, v] of Object.entries(fields)) r.ints.set(k, v);
@@ -109,8 +109,8 @@ function make(opts: { mine?: (ctx: ModContext) => void } = {}): { ctx: ModContex
 const kinds = (ctx: ModContext, src: MergeSource, ledger: MergeLedger, showRejected = false) =>
   planMerge(ctx, src, ledger, { showRejected }).changes.map((c) => `${c.kind}:${c.sid}`);
 
-describe('слияние: список изменений', () => {
-  it('новые, изменённые и удалённые записи; конфликтов нет, если ваш мод пуст', () => {
+describe('merge: change list', () => {
+  it('new, changed and deleted records; no conflicts if your mod is empty', () => {
     const { ctx, ledger } = make();
     const plan = planMerge(ctx, sourceMod(), ledger);
     expect(kinds(ctx, sourceMod(), ledger)).toEqual([
@@ -126,18 +126,18 @@ describe('слияние: список изменений', () => {
     const k = plan.changes[0]!;
     expect(k.fields).toHaveLength(1);
     expect(k.fields[0]).toMatchObject({ key: 'ints:value', before: '100', after: '150', conflict: false });
-    // Предпросмотр ничего не меняет.
+    // The preview changes nothing.
     expect(ctx.dirty).toBe(false);
     expect(ctx.get('k')!.ints.get('value')).toBe(100);
   });
 
-  it('запись источника, совпадающая с вашей, в список не попадает', () => {
+  it('a source record equal to yours does not get into the list', () => {
     const { ctx, ledger } = make({ mine: (c) => { c.setField('k', 'ints', 'value', 150); } });
     expect(kinds(ctx, sourceMod(), ledger)).not.toContain('changed:k');
     expect(planMerge(ctx, sourceMod(), ledger).counts.identical).toBe(1);
   });
 
-  it('текстовый отчёт содержит поля «было → станет»', () => {
+  it('the text report contains "was → will be" fields', () => {
     const { ctx, ledger } = make();
     const text = formatMergePlan(planMerge(ctx, sourceMod(), ledger)).join('\n');
     expect(text).toContain('new 4, changed 2, deleted 1');
@@ -146,20 +146,20 @@ describe('слияние: список изменений', () => {
   });
 });
 
-describe('слияние: конфликты', () => {
+describe('merge: conflicts', () => {
   const edited = (c: ModContext): void => { c.setField('k', 'ints', 'value', 120); };
 
-  it('поле меняли и вы, и источник — конфликт с обоими значениями', () => {
+  it('both you and the source changed a field — conflict with both values', () => {
     const { ctx, ledger } = make({ mine: edited });
     const k = planMerge(ctx, sourceMod(), ledger).changes.find((c) => c.sid === 'k')!;
     expect(k.conflict).toBe('both');
     expect(k.fields[0]).toMatchObject({ before: '120', after: '150', conflict: true });
-    // Другое поле того же рода — не конфликт.
+    // Another field of the same kind — not a conflict.
     const s = planMerge(ctx, sourceMod(), ledger).changes.find((c) => c.sid === 's')!;
     expect(s.conflict).toBeUndefined();
   });
 
-  it('без выбора остаётся ваше значение, с выбором source — значение источника', () => {
+  it('without a choice your value stays, with choice source — the source value', () => {
     const a = make({ mine: edited });
     const r1 = applyMerge(a.ctx, sourceMod(), a.ledger, { accept: ['k'] });
     expect(a.ctx.get('k')!.ints.get('value')).toBe(120);
@@ -175,7 +175,7 @@ describe('слияние: конфликты', () => {
     expect(c.ctx.get('k')!.ints.get('value')).toBe(150);
   });
 
-  it('вы удалили запись, источник её меняет — конфликт mine-deleted; source возвращает запись с правкой', () => {
+  it('you deleted a record, the source changes it — mine-deleted conflict; source brings the record back with the edit', () => {
     const { ctx, ledger } = make({ mine: (c) => { c.deleteRecord('s'); } });
     const s = planMerge(ctx, sourceMod(), ledger).changes.find((c) => c.sid === 's')!;
     expect(s.conflict).toBe('mine-deleted');
@@ -187,7 +187,7 @@ describe('слияние: конфликты', () => {
     expect(b.ctx.get('s')!.ints.get('value')).toBe(90);
   });
 
-  it('источник удаляет запись, которую вы меняли — конфликт source-deleted', () => {
+  it('the source deletes a record you changed — source-deleted conflict', () => {
     const { ctx, ledger } = make({ mine: (c) => { c.setField('c', 'ints', 'value', 11); } });
     const c = planMerge(ctx, sourceMod(), ledger).changes.find((x) => x.sid === 'c')!;
     expect(c.conflict).toBe('source-deleted');
@@ -199,8 +199,8 @@ describe('слияние: конфликты', () => {
   });
 });
 
-describe('слияние: выбор записей', () => {
-  it('рекурсивный выбор диалога берёт все его реплики', () => {
+describe('merge: record selection', () => {
+  it('recursive selection of a dialogue takes all its lines', () => {
     const { ctx, ledger } = make();
     const plan = planMerge(ctx, sourceMod(), ledger);
     expect(mergeClosure(plan, ['d1-Source.mod'])).toEqual(['d1-Source.mod', 'l1-Source.mod', 'l2-Source.mod']);
@@ -211,11 +211,11 @@ describe('слияние: выбор записей', () => {
     expect(ctx.get('d1-Source.mod')!.refs.get('lines')!.map((x) => x.target)).toEqual(['l1-Source.mod', 'l2-Source.mod']);
   });
 
-  it('«исправить ссылки» добавляет новые записи, на которые ссылаются принятые', () => {
+  it('"fix references" adds new records the accepted ones refer to', () => {
     const { ctx, ledger } = make();
     const plan = planMerge(ctx, sourceMod(), ledger);
     expect(mergeFixReferences(plan, ['d1-Source.mod'])).toEqual(['l1-Source.mod', 'l2-Source.mod']);
-    // Изменённые записи по ссылкам не добавляются: только новые.
+    // Changed records are not added via references: only new ones.
     expect(mergeFixReferences(plan, ['k'])).toEqual([]);
     const without = make();
     const r = applyMerge(without.ctx, sourceMod(), without.ledger, { accept: ['d1-Source.mod'] });
@@ -226,7 +226,7 @@ describe('слияние: выбор записей', () => {
     expect(fixed.ctx.has('l2-Source.mod')).toBe(true);
   });
 
-  it('неизвестные id пропускаются с причиной, а не ломают слияние', () => {
+  it('unknown ids are skipped with a reason instead of breaking the merge', () => {
     const { ctx, ledger } = make();
     const r = applyMerge(ctx, sourceMod(), ledger, { accept: ['k', 'нет-такой'] });
     expect(r.accepted).toEqual(['k']);
@@ -235,8 +235,8 @@ describe('слияние: выбор записей', () => {
   });
 });
 
-describe('слияние: применение', () => {
-  it('одна отмена на всё слияние; название шага понятное; в мод пишется только разница', () => {
+describe('merge: applying', () => {
+  it('one undo for the whole merge; a clear step name; only the diff goes into the mod', () => {
     const { ctx, ledger } = make();
     const r = applyMerge(ctx, sourceMod(), ledger, { accept: ['k', 's', 'n1-Source.mod', 'c'] });
     expect(r).toMatchObject({ created: 1, changed: 2, deleted: 1 });
@@ -244,23 +244,23 @@ describe('слияние: применение', () => {
     const cs = ctx.history().undo[0]!;
     expect(describeChangeset(ctx, cs).text.ru).toBe('Слияние с «Source.mod»: записей 4');
     expect(describeChangeset(ctx, cs).text.en).toBe('Merge from “Source.mod”: 4 records');
-    // Изменённая запись ванили в моде — только поле value.
+    // Changed vanilla record in the mod — only the value field.
     const delta = ctx.delta('k')!;
     expect([...delta.ints.keys()]).toEqual(['value']);
     expect(delta.floats.size).toBe(0);
     expect(ctx.status('c')).toBe('deleted');
     expect(ctx.status('n1-Source.mod')).toBe('new');
-    // Отмена возвращает всё.
+    // Undo brings everything back.
     ctx.undo();
     expect(ctx.dirty).toBe(false);
     expect(ctx.modRecords()).toHaveLength(0);
     expect(ctx.get('k')!.ints.get('value')).toBe(100);
-    // Повтор — снова всё.
+    // Redo — everything again.
     ctx.redo();
     expect(ctx.get('k')!.ints.get('value')).toBe(150);
   });
 
-  it('повторное слияние ничего не меняет', () => {
+  it('a repeated merge changes nothing', () => {
     const { ctx, ledger } = make();
     const all = planMerge(ctx, sourceMod(), ledger).changes.map((c) => c.sid);
     applyMerge(ctx, sourceMod(), ledger, { accept: all });
@@ -273,19 +273,19 @@ describe('слияние: применение', () => {
     expect(JSON.stringify(ctx.modRecords().map((x) => recordFingerprint(x)))).toBe(before);
   });
 
-  it('свои правки после слияния не считаются расхождением, пока источник не менялся', () => {
+  it('your own edits after a merge do not count as divergence while the source has not changed', () => {
     const { ctx, ledger } = make();
     applyMerge(ctx, sourceMod(), ledger, { accept: ['k'] });
     ctx.setField('k', 'ints', 'value', 175);
     expect(kinds(ctx, sourceMod(), ledger)).not.toContain('changed:k');
-    // Источник обновился — запись снова в списке, и это конфликт (вы тоже её меняли).
+    // The source was updated — the record is in the list again, and it is a conflict (you changed it too).
     const updated: MergeSource = { name: 'Source.mod', file: modFile([weaponDelta('k', 'Katana', { value: 160 })]) };
     const k = planMerge(ctx, updated, ledger).changes.find((c) => c.sid === 'k')!;
     expect(k.conflict).toBe('both');
     expect(k.fields[0]).toMatchObject({ before: '175', after: '160' });
   });
 
-  it('отмена слияния отменяет и пометку «слито»', () => {
+  it('undoing a merge also undoes the "merged" mark', () => {
     const { ctx, ledger } = make();
     applyMerge(ctx, sourceMod(), ledger, { accept: ['k'] });
     expect(kinds(ctx, sourceMod(), ledger)).not.toContain('changed:k');
@@ -295,7 +295,7 @@ describe('слияние: применение', () => {
     expect(kinds(ctx, sourceMod(), ledger)).not.toContain('changed:k');
   });
 
-  it('результат записывается и читается байт в байт, значения те же', () => {
+  it('the result is written and read byte for byte, the values are the same', () => {
     const { ctx, ledger } = make();
     applyMerge(ctx, sourceMod(), ledger, { accept: planMerge(ctx, sourceMod(), ledger).changes.map((c) => c.sid) });
     const bytes = writeDataFile(ctx.buildModFile());
@@ -308,7 +308,7 @@ describe('слияние: применение', () => {
     expect(ctx2.has('c')).toBe(false);
   });
 
-  it('запись, которая лишь меняет чужой мод, принять нельзя', () => {
+  it('a record that only changes another mod cannot be accepted', () => {
     const src: MergeSource = { name: 'Other.mod', file: modFile([weaponDelta('zzz-Dep.mod', 'Ghost', { value: 5 })], 'Dep.mod') };
     const { ctx, ledger } = make();
     const plan = planMerge(ctx, src, ledger);
@@ -319,7 +319,7 @@ describe('слияние: применение', () => {
     expect(ctx.has('zzz-Dep.mod')).toBe(false);
   });
 
-  it('данные уровня не сливаются: отказ в отчёте, файлы не трогаются', () => {
+  it('level data is not merged: refused in the report, files are not touched', () => {
     const { ctx, ledger } = make();
     const levelData = { dir: 'x/leveldata', files: ['leveldata.level', 'zone.1.1.zone'] };
     const plan = planMerge(ctx, sourceMod(), ledger, { levelData });
@@ -330,8 +330,8 @@ describe('слияние: применение', () => {
   });
 });
 
-describe('слияние: отклонить и не показывать', () => {
-  it('отклонённая запись скрыта, «показать пропущенные» её возвращает, unreject — снимает отметку', () => {
+describe('merge: reject and hide', () => {
+  it('a rejected record is hidden, "show skipped" brings it back, unreject clears the mark', () => {
     const { ctx, ledger } = make();
     const src = sourceMod();
     expect(rejectMerge(ctx, src, ledger, ['s', 'нет-такой'])).toEqual(['s']);
@@ -339,13 +339,13 @@ describe('слияние: отклонить и не показывать', () =
     expect(planMerge(ctx, src, ledger).counts.rejected).toBe(1);
     const shown = planMerge(ctx, src, ledger, { showRejected: true }).changes.find((c) => c.sid === 's')!;
     expect(shown.rejected).toBe(true);
-    // Принять отклонённую нельзя, пока её не вернули.
+    // A rejected one cannot be accepted until it is brought back.
     expect(applyMerge(ctx, src, ledger, { accept: ['s'] }, { showRejected: true }).skipped).toHaveLength(1);
     unrejectMerge(ledger, src, ['s']);
     expect(kinds(ctx, src, ledger)).toContain('changed:s');
   });
 
-  it('если запись источника изменилась после отклонения, это видно в режиме «показать пропущенные»', () => {
+  it('if the source record changed after rejection, it shows in "show skipped" mode', () => {
     const { ctx, ledger } = make();
     rejectMerge(ctx, sourceMod(), ledger, ['s']);
     const updated: MergeSource = { name: 'Source.mod', file: modFile([weaponDelta('s', 'Sabre', { value: 95 })]) };
@@ -355,8 +355,8 @@ describe('слияние: отклонить и не показывать', () =
   });
 });
 
-describe('слияние: допустимость источника и файл-спутник', () => {
-  it('зависимость активного мода и сам мод слить нельзя — понятное сообщение', () => {
+describe('merge: source eligibility and sidecar file', () => {
+  it('a dependency of the active mod and the mod itself cannot be merged — a clear message', () => {
     const { ctx } = make({ mine: (c) => { c.setModInfo({ dependencies: ['Dep.mod'] }); } });
     expect(() => { checkMergeSource(ctx, 'Dep.mod'); }).toThrow(MergeError);
     expect(() => { checkMergeSource(ctx, 'dep.MOD'); }).toThrow(/open as a dependency/);
@@ -366,11 +366,11 @@ describe('слияние: допустимость источника и фай�
     expect(() => planMerge(ctx, { name: 'Dep.mod', file: modFile([]) }, new MergeLedger())).toThrow(MergeError);
   });
 
-  it('файл-спутник: отклонённые и журнал сохраняются, битый файл — понятная ошибка', () => {
+  it('sidecar file: rejections and the log are saved, a broken file — a clear error', () => {
     const { ctx, ledger } = make();
     rejectMerge(ctx, sourceMod(), ledger, ['s']);
     applyMerge(ctx, sourceMod(), ledger, { accept: ['k'] });
-    // До сохранения слияние ещё не постоянное.
+    // Before saving the merge is not permanent yet.
     const store = ledger.commit(ctx);
     const text = serializeMergeStore(store);
     const back = parseMergeStore(text);
@@ -378,14 +378,14 @@ describe('слияние: допустимость источника и фай�
     expect(Object.keys(back.sources['source.mod']!.baseline)).toEqual(['k']);
     expect(back.log).toHaveLength(1);
     expect(back.log[0]).toMatchObject({ source: 'Source.mod', accepted: 1, changed: 1 });
-    // Заново открытый мод помнит решения.
+    // A reopened mod remembers the decisions.
     const fresh = new MergeLedger(back);
     expect(fresh.state(ctx, 'SOURCE.mod').rejected['s']).toBeDefined();
     expect(() => parseMergeStore('{не json')).toThrow(MergeError);
     expect(() => parseMergeStore('{"version":2,"sources":{}}')).toThrow(MergeError);
   });
 
-  it('отменённое слияние не попадает в файл-спутник при сохранении', () => {
+  it('an undone merge does not get into the sidecar file on save', () => {
     const { ctx, ledger } = make();
     applyMerge(ctx, sourceMod(), ledger, { accept: ['k'] });
     ctx.undo();

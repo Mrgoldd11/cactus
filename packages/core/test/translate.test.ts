@@ -1,6 +1,6 @@
 /**
- * Помощник перевода: тексты оригинала, мод-перевод поверх него, CSV/JSON туда и обратно,
- * изменившиеся оригиналы и лишнее в переводе. На синтетических слоях, без игры.
+ * Translation helper: original texts, a translation mod on top of it, CSV/JSON there and back,
+ * changed originals and extras in the translation. On synthetic layers, without the game.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -44,7 +44,7 @@ function file(records: GameRecord[], deps = ''): DataFile {
   return { fileType: FileType.Mod, header: { version: 1, author: encodeText(''), description: encodeText(''), dependencies: encodeText(deps), references: encodeText('') }, lastId: 0, records, tail: new Uint8Array() };
 }
 
-/** Ваниль: шлем V. Оригинал: свой шлем, реплика, отряд; у V меняет описание (имя то же). */
+/** Vanilla: helmet V. Original: own helmet, a line, a squad; changes the description of V (name the same). */
 function layers(original = 'Plate helm. Heavy.'): Layer[] {
   const vanilla = file([rec(ARMOUR, 'V', 'Hat', { description: 'Old hat', category: 'Armour' }, (r) => r.floats.set('weight', 1))]);
   const mod = file([
@@ -61,8 +61,8 @@ function layers(original = 'Plate helm. Heavy.'): Layer[] {
 
 const tr = (l = layers()): ModContext => new ModContext({ layers: l, modName: 'Orig RUS.mod' });
 
-describe('помощник перевода', () => {
-  it('тексты оригинала: имена переводимых типов, текстовые поля; служебное и неизменённое — нет', () => {
+describe('translation helper', () => {
+  it('original texts: names of translatable types, text fields; service and unchanged ones — no', () => {
     const texts = layerTexts(layers(), 'orig.mod').map((e) => `${e.id} ${e.field}: ${e.original}`);
     expect(texts).toEqual([
       '1-orig.mod name: Plate helm',
@@ -75,7 +75,7 @@ describe('помощник перевода', () => {
     expect(hasTranslatableText('Привет')).toBe(true);
   });
 
-  it('перевод ставится в мод-перевод только текстами; совпадение с оригиналом — перевод снят', () => {
+  it('the translation goes into the translation mod as texts only; equal to the original — translation removed', () => {
     const ctx = tr();
     setTranslation(ctx, '1-orig.mod', 'name', 'Латный шлем');
     setTranslation(ctx, '1-orig.mod', 'description', 'Латный шлем. Тяжёлый.');
@@ -87,19 +87,19 @@ describe('помощник перевода', () => {
     expect(decodeText(d.name)).toBe('Латный шлем');
     expect([...d.strings.keys()]).toEqual(['description']);
     expect(d.floats.size + d.refs.size).toBe(0);
-    // Пустой текст — перевод снят; запись уходит из мода.
+    // Empty text — the translation is removed; the record leaves the mod.
     setTranslation(ctx, '1-orig.mod', 'name', '');
     setTranslation(ctx, '1-orig.mod', 'description', '');
     expect(ctx.modRecords()).toEqual([]);
     rows = translationRows(ctx, 'Orig.mod');
     expect(rows.every((r) => r.status === 'todo')).toBe(true);
-    // Сохранённый мод читается обратно с теми же текстами.
+    // The saved mod reads back with the same texts.
     setTranslation(ctx, '2-orig.mod', 'text0', 'Привет, бродяга.');
     const back = readDataFile(writeDataFile(ctx.buildModFile()));
     expect(decodeText(back.records[0]!.strings.get('text0')!)).toBe('Привет, бродяга.');
   });
 
-  it('CSV и JSON: выгрузка → правка → загрузка; кавычки, переносы, точка с запятой', () => {
+  it('CSV and JSON: export → edit → import; quotes, line breaks, semicolon', () => {
     const ctx = tr();
     setTranslation(ctx, '2-orig.mod', 'text0', 'Привет, "бродяга".\nКуда идёшь?');
     const csv = formatTranslationCsv(translationRows(ctx, 'Orig.mod'));
@@ -107,34 +107,34 @@ describe('помощник перевода', () => {
     const parsed = parseTranslationFile(csv);
     expect(parsed.rows).toHaveLength(5);
     expect(parsed.rows[2]).toMatchObject({ id: '2-orig.mod', field: 'text0', original: 'Hello, drifter.', translation: 'Привет, "бродяга".\nКуда идёшь?' });
-    // Перевод в другом мод-переводе из того же файла даёт те же тексты.
+    // Translating into another translation mod from the same file gives the same texts.
     const other = tr();
     const rows = parsed.rows.map((r) => (r.field === 'name' ? { ...r, translation: 'Латный шлем' } : r));
     const rep = applyTranslationRows(other, 'Orig.mod', rows);
     expect(rep).toMatchObject({ applied: 2, unchanged: 0, empty: 3, stale: [], unknown: [] });
     expect(decodeText(other.delta('2-orig.mod')!.strings.get('text0')!)).toBe('Привет, "бродяга".\nКуда идёшь?');
-    // Перевод зависит от оригинала — в заголовке.
+    // The translation depends on the original — in the header.
     expect(other.info.dependencies).toEqual(['Orig.mod']);
-    // Одна правка — одна отмена.
+    // One edit — one undo.
     other.undo();
     expect(other.modRecords()).toEqual([]);
     expect(other.info.dependencies).toEqual([]);
-    // JSON — то же.
+    // JSON — the same.
     const json = parseTranslationFile(formatTranslationJson('Orig.mod', translationRows(ctx, 'Orig.mod')));
     expect(json.source).toBe('Orig.mod');
     expect(json.rows[2]!.translation).toBe('Привет, "бродяга".\nКуда идёшь?');
-    // PO (Poedit, как у FCS) — то же; кавычки и перенос строки экранированы.
+    // PO (Poedit, as in FCS) — the same; quotes and line breaks are escaped.
     const poText = formatTranslationPo('Orig.mod', translationRows(ctx, 'Orig.mod'));
     expect(poText).toContain('msgctxt "2-orig.mod|text0"');
     const po = parseTranslationFile(poText);
     expect(po.source).toBe('Orig.mod');
     expect(po.rows.map((r) => [r.id, r.field, r.original, r.translation])).toEqual(parsed.rows.map((r) => [r.id, r.field, r.original, r.translation]));
-    // Excel с русской локалью сохраняет через «;».
+    // Excel with a Russian locale saves with ";".
     expect(parseCsv('id;field;translation\r\nV;description;"a;b"\r\n')).toEqual([['id', 'field', 'translation'], ['V', 'description', 'a;b']]);
     expect(() => parseTranslationFile('a,b\n1,2')).toThrow('id, field and translation');
   });
 
-  it('оригинал обновился: строка с устаревшим оригиналом не применяется; чужие id — в отчёт', () => {
+  it('original updated: a row with an outdated original is not applied; unknown ids — into the report', () => {
     const csv = formatTranslationCsv(translationRows(tr(), 'Orig.mod'));
     const rows = parseTranslationFile(csv).rows.map((r) => ({ ...r, translation: `RU ${r.original ?? ''}` }));
     rows.push({ id: 'nope', field: 'description', translation: 'x' });
@@ -148,7 +148,7 @@ describe('помощник перевода', () => {
     expect(forced.applied).toBe(1);
   });
 
-  it('проверка мода-перевода: тексты не из оригинала и правки не текстов', () => {
+  it('translation mod check: texts not from the original and edits of non-texts', () => {
     const ctx = tr();
     setTranslation(ctx, '1-orig.mod', 'description', 'Шлем');
     ctx.setField('1-orig.mod', 'floats', 'weight', 2);

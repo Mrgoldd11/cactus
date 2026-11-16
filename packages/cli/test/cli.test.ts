@@ -1,5 +1,5 @@
 /**
- * Команды kedit на маленькой синтетической «папке игры» (без файлов Kenshi).
+ * kedit commands on a small synthetic "game folder" (no Kenshi files).
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,8 +24,8 @@ beforeEach(() => {
   fx = makeFixture();
 });
 
-describe('kedit: поиск и просмотр', () => {
-  it('find: по-русски, по типу номером (как kdata.py), по полю, страницами, JSON', async () => {
+describe('kedit: search and view', () => {
+  it('find: in Russian, by type number (like kdata.py), by field, paged, JSON', async () => {
     expect((await run('find', 'разбой')).out).toContain('A  CHARACTER  «Bandit» (Разбойник)');
     const items = await run('find', '', '4');
     expect(items.out.split('\n')).toEqual(['X  ITEM  «Sword» (Меч)', 'Y  ITEM  «Shield»']);
@@ -38,7 +38,7 @@ describe('kedit: поиск и просмотр', () => {
     expect((await run('find', 'hat', '--mod', 'My', '--status', 'new')).out).toContain('1-My.mod  ITEM  «Magic hat»  [new]');
   });
 
-  it('show: итог слоёв, ссылки с именами, слои; нет записи — код 2', async () => {
+  it('show: layer result, references with names, layers; no record — exit code 2', async () => {
     const r = await run('show', 'A', '--mod', 'My', '--layers');
     expect(r.out).toContain('CHARACTER A «Bandit» (Разбойник) — changed');
     expect(r.out).toContain('слои: gamedata.base → rebirth.mod → My.mod');
@@ -51,7 +51,7 @@ describe('kedit: поиск и просмотр', () => {
     expect((await run('show', 'nope')).code).toBe(2);
   });
 
-  it('tree: цикл не разворачивается; --full — все поля', async () => {
+  it('tree: a cycle is not expanded; --full — all fields', async () => {
     const r = await run('tree', 'D1');
     expect(r.out.split('\n')).toEqual([
       'DIALOGUE D1 «greet»',
@@ -64,25 +64,25 @@ describe('kedit: поиск и просмотр', () => {
     expect((await run('tree', 'D1', '--full')).out).toContain('str text0 = "Hello there"');
   });
 
-  it('mod: записи файла, фильтр по подстроке, кратко', async () => {
+  it('mod: file records, substring filter, brief', async () => {
     const r = await run('mod', fx.modPath, '--brief');
     expect(r.out.split('\n')).toEqual(['CHARACTER A «Bandit» (Разбойник) — changed', 'ITEM 1-My.mod «Magic hat» — new']);
     expect((await run('mod', 'My.mod', 'magic')).out).toContain('float weight = 0.5');
-    // В файле мода — маркер снятия ссылки на X.
+    // The mod file has a marker removing the reference to X.
     expect((await run('mod', 'My', 'bandit')).out).toContain('→ Sword [X]  удалить');
   });
 
-  it('refs: из записи и на неё', async () => {
+  it('refs: from the record and to it', async () => {
     const to = await run('refs', '1-My.mod', '--mod', 'My', '--to');
     expect(to.out).toBe('← Bandit [A] vendors  3 0 0');
     expect((await run('refs', 'A', '--from')).out).toBe('→ vendors: Sword [X]  1 0 0');
   });
 
-  it('where: цепочка обратных ссылок; без папок уровня — без координат', async () => {
+  it('where: chain of back references; without level folders — no coordinates', async () => {
     const r = await run('where', 'Sword', '--lang', 'en');
     expect(r.code).toBe(0);
     expect(r.out).toContain('ITEM «Sword» (Меч) [X]');
-    // В фикстуре предмет прямо в `vendors` персонажа (в игре там VENDOR_LIST) — просто связь.
+    // In the fixture the item is directly in the character's `vendors` (in the game it is a VENDOR_LIST) — just a link.
     expect(r.out).toContain('Related to «Разбойник» — no place in the world found');
     expect(r.out).toContain('path: ← CHARACTER «Bandit» (Разбойник) [A] (vendors)');
     const j = JSON.parse((await run('where', 'X', '--json')).out) as { facts: { role: string; holder?: { id: string } }[] };
@@ -91,7 +91,7 @@ describe('kedit: поиск и просмотр', () => {
 });
 
 describe('kedit talk', () => {
-  it('без диалогов; клик из мода игрока (--mods из mods.cfg); JSON', async () => {
+  it('no dialogues; click from a player mod (--mods from mods.cfg); JSON', async () => {
     expect((await run('talk', 'Bandit', '--lang', 'en')).out).toContain('no dialogues for this event');
     mkdirSync(join(fx.game, 'mods', 'Talk'), { recursive: true });
     writeDataFileSync(join(fx.game, 'mods', 'Talk', 'Talk.mod'), dataFile([rec(CHAR, 'A', 'Bandit', (r) => r.refs.set('dialogue', [{ target: 'D1', v0: 0, v1: 0, v2: 0 }]))]));
@@ -104,13 +104,13 @@ describe('kedit talk', () => {
     expect(r.out).toContain('NPC: «Hello there» [score 0]');
     const j = JSON.parse((await run('talk', 'A', '--mods', '--json')).out) as { winner: string; candidates: { verdict: string }[] };
     expect(j.winner).toBe('D1');
-    // Событие 3: `dialogue` персонажа не участвует.
+    // Event 3: the character's `dialogue` does not take part.
     expect((await run('talk', 'A', '--mods', '--event', '3', '--lang', 'en')).out).toContain('no dialogues for this event');
   });
 });
 
-describe('kedit: разница, проверка, схема', () => {
-  it('diff мода и двух файлов', async () => {
+describe('kedit: diff, validate, schema', () => {
+  it('diff of a mod and of two files', async () => {
     const r = await run('diff', '--mod', 'My');
     expect(r.out).toContain('~ CHARACTER A «Bandit»');
     expect(r.out).toContain('~ int money: 15 → 99');
@@ -120,7 +120,7 @@ describe('kedit: разница, проверка, схема', () => {
     expect(two.out).toContain('~ int money: 10 → 15');
   });
 
-  it('validate: код 1 при битой ссылке', async () => {
+  it('validate: exit code 1 on a broken reference', async () => {
     expect((await run('validate', '--mod', 'My')).code).toBe(0);
     const f = readDataFileSync(fx.modPath);
     f.records[0]!.refs.get('vendors')!.push({ target: 'ghost', v0: 1, v1: 0, v2: 0 });
@@ -130,7 +130,7 @@ describe('kedit: разница, проверка, схема', () => {
     expect(r.out).toContain('broken-ref A');
   });
 
-  it('schema: типы, поля с описанием, перечисление', async () => {
+  it('schema: types, fields with description, enum', async () => {
     expect((await run('schema')).out).toContain('CHARACTER  полей 2, ссылок 1');
     expect((await run('schema', 'character')).out).toContain('money: int = 0 — how much money');
     expect((await run('schema', '--enum', 'Kind')).out).toContain('FOOD = 1');
@@ -151,7 +151,7 @@ describe('kedit: разница, проверка, схема', () => {
     expect((await run('schema', 'counter', '--mod', 'My')).out).toContain('[COUNTER] — полей 1 [extension My]');
   });
 
-  it('ошибки использования — код 2', async () => {
+  it('usage errors — exit code 2', async () => {
     expect((await run('bogus')).code).toBe(2);
     expect((await run('find', '--nope')).code).toBe(2);
     expect((await run('help')).out).toContain('kedit');
@@ -159,7 +159,7 @@ describe('kedit: разница, проверка, схема', () => {
 });
 
 describe('kedit build', () => {
-  it('JSON-план поверх мода: пишет только изменения', async () => {
+  it('JSON plan on top of a mod: writes only changes', async () => {
     const plan = join(fx.game, 'plan.json');
     writeFileSync(
       plan,
@@ -180,11 +180,11 @@ describe('kedit build', () => {
     const f = readDataFileSync(out);
     expect(f.records.map((x) => decodeText(x.name))).toEqual(['Bandit', 'Magic hat', 'Pick']);
     expect(decodeText(f.header!.author)).toBe('kedit');
-    // Ссылка по умолчанию из схемы: vendors: ITEM (1,0,0).
+    // Default reference from the schema: vendors: ITEM (1,0,0).
     expect(f.records[0]!.refs.get('vendors')!.at(-1)).toMatchObject({ target: '2-My.mod', v0: 1 });
   });
 
-  it('скрипт .ts и защита папки игры', async () => {
+  it('.ts script and game folder protection', async () => {
     const script = join(fx.game, 'build.ts');
     writeFileSync(
       script,
@@ -207,7 +207,7 @@ describe('kedit build', () => {
     const f = readDataFileSync(inGame);
     expect(f.records.map((x) => [x.stringId, decodeText(x.name)])).toEqual([['Y', 'Big shield']]);
     expect(readFileSync(inGame).length).toBeGreaterThan(0);
-    // В мастерскую — никогда, даже с --force (до записи дело не доходит).
+    // Into the Workshop — never, even with --force (it does not get as far as writing).
     const inWorkshop = join(defaultWorkshopDir(fx.game), '123', 'Out.mod');
     const ws = await run('build', script, '--out', inWorkshop, '--force');
     expect(ws.code).toBe(2);
@@ -216,8 +216,8 @@ describe('kedit build', () => {
   });
 });
 
-describe('kedit: этап 2', () => {
-  it('show/refs по имени; diff --status и итог', async () => {
+describe('kedit: stage 2', () => {
+  it('show/refs by name; diff --status and summary', async () => {
     expect((await run('show', 'Sword')).out).toContain('ITEM X «Sword» (Меч)');
     expect((await run('show', 'разбойник')).out).toContain('CHARACTER A «Bandit»');
     const many = await run('show', 'S');
@@ -230,7 +230,7 @@ describe('kedit: этап 2', () => {
     expect(added.out).toContain('всего 2: новых 1, изменённых 1, удалённых 0; показаны: added');
   });
 
-  it('build: env.stableId — номер по имени, ids.json рядом со скриптом, сироты', async () => {
+  it('build: env.stableId — number by name, ids.json next to the script, orphans', async () => {
     const script = join(fx.game, 'ids-build.ts');
     writeFileSync(
       script,
@@ -257,7 +257,7 @@ describe('kedit: этап 2', () => {
 });
 
 describe('kedit mods', () => {
-  it('list: порядок mods.cfg, нет файла, выключенные; --json', async () => {
+  it('list: mods.cfg order, missing file, disabled; --json', async () => {
     writeFileSync(join(fx.game, 'data', 'mods.cfg'), 'Gone.mod\r\nMy.mod\r\n');
     mkdirSync(join(fx.game, 'mods', 'Off'), { recursive: true });
     writeDataFileSync(join(fx.game, 'mods', 'Off', 'Off.mod'), dataFile([]));
@@ -274,7 +274,7 @@ describe('kedit mods', () => {
     expect((await run('mods', 'nope')).code).toBe(2);
   });
 
-  it('touched и conflicts: кто меняет запись, кто побеждает, --mod', async () => {
+  it('touched and conflicts: who changes a record, who wins, --mod', async () => {
     mkdirSync(join(fx.game, 'mods', 'Rich'), { recursive: true });
     writeDataFileSync(join(fx.game, 'mods', 'Rich', 'Rich.mod'), dataFile([rec(CHAR, 'A', 'Bandit', (r) => r.ints.set('money', 500))]));
     writeFileSync(join(fx.game, 'data', 'mods.cfg'), `My.mod${EOL}Rich.mod${EOL}`);
@@ -297,12 +297,12 @@ describe('kedit mods', () => {
     expect(j.touches.map((x) => x.layer)).toEqual(['My.mod', 'Rich.mod']);
   });
 
-  it('move/enable/disable: без --force только показ, с --force — запись с копией, CRLF', async () => {
+  it('move/enable/disable: without --force only a preview, with --force — write with a copy, CRLF', async () => {
     mkdirSync(join(fx.game, 'mods', 'Rich'), { recursive: true });
     writeDataFileSync(join(fx.game, 'mods', 'Rich', 'Rich.mod'), dataFile([]));
     const cfg = join(fx.game, 'data', 'mods.cfg');
     writeFileSync(cfg, `My.mod${EOL}Rich.mod${EOL}`);
-    // Запись mods.cfg проверяет, не запущена ли игра; в тесте — временная папка, проверка не нужна.
+    // Writing mods.cfg checks whether the game is running; the test uses a temp folder, so no check is needed.
     process.env['KEDIT_SKIP_GAME_CHECK'] = '1';
     onTestFinished(() => {
       delete process.env['KEDIT_SKIP_GAME_CHECK'];
@@ -328,7 +328,7 @@ describe('kedit mods', () => {
     expect((await run('mods', 'enable', 'My')).out).toContain('без изменений');
   });
 
-  it('mods copy: без --force только показ; копия байт в байт + откуда; вторая — ошибка', async () => {
+  it('mods copy: without --force only a preview; byte-for-byte copy + origin; a second one — error', async () => {
     const src = join(fx.game, 'mods', 'My', 'My.mod');
     const before = readFileSync(src);
     const dest = join(fx.game, 'mods', 'My edit', 'My edit.mod');
@@ -344,14 +344,14 @@ describe('kedit mods', () => {
     const origin = JSON.parse(readFileSync(join(fx.game, 'mods', 'My edit', 'My edit.kedit-origin.json'), 'utf8')) as { source: string; size: number };
     expect(origin).toMatchObject({ source: src, size: before.length });
     expect((await run('mods', 'copy', 'My', '--name', 'My edit', '--force')).code).toBe(2);
-    // Сам в себя (тот же путь в mods/) — ошибка.
+    // Into itself (the same path in mods/) — error.
     expect((await run('mods', 'copy', 'My', '--force')).code).toBe(2);
     expect((await run('mods', 'copy', 'Nope')).code).toBe(2);
   });
 });
 
 describe('kedit strings', () => {
-  it('тексты мода → CSV → мод-перевод с зависимостью от оригинала; в папку игры без --force — нет', async () => {
+  it('mod texts → CSV → translation mod depending on the original; into the game folder without --force — no', async () => {
     const out = mkdtempSync(join(tmpdir(), 'kedit-tr-'));
     const s = await run('strings', 'My');
     expect(s.code, s.err).toBe(0);
@@ -368,14 +368,14 @@ describe('kedit strings', () => {
     expect(decodeText(f.header!.dependencies)).toBe('My.mod');
     expect(f.records.map((r) => [r.stringId, decodeText(r.name), r.floats.size])).toEqual([['1-My.mod', 'Волшебная шляпа', 0]]);
     expect((await run('strings', 'My', '--mod', modPath)).out).toContain('переведено 1');
-    // Папка игры — только с --force.
+    // Game folder — only with --force.
     expect((await run('strings', 'My', '--out', join(fx.game, 'my.csv'))).code).toBe(2);
     expect((await run('strings', 'My', '--out', join(out, 'x.txt'))).code).toBe(2);
   });
 });
 
 describe('kedit bulk', () => {
-  it('предпросмотр по умолчанию, --apply пишет одну правку, защита папки игры', async () => {
+  it('preview by default, --apply writes one edit, game folder protection', async () => {
     const pre = await run('bulk', 'ITEM', '--mul', 'weight=1.5');
     expect(pre.code, pre.err).toBe(0);
     expect(pre.out).toContain('X  «Sword»  weight: 2 → 3');
@@ -383,12 +383,12 @@ describe('kedit bulk', () => {
     expect(pre.out).toContain('подошло записей 2, изменится 2, пропущено 0');
     expect(pre.out).toContain('ничего не записано');
 
-    // Условие по полю, замена имени по regex.
+    // Condition on a field, name replacement by regex.
     const ren = await run('bulk', 'ITEM', '--field', 'weight>1', '--replace', 'name', '--find', '^S(\\w)', '--regex', '--with', 'Big s$1');
     expect(ren.out).toContain('X  «Sword»  name: Sword → Big sword');
     expect(ren.out).toContain('изменится 1,');
 
-    // Без --out/--mod — некуда писать; в папку игры — только с --force.
+    // Without --out/--mod — nowhere to write; into the game folder — only with --force.
     expect((await run('bulk', 'ITEM', '--mul', 'weight=2', '--apply')).code).toBe(2);
     expect((await run('bulk', 'ITEM', '--mul', 'weight=2', '--apply', '--out', join(fx.game, 'x.mod'))).code).toBe(2);
     expect((await run('bulk', 'ITEM', '--mul', 'weight=2', '--set', 'weight=1')).code).toBe(2);
@@ -415,7 +415,7 @@ describe('kedit merge', () => {
     writeDataFileSync(join(fx.game, 'mods', 'Other', 'Other.mod'), dataFile([y, a, hat], [], 7));
   };
 
-  it('предпросмотр по умолчанию: новые, изменённые, конфликт; ничего не записывается', async () => {
+  it('preview by default: new, changed, conflict; nothing is written', async () => {
     source();
     const r = await run('merge', 'Other', '--mod', 'My');
     expect(r.code, r.err).toBe(0);
@@ -427,14 +427,14 @@ describe('kedit merge', () => {
     expect(j.counts.conflicts).toBe(1);
   });
 
-  it('--apply: нужен выбор и место записи; в --out пишется мод и файл решений, validate чист', async () => {
+  it('--apply: needs a selection and a target; --out gets the mod and the decision file, validate is clean', async () => {
     source();
     const noChoice = await run('merge', 'Other', '--mod', 'My', '--apply', '--out', join(mkdtempSync(join(tmpdir(), 'kedit-merge-')), 'x.mod'));
     expect(noChoice.code).toBe(2);
     expect(noChoice.err).toContain('что сливать');
-    // В папку игры (сам --mod) — только с --force.
+    // Into the game folder (the --mod itself) — only with --force.
     expect((await run('merge', 'Other', '--mod', 'My', '--apply', '--all')).code).toBe(2);
-    // Мод нельзя слить в самого себя / в зависимость.
+    // A mod cannot be merged into itself / into a dependency.
     expect((await run('merge', 'My', '--mod', 'My')).code).toBe(2);
 
     const out = join(mkdtempSync(join(tmpdir(), 'kedit-merge-')), 'Merged.mod');
@@ -450,7 +450,7 @@ describe('kedit merge', () => {
     expect(v.code, v.out).toBe(0);
   });
 
-  it('--reject скрывает запись, --show-rejected возвращает, --unreject снимает отметку', async () => {
+  it('--reject hides a record, --show-rejected brings it back, --unreject clears the mark', async () => {
     source();
     const dir = mkdtempSync(join(tmpdir(), 'kedit-merge-'));
     const out = join(dir, 'R.mod');

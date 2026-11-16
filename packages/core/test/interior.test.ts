@@ -1,6 +1,6 @@
 /**
- * Интерьеры: раскладки здания, объекты, новый объект с состоянием (копия образца, этаж, фракция),
- * сдвиг с этажом, удаление, отмена; ленивое чтение `interiors.level`; запись без потерь.
+ * Interiors: building layouts, objects, a new object with state (copy of a sample, floor, faction),
+ * move with floor, deletion, undo; lazy reading of `interiors.level`; lossless writing.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -39,7 +39,7 @@ function level(records: GameRecord[], lastId = 0): DataFile {
 
 const LAYOUT = 'HOUSE-Noble House';
 
-/** Типы записей .mod: здание, кровать, сундук, точка предметов, персонаж. */
+/** .mod record types: building, bed, chest, item spot, character. */
 const types: RecordTypes = {
   headline: (sid) => {
     const t = { HOUSE: 'BUILDING', BED: 'BUILDING', CHEST: 'BUILDING', LOOT: 'ITEM_PLACEMENT_GROUP', GUY: 'CHARACTER' }[sid];
@@ -93,8 +93,8 @@ function edits(): WorldEdits {
   return e;
 }
 
-describe('интерьеры', () => {
-  it('без addFiles интерьеры не правятся', () => {
+describe('interiors', () => {
+  it('without addFiles interiors cannot be edited', () => {
     const e = new WorldEdits([], 'My Mod.mod');
     expect(e.isLoaded(INTERIORS)).toBe(false);
     expect(() => interiorLayouts(e)).toThrow(/not read yet/);
@@ -104,7 +104,7 @@ describe('интерьеры', () => {
     expect(() => { e.addFiles([]); }).toThrow(/already read/);
   });
 
-  it('раскладки здания и объекты', () => {
+  it('building layouts and objects', () => {
     const e = edits();
     const ls = interiorLayouts(e, 'HOUSE');
     expect(ls.map((l) => [l.name, l.exterior, l.objects])).toEqual([
@@ -121,12 +121,12 @@ describe('интерьеры', () => {
     expect(objs[2]!.items).toBe('LOOT');
     expect(layoutOfBuilding(e, { target: 'HOUSE', interior: 'noble house' })?.sid).toBe(LAYOUT);
     expect(layoutOfBuilding(e, { target: 'HOUSE' })).toBeUndefined();
-    // В файлах мира для WorldIndex интерьеров нет.
+    // The world files for WorldIndex have no interiors.
     expect(e.files().some((f) => f.path === INTERIORS)).toBe(false);
     expect(e.files({ interiors: true }).some((f) => f.path === INTERIORS)).toBe(true);
   });
 
-  it('новая мебель: копия состояния образца, этаж соседа, фракция раскладки', () => {
+  it('new furniture: copy of the sample state, neighbour floor, layout faction', () => {
     const e = edits();
     const r = placeInterior(e, types, LAYOUT, 'BED', [1, 230, 1], [1, 0, 0, 0]);
     expect(r).toEqual({ key: '1-My Mod-INGAME', state: '1-My Mod-INGAME-S23', floor: 1, template: '10-base-S23' });
@@ -138,21 +138,21 @@ describe('интерьеры', () => {
     expect(e.history().undo).toEqual(['New object in an interior']);
     const file = e.buildFile(INTERIORS)!;
     expect(file.lastId).toBe(1);
-    // Раскладка в моде — с полями, но только с новым экземпляром.
+    // The layout in the mod — with fields, but only with the new instance.
     const holder = file.records.find((x) => x.stringId === LAYOUT)!;
     expect([...holder.instances.keys()]).toEqual(['1-My Mod-INGAME']);
     expect(decodeText(holder.strings.get('associated building')!)).toBe('HOUSE');
-    // Запись без потерь.
+    // Lossless writing.
     expect(writeDataFile(readDataFile(writeDataFile(file)))).toEqual(writeDataFile(file));
   });
 
-  it('новая точка предметов: своё состояние со следующим id; без образца — собрано заново', () => {
+  it('new item spot: own state with the next id; without a sample — built from scratch', () => {
     const e = edits();
     const r = placeInterior(e, types, LAYOUT, 'LOOT', [0, 183, 0], [1, 0, 0, 0]);
     expect(r).toMatchObject({ key: '1-My Mod-INGAME', state: '2-My Mod-INGAME', floor: 0 });
     expect(e.buildFile(INTERIORS)!.lastId).toBe(2);
     expect(decodeText(e.record(INTERIORS, r.state)!.strings.get('base data sid')!)).toBe('LOOT');
-    // Мебели без образца: состояние с именем записи.
+    // Furniture without a sample: state with the record name.
     const c = placeInterior(e, types, LAYOUT, 'HOUSE', [0, 183, 0], [1, 0, 0, 0]);
     expect(c.template).toBeUndefined();
     const st = e.record(INTERIORS, c.state)!;
@@ -162,7 +162,7 @@ describe('интерьеры', () => {
     expect(() => placeInterior(e, types, 'NOPE', 'BED', [0, 0, 0], [1, 0, 0, 0])).toThrow(/No layout/);
   });
 
-  it('сдвиг: этаж и высота в состоянии; по горизонтали — состояние не трогаем', () => {
+  it('move: floor and height in the state; horizontally — the state is not touched', () => {
     const e = edits();
     moveInterior(e, types, LAYOUT, '10-base', [7, 182, 0], [1, 0, 0, 0]);
     expect(e.buildFile(INTERIORS)!.records.map((x) => x.stringId)).toEqual([LAYOUT]);
@@ -170,14 +170,14 @@ describe('интерьеры', () => {
     const st = e.record(INTERIORS, '10-base-S23')!;
     expect(st.ints.get('floornum')).toBe(1);
     expect(st.floats.get('player furniture Y offset')).toBe(181 + 46);
-    // Состояние — полной копией.
+    // State — as a full copy.
     expect(e.buildFile(INTERIORS)!.records.find((x) => x.stringId === '10-base-S23')!.strings.size).toBe(3);
     e.undo();
     e.undo();
     expect(e.buildFile(INTERIORS)?.records ?? []).toEqual([]);
   });
 
-  it('удаление: своё — стирается с состоянием, из ваниль — пометка «удалено»', () => {
+  it('deletion: own — erased with its state, from vanilla — marked "deleted"', () => {
     const e = edits();
     const r = placeInterior(e, types, LAYOUT, 'LOOT', [0, 183, 0], [1, 0, 0, 0]);
     removeInterior(e, LAYOUT, r.key);
@@ -190,7 +190,7 @@ describe('интерьеры', () => {
     expect(e.isDirty()).toBe(false);
   });
 
-  it('свой interiors.level мода дочитывается и правится поверх', () => {
+  it('the mod own interiors.level is read in and edited on top', () => {
     const mine: WorldFile = {
       layer: 'My Mod.mod',
       path: INTERIORS,

@@ -1,6 +1,6 @@
 /**
- * Маленькая «папка игры» во временном каталоге: четыре ванильных файла, fcs.def,
- * fcs_enums.def, русский gamedata.po и один установленный мод.
+ * A small "game folder" in a temp directory: four vanilla files, fcs.def,
+ * fcs_enums.def, a Russian gamedata.po and one installed mod.
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

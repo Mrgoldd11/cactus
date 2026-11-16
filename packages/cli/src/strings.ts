@@ -1,6 +1,6 @@
 /**
- * kedit strings — тексты мода для перевода: таблица со статусами, выгрузка в CSV/JSON/PO и
- * сборка мода-перевода из файла перевода.
+ * kedit strings — mod texts for translation: a table with statuses, export to CSV/JSON/PO and
+ * building a translation mod from a translation file.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename, extname, resolve } from 'node:path';
@@ -23,12 +23,12 @@ import type { Io } from './main.ts';
 import { UsageError, type Workspace } from './workspace.ts';
 
 export interface StringsOptions {
-  /** Мод-перевод, поверх которого смотреть статусы (путь или имя). */
+  /** Translation mod to view statuses on top of (path or name). */
   mod?: string;
   deps?: string[];
-  /** Файл выгрузки (.csv, .json, .po) или, с `import`, файл мода-перевода (.mod). */
+  /** Export file (.csv, .json, .po) or, with `import`, the translation mod file (.mod). */
   out?: string;
-  /** Файл перевода для сборки мода-перевода. */
+  /** Translation file for building the translation mod. */
   import?: string;
   name?: string;
   todo: boolean;
@@ -52,7 +52,7 @@ function checkOut(ws: Workspace, path: string, force: boolean): void {
   if (!force && isInGameFolders(ws.paths, path)) throw new UsageError({ en: `${path} is in the game folder; writing there needs --force`, ru: `${path} — в папке игры; запись туда только с --force` });
 }
 
-/** Контекст мода-перевода: ваниль → оригинал (и зависимости перевода) → перевод. */
+/** Translation mod context: vanilla → original (and translation dependencies) → translation. */
 function openTranslation(ws: Workspace, source: string, o: StringsOptions): { ctx: ModContext; source: string } {
   const name = o.name ?? (o.out !== undefined && o.import !== undefined ? basename(o.out) : `${source.slice(0, -4)} RUS.mod`);
   const open = (deps?: string[]): ModContext => {

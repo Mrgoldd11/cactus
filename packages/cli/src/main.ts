@@ -1,6 +1,6 @@
 /**
- * kedit — данные Kenshi из командной строки. Заменяет tools/kdata.py (find/show/tree/mod)
- * и добавляет refs, diff, validate, schema, build.
+ * kedit — Kenshi data from the command line. Replaces tools/kdata.py (find/show/tree/mod)
+ * and adds refs, diff, validate, schema, build.
  */
 import { parseArgs } from 'node:util';
 import {
@@ -271,7 +271,7 @@ class Command {
   /** Output language. */
   readonly lang: string;
   private ctxCache?: ModContext;
-  /** Файлы .mod, наложенные на ваниль (зависимости, затем мод) — для папок `leveldata`. */
+  /** .mod files overlaid on vanilla (dependencies, then the mod) — for the `leveldata` folders. */
   modFiles: string[] = [];
 
   constructor(io: Io, values: Values, args: string[], lang: string) {
@@ -284,7 +284,7 @@ class Command {
 
   get deps(): string[] | undefined {
     if (this.values.mods) {
-      // Моды игрока по порядку mods.cfg (кроме самого --mod).
+      // Player mods in mods.cfg order (except --mod itself).
       const own = this.values.mod !== undefined ? basename(this.values.mod).toLowerCase() : undefined;
       return readModsCfg(this.ws.paths).filter((n) => n.toLowerCase() !== own);
     }
@@ -296,7 +296,7 @@ class Command {
       .filter(Boolean);
   }
 
-  /** Контекст: ваниль → зависимости → мод из --mod (если задан). */
+  /** Context: vanilla → dependencies → the mod from --mod (if given). */
   ctx(): ModContext {
     if (this.ctxCache) return this.ctxCache;
     const deps = this.deps;
@@ -327,7 +327,7 @@ class Command {
     return rec;
   }
 
-  /** Строковый id по id или имени; при нескольких совпадениях — список и ошибка. */
+  /** String id by id or name; with several matches — a list and an error. */
   resolve(ctx: ModContext, spec: string, preferTypes?: readonly string[]): string {
     const found = lookupRecord(ctx, spec, preferTypes ? { preferTypes } : {});
     if (found.stringId !== undefined) return found.stringId;
@@ -339,7 +339,7 @@ class Command {
     throw new UsageError({ en: `“${spec}”: ${found.candidates.length} records match — pass an id from the list`, ru: `«${spec}»: подходит записей ${found.candidates.length} — укажите id из списка` });
   }
 
-  /** Страница строк (или объектов в --json). */
+  /** A page of lines (or objects with --json). */
   paged<T>(items: readonly T[], text: (item: T) => string[], json: (item: T) => unknown = (x) => x): void {
     const limit = int(this.values.limit, 'limit', 50);
     const p: Page<T> = page(items, int(this.values.offset, 'offset', 0), limit === 0 ? Infinity : limit);
@@ -405,9 +405,9 @@ const COMMANDS: Record<string, Handler> = {
   mod(c) {
     const path = c.ws.modPath(c.arg(0, c.t({ en: '<file.mod>', ru: '<файл.mod>' })));
     const q = c.args[1]?.toLowerCase();
-    // С игрой — статусы и имена целей ссылок; без неё — просто содержимое файла.
+    // With the game — statuses and reference target names; without it — just the file contents.
     const ctx = c.ws.hasGame ? c.ws.open({ mod: path, ...(c.deps ? { dependencies: c.deps } : {}) }).ctx : c.ws.openStandalone(path);
-    // Как kdata.py: подстрока в чём угодно из записи файла (не итоговой).
+    // Like kdata.py: a substring in anything of the file record (not the final one).
     const recs = ctx.modRecords().filter((r) => q === undefined || recordHaystack(ctx, r).includes(q));
     c.paged(
       recs,
@@ -541,7 +541,7 @@ const COMMANDS: Record<string, Handler> = {
     try {
       sid = c.resolve(vanilla.ctx, spec);
     } catch (e) {
-      // Записи нет в ванили — её могут создавать моды: ищем как есть.
+      // The record is not in vanilla — mods may create it: search as is.
       if (!(e instanceof NoRecordError)) throw e;
     }
     const { layers, broken } = loadModLayers(c.ws.paths, c.ws.vanilla(), { all: c.values.all ?? false });

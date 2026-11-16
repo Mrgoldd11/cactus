@@ -1,6 +1,6 @@
 /**
- * MCP-сервер: поиск, просмотр, проверка, правка и сохранение мода через ядро редактора.
- * Ответы — компактный текст: ссылки с именами целей, длинные списки страницами.
+ * MCP server: search, view, check, edit and save a mod through the editor core.
+ * Answers are compact text: references with target names, long lists in pages.
  */
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
@@ -74,7 +74,7 @@ function text(lines: readonly string[]): ToolResult {
   return { content: [{ type: 'text', text: lines.join('\n') }] };
 }
 
-/** Ошибки ядра и сессии — ответом с isError (модель их видит и может исправиться). */
+/** Core and session errors — as an answer with isError (the model sees them and can correct itself). */
 async function guarded(fn: () => string[] | Promise<string[]>): Promise<ToolResult> {
   try {
     return text(await fn());
@@ -96,7 +96,7 @@ function record(ctx: ModContext, sid: string): GameRecord {
   return rec;
 }
 
-/** Id записи по id или имени (англ. или рус.); если подходит несколько — ошибка со списком. */
+/** Record id by id or name (English or Russian); if several match — an error with a list. */
 function resolveId(ctx: ModContext, spec: string, preferTypes?: readonly string[]): string {
   const r = lookupRecord(ctx, spec, preferTypes ? { preferTypes } : {});
   if (r.stringId !== undefined) return r.stringId;
@@ -163,7 +163,7 @@ const editOp = z.discriminatedUnion('op', [
   z.object({ op: z.literal('removeAction'), id: z.string(), category: z.enum(['conditions', 'effects']), action: z.string() }),
 ]);
 
-/** Убрать ключи со значением undefined (exactOptionalPropertyTypes). */
+/** Remove keys with value undefined (exactOptionalPropertyTypes). */
 function compact<T extends object>(o: T): T {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
 }
@@ -172,7 +172,7 @@ const READ = { readOnlyHint: true, openWorldHint: false } as const;
 const EDIT = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 
 export function createServer(session: Session, opts: { game?: GameBridge } = {}): McpServer {
-  // Подключены к редактору — перед командой взять свежее состояние окна.
+  // Connected to the editor — take the fresh window state before the command.
   const run = (fn: () => string[] | Promise<string[]>): Promise<ToolResult> =>
     guarded(async () => {
       await session.sync();
@@ -867,7 +867,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
       }),
   );
 
-  // ------------------------------------------------------------------ ресурсы
+  // ------------------------------------------------------------------ resources
 
   const resourceText = (uri: URL, lines: readonly string[]): { contents: { uri: string; mimeType: string; text: string }[] } => ({
     contents: [{ uri: uri.href, mimeType: 'text/plain', text: lines.join('\n') }],

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// MCP-сервер по stdio. Node ≥ 22.18 запускает .ts без сборки (type stripping).
-// В stdout — только протокол; сообщения — в stderr.
+// MCP server over stdio. Node ≥ 22.18 runs .ts without a build step (type stripping).
+// stdout carries only the protocol; messages go to stderr.
 import { parseArgs } from 'node:util';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { defaultWorkshopDir, resolveGamePaths } from '@kenshi-editor/core/node';

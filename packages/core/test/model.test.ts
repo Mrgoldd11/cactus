@@ -1,7 +1,7 @@
 /**
- * Модель редактирования: наложение слоёв, разница «итог минус нижние слои», статусы,
- * команды с отменой/повтором, сохранение, поиск, проверка, деревья диалогов.
- * Всё на маленьких синтетических слоях, без файлов игры.
+ * Edit model: layer overlay, the diff "result minus lower layers", statuses,
+ * commands with undo/redo, saving, search, validation, dialogue trees.
+ * All on small synthetic layers, without game files.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -74,8 +74,8 @@ function file(records: GameRecord[], fileType: number = FileType.Mod, lastId = 0
 }
 
 /**
- * gamedata.base: бандит A с торговцами X, Y; предметы X, Y; запись D.
- * rebirth.mod: A переименован, money=20, ссылка на Y снята, добавлен Z; D удалена; новый Z.
+ * gamedata.base: bandit A with traders X, Y; items X, Y; record D.
+ * rebirth.mod: A renamed, money=20, reference to Y removed, Z added; D deleted; new Z.
  */
 function layers(): Layer[] {
   const base = file([
@@ -108,8 +108,8 @@ function newCtx(mod?: DataFile, modName = 'test.mod'): ModContext {
 
 const targets = (r: GameRecord | undefined, cat: string): string[] => (r?.refs.get(cat) ?? []).map((x) => x.target);
 
-describe('наложение слоёв', () => {
-  it('applyLayer: замена на месте, снятие, добавление в конец, удаление записи', () => {
+describe('layer overlay', () => {
+  it('applyLayer: replace in place, removal, append to the end, record deletion', () => {
     const [base, rebirth] = layers();
     const a = applyLayer(base!.file.records[0], rebirth!.file.records[0]!)!;
     expect(decodeText(a.name)).toBe('Bandit 2');
@@ -117,12 +117,12 @@ describe('наложение слоёв', () => {
     expect(a.bools.get('unique')).toBe(true);
     expect(a.refs.get('vendors')).toEqual([ref('X', 1), ref('Z', 5)]);
     expect(applyLayer(base!.file.records[3], rebirth!.file.records[1]!)).toBeUndefined();
-    // Новая запись: маркеры снятия ссылок ничего не значат.
+    // New record: reference removal markers mean nothing.
     const created = applyLayer(undefined, rec(ITEM, 'N', 'n', (r) => r.refs.set('c', [removedRef('X'), ref('Y')])))!;
     expect(created.refs.get('c')).toEqual([ref('Y')]);
   });
 
-  it('diffRecord: только изменения; снятые ссылки — маркером; лишнего не пишет', () => {
+  it('diffRecord: only changes; removed references — with a marker; writes nothing extra', () => {
     const lower = rec(CHAR, 'A', 'Bandit', (r) => {
       r.ints.set('money', 10).set('age', 3);
       r.refs.set('vendors', [ref('X', 1), ref('Y', 2)]);
@@ -138,12 +138,12 @@ describe('наложение слоёв', () => {
     expect([...d.floats]).toEqual([['speed', 1.5]]);
     expect(d.refs.get('vendors')).toEqual([ref('X', 9), removedRef('Y'), ref('W')]);
     expect(applyLayer(lower, d)!.refs.get('vendors')).toEqual([ref('X', 9), ref('W')]);
-    // Нельзя убрать скалярное поле нижних слоёв.
+    // A scalar field of the lower layers cannot be removed.
     const noAge = rec(CHAR, 'A', 'Bandit', (r) => r.ints.set('money', 10));
     expect(() => diffRecord(lower, noAge)).toThrow(LayerDiffError);
   });
 
-  it('diffRecord сохраняет порядок прежней записи мода', () => {
+  it('diffRecord keeps the order of the previous mod record', () => {
     const lower = rec(CHAR, 'A', 'n', (r) => r.ints.set('a', 1).set('b', 1));
     const prev = rec(CHAR, 'A', 'n', (r) => r.ints.set('b', 2).set('a', 2));
     const want = rec(CHAR, 'A', 'n', (r) => r.ints.set('a', 3).set('b', 3));
@@ -151,8 +151,8 @@ describe('наложение слоёв', () => {
   });
 });
 
-describe('контекст: чтение', () => {
-  it('итоговые записи, статусы, происхождение', () => {
+describe('context: reading', () => {
+  it('final records, statuses, origin', () => {
     const ctx = newCtx();
     expect(decodeText(ctx.get('A')!.name)).toBe('Bandit 2');
     expect(targets(ctx.get('A'), 'vendors')).toEqual(['X', 'Z']);
@@ -164,7 +164,7 @@ describe('контекст: чтение', () => {
     expect([...ctx.allStringIds()]).toEqual(['A', 'X', 'Y', 'D', 'Z']);
   });
 
-  it('индекс ссылок в обе стороны, обновляется при правках', () => {
+  it('reference index both ways, updated on edits', () => {
     const ctx = newCtx();
     expect(ctx.referencesFrom('A').map((e) => e.target)).toEqual(['X', 'Z']);
     expect(ctx.referencesTo('X').map((e) => e.source)).toEqual(['A']);
@@ -176,8 +176,8 @@ describe('контекст: чтение', () => {
   });
 });
 
-describe('контекст: команды и история', () => {
-  it('setField пишет только изменённое поле; undo/redo', () => {
+describe('context: commands and history', () => {
+  it('setField writes only the changed field; undo/redo', () => {
     const ctx = newCtx();
     ctx.setField('A', 'ints', 'money', 99);
     expect(ctx.status('A')).toBe('changed');
@@ -191,12 +191,12 @@ describe('контекст: команды и история', () => {
     expect(ctx.dirty).toBe(false);
     ctx.redo();
     expect(ctx.get('A')!.ints.get('money')).toBe(99);
-    // Значение как в нижних слоях — запись уходит из мода.
+    // Value as in the lower layers — the record leaves the mod.
     ctx.setField('A', 'ints', 'money', 20);
     expect(ctx.delta('A')).toBeUndefined();
   });
 
-  it('createRecord выдаёт id из lastId, отмена возвращает lastId', () => {
+  it('createRecord gives an id from lastId, undo restores lastId', () => {
     const ctx = newCtx();
     const sid = ctx.createRecord(ITEM, 'Новый');
     expect(sid).toBe('1-test.mod');
@@ -209,7 +209,7 @@ describe('контекст: команды и история', () => {
     expect(() => ctx.createRecord(ITEM, 'x', { stringId: 'A' })).toThrow(/already exists/);
   });
 
-  it('duplicateRecord копирует итоговую запись', () => {
+  it('duplicateRecord copies the final record', () => {
     const ctx = newCtx();
     const sid = ctx.duplicateRecord('A', { name: 'Клон' });
     const c = ctx.get(sid)!;
@@ -218,7 +218,7 @@ describe('контекст: команды и история', () => {
     expect(targets(c, 'vendors')).toEqual(['X', 'Z']);
   });
 
-  it('удаление: маркер для записи нижних слоёв, восстановление, удаление ссылок', () => {
+  it('deletion: marker for a lower-layer record, restore, reference removal', () => {
     const ctx = newCtx();
     ctx.deleteRecord('X', { removeReferences: true });
     expect(ctx.status('X')).toBe('deleted');
@@ -233,13 +233,13 @@ describe('контекст: команды и история', () => {
     ctx.redo();
     ctx.restoreRecord('X');
     expect(ctx.status('X')).toBe('base');
-    // Новая запись удаляется из мода совсем.
+    // A new record is removed from the mod entirely.
     const n = ctx.createRecord(ITEM, 'n');
     ctx.deleteRecord(n);
     expect(ctx.delta(n)).toBeUndefined();
   });
 
-  it('ссылки: добавить, поменять значения, снять ссылку нижних слоёв', () => {
+  it('references: add, change values, remove a lower-layer reference', () => {
     const ctx = newCtx();
     ctx.addReference('A', 'vendors', 'Y', [3, 0, 0]);
     ctx.addReference('A', 'vendors', 'X', [7]);
@@ -249,7 +249,7 @@ describe('контекст: команды и история', () => {
     expect(ctx.delta('A')!.refs.get('vendors')![1]!.v0).toBe(REMOVED_REF_VALUE);
   });
 
-  it('транзакция: одна отмена, откат при исключении', () => {
+  it('transaction: one undo, rollback on exception', () => {
     const ctx = newCtx();
     ctx.transaction('две правки', () => {
       ctx.setField('A', 'ints', 'money', 1);
@@ -271,7 +271,7 @@ describe('контекст: команды и история', () => {
     expect(ctx.canRedo).toBe(false);
   });
 
-  it('подписка получает изменённые id', () => {
+  it('a subscription gets the changed ids', () => {
     const ctx = newCtx();
     const seen: string[][] = [];
     const off = ctx.subscribe((e) => seen.push(e.stringIds));
@@ -282,7 +282,7 @@ describe('контекст: команды и история', () => {
     expect(seen).toEqual([['A'], ['A']]);
   });
 
-  it('changeStringIds меняет id местами и переписывает ссылки', () => {
+  it('changeStringIds swaps ids and rewrites references', () => {
     const ctx = newCtx();
     const p = ctx.createRecord(ITEM, 'P');
     const q = ctx.createRecord(ITEM, 'Q');
@@ -297,7 +297,7 @@ describe('контекст: команды и история', () => {
     expect(targets(ctx.get(p), 'next')).toEqual([q]);
   });
 
-  it('diff правки читается', () => {
+  it('an edit diff is readable', () => {
     const ctx = newCtx();
     ctx.setField('A', 'ints', 'money', 5);
     const cs = ctx.history().undo[0]!;
@@ -309,8 +309,8 @@ describe('контекст: команды и история', () => {
   });
 });
 
-describe('сохранение', () => {
-  it('пишет только изменения; файл читается обратно в тот же итог', () => {
+describe('saving', () => {
+  it('writes only changes; the file reads back into the same result', () => {
     const ctx = newCtx();
     const n = ctx.createRecord(ITEM, 'Новый');
     ctx.setField(n, 'floats', 'weight', 2.5);
@@ -325,7 +325,7 @@ describe('сохранение', () => {
     expect(back.status('Y')).toBe('deleted');
   });
 
-  it('нетронутый мод пишется байт в байт; правка одной записи не трогает другие', () => {
+  it('an untouched mod is written byte for byte; editing one record does not touch others', () => {
     const first = newCtx();
     first.createRecord(ITEM, 'один');
     first.setField('A', 'ints', 'money', 1);
@@ -338,7 +338,7 @@ describe('сохранение', () => {
     expect(diff.map((d) => d.stringId)).toEqual(['A']);
   });
 
-  it('формат 17: номер сохранения в флагах, markSaved', () => {
+  it('format 17: save number in the flags, markSaved', () => {
     const ctx = newCtx();
     ctx.setModInfo({ fileType: FileType.MergeMod });
     const n = ctx.createRecord(ITEM, 'x');
@@ -350,15 +350,15 @@ describe('сохранение', () => {
     ctx.setField(n, 'ints', 'v', 1);
     const next = ctx.buildModFile();
     expect(next.header!.merge!.saveCount).toBe(2);
-    // Изменилась только новая запись — у второй прежние флаги.
+    // Only the new record changed — the second one keeps its old flags.
     expect(next.records.map((r) => r.changeFlags)).toEqual([(2 << 4) | 0, (1 << 4) | 1]);
     const back = readDataFile(writeDataFile(next));
     expect(back.fileType).toBe(FileType.MergeMod);
   });
 });
 
-describe('поиск', () => {
-  it('по имени, типу, полям, статусу', () => {
+describe('search', () => {
+  it('by name, type, fields, status', () => {
     const ctx = newCtx();
     ctx.setField('X', 'ints', 'value', 100);
     const ids = (q: Parameters<typeof searchRecords>[1]): string[] => searchRecords(ctx, q).map((h) => h.stringId);
@@ -375,12 +375,12 @@ describe('поиск', () => {
   });
 });
 
-describe('проверка', () => {
+describe('validation', () => {
   const schema = buildGameSchema(
     parseFcsDef(['[CHARACTER]', 'general:', 'money: 0', 'unique: False', 'vendors: ITEM (1,0,0)', ''].join('\n')),
   );
 
-  it('битые ссылки, удалённые цели, поля вне схемы, не тот вид и тип цели', () => {
+  it('broken references, deleted targets, fields outside the schema, wrong kind and target type', () => {
     const ctx = new ModContext({ layers: layers(), modName: 'test.mod', schema });
     ctx.addReference('A', 'vendors', 'nowhere');
     ctx.deleteRecord('X');
@@ -394,15 +394,15 @@ describe('проверка', () => {
     expect(ctx.refDefaults('A', 'vendors')).toEqual([1, 0, 0]);
   });
 
-  it('чистый мод — без замечаний', () => {
+  it('a clean mod — no remarks', () => {
     const ctx = new ModContext({ layers: layers(), modName: 'test.mod', schema });
     ctx.setField('A', 'ints', 'money', 5);
     expect(validateMod(ctx)).toEqual([]);
   });
 });
 
-describe('деревья диалогов и представление', () => {
-  it('дерево с циклом: повтор не разворачивается', () => {
+describe('dialogue trees and presentation', () => {
+  it('tree with a cycle: a repeat is not expanded', () => {
     const ctx = newCtx();
     const dlg = ctx.createRecord(DIALOGUE, 'talk');
     const l1 = ctx.createRecord(LINE, 'DIALOGUE_LINE');
@@ -424,14 +424,14 @@ describe('деревья диалогов и представление', () => 
     expect(buildDialogueTree(ctx, dlg, { maxDepth: 1 }).children[0]!.truncated).toBe(true);
   });
 
-  it('запись текстом: ссылки с именами', () => {
+  it('record as text: references with names', () => {
     const ctx = newCtx();
     const text = formatRecord(ctx, ctx.get('A')!).join('\n');
     expect(text).toContain('Sword [X]');
     expect(text).toContain('money');
   });
 
-  it('разница состояний, float, страницы', () => {
+  it('state diff, float, pages', () => {
     const a = rec(CHAR, 'A', 'n', (r) => r.refs.set('c', [ref('X'), ref('Y')]));
     const c = rec(CHAR, 'A', 'n', (r) => r.refs.set('c', [ref('Y'), ref('X')]));
     expect(diffRecordStates(a, c)!.fields.map((f) => f.kind)).toEqual(['refOrder']);
@@ -443,8 +443,8 @@ describe('деревья диалогов и представление', () => 
   });
 });
 
-describe('правки данными (applyOps)', () => {
-  it('псевдонимы, виды полей, одна отмена на весь список', () => {
+describe('data edits (applyOps)', () => {
+  it('aliases, field kinds, one undo for the whole list', () => {
     const ctx = newCtx();
     const r = applyOps(ctx, [
       { op: 'create', type: 'ITEM', name: 'Кирка', as: '$pick' },
@@ -469,7 +469,7 @@ describe('правки данными (applyOps)', () => {
     expect(ctx.dirty).toBe(false);
   });
 
-  it('ошибка в середине откатывает всё', () => {
+  it('an error in the middle rolls everything back', () => {
     const ctx = newCtx();
     expect(() =>
       applyOps(ctx, [
@@ -484,8 +484,8 @@ describe('правки данными (applyOps)', () => {
   });
 });
 
-describe('схема текстом и запись в JSON', () => {
-  it('типы, поля с описаниями, перечисления', () => {
+describe('schema as text and record to JSON', () => {
+  it('types, fields with descriptions, enums', () => {
     const schema = parseGameSchema({
       fcsDef: ['[CHARACTER]', 'general:', 'money: 0 "Деньги\\nв кошельке"', 'mood: Mood.CALM', 'vendors: ITEM (1,0,0)', ''].join('\n'),
       fcsEnums: ['enum Mood', '{', '  CALM, // спокоен', '  ANGRY', '}', ''].join('\n'),
@@ -502,7 +502,7 @@ describe('схема текстом и запись в JSON', () => {
     expect(formatEnum(schema, 'Nope')).toBeUndefined();
   });
 
-  it('recordToJson: поля по видам, ссылки с именами, статус', () => {
+  it('recordToJson: fields by kind, references with names, status', () => {
     const ctx = newCtx();
     ctx.setField('A', 'ints', 'money', 7);
     const j = recordToJson(ctx, ctx.get('A')!);

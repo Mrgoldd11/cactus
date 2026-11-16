@@ -1,5 +1,5 @@
 /**
- * История правок: понятные названия шагов (ru/en) и переход к любому шагу одним действием.
+ * Edit history: clear step names (ru/en) and jumping to any step in one action.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -57,8 +57,8 @@ function base(): DataFile {
 const ctxOf = (): ModContext => new ModContext({ layers: [{ name: 'gamedata.base', file: base() }], modName: 'Test.mod' });
 const last = (ctx: ModContext) => describeChangeset(ctx, ctx.history().undo.at(-1)!);
 
-describe('названия шагов истории', () => {
-  it('реплики, связи, текст — по-человечески на двух языках', () => {
+describe('history step names', () => {
+  it('lines, links, text — in plain words in two languages', () => {
     const ctx = ctxOf();
     const a = addLine(ctx, 'L', { speaker: 1, text: 'Who are you?' });
     expect(last(ctx)).toMatchObject({ text: { ru: 'Добавлен ответ игрока „Who are you?“', en: 'Added player answer „Who are you?“' }, ai: false });
@@ -75,7 +75,7 @@ describe('названия шагов истории', () => {
     expect(last(ctx).text.ru).toMatch(/^Удален/);
   });
 
-  it('поля записи, ИИ, откат, своя метка', () => {
+  it('record fields, AI, revert, custom label', () => {
     const ctx = ctxOf();
     ctx.editRecord('K', (d) => d.ints.set('damage', 20));
     expect(last(ctx)).toMatchObject({ text: { ru: 'Изменено «damage» у «Katana» → 20', en: 'Changed “damage” on “Katana” → 20' } });
@@ -91,8 +91,8 @@ describe('названия шагов истории', () => {
   });
 });
 
-describe('переход к шагу истории', () => {
-  it('3 правки → к первой: две отменены, повтор до последней возвращает', () => {
+describe('jump to a history step', () => {
+  it('3 edits → to the first: two undone, redo to the last brings them back', () => {
     const ctx = ctxOf();
     for (const v of [1, 2, 3]) ctx.editRecord('K', (d) => d.ints.set('damage', v));
     const [s1, , s3] = ctx.history().undo;

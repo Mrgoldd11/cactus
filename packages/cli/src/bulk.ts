@@ -1,7 +1,7 @@
 /**
- * `kedit bulk` — массовая правка: записи типа по условиям → задать / умножить / прибавить /
- * заменить текст. По умолчанию только предпросмотр «было → станет»; запись — с `--apply`
- * (в `--out` или в сам `--mod`). В мастерскую не пишем никогда, в папку игры — с `--force`.
+ * `kedit bulk` — bulk edit: records of a type by conditions → set / multiply / add /
+ * replace text. By default only a "was → will be" preview; writing — with `--apply`
+ * (into `--out` or the `--mod` itself). Never writes into the Workshop, into the game folder — with `--force`.
  */
 import { basename, resolve } from 'node:path';
 import { applyBulk, formatBulkPreview, previewBulk, validateMod, type BulkKind, type BulkOperation, type FieldFilter, type ModContext } from '@kenshi-editor/core';
@@ -27,7 +27,7 @@ export interface BulkRequest {
   force: boolean;
 }
 
-/** `ПОЛЕ=ЗНАЧЕНИЕ` → [поле, значение]. */
+/** `FIELD=VALUE` → [field, value]. */
 function fieldValue(spec: string, flag: string): [string, string] {
   const i = spec.indexOf('=');
   if (i <= 0) throw new UsageError({ en: `--${flag}: FIELD=VALUE expected, not “${spec}”`, ru: `--${flag}: нужно ПОЛЕ=ЗНАЧЕНИЕ, а не «${spec}»` });

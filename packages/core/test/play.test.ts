@@ -1,6 +1,6 @@
 /**
- * Этап 3, проигрыватель разговора: выбор диалога и реплик по правилу игры, ответы игрока,
- * «как будто», выбор среди равных.
+ * Stage 3, conversation player: picking the dialogue and lines by the game rule, player answers,
+ * "as if", picking among equals.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -35,9 +35,9 @@ const line = (sid: string, speaker: number, text: string, o: { kids?: string[]; 
   });
 
 /**
- * Персонаж C, пакет PK на событие 1: DA (без условий) и DB (с условием → +1 очко).
- * DA → E (пустой узел) → LA «hi» → A1 (ответ) → LN «ok»; A2 (ответ с условием); `mixed` — ещё LM (NPC).
- * С `tie` — ещё DT без условий: с DA поровну.
+ * Character C, package PK on event 1: DA (no conditions) and DB (with a condition → +1 point).
+ * DA → E (empty node) → LA "hi" → A1 (answer) → LN "ok"; A2 (answer with a condition); `mixed` — also LM (NPC).
+ * With `tie` — also DT without conditions: equal with DA.
  */
 function ctxOf(o: { tie?: boolean; mixed?: boolean } = {}): ModContext {
   const records = [
@@ -63,11 +63,11 @@ function ctxOf(o: { tie?: boolean; mixed?: boolean } = {}): ModContext {
   return new ModContext({ layers: [{ name: 'gamedata.base', file }], modName: 'Test.mod' });
 }
 
-/** Расклад «только записи без условий». */
+/** The "only records without conditions" setup. */
 const N = { mode: 'none' } as const;
 
-describe('проигрыватель разговора', () => {
-  it('по умолчанию условия считаются выполненными: диалог с условием (+1) выбран, ответ с условием показан', () => {
+describe('conversation player', () => {
+  it('by default conditions count as met: the dialogue with a condition (+1) is picked, the answer with a condition is shown', () => {
     const s = playConversation(ctxOf(), 'C').steps[0]!;
     expect(s.options.map((o) => [o.sid, o.why])).toEqual([
       ['DB', 'chosen'],
@@ -78,7 +78,7 @@ describe('проигрыватель разговора', () => {
     expect(a.answers.every((x) => x.shown)).toBe(true);
   });
 
-  it('начало: диалог с условием не проходит, выбран диалог без условий, пустой узел пройден', () => {
+  it('start: the dialogue with a condition fails, the dialogue without conditions is picked, the empty node is passed', () => {
     const p = playConversation(ctxOf(), 'C', N);
     const s = p.steps[0]!;
     expect(s.options.map((o) => [o.sid, o.why, o.passes])).toEqual([
@@ -95,7 +95,7 @@ describe('проигрыватель разговора', () => {
     expect(p.waiting).toBe(true);
   });
 
-  it('ответ игрока ведёт дальше; скрытый ответ не принимается; «как будто» его показывает', () => {
+  it('a player answer leads on; a hidden answer is not accepted; "as if" shows it', () => {
     const ctx = ctxOf();
     const p = playConversation(ctx, 'C', { ...N, answers: ['A1'] });
     expect(p.steps).toHaveLength(2);
@@ -110,7 +110,7 @@ describe('проигрыватель разговора', () => {
     expect(q.steps[1]!.end).toBe('nothing-next');
   });
 
-  it('«как будто условия выполнены»: диалог с условием получает +1 и перебивает', () => {
+  it('"as if conditions are met": the dialogue with a condition gets +1 and outscores', () => {
     const p = playConversation(ctxOf(), 'C', { ...N, assume: new Map([['DB', true]]) });
     const s = p.steps[0]!;
     expect(s.options.map((o) => [o.sid, o.why])).toEqual([
@@ -118,18 +118,18 @@ describe('проигрыватель разговора', () => {
       ['DA', 'outscored'],
     ]);
     expect(s.said).toBe('LB');
-    // Диалог подходит, но его реплика — нет: игра его пропускает, причина — «внутри ничего не подходит».
+    // The dialogue fits, but its line does not: the game skips it, the reason is "nothing inside fits".
     const inner = playConversation(ctxOf(), 'C', { ...N, assume: new Map([['DB', true], ['LB', false]]) }).steps[0]!;
     expect(inner.options.map((o) => [o.sid, o.why])).toEqual([
       ['DB', 'empty'],
       ['DA', 'chosen'],
     ]);
-    // И наоборот: «как будто не выполнены» для записи без условий.
+    // And the other way round: "as if not met" for a record without conditions.
     const none = playConversation(ctxOf(), 'C', { ...N, assume: new Map([['DA', false]]) });
     expect(none.steps[0]!.end).toBe('nothing-fits');
   });
 
-  it('равные очки: случайно поровну, по умолчанию первый в порядке игры, можно взять другой', () => {
+  it('equal scores: random, equal odds, by default the first in game order, another can be taken', () => {
     const ctx = ctxOf({ tie: true });
     const s = playConversation(ctx, 'C', N).steps[0]!;
     expect(s.options.filter((o) => o.odds > 0).map((o) => [o.sid, o.why, o.odds])).toEqual([
@@ -141,7 +141,7 @@ describe('проигрыватель разговора', () => {
     expect(t.end).toBe('nothing-next');
   });
 
-  it('смешанная ветка: ответы и ход «NPC продолжает сам»', () => {
+  it('mixed branch: answers and the "NPC continues on its own" move', () => {
     const ctx = ctxOf({ mixed: true });
     const p = playConversation(ctx, 'C', N);
     expect(p.steps[0]!.npcToo).toBe(true);

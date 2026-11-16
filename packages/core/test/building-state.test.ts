@@ -1,6 +1,6 @@
 /**
- * Состояние нового здания: готовое (`is complete`), материалы как в записи здания,
- * не здание — состояний нет.
+ * State of a new building: finished (`is complete`), materials as in the building record,
+ * not a building — no states.
  */
 import { describe, expect, it } from 'vitest';
 import { buildingStateId, emptyRecord, encodeText, itemTypeId, itemTypeName, newBuildingState, newBuildingStates } from '../src/index.ts';
@@ -11,8 +11,8 @@ function building(fill: (r: ReturnType<typeof emptyRecord>) => void = () => unde
   return r;
 }
 
-describe('состояние нового здания', () => {
-  it('готовое, материалы из ссылок construction, высота в мире', () => {
+describe('new building state', () => {
+  it('finished, materials from construction references, world height', () => {
     const rec = building((r) => {
       r.refs.set('construction', [
         { target: 'A', v0: 300, v1: 0, v2: 0 },
@@ -30,13 +30,13 @@ describe('состояние нового здания', () => {
     expect(st.ints.get('version')).toBe(270);
   });
 
-  it('без ссылок construction — build materials', () => {
+  it('no construction references — build materials', () => {
     const st = newBuildingState(building((r) => r.ints.set('build materials', 40)), 'k-S23', 0);
     expect(st.floats.get('0construction mats')).toBe(40);
     expect(st.floats.get('construction progress')).toBe(40);
   });
 
-  it('состояния только у зданий', () => {
+  it('states only for buildings', () => {
     expect(newBuildingStates(undefined, 0)).toBeUndefined();
     expect(newBuildingStates(emptyRecord(itemTypeId('ITEM')!, 'i', encodeText('i')), 0)).toBeUndefined();
     const make = newBuildingStates(building(), 3)!;

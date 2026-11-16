@@ -1,13 +1,13 @@
 /**
- * Ваниль так, как её видел tools/kdata.py (`base()`): записи четырёх файлов сливаются в одну,
- * а не накладываются слоями. Нужна, чтобы собрать мод байт в байт как Python-сборщик.
+ * Vanilla as tools/kdata.py saw it (`base()`): records of the four files are merged into one
+ * instead of being overlaid as layers. Needed to build the mod byte for byte like the Python builder.
  *
- * Отличия от настоящего наложения слоёв (ModContext):
- * - имя и тип — из первого файла, где запись встретилась (переименования ниже не видны);
- * - bool/float/int/str — `dict.update` по порядку файлов (новые ключи в конец);
- * - ссылки — дописываются в конец категории, с повторами и маркерами удаления как есть;
- * - vec3/vec4/file и объекты — только из первого файла;
- * - маркер удаления записи (REMOVED) — просто ещё одно bool-поле.
+ * Differences from a real layer overlay (ModContext):
+ * - name and type come from the first file where the record appears (renames below are not seen);
+ * - bool/float/int/str — `dict.update` in file order (new keys at the end);
+ * - references are appended to the end of the category, with repeats and deletion markers as is;
+ * - vec3/vec4/file and instances — only from the first file;
+ * - the record deletion marker (REMOVED) is just another bool field.
  */
 import { cloneRecord, FileType, type GameRecord, type Layer } from '@kenshi-editor/core';
 
@@ -37,7 +37,7 @@ export function kdataMerge(layers: readonly Layer[]): Map<string, GameRecord> {
   return all;
 }
 
-/** Слитая ваниль одним слоем (под ним мод получает разницу ровно с тем, что видел kdata.py). */
+/** Merged vanilla as one layer (on top of it the mod gets a diff against exactly what kdata.py saw). */
 export function kdataLayer(merged: ReadonlyMap<string, GameRecord>): Layer {
   return { name: 'vanilla (kdata.py)', file: { fileType: FileType.Mod, lastId: 0, records: [...merged.values()], tail: new Uint8Array() } };
 }

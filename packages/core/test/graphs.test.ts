@@ -1,7 +1,7 @@
 /**
- * Графы этапа 5: исследования (требования, цена, что открывает, чертежи), станки крафта
- * (что делают и из чего), состав отрядов и городов (кто, сколько, шанс, жители фракции) и
- * правка значений ссылки одной отменой с сохранением только разницы.
+ * Stage 5 graphs: research (requirements, cost, what it unlocks, blueprints), crafting benches
+ * (what they make and from what), squad and town makeup (who, how many, chance, faction residents) and
+ * editing reference values as one undo, saving only the diff.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -91,8 +91,8 @@ function make(): ModContext {
   });
 }
 
-describe('графы этапа 5', () => {
-  it('исследования: требования, цена, что открывает, чертёж и где он продаётся', () => {
+describe('stage 5 graphs', () => {
+  it('research: requirements, cost, what it unlocks, blueprint and where it is sold', () => {
     const g = researchGraph(make());
     expect(g.nodes.map((n) => n.sid)).toEqual(['r1', 'r2']);
     expect(g.categories).toEqual(['Core', 'Crafting']);
@@ -107,7 +107,7 @@ describe('графы этапа 5', () => {
     expect(r2!.soldBy.map((v) => v.sid)).toEqual(['v1']);
   });
 
-  it('крафт: станок → вещи → ингредиенты; здания без производства не входят', () => {
+  it('crafting: bench → items → ingredients; buildings without production are left out', () => {
     const ctx = make();
     const st = craftingStations(ctx);
     expect(st.map((s) => s.sid)).toEqual(['bench']);
@@ -123,7 +123,7 @@ describe('графы этапа 5', () => {
     ]);
   });
 
-  it('отряд: кто, сколько, шанс, торговец; город: жители, бар и жители фракции', () => {
+  it('squad: who, how many, chance, trader; town: residents, bar and faction residents', () => {
     const ctx = make();
     const q = squadComposition(ctx, 'sq')!;
     expect(q.trader).toBe(true);
@@ -144,12 +144,12 @@ describe('графы этапа 5', () => {
       ['faction residents', 'pol', 3, 1, undefined, 'fac'],
       ['bar squads', 'bar', 1, undefined, 50, 'town'],
     ]);
-    // «residents override»: свои жители заменяют жителей фракции.
+    // "residents override": own residents replace the faction residents.
     ctx.setField('town', 'bools', 'residents override', true);
     expect(townComposition(ctx, 'town')!.usesFaction).toBe(false);
   });
 
-  it('правка значений ссылки: одна отмена, место в списке, в моде только разница', () => {
+  it('editing reference values: one undo, place in the list, only the diff in the mod', () => {
     const ctx = make();
     const l = squadComposition(ctx, 'sq')!.members[1]!.link;
     setLinkValues(ctx, l, [3, 6]);
@@ -159,7 +159,7 @@ describe('графы этапа 5', () => {
     const saved = readDataFile(writeDataFile(ctx.buildModFile()));
     expect(saved.records.map((r) => r.stringId)).toEqual(['sq']);
     expect([...saved.records[0]!.refs.keys()]).toEqual(['squad']);
-    // Без изменений — нет шага; чужой ссылки нет — ошибка.
+    // No changes — no step; no such reference — error.
     setLinkValues(ctx, l, [3, 6]);
     expect(ctx.history().undo).toHaveLength(1);
     expect(() => {

@@ -5,7 +5,7 @@ export default defineProject({
     name: 'mcp',
     include: ['test/**/*.test.ts'],
     exclude: ['test/**/*.game.test.ts'],
-    // Сервер и клиент в памяти; при холодном старте импорт SDK и ядра бывает дольше 5 с.
+    // Server and client in memory; on a cold start importing the SDK and the core can take longer than 5 s.
     testTimeout: 30_000,
   },
 });

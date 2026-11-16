@@ -1,6 +1,6 @@
 /**
- * Состояние сервера: пути к игре, ванильные слои (читаются один раз) и открытый мод.
- * Пока мод не открыт, команды работают по ванили (контекст нового пустого мода).
+ * Server state: game paths, vanilla layers (read once) and the open mod.
+ * While no mod is open, commands work on vanilla (the context of a new empty mod).
  */
 import { basename, dirname, join, resolve } from 'node:path';
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
@@ -43,9 +43,9 @@ export class SessionError extends Error {
 }
 
 export interface OpenRequest {
-  /** Путь к .mod или имя установленного мода; если файла нет — новый мод с этим путём. */
+  /** Path to a .mod or an installed mod name; if the file does not exist — a new mod with this path. */
   mod?: string;
-  /** Имя файла нового мода (`Мой мод.mod`), если `mod` не задан. */
+  /** File name of a new mod (`My mod.mod`) if `mod` is not given. */
   name?: string;
   dependencies?: string[];
 }
@@ -59,7 +59,7 @@ export interface OpenResult {
   extensions: FoundExtension[];
 }
 
-/** Файлы .mod, чьи `leveldata` накладываются на ваниль: зависимости, затем сам мод. */
+/** .mod files whose `leveldata` is overlaid on vanilla: dependencies, then the mod itself. */
 function worldModFiles(cur: OpenResult | undefined): string[] {
   return [...(cur?.dependencyPaths ?? []), ...(cur?.path !== undefined ? [cur.path] : [])];
 }
@@ -74,14 +74,14 @@ export class Session {
   private translationCache?: TranslationIndex | null;
   private current?: OpenResult;
   private worldCache?: { key: string; world: WorldIndex };
-  /** Правки мира открытого мода (сдвиг, поворот, новые и удалённые объекты) и мир с ними. */
+  /** World edits of the open mod (move, rotation, new and deleted objects) and the world with them. */
   private editsCache?: { owner: OpenResult; edits: WorldEdits; version: number; index?: { version: number; world: WorldIndex } };
   private heightmap?: Promise<Heightmap>;
   private live?: { client: LiveClient; state: LiveState; synced?: { session: number; version: number } };
-  /** Решения слияния открытого мода (читаются из файла-спутника при первом обращении). */
+  /** Merge decisions of the open mod (read from the sidecar file on first access). */
   private ledgerCache?: { owner: OpenResult; ledger: MergeLedger };
   private readonly depCache = new Map<string, Layer>();
-  /** Разобранные моды игрока для конфликтов: путь → размер/время и файл. */
+  /** Parsed player mods for conflicts: path → size/time and file. */
   private readonly modFileCache = new Map<string, { stamp: string; file: DataFile }>();
 
   /** `dataLocale`: a locale code or `none`; default — KENSHI_DATA_LOCALE, then the game's settings.cfg. */
@@ -123,7 +123,7 @@ export class Session {
     return this.current;
   }
 
-  /** Открытый мод; если ничего не открыто — новый пустой мод поверх ванили. */
+  /** The open mod; if nothing is open — a new empty mod on top of vanilla. */
   ctx(): ModContext {
     return (this.current ??= this.load({})).ctx;
   }
@@ -151,8 +151,8 @@ export class Session {
   }
 
   /**
-   * Мир (города, здания, экземпляры в зонах) ванили и папок `leveldata` зависимостей и
-   * открытого мода. Читается один раз на набор модов (~1–2 с).
+   * The world (towns, buildings, instances in zones) of vanilla and the `leveldata` folders of the dependencies and
+   * the open mod. Read once per set of mods (~1–2 s).
    */
   world(): WorldIndex {
     const cur = this.current;
@@ -168,8 +168,8 @@ export class Session {
   }
 
   /**
-   * Правки мира открытого мода: свои шаги отмены (не путаются с правками записей). Файлы уровня
-   * читаются при первом обращении. С подключённым редактором мир правят в его окне.
+   * World edits of the open mod: their own undo steps (not mixed with record edits). Level files
+   * are read on first access. With the editor connected, the world is edited in its window.
    */
   worldEdits(): WorldEdits {
     if (this.live) throw new SessionError('Connected to the editor: world objects are moved in the editor window (the World panel). connect_editor with disconnect: true edits the mod file directly');
@@ -189,8 +189,8 @@ export class Session {
   }
 
   /**
-   * Правки мира с дочитанными интерьерами (`interiors.level` ванили, зависимостей и мода): тот
-   * же объект и та же история отмены, что у `worldEdits`.
+   * World edits with interiors read in (`interiors.level` of vanilla, dependencies and the mod): the
+   * same object and the same undo history as `worldEdits`.
    */
   interiorEdits(): WorldEdits {
     const edits = this.worldEdits();
@@ -201,13 +201,13 @@ export class Session {
     return edits;
   }
 
-  /** Есть ли несохранённые правки мира открытого мода. */
+  /** Whether the open mod has unsaved world edits. */
   worldDirty(): boolean {
     const e = this.editsCache;
     return e !== undefined && e.owner === this.current && e.edits.isDirty();
   }
 
-  /** Высота земли в точках мира (карта высот игры); undefined — карты нет. */
+  /** Ground height at world points (the game heightmap); undefined — no map. */
   async groundAt(points: readonly { x: number; z: number }[]): Promise<number[] | undefined> {
     const path = heightmapPath(this.paths.kenshi);
     if (!existsSync(path)) return undefined;
@@ -216,9 +216,9 @@ export class Session {
   }
 
   /**
-   * Слои для конфликтов: ваниль, моды из `mods.cfg` (с `all` — все установленные) и открытый
-   * мод (его записи как есть сейчас, с несохранёнными правками) на его месте или последним.
-   * Файлы модов читаются один раз, пока не изменились. Только чтение.
+   * Layers for conflicts: vanilla, mods from `mods.cfg` (with `all` — all installed) and the open
+   * mod (its records as they are now, with unsaved edits) in its place or last.
+   * Mod files are read once, until they change. Read only.
    */
   modLayers(all: boolean): ModLayers & { opened?: string } {
     const read = (path: string): DataFile => {
@@ -240,7 +240,7 @@ export class Session {
     return { ...r, ...(opened !== undefined ? { opened } : {}) };
   }
 
-  /** Решения слияния открытого мода; записываются в файл-спутник вместе с сохранением мода. */
+  /** Merge decisions of the open mod; written into the sidecar file together with saving the mod. */
   mergeLedger(): MergeLedger {
     this.ctx();
     const cur = this.current!;
@@ -248,7 +248,7 @@ export class Session {
     return this.ledgerCache.ledger;
   }
 
-  /** Мод-источник слияния по имени установленного мода или пути. */
+  /** Merge source mod by installed mod name or path. */
   mergeSource(spec: string, levels: boolean): { source: MergeSource; path: string; levelData?: LevelDataInfo } {
     const path = resolveModPath(this.paths, spec, this.cwd);
     if (!path) throw new SessionError(`Source mod not found: ${spec}`);
@@ -256,7 +256,7 @@ export class Session {
     return { source: readMergeSource(path), path, ...(levelData ? { levelData } : {}) };
   }
 
-  /** Записать мод. Без пути — туда, откуда открыт. В папку игры — только с `force`. */
+  /** Write the mod. Without a path — to where it was opened from. Into the game folder — only with `force`. */
   save(path: string | undefined, force: boolean): { path: string; records: number; mergeStore?: string; world?: string[] } {
     if (this.live) throw new SessionError('Connected to the editor: the user saves in the window (Ctrl+S)');
     const cur = this.current;
@@ -272,14 +272,14 @@ export class Session {
     const file = saveModContext(cur.ctx, target);
     const world = this.saveWorld(cur, target);
     cur.path ??= target;
-    // Слияние: «слито» и «отклонено» становятся постоянными, файл-спутник рядом с модом.
+    // Merge: "merged" and "rejected" become permanent, the sidecar file goes next to the mod.
     const mergeStore = this.ledgerCache?.owner === cur ? saveMergeLedger(cur.ctx, this.ledgerCache.ledger, target) : undefined;
     return { path: target, records: file.records.length, ...(mergeStore !== undefined ? { mergeStore } : {}), ...(world.length ? { world } : {}) };
   }
 
   /**
-   * Файлы уровня мода — в `leveldata` рядом с .mod: изменённые; при записи в другое место — все
-   * файлы мода. Возвращает записанные имена.
+   * The mod level files — in `leveldata` next to the .mod: the changed ones; when writing elsewhere — all
+   * the mod files. Returns the written names.
    */
   private saveWorld(cur: OpenResult, target: string): string[] {
     const e = this.editsCache?.owner === cur ? this.editsCache.edits : undefined;
@@ -291,7 +291,7 @@ export class Session {
       const f = e.buildFile(p);
       if (!f) continue;
       mkdirSync(dir, { recursive: true });
-      // Сначала во временный файл, потом на место: игра не увидит половину файла.
+      // First into a temp file, then into place: the game will not see half a file.
       const full = join(dir, p);
       writeFileSync(`${full}.tmp`, writeDataFile(f));
       renameSync(`${full}.tmp`, full);
@@ -301,14 +301,14 @@ export class Session {
     return out;
   }
 
-  // ------------------------------------------------------------ живая связь с редактором
+  // ------------------------------------------------------------ live link with the editor
 
-  /** Подключён ли открытый редактор (и что в нём открыто на момент последней синхронизации). */
+  /** Whether the open editor is connected (and what is open in it as of the last sync). */
   get editor(): LiveState | undefined {
     return this.live && !this.live.client.closed ? this.live.state : undefined;
   }
 
-  /** Подключиться к открытому редактору по файлу обнаружения и взять его мод. */
+  /** Connect to the open editor via the discovery file and take its mod. */
   async connectEditor(discoveryPath = liveDiscoveryPath()): Promise<LiveState> {
     const d = readLiveDiscovery(discoveryPath);
     if (!d) throw new SessionError(`The editor is not running (no ${discoveryPath}): open Cactus`);
@@ -334,8 +334,8 @@ export class Session {
   }
 
   /**
-   * Перед каждой командой: если подключены к редактору и в окне что-то изменилось — взять
-   * свежий снимок мода. Связь оборвалась — ошибка, дальше работа без редактора (по ванили).
+   * Before each command: if connected to the editor and something changed in the window — take
+   * a fresh mod snapshot. The connection dropped — an error, then work goes on without the editor (on vanilla).
    */
   async sync(): Promise<void> {
     const live = this.live;
@@ -374,7 +374,7 @@ export class Session {
     return { ctx, ...(snap.modPath !== undefined ? { path: snap.modPath } : {}), missingDependencies: [], dependencyPaths, extensions };
   }
 
-  /** Отправить правки в окно редактора набором изменений ИИ. */
+  /** Send edits to the editor window as an AI change set. */
   async propose(title: string, ops: EditOp[]): Promise<ProposeResult> {
     const live = this.live;
     if (!live) throw new SessionError('The editor is not connected');

@@ -1,6 +1,6 @@
 /**
- * Правки мира в моде (`WorldEdits`): сдвиг с состоянием здания, новый и удалённый экземпляр,
- * отмена/повтор, файл уровня мода — разница поверх нижних слоёв, не тронутое — те же байты.
+ * World edits in a mod (`WorldEdits`): move with the building state, new and deleted instance,
+ * undo/redo, the mod level file — a diff on top of the lower layers, untouched — the same bytes.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -52,7 +52,7 @@ function vanilla(): WorldFile {
 }
 
 function modZone(): WorldFile {
-  // Мод уже двигал стену и имеет хвост — его надо сохранить.
+  // The mod already moved the wall and has a tail — it must be kept.
   const tail = new Uint8Array([1, 0, 0, 0, 7, 0, 0, 0]);
   return {
     layer: 'My Mod.mod',
@@ -69,8 +69,8 @@ function modZone(): WorldFile {
   };
 }
 
-describe('правки мира в моде', () => {
-  it('сдвиг здания: экземпляр и полная копия состояния с новой высотой; отмена — те же байты', () => {
+describe('world edits in a mod', () => {
+  it('building move: instance and a full copy of the state with the new height; undo — the same bytes', () => {
     const mod = modZone();
     const bytes = writeDataFile(mod.file);
     const ed = new WorldEdits([vanilla(), mod], 'My Mod.mod');
@@ -88,7 +88,7 @@ describe('правки мира в моде', () => {
     const state = out.records.find((r) => r.stringId === '1-base-S23')!;
     expect(state.floats.get('world Y pos')).toBe(510);
     expect(state.strings.has('name')).toBe(true);
-    // Через WorldIndex видно новое место и высоту.
+    // WorldIndex shows the new place and height.
     const w = new WorldIndex(ed.files());
     expect(w.buildings()[0]).toMatchObject({ key: '1-base', position: [120, 2, 210], worldY: 510 });
 
@@ -99,7 +99,7 @@ describe('правки мира в моде', () => {
     expect(ed.buildFile(ZONE)!.records.length).toBe(2);
   });
 
-  it('вернуть объект на место — правка мода исчезает', () => {
+  it('put an object back in place — the mod edit disappears', () => {
     const ed = new WorldEdits([vanilla()], 'My Mod.mod');
     ed.move(ZONE, '0-buildinglist', '1-base', [0, 2, 0], [1, 0, 0, 0], { worldY: 1 });
     ed.move(ZONE, '0-buildinglist', '1-base', [100, 2, 200], [1, 0, 0, 0], { worldY: 502 });
@@ -107,7 +107,7 @@ describe('правки мира в моде', () => {
     expect(ed.dirtyFiles()).toEqual([]);
   });
 
-  it('новый объект: ключ мода, lastId; удаление своего — стирает, чужого — пишет пустую цель', () => {
+  it('new object: mod key, lastId; deleting own — erases, another one — writes an empty target', () => {
     const ed = new WorldEdits([vanilla(), modZone()], 'My Mod.mod');
     const key = ed.place(ZONE, '0-buildinglist', 'BED', [1, 2, 3], [1, 0, 0, 0]);
     expect(key).toBe('6-My Mod-INGAME');
@@ -127,7 +127,7 @@ describe('правки мира в моде', () => {
     expect(ed.dirtyFiles()).toEqual([]);
   });
 
-  it('новый файл зоны мода: тип 15, пустой хвост, владелец с типом и именем ванили; запись читается обратно', () => {
+  it('new mod zone file: type 15, empty tail, owner with vanilla type and name; the record reads back', () => {
     const ed = new WorldEdits([vanilla()], 'My Mod.mod');
     ed.transaction('Две правки', () => {
       ed.place(ZONE, '0-buildinglist', 'BED', [1, 2, 3], [1, 0, 0, 0]);
@@ -145,7 +145,7 @@ describe('правки мира в моде', () => {
     expect(ed.dirtyFiles()).toEqual([ZONE]);
   });
 
-  it('объект не выносится из своей зоны; подписчики узнают, какие записи менялись', () => {
+  it('an object is not moved out of its zone; subscribers learn which records changed', () => {
     const ed = new WorldEdits([vanilla()], 'My Mod.mod');
     const seen: string[][] = [];
     ed.onChange((c) => {
@@ -162,7 +162,7 @@ describe('правки мира в моде', () => {
     ]);
   });
 
-  it('ошибка в транзакции откатывает её правки', () => {
+  it('an error in a transaction rolls back its edits', () => {
     const ed = new WorldEdits([vanilla()], 'My Mod.mod');
     expect(() => {
       ed.transaction('x', () => {

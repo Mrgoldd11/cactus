@@ -1,6 +1,6 @@
 /**
- * Этап 3, симулятор разговора, проверка «мод перебивает ванильный диалог с действием» и
- * конструктор диалогов.
+ * Stage 3, conversation simulator, the "mod outscores a vanilla dialogue with an effect" check and
+ * the dialogue builder.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -35,7 +35,7 @@ function rec(type: string, sid: string, fill: (r: GameRecord) => void = () => un
 
 const file = (records: GameRecord[]): DataFile => ({ fileType: FileType.Data, lastId: 0, records, tail: new Uint8Array() });
 
-/** Диалог с одной корневой репликой NPC; `cond` — условие на самом диалоге. */
+/** A dialogue with one root NPC line; `cond` is a condition on the dialogue itself. */
 function dlg(sid: string, o: { score?: number; cond?: boolean; act?: string; locked?: boolean; empty?: boolean } = {}): GameRecord[] {
   const line = rec('DIALOGUE_LINE', `${sid}.L`, (r) => {
     r.ints.set('speaker', 0);
@@ -57,11 +57,11 @@ function dlg(sid: string, o: { score?: number; cond?: boolean; act?: string; loc
 }
 
 /**
- * Персонаж C (без своей фракции, лидер отряда SQ):
- * - `dialogue` → DC (условие, 10 очков);
- * - свой пакет PK: событие 1 → DV (без условий, 0, арест), событие 3 → D3; наследует PK2 (событие 1 → DS, −5);
- * - отряд SQ: `dialog leader` PL (DLOCK, заблокирован), `dialog squad` PS (DEMPTY, без реплик);
- * - фракция отряда F: `dialog default` PF (DTIE без условий, 0; и DV ещё раз).
+ * Character C (no own faction, leader of squad SQ):
+ * - `dialogue` → DC (condition, 10 points);
+ * - own package PK: event 1 → DV (no conditions, 0, arrest), event 3 → D3; inherits PK2 (event 1 → DS, −5);
+ * - squad SQ: `dialog leader` PL (DLOCK, locked), `dialog squad` PS (DEMPTY, no lines);
+ * - squad faction F: `dialog default` PF (DTIE without conditions, 0; and DV once more).
  */
 function base(): DataFile {
   return file([
@@ -100,8 +100,8 @@ function base(): DataFile {
 
 const ctxOf = (): ModContext => new ModContext({ layers: [{ name: 'gamedata.base', file: base() }], modName: 'Test.mod' });
 
-describe('симулятор разговора', () => {
-  it('источники: персонаж, свой пакет (с inheritsFrom), лидер отряда, отряд, фракция отряда', () => {
+describe('conversation simulator', () => {
+  it('sources: character, own package (with inheritsFrom), squad leader, squad, squad faction', () => {
     const ctx = ctxOf();
     const src = talkSources(ctx, ctx.get('C')!, 1, squadIndex(ctx));
     expect(src.map((s) => [s.via, s.holder, s.dialog])).toEqual([
@@ -113,14 +113,14 @@ describe('симулятор разговора', () => {
       ['faction', 'PF', 'DTIE'],
       ['faction', 'PF', 'DV'],
     ]);
-    // Событие 3: только из пакетов, `dialogue` персонажа — лишь для клика.
+    // Event 3: only from packages, the character's `dialogue` is only for the click.
     expect(talkSources(ctx, ctx.get('C')!, 3).map((s) => s.dialog)).toEqual(['D3']);
   });
 
-  it('вердикты: случайно из равных, условия, перебит, заблокирован, пустой', () => {
+  it('verdicts: random among equals, conditions, outscored, locked, empty', () => {
     const ctx = ctxOf();
     const sim = simulateTalk(ctx, 'C');
-    // Порядок игры: по очкам (у DC +1 за условие), заблокированные и пустые — в конце.
+    // Game order: by score (DC gets +1 for the condition), locked and empty ones — at the end.
     expect(sim.candidates.map((x) => [x.dialog, x.verdict, x.score])).toEqual([
       ['DC', 'if-conditions', 11],
       ['DV', 'random', 0],
@@ -129,7 +129,7 @@ describe('симулятор разговора', () => {
       ['DLOCK', 'locked', 2],
       ['DEMPTY', 'empty', 0],
     ]);
-    // DV и DTIE без условий и с равными очками: игра выбирает случайно, поровну.
+    // DV and DTIE without conditions and with equal scores: the game picks randomly, with equal odds.
     expect(sim.winner).toBeUndefined();
     expect(sim.pool).toEqual(['DV', 'DTIE']);
     expect(sim.candidates.find((x) => x.dialog === 'DV')!.odds).toBeCloseTo(0.5);
@@ -144,7 +144,7 @@ describe('симулятор разговора', () => {
     expect(dv.origin).toBe('gamedata.base');
     expect(sim.candidates.find((x) => x.dialog === 'DS')!.by).toBe('DV');
     expect(sim.candidates.find((x) => x.dialog === 'DC')!.conditions.length).toBe(1);
-    // Начало разговора: реплика NPC и выбор игрока под ней.
+    // Start of the conversation: the NPC line and the player choice under it.
     expect(sim.opening.map((l) => [l.id, l.texts[0]?.en, l.choices.map((c) => c.texts[0]?.en)])).toEqual([['DV.L', 'DV says hi', ['Bye']]]);
     const text = formatTalk(sim, 'ru').join('\n');
     expect(sim.openingOf).toBe('DV');
@@ -155,24 +155,24 @@ describe('симулятор разговора', () => {
     expect(text).toContain('«DV says hi»');
   });
 
-  it('правило игры: условие даёт очки, уже попавший в розыгрыш не выбывает, раса +2, предел −999', () => {
+  it('game rule: a condition gives points, one already in the draw does not drop out, race +2, limit −999', () => {
     const ctx = ctxOf();
     const bld = new DialogBuilder(ctx);
-    // Реплика A (0 очков, но с вариантом игрока: ключ 1) стоит в списке раньше B (1 очко, ключ 1):
-    // A попадает в розыгрыш первой и не выбывает, хотя у B очков больше.
+    // Line A (0 points, but with a player option: key 1) comes earlier in the list than B (1 point, key 1):
+    // A enters the draw first and does not drop out, although B has more points.
     const a = bld.line('A', SPEAKER.ME, ['A'], { children: [bld.line('A.p', SPEAKER.TARGET, ['ok'])] });
     const bl = bld.line('B', SPEAKER.ME, ['B'], { score: 1 });
     const w = bld.dialogue('W', [a, bl], [], { score: 4 });
-    // Раса собеседника: +2 при загрузке и ещё +2 в игре — 4, как у W с репликой A.
+    // Target race: +2 at load and another +2 in the game — 4, as W has with line A.
     const r = bld.dialogue('R', [bld.line('R.l', SPEAKER.ME, ['R'])], [{ targetRace: ['RACE'] }]);
     const low = bld.dialogue('LOW', [bld.line('LOW.l', SPEAKER.ME, ['low'])], [], { score: -1000 });
     for (const d of [w, r, low]) bld.attachToCharacter('OTHER', d);
     const sim = simulateTalk(ctx, 'OTHER');
     const v = Object.fromEntries(sim.candidates.map((x) => [x.dialog, [x.verdict, x.odds]]));
     expect(v[w]).toEqual(['wins', 1]);
-    // W начинает с A (итог 4) или B (итог 5) поровну; R (4) в розыгрыше только при A: 1/2 × 1/2.
+    // W starts with A (total 4) or B (total 5) with equal odds; R (4) is in the draw only with A: 1/2 × 1/2.
     expect(v[r]).toEqual(['tie', 0.25]);
-    // Очки ниже −999 игра не берёт никогда, даже если диалог один.
+    // The game never takes scores below −999, even if there is only one dialogue.
     expect(v[low]).toEqual(['shadowed', undefined]);
     expect(sim.opening.map((l) => [l.id, l.odds])).toEqual([
       [a, 0.5],
@@ -180,15 +180,15 @@ describe('симулятор разговора', () => {
     ]);
   });
 
-  it('без диалогов и не персонаж', () => {
+  it('no dialogues and not a character', () => {
     const ctx = ctxOf();
     expect(formatTalk(simulateTalk(ctx, 'OTHER'), 'ru').join('\n')).toContain('диалогов на это событие нет');
     expect(() => simulateTalk(ctx, 'PK')).toThrow(/is not a character/);
   });
 });
 
-describe('проверка: мод перебивает ванильный диалог с действием', () => {
-  it('диалог мода в пакете с очками ≥ ванильного с арестом — предупреждение; запасной (−100) — нет', () => {
+describe('check: the mod outscores a vanilla dialogue with an effect', () => {
+  it('a mod dialogue in a package with a score ≥ the vanilla one with arrest — warning; a fallback (−100) — no', () => {
     const ctx = ctxOf();
     const bld = new DialogBuilder(ctx);
     const l = bld.line('мой привет', SPEAKER.ME, ['Yo']);
@@ -202,7 +202,7 @@ describe('проверка: мод перебивает ванильный ди�
     expect(w[0]!.message).toContain('arrest');
   });
 
-  it('клик персонажа (CHARACTER.dialogue) сравнивается со всеми диалогами события 1', () => {
+  it('the character click (CHARACTER.dialogue) is compared with all event 1 dialogues', () => {
     const ctx = ctxOf();
     const bld = new DialogBuilder(ctx);
     const d = bld.dialogue('мой клик', [bld.line('клик', SPEAKER.ME, ['Hey'])], [], { score: 5 });
@@ -212,8 +212,8 @@ describe('проверка: мод перебивает ванильный ди�
   });
 });
 
-describe('конструктор диалогов', () => {
-  it('реплики, условия, действие, диалог, постоянные id; привязка к персонажу и пакетам', () => {
+describe('dialogue builder', () => {
+  it('lines, conditions, effect, dialogue, permanent ids; binding to a character and packages', () => {
     const ctx = ctxOf();
     const ids = new StableIds('Test.mod');
     const bld = new DialogBuilder(ctx, ids);
@@ -237,7 +237,7 @@ describe('конструктор диалогов', () => {
     bld.attachToCharacter('C', d);
     bld.attachToCharacter('C', d);
     expect(ctx.get('C')!.refs.get('dialogue')!.map((r) => r.target)).toEqual(['DC', d]);
-    // Свой пакет персонажа — только первый; персонаж без пакетов — в noPackage.
+    // The character's own package — only the first; a character without packages — in noPackage.
     expect(bld.attachToPackages(['C', 'OTHER'], d, 3)).toEqual(['PK']);
     expect([...bld.noPackage]).toEqual(['OTHER']);
     expect(ctx.get('PK')!.refs.get('dialogs')!.map((r) => [r.target, r.v0])).toContainEqual([d, 3]);

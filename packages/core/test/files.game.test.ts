@@ -1,6 +1,6 @@
 /**
- * Проверки на файлах установленной игры. Путь берётся из KENSHI_DIR / kenshi-paths.json
- * (см. README); если игры нет, все тесты здесь пропускаются.
+ * Checks on the installed game's files. The path comes from KENSHI_DIR / kenshi-paths.json
+ * (see README); without the game all tests here are skipped.
  */
 import { readFileSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
@@ -21,13 +21,13 @@ const paths = resolveGamePaths();
 const game = hasGame(paths);
 
 /**
- * Моды, которые не проходят round-trip, с диагнозом. Сейчас пусто: на 106 модах из
- * мастерской и mods/ всё сходится байт в байт.
+ * Mods that fail the round trip, with a diagnosis. Empty now: on 106 mods from
+ * the Workshop and mods/ everything matches byte for byte.
  */
 const KNOWN_MOD_EXCEPTIONS = new Map<string, string>();
 
-/** Типы записей ванили, которых нет в fcs.def: FCS показывает их своими окнами. */
-// DIALOG_ACTION в fcs.def нет, его поля встроены в схему (builtin-enums.ts).
+/** Vanilla record types missing from fcs.def: FCS shows them in its own windows. */
+// DIALOG_ACTION is not in fcs.def, its fields are built into the schema (builtin-enums.ts).
 const TYPES_WITHOUT_FCS_DEF = ['CAMERA', 'DAY_SCHEDULE', 'FOLIAGE_BUILDING', 'ROAD'];
 
 function expectRoundTrip(path: string): DataFile {
@@ -46,15 +46,15 @@ function vanilla(): { label: string; file: DataFile }[] {
 }
 
 describe.skipIf(!game)(`игра: ${paths.kenshi}`, () => {
-  describe('ванильные файлы пишутся байт в байт', () => {
+  describe('vanilla files are written byte for byte', () => {
     it.each((game ? vanillaFilePaths(paths) : []).map((p) => [basename(p), p]))('%s', (_, p) => {
       expectRoundTrip(p);
     });
   });
 
-  describe('установленные моды пишутся байт в байт', () => {
+  describe('installed mods are written byte for byte', () => {
     const mods = game ? installedModFiles(paths) : [];
-    it('моды найдены', () => {
+    it('mods found', () => {
       expect(mods.length).toBeGreaterThan(0);
     });
     it.each(mods.map((m) => [`${m.source}/${basename(dirname(m.path))}/${basename(m.path)}`, m.path]))('%s', (name, p) => {
@@ -69,17 +69,17 @@ describe.skipIf(!game)(`игра: ${paths.kenshi}`, () => {
     });
   });
 
-  describe('схема', () => {
+  describe('schema', () => {
     const schema = game ? loadGameSchema(paths) : undefined;
 
-    it('загружается; предупреждения — только известная опечатка в fcs_enums.def', () => {
+    it('loads; warnings — only the known typo in fcs_enums.def', () => {
       expect(schema!.types.size).toBeGreaterThan(70);
       expect(schema!.enums.size).toBeGreaterThan(30);
       expect(schema!.layout.length).toBeGreaterThan(10);
       expect(schema!.warnings.map((w) => `${w.source}: ${w.message}`)).toEqual(['fcs_enums.def: значения без запятой: «CARAVAN. MILITARY»']);
     });
 
-    it('fcs.def описывает все типы ванили, кроме известных; с полями из данных — все', () => {
+    it('fcs.def describes all vanilla types except known ones; with fields from the data — all', () => {
       const raw = analyzeCoverage(schema!, vanilla());
       expect(raw.typesWithoutSchema).toEqual(TYPES_WITHOUT_FCS_DEF);
 
@@ -90,7 +90,7 @@ describe.skipIf(!game)(`игра: ${paths.kenshi}`, () => {
       for (const t of TYPES_WITHOUT_FCS_DEF) expect(full.types.get(t)?.inferred).toBe(true);
     });
 
-    it('номера типов совпадают с комментариями «Type:» в gamedata.po', () => {
+    it('type numbers match the "Type:" comments in gamedata.po', () => {
       const po = loadGamedataPo(paths, 'ru_RU');
       expect(po.warnings).toEqual([]);
       const byId = new Map<string, string>();

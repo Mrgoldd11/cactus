@@ -1,6 +1,6 @@
 /**
- * Слияние на модах установленной игры: мод мастерской целиком вливается в тестовый мод,
- * проверка без ошибок, запись и чтение байт в байт, отмена, повтор. Без игры тесты пропускаются.
+ * Merging on the installed game's mods: a Workshop mod is merged whole into a test mod,
+ * check without errors, write and read byte for byte, undo, redo. Without the game the tests are skipped.
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -41,14 +41,14 @@ const vanilla = (): Layer[] => (vanillaCache ??= loadVanillaLayers(paths));
 const tmp = mkdtempSync(join(tmpdir(), 'kedit-merge-'));
 afterAll(() => { rmSync(tmp, { recursive: true, force: true }); });
 
-/** Тестовый мод: пустой, с теми же зависимостями, что у источника. */
+/** Test mod: empty, with the same dependencies as the source. */
 function testMod(sourcePath: string, name = 'merge-test.mod'): ReturnType<typeof loadModContext> {
   const deps = readModSummary(sourcePath).dependencies ?? [];
   return loadModContext({ paths, modName: name, dependencies: deps, vanilla: vanilla(), schema: false, po: false });
 }
 
 describe.skipIf(!game || !scfPath)('слияние: мод мастерской в тестовый мод', () => {
-  it('весь мод вливается, проверка без ошибок, запись и чтение байт в байт', () => {
+  it('the whole mod merges, check without errors, write and read byte for byte', () => {
     const source = readMergeSource(scfPath!);
     const { ctx } = testMod(scfPath!);
     checkMergeSource(ctx, source.name);
@@ -63,12 +63,12 @@ describe.skipIf(!game || !scfPath)('слияние: мод мастерской 
     expect(r.dangling).toEqual([]);
     expect(validateMod(ctx).filter((i) => i.severity === 'error')).toEqual([]);
 
-    // Запись → чтение → запись: те же байты.
+    // Write → read → write: the same bytes.
     const bytes = writeDataFile(ctx.buildModFile());
     const back = writeDataFile(readDataFile(bytes));
     expect(firstDifference(bytes, back)).toBe(-1);
 
-    // Мод после слияния содержит все записи источника с теми же именами и типами.
+    // After merging the mod contains all source records with the same names and types.
     const merged = new Map(ctx.modRecords().map((x) => [x.stringId, x]));
     for (const rec of source.file.records) {
       if ((rec.changeFlags & 0x7fffffff) !== 2) continue;
@@ -77,12 +77,12 @@ describe.skipIf(!game || !scfPath)('слияние: мод мастерской 
       expect(m!.type).toBe(rec.type);
     }
 
-    // Повтор ничего не меняет.
+    // A repeat changes nothing.
     expect(planMerge(ctx, source, ledger).changes).toEqual([]);
     expect(applyMerge(ctx, source, ledger, { accept: [] }).changesetId).toBeUndefined();
   });
 
-  it('отмена возвращает пустой мод, повтор — то же слияние; файл-спутник переживает перезагрузку', () => {
+  it('undo returns the empty mod, redo — the same merge; the sidecar file survives a reload', () => {
     const source = readMergeSource(scfPath!);
     const { ctx } = testMod(scfPath!);
     const ledger = new MergeLedger();
@@ -98,7 +98,7 @@ describe.skipIf(!game || !scfPath)('слияние: мод мастерской 
     ctx.redo();
     expect(firstDifference(writeDataFile(ctx.buildModFile()), merged)).toBe(-1);
 
-    // Сохранение: мод + файл-спутник; после перезагрузки слитое не предлагается снова.
+    // Saving: mod + sidecar file; after reloading the merged items are not offered again.
     const modPath = join(tmp, 'merge-test.mod');
     writeFileSync(modPath, merged);
     expect(saveMergeLedger(ctx, ledger, modPath)).toBeDefined();
@@ -119,7 +119,7 @@ describe.skipIf(!game || !scfPath)('слияние: мод мастерской 
 });
 
 describe.skipIf(!game)('слияние: каждый установленный мод в пустой тестовый', () => {
-  it('сливается без падений, запись читается байт в байт', () => {
+  it('merges without crashing, the written file reads byte for byte', () => {
     const bad: string[] = [];
     let n = 0;
     for (const m of installedModFiles(paths)) {

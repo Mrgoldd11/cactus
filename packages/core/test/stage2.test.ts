@@ -1,7 +1,7 @@
 /**
- * Этап 2, ядро: имена enum (встроенные из C#, `enum shared` с номерами по имени), условия и
- * действия диалога текстом, ввод enum по имени, поиск записи по имени, фильтр diff,
- * проверки «диалог без реплик» и «висячая ссылка», постоянные id по имени.
+ * Stage 2, core: enum names (built-in from C#, `enum shared` with numbers by name), dialogue
+ * conditions and effects as text, enum input by name, record search by name, diff filter,
+ * the "dialogue without lines" and "dangling reference" checks, permanent ids by name.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -64,7 +64,7 @@ function file(records: GameRecord[]): DataFile {
   };
 }
 
-/** Ваниль: персонаж с диалогом D1 и пустым диалогом D0; условие «собеседник: отношения < 20». */
+/** Vanilla: a character with dialogue D1 and an empty dialogue D0; condition "target: relation < 20". */
 function vanilla(): Layer[] {
   const base = file([
     rec(CHAR, 'C', 'Guard', (r) => r.refs.set('dialogue', [ref('D1'), ref('D0')])),
@@ -93,15 +93,15 @@ function vanilla(): Layer[] {
 
 const schema = parseGameSchema({
   fcsDef: ['[DIALOGUE]', 'general:', 'repetition limit: DialogRepetitionEnum.DR_NO_LIMIT', 'lines: DIALOGUE_LINE (0,0,0)', ''].join('\n'),
-  // Порядок в файле не совпадает с C#: номера берутся по имени.
+  // The order in the file does not match C#: numbers are taken by name.
   fcsEnums: ['enum shared DialogRepetitionEnum', '{', '  DR_ONCE_ONLY, // один раз', '  DR_NO_LIMIT', '  DR_MADE_UP', '}', ''].join('\n'),
 });
 
 const ctxOf = (layers: Layer[] = vanilla(), mod?: DataFile): ModContext =>
   new ModContext({ layers, modName: 'test.mod', schema, ...(mod ? { mod } : {}) });
 
-describe('перечисления', () => {
-  it('enum shared нумеруется по именам из C#, недостающие имена дописываются', () => {
+describe('enums', () => {
+  it('enum shared is numbered by names from C#, missing names are appended', () => {
     const e = schema.enums.get('DialogRepetitionEnum')!;
     const byName = Object.fromEntries(e.values.map((v) => [v.name, v.value]));
     expect(byName['DR_ONCE_ONLY']).toBe(5);
@@ -111,14 +111,14 @@ describe('перечисления', () => {
     expect(schema.warnings.some((w) => w.message.includes('DR_MADE_UP'))).toBe(true);
   });
 
-  it('встроенные enum и тип DIALOG_ACTION без fcs.def', () => {
+  it('built-in enums and the DIALOG_ACTION type without fcs.def', () => {
     expect(getEnum(undefined, 'TalkerEnum')?.values[1]?.name).toBe('T_TARGET');
     expect(schema.types.get('DIALOG_ACTION')?.builtin).toBe(true);
     expect(fieldEnum(schema, 'DIALOG_ACTION', 'who')?.name).toBe('TalkerEnum');
     expect(fieldEnum(schema, 'DIALOGUE', 'repetition limit')?.name).toBe('DialogRepetitionEnum');
   });
 
-  it('имя, имя без префикса, подпись и число; показ значения', () => {
+  it('name, name without prefix, label and number; showing a value', () => {
     const e = getEnum(schema, 'DialogRepetitionEnum')!;
     expect(parseEnumValue(e, 'DR_ONCE_ONLY')).toBe(5);
     expect(parseEnumValue(e, 'once_only')).toBe(5);
@@ -132,7 +132,7 @@ describe('перечисления', () => {
     expect(formatEnumValue(e, 99, 'ru')).toBe('99 (нет в DialogRepetitionEnum)');
   });
 
-  it('условия и действия диалога текстом; tag по условию', () => {
+  it('dialogue conditions and effects as text; tag by condition', () => {
     const ctx = ctxOf();
     expect(describeDialogAction(ctx, ref('A1', 20), 'conditions')).toBe('target: DC_RELATIONS < 20');
     expect(describeDialogAction(ctx, ref('A1', 20), 'conditions', 'ru')).toBe('собеседник: DC_RELATIONS < 20');
@@ -142,7 +142,7 @@ describe('перечисления', () => {
     expect(describeDialogAction(ctx, ref('E1'), 'effects')).toMatch(/^DA_/);
   });
 
-  it('set принимает имя значения enum; неизвестное имя — ошибка', () => {
+  it('set accepts an enum value name; an unknown name — error', () => {
     const ctx = ctxOf();
     applyOps(ctx, [{ op: 'set', id: 'D1', field: 'repetition limit', value: 'DR_NO_LIMIT' }]);
     expect(ctx.get('D1')!.ints.get('repetition limit')).toBe(0);
@@ -152,21 +152,21 @@ describe('перечисления', () => {
   });
 });
 
-describe('запись по имени', () => {
-  it('id, точное имя, подстрока; несколько — список', () => {
+describe('record by name', () => {
+  it('id, exact name, substring; several — a list', () => {
     const ctx = ctxOf();
     expect(lookupRecord(ctx, 'D1').stringId).toBe('D1');
     expect(lookupRecord(ctx, 'guard talk').stringId).toBe('D1');
     expect(lookupRecord(ctx, 'Same name').candidates.map((h) => h.stringId)).toEqual(['S1', 'S2']);
-    // «Guard» — точное имя персонажа; без него подстрока дала бы два.
+    // "Guard" is an exact character name; without it a substring would give two.
     expect(lookupRecord(ctx, 'Guard').stringId).toBe('C');
     expect(lookupRecord(ctx, 'talk', { preferTypes: ['DIALOGUE'] }).candidates).toHaveLength(2);
     expect(lookupRecord(ctx, 'нет такого')).toEqual({ candidates: [] });
   });
 });
 
-describe('diff: фильтр и итог', () => {
-  it('статусы, псевдонимы, итог', () => {
+describe('diff: filter and summary', () => {
+  it('statuses, aliases, summary', () => {
     const a = file([rec(CHAR, 'X', 'x'), rec(CHAR, 'Y', 'y')]);
     const bFile = file([rec(CHAR, 'X', 'x2'), rec(CHAR, 'Z', 'z')]);
     const diffs = diffDataFiles(a, bFile);
@@ -178,8 +178,8 @@ describe('diff: фильтр и итог', () => {
   });
 });
 
-describe('проверки этапа 2', () => {
-  it('диалог без реплик: свой новый и ванильный, на который мод ссылается', () => {
+describe('stage 2 checks', () => {
+  it('dialogue without lines: own new one and a vanilla one the mod refers to', () => {
     const ctx = ctxOf();
     const sid = ctx.createRecord(DIALOGUE, 'Mine');
     ctx.addReference('S1', 'dialogue', 'D0');
@@ -187,7 +187,7 @@ describe('проверки этапа 2', () => {
     expect(issues.map((i) => `${i.stringId}:${i.target ?? ''}`).sort()).toEqual([`${sid}:`, 'S1:D0'].sort());
   });
 
-  it('висячая ссылка: зависимость удаляет диалог, на который ссылается ваниль', () => {
+  it('dangling reference: a dependency deletes a dialogue vanilla refers to', () => {
     const dep = file([removalMarker(rec(DIALOGUE, 'D1', 'Guard talk'))]);
     const layers: Layer[] = [...vanilla(), { name: 'Other.mod', file: dep }];
     const ctx = ctxOf(layers);
@@ -195,13 +195,13 @@ describe('проверки этапа 2', () => {
     expect(issues).toHaveLength(1);
     expect(issues[0]).toMatchObject({ stringId: 'C', key: 'dialogue', target: 'D1', severity: 'warning' });
     expect(issues[0]!.message).toContain('Other.mod');
-    // Удаление в самой ванили — не повод для предупреждения.
+    // A deletion in vanilla itself is no reason for a warning.
     expect(isVanillaLayer('REBIRTH.MOD')).toBe(true);
   });
 });
 
-describe('постоянные id', () => {
-  it('номер по имени выдаётся один раз; сироты; проверка таблицы', () => {
+describe('permanent ids', () => {
+  it('a number by name is given once; orphans; table check', () => {
     const ids = new StableIds('My.mod', { next: 102, ids: { old: 100, keep: 101 } });
     expect(ids.id('keep')).toBe('101-My.mod');
     expect(ids.id('new')).toBe('102-My.mod');
@@ -215,7 +215,7 @@ describe('постоянные id', () => {
   });
 });
 
-describe('редактор: категории, поля, ссылки', () => {
+describe('editor: categories, fields, references', () => {
   const ITEM = itemTypeId('ITEM')!;
   const s = parseGameSchema({
     fcsDef: [
@@ -245,7 +245,7 @@ describe('редактор: категории, поля, ссылки', () => {
   ]);
   const make = (): ModContext => new ModContext({ layers: [{ name: 'gamedata.base', file: base }], modName: 't.mod', schema: s });
 
-  it('дерево: фильтры по enum (с умолчанием) и bool, прочие типы, всё', () => {
+  it('tree: filters by enum (with default) and bool, other types, all', () => {
     const ctx = make();
     const tree = buildCategoryTree(s, ['ITEM', 'CHARACTER']);
     expect(tree.map((n) => n.label)).toEqual(['Items', 'Everything', 'Other types']);
@@ -258,7 +258,7 @@ describe('редактор: категории, поля, ссылки', () => {
     expect(tree[2]!.children.map((n) => n.type)).toEqual(['CHARACTER']);
   });
 
-  it('поля: состояние, enum, условия, повторяющиеся поля', () => {
+  it('fields: state, enum, conditions, repeated fields', () => {
     const ctx = make();
     ctx.setField('T', 'ints', 'mode', 1);
     ctx.setField('T', 'ints', 'extra', 5);
@@ -279,7 +279,7 @@ describe('редактор: категории, поля, ссылки', () => {
     expect(again.find((r) => r.key === 'heavy')!.hidden).toBe(true);
   });
 
-  it('ссылки: подписи значений, добавленные, изменённые, убранные', () => {
+  it('references: value labels, added, changed, removed', () => {
     const ctx = make();
     ctx.removeReference('T', 'parts', 'H');
     ctx.addReference('T', 'parts', 'C');

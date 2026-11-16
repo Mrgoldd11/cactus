@@ -1,6 +1,6 @@
 /**
- * Живая связь: «редактор» (LiveHost + startLiveServer над своей сессией) и MCP-сервер,
- * подключённый к нему через connect_editor.
+ * Live link: an "editor" (LiveHost + startLiveServer over its own session) and the MCP server
+ * connected to it via connect_editor.
  */
 import { mkdtempSync, existsSync } from 'node:fs';
 import { request } from 'node:http';
@@ -26,7 +26,7 @@ const prevEnv = process.env.KEDIT_LIVE_FILE;
 beforeEach(async () => {
   fx = makeFixture();
   const paths = { kenshi: fx.game, workshop: defaultWorkshopDir(fx.game) };
-  // Сторона редактора: свой контекст, версия растёт при каждой правке.
+  // Editor side: its own context, the version grows with each edit.
   const editorSide = new Session(paths, fx.game);
   editorCtx = editorSide.open({ name: 'Live.mod' }).ctx;
   editorCtx.subscribe(() => version++);
@@ -54,14 +54,14 @@ async function call(name: string, args: Record<string, unknown> = {}): Promise<{
   return { text: r.content.map((c) => c.text).join('\n'), isError: r.isError ?? false };
 }
 
-describe('живая связь с редактором', () => {
-  it('connect_editor, правка набором изменений, принять / откатить, правки в окне видны ИИ', async () => {
+describe('live link with the editor', () => {
+  it('connect_editor, edit as a change set, accept / revert, window edits are visible to the AI', async () => {
     const c = await call('connect_editor');
     expect(c.isError, c.text).toBe(false);
     expect(c.text).toContain('connected to the editor: Live.mod');
     expect(server.clients().map((x) => x.name)).toEqual(['kenshi-mcp']);
 
-    // Правка ИИ — сразу в окне, одной правкой истории, ждёт решения.
+    // An AI edit goes straight into the window, as one history edit, and waits for a decision.
     const e = await call('edit', { label: 'тяжелее', ops: [{ op: 'set', id: 'X', field: 'weight', value: 7 }] });
     expect(e.isError, e.text).toBe(false);
     expect(e.text).toContain('"тяжелее" is waiting for the user decision');
@@ -71,15 +71,15 @@ describe('живая связь с редактором', () => {
     expect(host.pending).toBe(1);
     expect((await call('show', { id: 'X' })).text).toContain('7');
 
-    // undo / open_mod / save — дело пользователя.
+    // undo / open_mod / save are up to the user.
     expect((await call('undo')).isError).toBe(true);
     expect((await call('open_mod', { mod: 'Other' })).isError).toBe(true);
 
-    // Пользователь правит в окне — ИИ видит это при следующей команде.
+    // The user edits in the window — the AI sees it on the next command.
     applyOps(editorCtx, [{ op: 'rename', id: 'Y', name: 'Tower shield' }], 'руками');
     expect((await call('find', { text: 'tower' })).text).toContain('Tower shield');
 
-    // Второй набор — пользователь откатывает; первый принимает.
+    // The second set — the user reverts it; the first one is accepted.
     const e2 = await call('edit', { label: 'имя', ops: [{ op: 'rename', id: 'X', name: 'Long sword' }] });
     const id2 = host.changesets[1]!.id;
     expect(e2.text).toContain(`#${id2}`);
@@ -92,8 +92,8 @@ describe('живая связь с редактором', () => {
     expect(list.text).toContain('"имя" — rolled back');
     expect((await call('show', { id: 'X' })).text).toContain('Sword');
 
-    // Ctrl+Z в окне — набор помечается «отменён».
-    // История: #1 тяжелее, #2 руками, #3 имя, #4 откат имени.
+    // Ctrl+Z in the window — the set is marked "undone".
+    // History: #1 heavier, #2 by hand, #3 name, #4 name revert.
     for (let i = 0; i < 4; i++) editorCtx.undo();
     expect((await call('editor_changes')).text).toContain('"тяжелее" — undone in the window');
 
@@ -101,7 +101,7 @@ describe('живая связь с редактором', () => {
     expect((await call('open_mod', { mod: 'Other' })).isError).toBe(false);
   });
 
-  it('bulk в режиме редактора: предпросмотр по окну, apply — набор изменений', async () => {
+  it('bulk in editor mode: preview from the window, apply — a change set', async () => {
     await call('connect_editor');
     applyOps(editorCtx, [{ op: 'set', id: 'Y', field: 'weight', value: 5 }], 'руками');
     const pre = await call('bulk', { type: 'ITEM', op: 'add', field: 'weight', value: '1' });
@@ -115,7 +115,7 @@ describe('живая связь с редактором', () => {
     expect(editorCtx.get('Y')?.floats.get('weight')).toBe(6);
   });
 
-  it('редактор закрылся — понятная ошибка, дальше без него', async () => {
+  it('the editor closed — a clear error, then without it', async () => {
     await call('connect_editor');
     await server.close();
     expect(existsSync(process.env.KEDIT_LIVE_FILE!)).toBe(false);
@@ -126,7 +126,7 @@ describe('живая связь с редактором', () => {
     expect((await call('connect_editor')).text).toContain('The editor is not running');
   });
 
-  it('из браузера (заголовок Origin) и без токена — отказ', async () => {
+  it('from a browser (Origin header) and without a token — refused', async () => {
     const status = await new Promise<number | undefined>((resolve) => {
       const req = request({
         host: '127.0.0.1',

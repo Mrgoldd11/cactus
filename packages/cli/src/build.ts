@@ -1,8 +1,8 @@
 /**
- * `kedit build`: собрать мод скриптом или JSON-планом правок и записать (только изменения).
+ * `kedit build`: build a mod with a script or a JSON edit plan and write it (changes only).
  *
- * Скрипт (.ts/.js) экспортирует по умолчанию функцию `(env: BuildEnv) => ModContext`.
- * План (.json) — `{ mod?, name?, dependencies?, info?, ops: EditOp[] }` или просто массив операций.
+ * A script (.ts/.js) default-exports a function `(env: BuildEnv) => ModContext`.
+ * A plan (.json) is `{ mod?, name?, dependencies?, info?, ops: EditOp[] }` or just an array of operations.
  */
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -13,31 +13,31 @@ import { UsageError, type OpenOptions, type Workspace } from './workspace.ts';
 
 export interface BuildEnv {
   paths: GamePaths;
-  /** Куда будет записан мод. */
+  /** Where the mod will be written. */
   outPath: string;
-  /** Имя файла мода (из `--name` или имени выходного файла). */
+  /** Mod file name (from `--name` or the output file name). */
   modName: string;
-  /** Аргументы после пути к скрипту. */
+  /** Arguments after the script path. */
   args: string[];
-  /** Ванильные слои (читаются один раз). */
+  /** Vanilla layers (read once). */
   vanilla(): Layer[];
-  /** Контекст поверх ванили и зависимостей. */
+  /** Context on top of vanilla and dependencies. */
   open(options?: OpenOptions): LoadedContext;
   log(line: string): void;
   /**
-   * Постоянный строковый id новой записи по её уникальному имени (`номер-Имя.mod`). Таблица
-   * имя → номер — `ids.json` рядом со скриптом; новые имена дописываются туда после удачной
-   * сборки, имена, которые больше не собираются, выводятся предупреждением.
+   * Stable string id of a new record by its unique name (`number-Name.mod`). The name → number
+   * table is `ids.json` next to the script; new names are appended to it after a successful
+   * build, names no longer built are reported as a warning.
    */
   stableId(name: string): string;
-  /** Таблица постоянных id (номер `next` — для `lastId` в ModInfo). */
+  /** Stable id table (number `next` — for `lastId` in ModInfo). */
   stableIds(): StableIds;
 }
 
 export type BuildScript = (env: BuildEnv) => ModContext | Promise<ModContext>;
 
 export interface BuildPlan {
-  /** Мод, с которого начать (путь или имя установленного). */
+  /** Mod to start from (path or installed mod name). */
   mod?: string;
   name?: string;
   dependencies?: string[];
@@ -49,10 +49,10 @@ export interface BuildRequest {
   source: string;
   out: string;
   name?: string;
-  /** Мод, с которого начать (для JSON-плана). */
+  /** Mod to start from (for a JSON plan). */
   mod?: string;
   args: string[];
-  /** Разрешить запись в папку игры / мастерской. */
+  /** Allow writing into the game / Workshop folder. */
   force: boolean;
 }
 
@@ -105,12 +105,12 @@ export async function runBuild(ws: Workspace, req: BuildRequest, log: (line: str
     ctx = await (mod.default as BuildScript)(env);
   }
   saveModContext(ctx, outPath);
-  // Таблица дописывается только после удачной записи мода.
+  // The table is appended only after the mod was written successfully.
   if (ids) finishStableIds(ids, idsPath, (t) => { log(ws.t(t)); });
   return { ctx, outPath, bytes: statSync(outPath).size };
 }
 
-/** Дописать новые имена в ids.json и предупредить об именах, которые больше не собираются. */
+/** Append new names to ids.json and warn about names that are no longer built. */
 function finishStableIds(ids: StableIds, idsPath: string, log: (text: UiText) => void): void {
   if (ids.added.length) {
     writeFileSync(idsPath, JSON.stringify(ids.data, null, 1) + '\n');

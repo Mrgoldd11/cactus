@@ -1,5 +1,5 @@
 /**
- * MCP-сервер через клиент SDK в памяти, на синтетической «папке игры» из тестов CLI.
+ * MCP server via the SDK client in memory, on the synthetic "game folder" from the CLI tests.
  */
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -34,8 +34,8 @@ async function call(name: string, args: Record<string, unknown> = {}): Promise<{
   return { text: r.content.map((c) => c.text).join('\n'), isError: r.isError ?? false };
 }
 
-describe('kenshi-mcp: чтение', () => {
-  it('список инструментов и ресурсов', async () => {
+describe('kenshi-mcp: reading', () => {
+  it('list of tools and resources', async () => {
     const tools = (await client.listTools()).tools.map((t) => t.name);
     expect(tools).toEqual(
       expect.arrayContaining(['open_mod', 'find', 'show', 'tree', 'refs', 'where', 'inspect', 'talk', 'diff', 'validate', 'edit', 'undo', 'redo', 'history', 'play', 'save', 'schema', 'touched', 'conflicts', 'merge']),
@@ -46,7 +46,7 @@ describe('kenshi-mcp: чтение', () => {
     expect(templates).toEqual(expect.arrayContaining(['kenshi://schema/type/{name}', 'kenshi://schema/enum/{name}']));
   });
 
-  it('без открытого мода — по ванили; open_mod, find, show, refs, tree', async () => {
+  it('without an open mod — on vanilla; open_mod, find, show, refs, tree', async () => {
     expect((await call('show', { id: 'A' })).text).toContain('int money = 15');
     const open = await call('open_mod', { mod: 'My' });
     expect(open.text).toContain('My.mod — ');
@@ -74,7 +74,7 @@ describe('kenshi-mcp: чтение', () => {
     expect(missing.text).toBe('No record "nope" (neither an id nor a name)');
   });
 
-  it('diff и validate', async () => {
+  it('diff and validate', async () => {
     await call('open_mod', { mod: 'My' });
     const diff = await call('diff');
     expect(diff.text).toContain('~ int money: 15 → 99');
@@ -90,7 +90,7 @@ describe('kenshi-mcp: чтение', () => {
     expect((await call('validate')).text).toBe('errors 0, warnings 0');
   });
 
-  it('схема: инструмент и ресурсы', async () => {
+  it('schema: tool and resources', async () => {
     expect((await call('schema')).text).toContain('CHARACTER  fields 2, references 1');
     expect((await call('schema', { type: 'item' })).text).toContain('kind: enum Kind = TOOL');
     expect((await call('schema', { enum: 'Kind' })).text).toContain('FOOD = 1');
@@ -143,8 +143,8 @@ describe('kenshi-mcp: чтение', () => {
   });
 });
 
-describe('kenshi-mcp: конфликты модов', () => {
-  it('touched и conflicts: моды mods.cfg и открытый мод с несохранёнными правками', async () => {
+describe('kenshi-mcp: mod conflicts', () => {
+  it('touched and conflicts: mods.cfg mods and the open mod with unsaved edits', async () => {
     mkdirSync(join(fx.game, 'mods', 'Rich'), { recursive: true });
     writeDataFileSync(join(fx.game, 'mods', 'Rich', 'Rich.mod'), dataFile([rec(CHAR, 'A', 'Bandit', (r) => r.ints.set('money', 500))]));
     writeFileSync(join(fx.game, 'data', 'mods.cfg'), `Rich.mod${EOL}My.mod${EOL}`);
@@ -154,13 +154,13 @@ describe('kenshi-mcp: конфликты модов', () => {
     expect((await call('conflicts', { mod_only: true })).isError).toBe(true);
     await call('open_mod', { mod: 'My' });
     await call('edit', { ops: [{ op: 'set', id: 'A', field: 'money', value: 500 }] });
-    // Несохранённая правка открытого мода: значения совпали — конфликта нет.
+    // Unsaved edit of the open mod: the values match — no conflict.
     expect((await call('conflicts', { mod_only: true })).text).toContain('records with conflicts 0');
   });
 });
 
-describe('kenshi-mcp: правка и сохранение', () => {
-  it('edit пачкой с псевдонимом, undo/redo, history, save только изменений', async () => {
+describe('kenshi-mcp: editing and saving', () => {
+  it('edit as a batch with an alias, undo/redo, history, save of changes only', async () => {
     await call('open_mod', { mod: 'My' });
     const edit = await call('edit', {
       label: 'кирка',
@@ -181,11 +181,11 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect(hist.text).toContain('#1 кирка');
     expect(hist.text).toContain('there are unsaved changes');
 
-    // Неверная операция — ошибка, мод не меняется.
+    // Invalid operation — error, the mod does not change.
     const bad = await call('edit', { ops: [{ op: 'rename', id: 'ghost', name: 'x' }] });
     expect(bad.isError).toBe(true);
 
-    // Мод открыт из папки игры: без force туда не пишем.
+    // The mod is opened from the game folder: without force we do not write there.
     const refused = await call('save');
     expect(refused.isError).toBe(true);
     expect(refused.text).toContain('force: true');
@@ -198,7 +198,7 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect((await call('history')).text).toContain('everything is saved');
   });
 
-  it('bulk: предпросмотр ничего не меняет, apply — одна правка', async () => {
+  it('bulk: preview changes nothing, apply — one edit', async () => {
     const pre = await call('bulk', { type: 'ITEM', op: 'mul', field: 'weight', value: '2' });
     expect(pre.isError, pre.text).toBe(false);
     expect(pre.text).toContain('X  «Sword»  weight: 2 → 4');
@@ -214,7 +214,7 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect((await call('find', { text: 'sabre' })).text).toBe('nothing found');
   });
 
-  it('merge: предпросмотр, слияние одной правкой, undo, save пишет мод и файл решений', async () => {
+  it('merge: preview, merge as one edit, undo, save writes the mod and the decision file', async () => {
     mkdirSync(join(fx.game, 'mods', 'Other'), { recursive: true });
     const y = rec(4, 'Y', 'Shield', (r) => r.floats.set('weight', 3));
     y.changeFlags = 0x80000001;
@@ -227,7 +227,7 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect(pre.text).toContain('changed 2, deleted 0, conflicts 1');
     expect(pre.text).toContain('preview: nothing changed');
     expect((await call('history')).text).not.toContain('#1');
-    // Без выбора слить нельзя; сам себя и неизвестный источник — понятная ошибка.
+    // Cannot merge without a selection; itself and an unknown source — a clear error.
     expect((await call('merge', { source: 'Other', apply: true })).isError).toBe(true);
     expect((await call('merge', { source: 'My' })).text).toContain('into itself');
     expect((await call('merge', { source: 'Нет-такого' })).isError).toBe(true);
@@ -250,7 +250,7 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect(readDataFileSync(out).records.map((r) => r.stringId)).toContain('Y');
   });
 
-  it('новый мод: save требует путь; force пишет в mods/', async () => {
+  it('new mod: save needs a path; force writes into mods/', async () => {
     await call('open_mod', { name: 'Fresh.mod' });
     await call('edit', { ops: [{ op: 'rename', id: 'Y', name: 'Big shield' }] });
     expect((await call('save')).text).toBe('The mod is new: give a path');
@@ -259,7 +259,7 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect(existsSync(inGame)).toBe(false);
     expect((await call('save', { path: inGame, force: true })).isError).toBe(false);
     expect(readDataFileSync(inGame).records.map((r) => r.stringId)).toEqual(['Y']);
-    // Мастерская — никогда, даже с force.
+    // The Workshop — never, even with force.
     const inWorkshop = join(defaultWorkshopDir(fx.game), '123', 'Fresh.mod');
     const ws = await call('save', { path: inWorkshop, force: true });
     expect(ws.isError).toBe(true);
@@ -268,8 +268,8 @@ describe('kenshi-mcp: правка и сохранение', () => {
   });
 });
 
-describe('kenshi-mcp: граф диалога и история', () => {
-  it('операции графа, понятные шаги истории, undo/redo до шага', async () => {
+describe('kenshi-mcp: dialogue graph and history', () => {
+  it('graph operations, clear history steps, undo/redo to a step', async () => {
     await call('open_mod', { name: 'Talk.mod' });
     const r1 = await call('edit', { ops: [{ op: 'addLine', parent: 'L1', speaker: 'player', text: 'Да', as: '$a' }] });
     expect(r1.isError, r1.text).toBe(false);
@@ -307,7 +307,7 @@ describe('kenshi-mcp: граф диалога и история', () => {
     expect((await call('tree', { id: 'D1' })).text).not.toContain('Да');
   });
 
-  it('play: проигрыватель разговора', async () => {
+  it('play: conversation player', async () => {
     const r = await call('play', { id: 'Bandit' });
     expect(r.isError, r.text).toBe(false);
     expect(r.text).toContain('Разбойник (A), event 1');

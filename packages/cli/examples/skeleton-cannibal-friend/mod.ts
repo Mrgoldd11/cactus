@@ -1,14 +1,14 @@
 /**
- * Мод «Skeleton Cannibal Friend» командами ядра — перенос tools/build_skeleton_cannibal.py.
- * Людоеды дружат со скелетом-игроком: болтовня, торговля, найм, квесты вождей и Шамана в Столице
- * людоедов (Deadcat, Cannibal Capital), рост деревни по этапам, повар Котлоед, фразы людоедов про
- * скелета и визиты с дарами.
+ * The "Skeleton Cannibal Friend" mod via core commands — a port of tools/build_skeleton_cannibal.py.
+ * Cannibals befriend a skeleton player: small talk, trade, recruiting, quests of the chiefs and the Shaman in the
+ * Cannibal Capital (Deadcat, Cannibal Capital), village growth in stages, the cook Kotloed, cannibal lines about
+ * the skeleton and visits with gifts.
  *
- * Порядок создания записей, ключей и категорий — как в Python-сборщике: от него зависят номера
- * записей, которые не закреплены в scf_ids.json, и байты файла. Новые записи получают временные id,
- * в конце — постоянные (scf_ids.json) через `changeStringIds`.
+ * The creation order of records, keys and categories matches the Python builder: the numbers of
+ * records not pinned in scf_ids.json and the file bytes depend on it. New records get temporary ids,
+ * and at the end stable ones (scf_ids.json) via `changeStringIds`.
  *
- * Без Node: источник ванили и таблица id передаются снаружи (см. build.ts).
+ * No Node: the vanilla source and the id table are passed in from outside (see build.ts).
  */
 import {
   encodeText,
@@ -24,23 +24,23 @@ import {
 export const MOD = 'Skeleton Cannibal Friend';
 export const MOD_FILE = `${MOD}.mod`;
 
-/** Откуда сборщик берёт ванильные записи (поля для копий и условия подключения). */
+/** Where the builder gets vanilla records (fields for copies and hook-up conditions). */
 export interface ScfSource {
   get(stringId: string): GameRecord | undefined;
-  /** Все записи по порядку первого появления в файлах ванили. */
+  /** All records in order of first appearance in the vanilla files. */
   all(): Iterable<GameRecord>;
 }
 
-/** scf_ids.json: постоянные номера уникальных пар (тип, имя) — на них ссылаются сохранения. */
+/** scf_ids.json: stable numbers of unique (type, name) pairs — saves reference them. */
 export interface ScfIds {
   next: number;
   ids: Record<string, number>;
 }
 
 export interface ScfResult {
-  /** Ключи `тип|имя`, которых не было в scf_ids.json (им выданы новые номера). */
+  /** `type|name` keys that were not in scf_ids.json (they got new numbers). */
   added: string[];
-  /** Итоговая таблица id (с добавленными). */
+  /** Final id table (with additions). */
   ids: ScfIds;
 }
 
@@ -65,7 +65,7 @@ function entries<V>(d: Dict<V> | undefined): [string, V][] {
   return d instanceof Map ? [...(d as ReadonlyMap<string, V>)] : Object.entries(d as Record<string, V>);
 }
 
-/** `{**base, **patch}`: ключи base по порядку, затем новые из patch. */
+/** `{**base, **patch}`: base keys in order, then new ones from patch. */
 function over<V>(base: ReadonlyMap<string, V>, patch: Dict<V> = {}): Map<string, V> {
   const out = new Map<string, V>(base);
   for (const [k, v] of entries(patch)) out.set(k, v);
@@ -86,7 +86,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
   let nid = 100;
   const sid = (): string => `${++nid}-${MOD_FILE}`;
 
-  /** Новая запись. */
+  /** New record. */
   const rec = (t: number, name: string, sd: string, f: Fields = {}): string => {
     ctx.createRecord(t, name, { stringId: sd });
     ctx.editRecord(sd, (d) => {
@@ -104,9 +104,9 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
   };
 
   /**
-   * Изменение ванильной записи. Каждое поле и категория — отдельной правкой по порядку: так ключи
-   * в записи мода идут в том же порядке, что у Python. Ссылка на цель, которая уже есть, заменяет
-   * её значения; маркер удаления снимает цель.
+   * Change to a vanilla record. Each field and category is a separate edit, in order: that way the keys
+   * in the mod record come in the same order as in Python. A reference to a target that already exists replaces
+   * its values; a deletion marker removes the target.
    */
   const chg = (sd: string, f: Fields): void => {
     const steps: ((d: GameRecord) => void)[] = [];
@@ -129,7 +129,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
     for (const step of steps) ctx.editRecord(sd, step);
   };
 
-  /** Новая запись по образцу src: поля копируются, refs заменяются по категориям, drop убирает категории. */
+  /** New record modelled on src: fields are copied, refs are replaced per category, drop removes categories. */
   const clone = (from: string, name: string, f: Fields & { drop?: readonly string[] } = {}): string => {
     const o = A(from);
     const refs = new Map<string, Reference[]>();
@@ -147,8 +147,8 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
     });
   };
 
-  // ---------- справочник
-  // все скелеты, включая подрасы из «Just Unlock Skeleton Subraces» (P4 Unit, Soldierbot, Screamer MkI)
+  // ---------- reference data
+  // all skeletons, including subraces from "Just Unlock Skeleton Subraces" (P4 Unit, Soldierbot, Screamer MkI)
   const SKELS = [
     '17946-stick_people.mod',
     '66529-Newwworld.mod',
@@ -178,7 +178,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
   const AI_HOME = '2677-gamedata.base';
   const SITSPOTS = '49371-rebirth.mod';
 
-  // ---------- диалоговые кирпичики
+  // ---------- dialogue building blocks
   const action = (n: number): string => rec(31, 'DIALOG_ACTION', sid(), { ints: { 'action name': n } });
   const cond = (n: number, who: number, cmp: number): string =>
     rec(31, 'DIALOG_ACTION', sid(), { ints: { 'compare by': cmp, 'condition name': n, tag: -1, who }, strs: { stringvar: '' } });
@@ -216,12 +216,12 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
 
   const [TRADE, JOIN, TAKEMONEY, TAKECAPTIVE, WAIT, ENDVISIT] = [action(1), action(3), action(8), action(40), action(12), action(38)];
   const [HAS1000, LESS1000] = [cond(2, 1, 2), cond(2, 1, 1)];
-  const CARRYING = cond(46, 1, 0); // DC_CARRYING_SOMEONE_TO_ENSLAVE: игрок несёт того, кого игра считает годным в рабы
-  const SQUAD_GT = cond(35, 1, 2); // в отряде игрока больше N
-  const HAS_OUTPOST = cond(74, 1, 2); // у игрока есть своё поселение (уровень > -1)
+  const CARRYING = cond(46, 1, 0); // DC_CARRYING_SOMEONE_TO_ENSLAVE: the player carries someone the game considers fit to be a slave
+  const SQUAD_GT = cond(35, 1, 2); // more than N in the player's squad
+  const HAS_OUTPOST = cond(74, 1, 2); // the player has their own settlement (level > -1)
   const PRICE = 1000;
 
-  // ---------- флаги прогресса: фиктивная фракция + world state «игрок — союзник»
+  // ---------- progress flags: a dummy faction + world state "the player is an ally"
   const FLAG_FIELDS = A('48708-rebirth.mod');
   const flag = (title: string): Flag => {
     const fa = rec(10, title, sid(), {
@@ -261,7 +261,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
   const ST2 = [W(FS1, 1), W(FS2, 0)];
   const ST3 = [W(FS2, 1), W(FS3, 0)];
 
-  // ---------- общие ветки (болтовня, торговля, найм, прощание)
+  // ---------- common branches (small talk, trade, recruiting, farewell)
   const news = [
     line(
       [
@@ -302,7 +302,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
   const bye = line('Ничего. Бывай.', PL, [line('Иди, Несъедобный. Мясо тебе не нужно, а нам больше достанется!', NPC)]);
   const COMMON = [ask, trade, join, bye];
 
-  // ---------- квесты: «Что нужно племени?» (описания с подсказками)
+  // ---------- quests: "What does the tribe need?" (descriptions with hints)
   const ok = line('Понял. Пойду.', PL);
   const info = (title: string, text: string, gate: Pair[], refs?: Refs): string =>
     line(`[${title}] Расскажи подробнее.`, PL, [line(text, NPC, [ok], refs ? { refs } : {})], { refs: ws(...gate) });
@@ -382,9 +382,9 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
   );
   const pNeeds = line('Что нужно племени?', PL, [needsNpc]);
 
-  // ---------- квесты: «Я сделал дело» (проверка и награда)
-  // после сдачи дела NPC говорит, что ещё осталось на этапе: по варианту реплики на каждое сочетание
-  // остальных флагов этапа (только что сданное дело считается сделанным — не зависим от того, успел ли флаг обновиться)
+  // ---------- quests: "I did the job" (check and reward)
+  // after a job is handed in the NPC says what is still left in the stage: one line variant per combination
+  // of the stage's other flags (the job just handed in counts as done — no dependency on whether the flag has updated yet)
   const STAGES: (readonly [Flag, string])[][] = [
     [
       [Q1, 'Горячий котёл'],
@@ -407,7 +407,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
     const others = STAGES.filter((qs) => qs.some(([q]) => q === fl)).flatMap((qs) => qs.filter(([q]) => q !== fl));
     const n = others.length;
     const out: string[] = [];
-    // как itertools.product((0,1), repeat=n): первый флаг меняется медленнее всех
+    // like itertools.product((0,1), repeat=n): the first flag changes slowest
     for (let m = 0; m < 2 ** n; m++) {
       const mask = others.map((_, i) => (m >> (n - 1 - i)) & 1);
       const left = others.filter((_, i) => mask[i] === 0).map(([, t]) => `«${t}»`);
@@ -428,8 +428,8 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
     [doneNpc('Живое! Тёплое! Котёл запоёт! Несъедобный — добрый друг. Держи, это для твоих костей.', Q1, [[REPAIR, 1]])],
     { refs: merge(ws(...ST1, W(Q1, 0)), eff([TAKECAPTIVE, 0])) },
   );
-  // без условия CARRYING: условие 46 — DC_CARRYING_SOMEONE_TO_ENSLAVE, и игра не считает «годным в рабы»
-  // любого пленника (охранник Святой нации не прошёл), поэтому сдача видна всё время, пока дело открыто
+  // no CARRYING condition: condition 46 is DC_CARRYING_SOMEONE_TO_ENSLAVE, and the game does not consider
+  // every prisoner "fit to be a slave" (a Holy Nation guard failed), so the hand-in is visible all the time while the job is open
   const mainDish = line(
     'Я принёс главное блюдо!',
     PL,
@@ -542,7 +542,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
   ];
   const pDone = line('Я сделал дело.', PL, [line(['Показывай, Несъедобный!', 'Ну? Что сделал?'], NPC, dones)]);
 
-  // ---------- доставка вестей в другие деревни
+  // ---------- delivering news to other villages
   const deliver2 = line(
     'Вождь Столицы людоедов шлёт слово: Столица снова сильна!',
     PL,
@@ -556,7 +556,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
     { refs: ws(W(Q7A, 1), W(Q7, 0)) },
   );
 
-  // ---------- корни разговора (порядок и очки: квесты Столицы людоедов > соседи > общий)
+  // ---------- conversation roots (order and score: Cannibal Capital quests > neighbours > common)
   const QUEST = [pNeeds, pDone, ...COMMON];
   const greetQ = ['Несъедобный! Кости-друг пришёл. Племени нужна помощь, слушай.', 'Несъедобный! Хорошо, что пришёл. Дела есть.'];
   const rWiz = line(['Кости-друг пришёл к Шаману. Говори, Несъедобный.', 'Шаман видит тебя, Несъедобный. Мясо стынет, дела ждут.'], NPC, QUEST, {
@@ -570,12 +570,12 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
   });
   const rAny = line('Несъедобный! Кости-друг пришёл. Чего хочешь?', NPC, COMMON);
 
-  // ---------- рост деревни: замены зданий и фракции-владельцы
+  // ---------- village growth: building replacements and owner factions
   const repl = (a: string, b: string): string => rec(103, `SCF ${a} -> ${b}`, sid(), { refs: { 'to replace': [R(a)], 'replace with': [R(b, 100)] } });
-  const RH = repl('3793-TwoStorey.mod', '3384-TwoStorey.mod'); // разрушенный дом -> целый
-  const RG = repl('3007-Walls.mod', '3006-Walls.mod'); // самодельные ворота -> Defensive Gate II
-  const RW = repl('3005-Walls.mod', '3004-Walls.mod'); // самодельная стена -> Defensive Wall II
-  const RWS = repl('3082-walls.mod', '3014-walls.mod'); // короткая стена -> короткая Defensive Wall II
+  const RH = repl('3793-TwoStorey.mod', '3384-TwoStorey.mod'); // ruined house -> intact
+  const RG = repl('3007-Walls.mod', '3006-Walls.mod'); // makeshift gate -> Defensive Gate II
+  const RW = repl('3005-Walls.mod', '3004-Walls.mod'); // makeshift wall -> Defensive Wall II
+  const RWS = repl('3082-walls.mod', '3014-walls.mod'); // short wall -> short Defensive Wall II
   const owner = (title: string, reps: string[]): string => {
     const o = A(CANNIBALS);
     return rec(10, title, sid(), {
@@ -593,8 +593,8 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
   const IN_DEADCAT: Refs = { 'in town of': [F0, F1, F2, F3].map((x) => R(x)) };
   const rChief = line(greetQ, NPC, QUEST, { refs: merge(ischar(CHIEF), IN_DEADCAT), score: 100 });
 
-  // ---------- пленник на плече: Шаман и вожди Столицы людоедов сами спрашивают о нём первой репликой,
-  // как ванильные работорговцы (условие «несёт кого-то» стоит на реплике NPC, а не игрока)
+  // ---------- prisoner on the shoulder: the Shaman and the Cannibal Capital chiefs ask about them with their first line,
+  // like vanilla slavers (the "carrying someone" condition is on the NPC line, not the player's)
   const spareMeat = line('Просто мясо, в подарок котлу.', PL, [line('Котёл всегда голодный! Держи сушёного мяса для твоих мясных.', NPC, [], { refs: give([DRIED, 3]) })], {
     refs: merge(ws(W(Q1, 1)), eff([TAKECAPTIVE, 0])),
   });
@@ -604,7 +604,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
   const rWizC = line(carryText, NPC, carryOpts, { refs: merge(ischar(WIZ), cnd([CARRYING, 1])), score: 150 });
   const rChiefC = line(carryText, NPC, carryOpts, { refs: merge(ischar(CHIEF), IN_DEADCAT, cnd([CARRYING, 1])), score: 150 });
 
-  // for enemies=1: людоеды формально враждебны всем (отношение -100), без флага игра прячет «Говорить»
+  // for enemies=1: cannibals are formally hostile to everyone (relation -100); without the flag the game hides "Talk"
   const talk = rec(18, 'skeleton friend talk to', sid(), {
     bools: { 'for enemies': 1, locked: 0, monologue: 1, 'one at a time': 0 },
     floats: { 'chance permanent': 100, 'chance temporary': 100 },
@@ -612,7 +612,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
     refs: { lines: [rWizC, rChiefC, rWiz, rChief, rMeat, rVill, rAny].map((x) => R(x)) },
   });
 
-  // ---------- фразы людоедов про скелета
+  // ---------- cannibal lines about the skeleton
   const jokes = [
     'Опять Несъедобный... Одни кости, даже бульона не сваришь.',
     'Не трогай его! Шаман сказал: кости священные.',
@@ -656,7 +656,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
     ],
     { enemies: 1, one: 1, chance: 35 },
   );
-  // выкрик при виде скелета с пленником на плече: подсказка, что мясо надо нести и заговорить
+  // shout on seeing a skeleton with a prisoner on the shoulder: a hint to carry the meat and start talking
   const carryBark = dialog(
     'skeleton friend sees meat',
     [
@@ -670,7 +670,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
     { enemies: 1, one: 1 },
   );
 
-  // ---------- повар Котлоед: приносишь любого живого — получаешь угощение
+  // ---------- the cook Kotloed: bring anyone alive — get a treat
   const cookTake = [
     line('О-о, жирное! Котлоед доволен. Держи редкую вещь — для твоих костей.', NPC, [], { refs: give([REPAIR, 1]), score: 30, chance: 10 }),
     line('Хорошее мясо! Держи грог, угости своих мясных.', NPC, [], { refs: give([GROG, 2]), score: 20, chance: 30 }),
@@ -696,14 +696,14 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
     strs: { tag: '' },
     refs: { dialogs: [R(cookTalk, 1), R(carryBark, 67), R(carryBark, 5), R(barks, 67), R(barks, 5)] },
   });
-  // свой пакет вместо ванильного 3721: тот в rebirth.mod/Dialogue.mod переименован в «Cannibals --Unfinished»,
-  // а пакет с «--» в имени игра игнорирует (и пока он висит на людоеде, не работают даже добавленные рядом пакеты)
+  // our own package instead of vanilla 3721: in rebirth.mod/Dialogue.mod that one is renamed to "Cannibals --Unfinished",
+  // and the game ignores a package with "--" in its name (and while it hangs on a cannibal, even packages added next to it do not work)
   const SPKG = rec(73, 'Skeleton Friend Cannibals', sid(), {
     strs: { tag: '' },
     refs: { dialogs: [R(talk, 1), R(carryBark, 67), R(carryBark, 5), R(barks, 67), R(barks, 5)] },
   });
   const nobounty = { 'bounty chance': 0, 'bounty amount': 0 };
-  // не unique: при смене этапа игра пересоздаёт жителей, а уникальный персонаж второй раз не появляется (так пропадали Шаман и Котлоед)
+  // not unique: when the stage changes the game recreates residents, and a unique character never appears a second time (that is how the Shaman and Kotloed vanished)
   const COOK = clone(CHIEF, 'Котлоед', {
     bools: { unique: 0, named: 1 },
     ints: nobounty,
@@ -718,15 +718,15 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
   });
   const ENVOY = clone(CHIEF, 'Посланник Шамана', { ints: nobounty, refs: { 'dialogue package': [R(SPKG)] }, drop: ['bounty factions'] });
 
-  // ---------- отряды жителей
+  // ---------- resident squads
   const FAC = [R(CANNIBALS)];
   const COOKSQ = clone(SQ_GUARDS, 'Котёл Котлоеда', {
     ints: { 'vendors fill total amount': 0, 'gear artifacts base value': 0 },
     refs: { leader: [R(COOK, 1)], 'AI packages': [R(AI_HOME)], 'dialog leader': [R(cookPkg)], faction: FAC },
     drop: ['squad', 'vendors'],
   });
-  // дом 3384 (Storm_House_01_NEW) и ванильные раскладки для него из data/newland/leveldata/interiors.level:
-  // 'General Shop' + вывеска 'Trader Sign', 'Slave Shop' (клетки), 'Residential Small' (жилой дом)
+  // house 3384 (Storm_House_01_NEW) and vanilla layouts for it from data/newland/leveldata/interiors.level:
+  // 'General Shop' + sign 'Trader Sign', 'Slave Shop' (cages), 'Residential Small' (dwelling)
   const STORM = '3384-TwoStorey.mod';
   const TRADERSQ = clone(SQ_GUARDS, 'Лавка Столицы людоедов', {
     bools: { 'is trader': 1 },
@@ -747,17 +747,17 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
     strs: { 'layout interior': 'Residential Small' },
     refs: { building: [R(STORM)], faction: FAC },
   });
-  // тюрьма: клетки из 'Slave Shop', ИИ тюремщиков как у «Rebirth Cage Guards» (49391-rebirth.mod)
+  // prison: cages from 'Slave Shop', jailer AI as in "Rebirth Cage Guards" (49391-rebirth.mod)
   const PRISONSQ = clone(SQ_GUARDS, 'Тюрьма Столицы людоедов', {
     strs: { 'building name': '', 'layout interior': 'Slave Shop', 'layout exterior': '' },
     refs: { building: [R(STORM)], 'AI packages': [R('5221-gamedata.base'), R(AI_HOME)], faction: FAC, 'dialog leader': [R(SPKG)] },
     drop: ['vendors'],
   });
   const GATES_OK = clone(SQ_GATES, 'repaired gates', { bools: { 'building ruined': 0 }, refs: { faction: FAC } });
-  // у этих отрядов нет своей фракции: иначе они стали бы жителями фракции-владельца
+  // these squads have no faction of their own: otherwise they would become residents of the owner faction
   for (const sq of [SQ_WIZ, SQ_HOUSE, SQ_GATES]) chg(sq, { refs: { faction: FAC, ...(sq === SQ_WIZ ? { 'dialog leader': [R(SPKG)] } : {}) } });
 
-  // ---------- подменные версии Столицы людоедов по этапам
+  // ---------- replacement versions of the Cannibal Capital per stage
   type Resident = readonly [string, number, number];
   const town = (title: string, fac: string, residents: readonly Resident[], condWs: readonly Pair[]): string => {
     const o = A(DEADCAT);
@@ -782,7 +782,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
   ];
   const COOK_RES: Resident[] = [[COOKSQ, 1, 3]];
   const O0 = town('Deadcat (SCF stage 0)', F0, [...BASE_RES, [SQ_HOUSE, 8, 3], [SQ_GATES, 1, 2], ...COOK_RES], [W(FS1, 0)]);
-  // 6 домов 3384: 4 жилых, тюрьма, лавка
+  // 6 houses 3384: 4 dwellings, prison, shop
   const HOUSES: Resident[] = [
     [HOUSE_OK, 4, 3],
     [PRISONSQ, 1, 3],
@@ -798,8 +798,8 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
   const O2 = town('Deadcat (SCF stage 2)', F2, [...MORE, ...HOUSES, [GATES_OK, 1, 2], ...COOK_RES], [W(FS2, 1), W(FS3, 0)]);
   const O3 = town('Deadcat (SCF stage 3)', F3, [...MORE, ...HOUSES, [GATES_OK, 1, 2], ...COOK_RES], [W(FS3, 1)]);
   chg(DEADCAT, { refs: { 'override town': [O3, O2, O1, O0].map((x) => R(x)) } });
-  // когда город уже подменён, игра смотрит только 'override town' текущей подмены, а не исходного города
-  // (так в ванили: Okran's Shield (override) empire -> destroyed); без этого город навсегда застревает на этапе 0
+  // once the town is replaced, the game looks only at 'override town' of the current replacement, not the original town
+  // (as in vanilla: Okran's Shield (override) empire -> destroyed); without this the town is stuck at stage 0 forever
   for (const [cur, nxt] of [
     [O0, [O3, O2, O1]],
     [O1, [O3, O2]],
@@ -808,7 +808,7 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
     ctx.editRecord(cur, (d) => d.refs.set('override town', nxt.map((x) => R(x))));
   }
 
-  // ---------- визиты с дарами (как молебен Святой Нации)
+  // ---------- visits with gifts (like the Holy Nation prayer)
   const ENVOYSQ = clone('99003-Dialogue.mod', 'Посланники Шамана', {
     refs: { leader: [R(ENVOY, 1)], squad: [R(CANNIBAL, 3)], faction: FAC },
     drop: ['special items', 'vendors'],
@@ -870,9 +870,9 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
     'Великий шаман шлёт богатые дары кости племени! Книги, древние знаки и лекарство для костей.',
   );
 
-  // ---------- подключение к людоедам
-  // везде, где висит ванильный 3721, снимаем его (маркер удаления) и вешаем свой пакет; беседу даём и напрямую,
-  // как у ванильных торговцев. Сам 3721 не трогаем.
+  // ---------- hooking up to the cannibals
+  // wherever vanilla 3721 hangs, we remove it (deletion marker) and hang our own package; talk is also given directly,
+  // like vanilla traders. 3721 itself is not touched.
   const hasPkg = (o: GameRecord, cat: string): boolean => (o.refs.get(cat) ?? []).some((x) => x.target === PKG);
   for (const o of src.all()) {
     if (o.type === 1 && hasPkg(o, 'dialogue package')) {
@@ -883,12 +883,12 @@ export function buildSkeletonCannibalFriend(ctx: ModContext, src: ScfSource, pin
       if (Object.keys(r).length) chg(o.stringId, { refs: r });
     }
   }
-  // Шаман не unique (см. COOK); правка попадает в ту же запись мода, что вешает ему пакет диалогов
+  // the Shaman is not unique (see COOK); the edit lands in the same mod record that hangs the dialogue package on him
   chg(WIZ, { bools: { unique: 0 } });
   chg(CANNIBALS, { refs: { campaigns: [C1, C2, C3].map((x) => R(x)), relations: [F0, F1, F2, F3].map((x) => R(x, 100)) } });
 
-  // ---------- постоянные ID: сейвы ссылаются на фракции/город/визиты мода по sid,
-  // поэтому уникальные (тип, имя) получают номер из scf_ids.json, а не по порядку сборки
+  // ---------- stable IDs: saves reference the mod's factions/town/visits by sid,
+  // so unique (type, name) pairs get a number from scf_ids.json, not by build order
   const pin: ScfIds = { next: pinned.next, ids: { ...pinned.ids } };
   const added: string[] = [];
   const cnt = new Map<string, number>();

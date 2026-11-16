@@ -1,8 +1,8 @@
 /**
- * Инструменты мира: что стоит вокруг точки или города (`list_in_area`), поставить / сдвинуть /
- * убрать объект (`place`, `move`, `remove`), история и отмена правок мира (`world_history`,
- * `world_undo`). Правки — в файлах уровня мода (`leveldata/zone.X.Y.zone`), пишутся вместе с
- * модом инструментом save. y везде — высота над землёй (как в файлах игры).
+ * World tools: what stands around a point or town (`list_in_area`), place / move /
+ * remove an object (`place`, `move`, `remove`), history and undo of world edits (`world_history`,
+ * `world_undo`). Edits go into the mod level files (`leveldata/zone.X.Y.zone`), written together with the
+ * mod by the save tool. y everywhere is the height above ground (as in the game files).
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
@@ -20,7 +20,7 @@ export interface WorldToolHelpers {
 const READ = { readOnlyHint: true, openWorldHint: false } as const;
 const EDIT = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 
-/** Объект мира одной строкой: `файл|владелец|ключ` (так его принимают move и remove). */
+/** A world object as one line: `file|owner|key` (that is how move and remove accept it). */
 export function objectHandle(p: { file: string; holder: string; key: string }): string {
   return `${p.file}|${p.holder}|${p.key}`;
 }
@@ -32,14 +32,14 @@ function parseHandle(spec: string): { file: string; holder: string; key: string 
   return { file, holder, key };
 }
 
-/** Угол поворота вокруг вертикали в градусах (из кватерниона w, x, y, z). */
+/** Rotation angle around the vertical in degrees (from the quaternion w, x, y, z). */
 export function yawOf(q: Vec4): number {
   const [w, x, y, z] = q;
   const deg = (Math.atan2(2 * (w * y + x * z), 1 - 2 * (x * x + y * y)) * 180) / Math.PI;
   return Math.round(((deg % 360) + 360) % 360);
 }
 
-/** Повернуть кватернион вокруг вертикали на `deg` градусов (наклон сохраняется). */
+/** Rotate a quaternion around the vertical by `deg` degrees (the tilt is kept). */
 export function turn(q: Vec4, deg: number): Vec4 {
   const h = (deg * Math.PI) / 360;
   const [bw, bx, by, bz] = q;
@@ -67,7 +67,7 @@ export function registerWorldTools(server: McpServer, session: Session, { run, r
   };
   const buildingOf = (p: Placement): BuildingPlacement | undefined => session.world().buildings().find((b) => b.key === p.key && b.holder === p.holder && b.file === p.file);
 
-  /** Точка «рядом с»: город или размещённая запись по id или имени. */
+  /** A "near" point: a town or a placed record by id or name. */
   const centreOf = (ctx: ModContext, spec: string): { x: number; z: number; label: string } => {
     const id = resolveId(ctx, spec, ['TOWN', 'BUILDING']);
     const w = session.world();
@@ -162,7 +162,7 @@ export function registerWorldTools(server: McpServer, session: Session, { run, r
         const holder = edits.holders(path).find((h) => h.endsWith('buildinglist')) ?? '0-buildinglist';
         const rotation = turn([1, 0, 0, 0], a.angle ?? 0);
         const notes: string[] = [];
-        // Высота в мире для состояния здания: земля по карте высот игры + y.
+        // World height for the building state: ground from the game heightmap + y.
         const g = await session.groundAt([{ x: a.x, z: a.z }]);
         const states = newBuildingStates(ctx.get(target), (g?.[0] ?? 0) + (a.y ?? 0));
         if (states && !g) notes.push('no height map: world Y pos = y (the game may put the building at the wrong height)');
@@ -211,7 +211,7 @@ export function registerWorldTools(server: McpServer, session: Session, { run, r
         const p = placementOf(h);
         const b = p ? buildingOf(p) : undefined;
         if (b?.worldY !== undefined) {
-          // Высота в мире: прежняя + подъём над землёй + перепад рельефа.
+          // World height: the previous one + lift above ground + terrain difference.
           let dg = 0;
           if (x !== x0 || z !== z0) {
             const g = await session.groundAt([{ x: x0, z: z0 }, { x, z }]);

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { formatGameState, formatTraceRecord, type GameState, type TraceRecord } from '../src/index.ts';
 import { GameBridge, GameBridgeError } from '../src/node/index.ts';
 
-/** Поддельный плагин: отвечает по таблице команд, умеет молчать и рвать связь. */
+/** Fake plugin: answers from a command table, can stay silent and drop the connection. */
 function fakeGame(handler: (cmd: string, args: Record<string, unknown>, sock: Socket) => unknown): Promise<{ server: Server; port: number; clients: Socket[] }> {
   const clients: Socket[] = [];
   const server = createServer((sock) => {
@@ -51,7 +51,7 @@ afterEach(() => {
 });
 
 describe('GameBridge', () => {
-  it('сопоставляет ответы по id и передаёт аргументы', async () => {
+  it('matches answers by id and passes arguments', async () => {
     const seen: unknown[] = [];
     const g = await fakeGame((cmd, args) => {
       seen.push([cmd, args]);
@@ -70,7 +70,7 @@ describe('GameBridge', () => {
     await expect(b.request('nope')).rejects.toMatchObject({ code: 'unknown_cmd' });
   });
 
-  it('без игры — no_connection, без ответа — timeout', async () => {
+  it('no game — no_connection, no answer — timeout', async () => {
     const g = await fakeGame(() => undefined);
     const b = new GameBridge({ port: g.port, timeoutMs: 100 });
     cleanup.push(() => { b.close(); }, () => g.server.close());
@@ -85,7 +85,7 @@ describe('GameBridge', () => {
     expect((err as GameBridgeError).code).toBe('no_connection');
   });
 
-  it('после обрыва переподключается сам', async () => {
+  it('reconnects on its own after a drop', async () => {
     let calls = 0;
     const g = await fakeGame((cmd, _args, sock) => {
       calls++;
@@ -102,7 +102,7 @@ describe('GameBridge', () => {
     expect(g.clients.length).toBe(2);
   });
 
-  it('разбирает ответ, пришедший кусками, и пачку ответов в одном пакете', async () => {
+  it('parses an answer that came in chunks and a batch of answers in one packet', async () => {
     const g = await fakeGame(() => undefined);
     const b = new GameBridge({ port: g.port });
     cleanup.push(() => { b.close(); }, () => g.server.close());
@@ -119,15 +119,15 @@ describe('GameBridge', () => {
   });
 });
 
-describe('формат ответов игры', () => {
-  it('состояние: время суток, выбранный, позиция', () => {
+describe('game answer format', () => {
+  it('state: time of day, selected, position', () => {
     const lines = formatGameState(STATE);
     expect(lines[0]).toBe('day 12, 12:30; speed ×1; build Steam');
     expect(lines[1]).toContain('Мэгги [42-x.mod «Maggie»]');
     expect(lines[2]).toBe('  position: 1.3, 2, -3');
   });
 
-  it('трассировка: выбор и причины выпадения соперников', () => {
+  it('trace: the choice and why the rivals dropped out', () => {
     const r: TraceRecord = {
       seq: 3,
       event: 1,

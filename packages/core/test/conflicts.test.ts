@@ -1,5 +1,5 @@
 /**
- * Конфликты модов: одно поле — разные значения, удаление против изменения, `only`, touchedBy.
+ * Mod conflicts: one field — different values, deletion vs change, `only`, touchedBy.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -39,8 +39,8 @@ const vanilla = layer(
   rec('2-s', (r) => r.floats.set('cut', 1), 'Sabre'),
 );
 
-describe('конфликты модов', () => {
-  it('одно поле, разные значения: побеждает поздний; одинаковые значения — не конфликт', () => {
+describe('mod conflicts', () => {
+  it('one field, different values: the later one wins; equal values — no conflict', () => {
     const a = layer('A.mod', rec('1-k', (r) => { r.floats.set('cut', 1.5); r.floats.set('weight', 4); }));
     const b = layer('B.mod', rec('1-k', (r) => { r.floats.set('cut', 2); r.floats.set('weight', 4); }));
     const found = findConflicts([vanilla, a, b]);
@@ -53,21 +53,21 @@ describe('конфликты модов', () => {
     expect(formatConflict(found[0]!, undefined, 'ru').join('\n')).toContain('победит B.mod');
   });
 
-  it('ссылки: разные цели в одной категории — не конфликт; одна цель, удалить против изменить — конфликт', () => {
+  it('references: different targets in one category — no conflict; one target, delete vs change — conflict', () => {
     const a = layer('A.mod', rec('1-k', (r) => r.refs.set('materials', [{ target: 'steel', v0: 1, v1: 0, v2: 0 }, { target: 'iron', v0: R, v1: R, v2: R }])));
     const b = layer('B.mod', rec('1-k', (r) => r.refs.set('materials', [{ target: 'cloth', v0: 1, v1: 0, v2: 0 }, { target: 'iron', v0: 3, v1: 0, v2: 0 }])));
     const [c] = findConflicts([vanilla, a, b]);
     expect(c!.fields.map((f) => [f.id, f.base, f.values.map((v) => v.value), f.winner])).toEqual([['ref:materials:iron', '1 0 0', ['удалить', '3 0 0'], 'B.mod']]);
   });
 
-  it('удаление записи против изменения', () => {
+  it('record deletion vs change', () => {
     const a = layer('A.mod', rec('2-s', (r) => r.floats.set('cut', 3), 'Sabre'));
     const b = layer('B.mod', removalMarker(rec('2-s', () => undefined, 'Sabre')));
     const [c] = findConflicts([vanilla, a, b]);
     expect(c!.fields[0]).toMatchObject({ id: 'record', base: 'есть', values: [{ layer: 'A.mod', value: 'изменить' }, { layer: 'B.mod', value: 'удалить' }], winner: 'B.mod' });
   });
 
-  it('only: только записи и поля, которые задаёт этот мод; ваниль не участвует', () => {
+  it('only: only records and fields this mod sets; vanilla does not take part', () => {
     const a = layer('A.mod', rec('1-k', (r) => r.floats.set('cut', 1.5)));
     const b = layer('B.mod', rec('1-k', (r) => { r.floats.set('cut', 2); r.floats.set('weight', 9); }));
     const c = layer('C.mod', rec('1-k', (r) => r.floats.set('weight', 7)), rec('2-s', (r) => r.floats.set('cut', 4), 'Sabre'));
@@ -78,14 +78,14 @@ describe('конфликты модов', () => {
     expect(findConflicts([vanilla, a])).toEqual([]);
   });
 
-  it('новая запись в двух модах: имя и поля сравниваются между собой', () => {
+  it('new record in two mods: name and fields are compared with each other', () => {
     const a = layer('A.mod', rec('9-new', (r) => r.ints.set('n', 1), 'Новая'));
     const b = layer('B.mod', rec('9-new', (r) => r.ints.set('n', 1), 'Другая'));
     const [c] = findConflicts([vanilla, a, b]);
     expect(c!.fields.map((f) => [f.id, f.base])).toEqual([['name', undefined]]);
   });
 
-  it('touchedBy: что задаёт каждый мод, создание и удаление', () => {
+  it('touchedBy: what each mod sets, creation and deletion', () => {
     const a = layer('A.mod', rec('1-k', (r) => r.floats.set('cut', 1.5), 'Катана'));
     const b = layer('B.mod', removalMarker(rec('1-k')));
     const rep = touchedBy([vanilla, a, b], '1-k');

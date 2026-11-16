@@ -1,5 +1,5 @@
 /**
- * Что нужно всем командам: пути к игре, ванильные слои (читаются один раз), контекст мода.
+ * What all commands need: game paths, vanilla layers (read once), the mod context.
  */
 import { basename } from 'node:path';
 import { ModContext, UiTextError, uiText, type Layer, type UiText } from '@kenshi-editor/core';
@@ -38,7 +38,7 @@ export function resolveCliLang(option: string | undefined, env: NodeJS.ProcessEn
 export interface WorkspaceOptions {
   cwd: string;
   env: NodeJS.ProcessEnv;
-  /** Папка игры вместо найденной по KENSHI_DIR / kenshi-paths.json. */
+  /** Game folder instead of the one found via KENSHI_DIR / kenshi-paths.json. */
   game?: string;
   /** Data language (locale code or `none`) instead of KENSHI_DATA_LOCALE / the game's settings.cfg. */
   dataLocale?: string;
@@ -47,15 +47,15 @@ export interface WorkspaceOptions {
 }
 
 export interface OpenOptions {
-  /** Путь к .mod или имя установленного мода. */
+  /** Path to a .mod or an installed mod name. */
   mod?: string;
-  /** Имя нового мода, если `mod` не задан или файла ещё нет. */
+  /** Name of a new mod if `mod` is not given or the file does not exist yet. */
   name?: string;
-  /** Зависимости вместо записанных в заголовке мода. */
+  /** Dependencies instead of those written in the mod header. */
   dependencies?: string[];
   schema?: boolean;
   po?: boolean;
-  /** Мод должен существовать. */
+  /** The mod must exist. */
   mustExist?: boolean;
 }
 
@@ -94,7 +94,7 @@ export class Workspace {
     return (this.vanillaCache ??= loadVanillaLayers(this.paths));
   }
 
-  /** Путь к моду: файл или установленный мод по имени. */
+  /** Mod path: a file or an installed mod by name. */
   modPath(spec: string, mustExist = true): string {
     const p = resolveModPath(this.paths, spec, this.cwd);
     if (p) return p;
@@ -102,7 +102,7 @@ export class Workspace {
     return spec;
   }
 
-  /** Контекст: ваниль → зависимости → мод. */
+  /** Context: vanilla → dependencies → mod. */
   open(options: OpenOptions = {}): LoadedContext {
     const modPath = options.mod !== undefined ? this.modPath(options.mod, options.mustExist ?? true) : undefined;
     return loadModContext({
@@ -117,7 +117,7 @@ export class Workspace {
     });
   }
 
-  /** Файл мода без игры: все записи — новые, имена целей ссылок неизвестны. */
+  /** A mod file without the game: all records are new, reference target names are unknown. */
   openStandalone(path: string): ModContext {
     return new ModContext({ layers: [], mod: readDataFileSync(path), modName: basename(path) });
   }

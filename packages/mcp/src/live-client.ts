@@ -1,5 +1,5 @@
 /**
- * Клиент живой связи: подключение MCP к открытому редактору (WebSocket Node, без зависимостей).
+ * Live link client: connecting MCP to the open editor (Node WebSocket, no dependencies).
  */
 import type { LiveDiscovery, LiveRequestBody, LiveResponse } from '@kenshi-editor/core';
 
@@ -10,7 +10,7 @@ export class LiveClient {
   private nextId = 1;
   private readonly pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   closed = false;
-  /** Причина обрыва (если связь закрылась не по нашей просьбе). */
+  /** Reason for the drop (if the connection closed without us asking). */
   closeReason: string | undefined;
 
   private constructor(ws: WebSocket) {
@@ -40,7 +40,7 @@ export class LiveClient {
     });
   }
 
-  /** Подключиться и представиться токеном из файла обнаружения. */
+  /** Connect and introduce ourselves with the token from the discovery file. */
   static async connect(d: LiveDiscovery, client = 'kenshi-mcp'): Promise<LiveClient> {
     const ws = new WebSocket(`ws://127.0.0.1:${d.port}`);
     await new Promise<void>((resolve, reject) => {

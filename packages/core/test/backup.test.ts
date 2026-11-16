@@ -54,15 +54,15 @@ afterEach(() => {
 
 const ls = (dir: string): string[] => (existsSync(dir) ? readdirSync(dir).sort() : []);
 
-describe('безопасное сохранение', () => {
-  it('новый файл пишется, временных файлов не остаётся', () => {
+describe('safe save', () => {
+  it('a new file is written, no temp files are left', () => {
     const r = safeSaveMod(modPath, modBytes(1), { dataDir: data, keep: 5 });
     expect(r.backup).toBeUndefined();
     expect(readFileSync(modPath)).toEqual(Buffer.from(modBytes(1)));
     expect(ls(join(game, 'mods', 'Test'))).toEqual(['Test.mod']);
   });
 
-  it('прежняя версия уходит в резервную копию, рядом с модом ничего не появляется', () => {
+  it('the previous version goes to a backup, nothing appears next to the mod', () => {
     safeSaveMod(modPath, modBytes(1), { dataDir: data, keep: 5, now: 1000 });
     const r = safeSaveMod(modPath, modBytes(2), { dataDir: data, keep: 5, now: 2000 });
     expect(r.backup?.kind).toBe('backup');
@@ -71,16 +71,16 @@ describe('безопасное сохранение', () => {
     expect(ls(join(game, 'mods', 'Test'))).toEqual(['Test.mod']);
   });
 
-  it('ротация: хранится не больше keep копий, самые новые', () => {
+  it('rotation: no more than keep copies are kept, the newest ones', () => {
     for (let i = 1; i <= 9; i++) safeSaveMod(modPath, modBytes(i), { dataDir: data, keep: 3, now: i * 1000 });
     const list = listBackups(data, { path: modPath, modName: 'Test.mod' });
     expect(list).toHaveLength(3);
     expect(list.map((b) => b.time)).toEqual([9000, 8000, 7000]);
-    // самая новая копия — версия 8 (9 сейчас в файле)
+    // the newest copy is version 8 (9 is in the file now)
     expect(readBackup(data, { path: modPath, modName: 'Test.mod' }, list[0]!.id)).toEqual(new Uint8Array(modBytes(8)));
   });
 
-  it('keep = 0 — копий нет, мод сохраняется', () => {
+  it('keep = 0 — no copies, the mod is saved', () => {
     safeSaveMod(modPath, modBytes(1), { dataDir: data, keep: 0 });
     const r = safeSaveMod(modPath, modBytes(2), { dataDir: data, keep: 0 });
     expect(r.backup).toBeUndefined();
@@ -88,14 +88,14 @@ describe('безопасное сохранение', () => {
     expect(readFileSync(modPath)).toEqual(Buffer.from(modBytes(2)));
   });
 
-  it('одинаковая версия не плодит копии', () => {
+  it('an identical version does not multiply copies', () => {
     safeSaveMod(modPath, modBytes(1), { dataDir: data, keep: 5, now: 1 });
     safeSaveMod(modPath, modBytes(2), { dataDir: data, keep: 5, now: 2 });
     safeSaveMod(modPath, modBytes(2), { dataDir: data, keep: 5, now: 3 });
     expect(listBackups(data, { path: modPath, modName: 'Test.mod' })).toHaveLength(1);
   });
 
-  it('сбой при записи временного файла не портит исходный мод', () => {
+  it('a failure writing the temp file does not corrupt the original mod', () => {
     safeSaveMod(modPath, modBytes(1), { dataDir: data, keep: 5 });
     const ops: FileOps = {
       writeFile(path, bytes) {
@@ -112,7 +112,7 @@ describe('безопасное сохранение', () => {
     expect(listBackups(data, { path: modPath, modName: 'Test.mod' })).toHaveLength(0);
   });
 
-  it('сбой при замене не портит исходный мод и убирает временный файл', () => {
+  it('a failure on replace does not corrupt the original mod and removes the temp file', () => {
     safeSaveMod(modPath, modBytes(1), { dataDir: data, keep: 5 });
     const ops: FileOps = {
       writeFile: (path, bytes) => { writeFileSync(path, bytes); },
@@ -125,7 +125,7 @@ describe('безопасное сохранение', () => {
     expect(ls(join(game, 'mods', 'Test'))).toEqual(['Test.mod']);
   });
 
-  it('записанное с искажением (проверка чтением) не заменяет мод', () => {
+  it('data written corrupted (checked by reading back) does not replace the mod', () => {
     safeSaveMod(modPath, modBytes(1), { dataDir: data, keep: 5 });
     const ops: FileOps = {
       writeFile(path, bytes) {
@@ -141,15 +141,15 @@ describe('безопасное сохранение', () => {
     expect(readFileSync(modPath)).toEqual(Buffer.from(modBytes(1)));
   });
 
-  it('байты, не читаемые как мод, не записываются вовсе', () => {
+  it('bytes not readable as a mod are not written at all', () => {
     safeSaveMod(modPath, modBytes(1), { dataDir: data, keep: 5 });
     expect(() => safeSaveMod(modPath, new Uint8Array([1, 2, 3]), { dataDir: data, keep: 5 })).toThrow();
     expect(readFileSync(modPath)).toEqual(Buffer.from(modBytes(1)));
   });
 
-  it('сбой копии не мешает сохранению, ошибка возвращается', () => {
+  it('a copy failure does not prevent saving, the error is returned', () => {
     safeSaveMod(modPath, modBytes(1), { dataDir: data, keep: 5 });
-    // Вместо папки данных — файл: копию положить некуда.
+    // A file instead of the data folder: there is nowhere to put the copy.
     const blocked = join(root, 'blocked');
     writeFileSync(blocked, 'x');
     const r = safeSaveMod(modPath, modBytes(2), { dataDir: blocked, keep: 5 });
@@ -157,7 +157,7 @@ describe('безопасное сохранение', () => {
     expect(readFileSync(modPath)).toEqual(Buffer.from(modBytes(2)));
   });
 
-  it('writeFileAtomic заменяет существующий файл', () => {
+  it('writeFileAtomic replaces an existing file', () => {
     const p = join(root, 'a.bin');
     writeFileSync(p, 'old');
     writeFileAtomic(p, new Uint8Array([1, 2, 3]));
@@ -166,10 +166,10 @@ describe('безопасное сохранение', () => {
   });
 });
 
-describe('автосохранение', () => {
+describe('autosave', () => {
   const ref = (): { path: string; modName: string } => ({ path: modPath, modName: 'Test.mod' });
 
-  it('пишет в папку данных, мод и его папка не меняются', () => {
+  it('writes into the data folder, the mod and its folder do not change', () => {
     writeFileSync(modPath, modBytes(1));
     const before = readFileSync(modPath);
     writeAutosave(data, ref(), modBytes(2), { forbidden: [game] });
@@ -180,7 +180,7 @@ describe('автосохранение', () => {
     expect(ls(game)).toEqual(['mods']);
   });
 
-  it('папка данных внутри игры или мастерской — отказ, ничего не записано', () => {
+  it('data folder inside the game or Workshop — refused, nothing written', () => {
     const inGame = join(game, 'userData');
     expect(() => writeAutosave(inGame, ref(), modBytes(2), { forbidden: [game] })).toThrow(/refusing/);
     expect(existsSync(inGame)).toBe(false);
@@ -188,7 +188,7 @@ describe('автосохранение', () => {
     expect(() => writeAutosave(join(workshop, '1', 'data'), ref(), modBytes(2), { forbidden: [game, workshop] })).toThrow(/refusing/);
   });
 
-  it('имя мода с путями и странными символами не выводит запись за папку автосохранений', () => {
+  it('a mod name with paths and odd characters does not take the write outside the autosave folder', () => {
     const evil = { modName: '..\\..\\evil:*?.mod' };
     writeAutosave(data, evil, modBytes(2));
     const f = autosaveFile(data, evil);
@@ -197,19 +197,19 @@ describe('автосохранение', () => {
     expect(ls(root).sort()).toEqual(['Kenshi', 'userData']);
   });
 
-  it('не читаемые как мод байты не записываются', () => {
+  it('bytes not readable as a mod are not written', () => {
     expect(() => writeAutosave(data, ref(), new Uint8Array([9, 9, 9]))).toThrow();
     expect(autosaveInfo(data, ref())).toBeUndefined();
   });
 
-  it('ключ: тот же мод — тот же ключ, другой путь — другой; новый мод по имени', () => {
+  it('key: same mod — same key, other path — other key; new mod by name', () => {
     expect(modKey({ path: modPath, modName: 'Test.mod' })).toBe(modKey({ path: modPath, modName: 'Other name' }));
     expect(modKey({ path: join(root, 'other', 'Test.mod'), modName: 'Test.mod' })).not.toBe(modKey({ path: modPath, modName: 'Test.mod' }));
     expect(modKey({ modName: 'New.mod' })).toBe(modKey({ modName: 'new.MOD' }));
     expect(modKey({ modName: 'New.mod' })).toMatch(/^new-[0-9a-f]{8}$/);
   });
 
-  it('очистка убирает файл и описание', () => {
+  it('cleanup removes the file and the description', () => {
     writeAutosave(data, ref(), modBytes(2));
     expect(clearAutosave(data, ref())).toBe(true);
     expect(ls(autosaveDir(data))).toEqual([]);
@@ -217,13 +217,13 @@ describe('автосохранение', () => {
   });
 });
 
-describe('восстановление', () => {
+describe('restore', () => {
   const ref = (): { path: string; modName: string } => ({ path: modPath, modName: 'Test.mod' });
   const setMtime = (p: string, ms: number): void => {
     utimesSync(p, ms / 1000, ms / 1000);
   };
 
-  it('автосохранение новее мода — предлагается; байты возвращаются как записаны', () => {
+  it('autosave newer than the mod — offered; bytes come back as written', () => {
     writeFileSync(modPath, modBytes(1));
     setMtime(modPath, Date.now() - 60_000);
     writeAutosave(data, ref(), modBytes(2));
@@ -233,21 +233,21 @@ describe('восстановление', () => {
     expect(readAutosave(data, ref())).toEqual(new Uint8Array(modBytes(2)));
   });
 
-  it('автосохранение старше мода (после сохранения) — не предлагается', () => {
+  it('autosave older than the mod (after saving) — not offered', () => {
     writeAutosave(data, ref(), modBytes(2));
     setMtime(autosaveFile(data, ref()), Date.now() - 120_000);
     writeFileSync(modPath, modBytes(3));
     expect(findRecovery(data, ref())).toBeUndefined();
   });
 
-  it('копия, совпадающая с модом, не предлагается', () => {
+  it('a copy equal to the mod is not offered', () => {
     writeFileSync(modPath, modBytes(1));
     setMtime(modPath, Date.now() - 60_000);
     writeAutosave(data, ref(), modBytes(1));
     expect(findRecovery(data, ref())).toBeUndefined();
   });
 
-  it('мода на диске нет (новый или удалён) — копия предлагается', () => {
+  it('no mod on disk (new or deleted) — the copy is offered', () => {
     writeAutosave(data, ref(), modBytes(2));
     expect(findRecovery(data, ref())).toMatchObject({ modExists: false });
     writeAutosave(data, { modName: 'Fresh.mod' }, modBytes(2));
@@ -255,7 +255,7 @@ describe('восстановление', () => {
     expect(findRecovery(data, { modName: 'Other.mod' })).toBeUndefined();
   });
 
-  it('«открыть как есть»: автосохранение уходит в список копий и не пропадает', () => {
+  it('"open as is": the autosave goes to the copy list and is not lost', () => {
     writeFileSync(modPath, modBytes(1));
     setMtime(modPath, Date.now() - 60_000);
     writeAutosave(data, ref(), modBytes(2));
@@ -267,7 +267,7 @@ describe('восстановление', () => {
     expect(readBackup(data, ref(), list[0]!.id)).toEqual(new Uint8Array(modBytes(2)));
   });
 
-  it('список копий: автосохранение сверху, потом копии по времени; id с путём отвергается', () => {
+  it('copy list: autosave on top, then copies by time; an id with a path is rejected', () => {
     addBackup(data, ref(), modBytes(1), 'backup', 5, 1000);
     addBackup(data, ref(), modBytes(2), 'restore-point', 5, 2000);
     writeAutosave(data, ref(), modBytes(3), { now: 3000 });

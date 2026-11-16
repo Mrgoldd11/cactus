@@ -1,5 +1,5 @@
 /**
- * Инструменты моста к игре на поддельном плагине (TCP на свободном порту).
+ * Game bridge tools on a fake plugin (TCP on a free port).
  */
 import { createServer as createTcp, type Server } from 'node:net';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -112,8 +112,8 @@ async function call(name: string, args: Record<string, unknown> = {}): Promise<{
   return { text: r.content.map((c) => c.text).join('\n'), isError: r.isError ?? false };
 }
 
-describe('kenshi-mcp: мост к игре', () => {
-  it('game_state читает состояние', async () => {
+describe('kenshi-mcp: game bridge', () => {
+  it('game_state reads the state', async () => {
     const r = await call('game_state');
     expect(r.isError).toBe(false);
     expect(r.text).toContain('game connected: kenshi-bridge 0.1.0');
@@ -122,7 +122,7 @@ describe('kenshi-mcp: мост к игре', () => {
     expect(r.text).toContain('position: 10, 20, 30');
   });
 
-  it('game_command без confirm ничего не шлёт игре', async () => {
+  it('game_command without confirm sends nothing to the game', async () => {
     const r = await call('game_command', { cmd: 'camera', pos: [1, 2, 3] });
     expect(r.text).toContain('not done: move the camera to 1, 2, 3');
     expect(seen).toEqual([]);
@@ -132,7 +132,7 @@ describe('kenshi-mcp: мост к игре', () => {
     expect((await call('game_command', { cmd: 'teleport', confirm: true })).isError).toBe(true);
   });
 
-  it('game_towns читает города', async () => {
+  it('game_towns reads towns', async () => {
     const t = await call('game_towns', { near: [0, 0, 0], range: 9000 });
     expect(t.text).toContain('towns: 1');
     expect(t.text).toContain('Хаб [hub-1] — town, radius 1500, center -4000, 100, 5000');
@@ -163,7 +163,7 @@ describe('kenshi-mcp: мост к игре', () => {
     ]);
   });
 
-  it('game_trace: включить и прочитать новые записи', async () => {
+  it('game_trace: enable and read new entries', async () => {
     expect((await call('game_trace', { action: 'on' })).text).toContain('trace on (player)');
     const first = await call('game_trace', { action: 'get' });
     expect(first.text).toContain('#1 event 1: Мэгги → Бип (player)');
@@ -171,7 +171,7 @@ describe('kenshi-mcp: мост к игре', () => {
     expect((await call('game_trace', { action: 'get' })).text).toContain('no new entries');
   });
 
-  it('без игры — понятная ошибка', async () => {
+  it('without the game — a clear error', async () => {
     const off = new GameBridge({ port: 1, connectTimeoutMs: 300 });
     const fx = makeFixture();
     const session = new Session({ kenshi: fx.game, workshop: defaultWorkshopDir(fx.game) }, fx.game);

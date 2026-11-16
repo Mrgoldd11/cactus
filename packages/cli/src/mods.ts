@@ -1,5 +1,5 @@
 /**
- * kedit mods — установленные моды и порядок загрузки (`data/mods.cfg`).
+ * kedit mods — installed mods and load order (`data/mods.cfg`).
  */
 import { applyModsCfgChange, describeOrderChange, type ModPlace, type ModsCfgChange } from '@kenshi-editor/core';
 import { existsSync, statSync } from 'node:fs';
@@ -15,7 +15,7 @@ function where(m: InstalledMod, ws: Workspace): string {
   return m.source === 'workshop' ? ws.t({ en: `workshop ${m.workshopId}`, ru: `мастерская ${m.workshopId}` }) : 'mods';
 }
 
-/** Строка мода для списка: место, имя, откуда; с `full` — автор, записей, зависимости. */
+/** Mod line for the list: position, name, origin; with `full` — author, records, dependencies. */
 function line(m: InstalledMod, full: boolean, ws: Workspace): string {
   const pos = m.loadIndex !== undefined ? `${String(m.loadIndex + 1).padStart(3)}.` : '    ';
   let s = `${pos} ${m.fileName}  [${where(m, ws)}]`;
@@ -32,7 +32,7 @@ function line(m: InstalledMod, full: boolean, ws: Workspace): string {
   return s;
 }
 
-/** `kedit mods [list]`: включённые по порядку (поздний побеждает), затем выключенные. */
+/** `kedit mods [list]`: enabled in order (the later one wins), then disabled. */
 export function modsList(ws: Workspace, io: ModsOut, options: { json?: boolean; full?: boolean }): number {
   ws.requireGame();
   const { mods, missing, order } = listInstalledMods(ws.paths);
@@ -69,7 +69,7 @@ export interface ModsChangeOptions {
   force?: boolean;
 }
 
-/** Имя файла мода: `X` → `X.mod`. */
+/** Mod file name: `X` → `X.mod`. */
 function modFileName(spec: string): string {
   return /\.mod$/i.test(spec) ? spec : `${spec}.mod`;
 }
@@ -85,8 +85,8 @@ function placeOf(o: ModsChangeOptions): ModPlace | undefined {
 }
 
 /**
- * `kedit mods move|enable|disable <мод>`: новый порядок `mods.cfg`. Без `--force` — только
- * показать, что изменится; с `--force` — записать (копия рядом, игра должна быть закрыта).
+ * `kedit mods move|enable|disable <mod>`: new `mods.cfg` order. Without `--force` — only
+ * show what will change; with `--force` — write (copy next to it, the game must be closed).
  */
 export function modsChange(ws: Workspace, io: ModsOut, op: 'move' | 'enable' | 'disable', spec: string | undefined, o: ModsChangeOptions): number {
   ws.requireGame();
@@ -136,9 +136,9 @@ export function modsChange(ws: Workspace, io: ModsOut, op: 'move' | 'enable' | '
 }
 
 /**
- * `kedit mods copy <мод|путь> [--name Имя] [--force]`: чужой мод (обычно из мастерской) —
- * байт в байт в `mods/<имя>/<имя>.mod` и рядом `<имя>.kedit-origin.json` (откуда копия).
- * Оригинал только читается. Без `--force` — только показать, что будет.
+ * `kedit mods copy <mod|path> [--name Name] [--force]`: someone else's mod (usually from the Workshop) —
+ * byte for byte into `mods/<name>/<name>.mod` with `<name>.kedit-origin.json` next to it (where the copy came from).
+ * The original is only read. Without `--force` — only show what will happen.
  */
 export function modsCopy(ws: Workspace, io: ModsOut, spec: string | undefined, o: { name?: string; force?: boolean }): number {
   ws.requireGame();
@@ -148,7 +148,7 @@ export function modsCopy(ws: Workspace, io: ModsOut, spec: string | undefined, o
   if (src === undefined) {
     const name = modFileName(spec);
     const same = listInstalledMods(ws.paths).mods.filter((m) => m.fileName.toLowerCase() === name.toLowerCase());
-    // Есть и копия, и оригинал — берём оригинал из мастерской.
+    // There is both a copy and the original — take the original from the Workshop.
     src = (same.find((m) => m.source === 'workshop') ?? same[0])?.path;
   }
   if (src === undefined) throw new UsageError({ en: `Mod not found: ${spec} (not in mods/ or the workshop)`, ru: `Мод не найден: ${spec} (нет в mods/ и в мастерской)` });

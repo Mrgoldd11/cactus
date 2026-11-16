@@ -1,6 +1,6 @@
 /**
- * Массовые правки: выбор по условиям, предпросмотр «было → станет», применение одной
- * отменой, замена текста (regex), сохранение только разницы.
+ * Bulk edits: selection by conditions, "was → will be" preview, applying as one
+ * undo, text replacement (regex), saving only the diff.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -46,8 +46,8 @@ function make(): ModContext {
   });
 }
 
-describe('массовые правки', () => {
-  it('умножение по условию: предпросмотр ничего не меняет, применение — одна отмена', () => {
+describe('bulk edits', () => {
+  it('multiply by condition: preview changes nothing, applying is one undo', () => {
     const ctx = make();
     const p = previewBulk(ctx, { type: 'WEAPON', fields: [parseFieldFilter('cut damage multiplier>0.5')] }, { kind: 'mul', field: 'value', value: '1.5' });
     expect(p.matched).toBe(2);
@@ -64,14 +64,14 @@ describe('массовые правки', () => {
     expect(ctx.get('k')!.ints.get('value')).toBe(100);
     expect(ctx.get('s')!.ints.get('value')).toBe(80);
     ctx.redo();
-    // Сохраняется только разница: две записи с одним полем.
+    // Only the diff is saved: two records with one field.
     const saved = readDataFile(writeDataFile(ctx.buildModFile())).records;
     expect(saved.map((r) => r.stringId)).toEqual(['k', 's']);
     expect([...saved[0]!.ints]).toEqual([['value', 150]]);
     expect(saved[0]!.floats.size).toBe(0);
   });
 
-  it('прибавить к дробному, задать bool, без изменений — не в списке', () => {
+  it('add to a float, set a bool, unchanged — not in the list', () => {
     const ctx = make();
     const add = previewBulk(ctx, { type: 'WEAPON', text: 'katana' }, { kind: 'add', field: 'cut damage multiplier', value: '0,25' });
     expect(add.changes).toEqual([{ sid: 'k', name: 'Katana', field: 'cut damage multiplier', before: '1', after: '1.25' }]);
@@ -81,7 +81,7 @@ describe('массовые правки', () => {
     expect(same.changes.map((c) => c.sid)).toEqual(['s', 'c']);
   });
 
-  it('замена текста: подстрока без регистра, regex с группами, имя записи', () => {
+  it('text replacement: case-insensitive substring, regex with groups, record name', () => {
     const ctx = make();
     const plain = previewBulk(ctx, { type: 'WEAPON' }, { kind: 'replace', field: 'description', find: 'SHARP', value: 'keen' });
     expect(plain.changes.map((c) => c.after)).toEqual(['keen blade', 'A keen sabre']);
@@ -93,7 +93,7 @@ describe('массовые правки', () => {
     expect(ctx.name('k')).toBe('Katana+');
   });
 
-  it('ошибки ввода и пропуски', () => {
+  it('input errors and skips', () => {
     const ctx = make();
     expect(() => previewBulk(ctx, { type: 'WEAPON' }, { kind: 'mul', field: 'value', value: 'abc' })).toThrow(/a number/);
     expect(() => previewBulk(ctx, { type: 'WEAPON' }, { kind: 'replace', field: 'description', find: '(', regex: true, value: '' })).toThrow(/regular expression/);
@@ -106,7 +106,7 @@ describe('массовые правки', () => {
     expect(bad.skipped).toHaveLength(3);
   });
 
-  it('галочки: restrictBulk оставляет выбранные записи, подпись и операции согласованы', () => {
+  it('checkboxes: restrictBulk keeps selected records, label and operations agree', () => {
     const ctx = make();
     const p = previewBulk(ctx, { type: 'WEAPON' }, { kind: 'mul', field: 'value', value: '2' });
     const r = restrictBulk(p, (sid) => sid !== 'c');
@@ -118,14 +118,14 @@ describe('массовые правки', () => {
     expect(ctx.get('k')!.ints.get('value')).toBe(200);
   });
 
-  it('значение поля записи для колонок', () => {
+  it('record field value for columns', () => {
     const ctx = make();
     expect(bulkFieldValue(ctx, ctx.get('k')!, 'value')).toBe('100');
     expect(bulkFieldValue(ctx, ctx.get('k')!, 'name')).toBe('Katana');
     expect(bulkFieldValue(ctx, ctx.get('k')!, 'nope')).toBeUndefined();
   });
 
-  it('фильтры как в FCS: содержит, не содержит, regex', () => {
+  it('filters as in FCS: contains, does not contain, regex', () => {
     const ctx = make();
     const ids = (f: string): string[] => previewBulk(ctx, { type: 'WEAPON', fields: [parseFieldFilter(f)] }, { kind: 'set', field: 'value', value: '1' }).changes.map((c) => c.sid);
     expect(ids('description:sharp')).toEqual(['k', 's']);
@@ -137,7 +137,7 @@ describe('массовые правки', () => {
   });
 });
 
-describe('массовые правки ссылок и условия по ссылкам', () => {
+describe('bulk reference edits and reference conditions', () => {
   const VENDOR = itemTypeId('VENDOR_LIST')!;
   function vendor(sid: string, items: [string, number][]): GameRecord {
     const r = emptyRecord(VENDOR, sid, encodeText(sid));
@@ -151,7 +151,7 @@ describe('массовые правки ссылок и условия по сс
     });
   }
 
-  it('условия по ссылкам: число в списке, значение v0, Ref', () => {
+  it('reference conditions: count in list, v0 value, Ref', () => {
     const ctx = makeVendors();
     const has = (sid: string, f: string): boolean => matchesFilter(ctx, ctx.get(sid)!, parseFieldFilter(f));
     expect(has('v2', 'items>1')).toBe(true);
@@ -164,7 +164,7 @@ describe('массовые правки ссылок и условия по сс
     expect(has('v1', 'items=Katana')).toBe(true);
   });
 
-  it('refAdd: добавляет ссылку тем, у кого её нет; одна отмена; повтор — без изменений', () => {
+  it('refAdd: adds the reference to those lacking it; one undo; repeat — no changes', () => {
     const ctx = makeVendors();
     const p = previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: 'Sabre', values: [7, 0, 0] });
     expect(p.matched).toBe(3);
@@ -178,7 +178,7 @@ describe('массовые правки ссылок и условия по сс
     expect(previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: 'Sabre', values: [7, 0, 0] }).changes).toHaveLength(0);
   });
 
-  it('refAdd без значений не трогает существующую ссылку; refRemove убирает', () => {
+  it('refAdd without values does not touch an existing reference; refRemove removes', () => {
     const ctx = makeVendors();
     const add = previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: 'k' });
     expect(add.changes.map((c) => c.sid)).toEqual(['v3']);
@@ -189,7 +189,7 @@ describe('массовые правки ссылок и условия по сс
     expect(ctx.get('v2')!.refs.get('items')!.map((r) => r.target)).toEqual(['s']);
   });
 
-  it('ссылки: ошибки — нет цели, нет списка', () => {
+  it('references: errors — no target, no list', () => {
     const ctx = makeVendors();
     expect(() => previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: 'Nothing here' })).toThrow(/not found/);
     expect(() => previewBulk(ctx, { type: 'VENDOR_LIST' }, { kind: 'refAdd', field: 'items', value: '' })).toThrow(/record to reference/);

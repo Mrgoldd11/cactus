@@ -1,5 +1,5 @@
 /**
- * Установленные моды, порядок `mods.cfg`, моды контекста — на временной «папке игры».
+ * Installed mods, `mods.cfg` order, context mods — on a temporary "game folder".
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -51,8 +51,8 @@ function game(): GamePaths {
   return { kenshi, workshop };
 }
 
-describe('порядок загрузки (mods.cfg) без диска', () => {
-  it('разбор и запись: конец строки сохраняется, пустые строки убираются', () => {
+describe('load order (mods.cfg) without disk', () => {
+  it('parse and write: line ending is kept, empty lines are removed', () => {
     const crlf = parseModsCfg('A.mod\r\n\r\nB.mod\r\n');
     expect(crlf).toEqual({ names: ['A.mod', 'B.mod'], eol: '\r\n' });
     expect(formatModsCfg(crlf)).toBe('A.mod\r\nB.mod\r\n');
@@ -61,7 +61,7 @@ describe('порядок загрузки (mods.cfg) без диска', () => {
     expect(formatModsCfg({ names: [], eol: '\r\n' })).toBe('');
   });
 
-  it('перестановка: в начало, в конец, после, перед, по номеру; регистр не важен', () => {
+  it('reordering: to the start, to the end, after, before, by number; case does not matter', () => {
     const l = ['A.mod', 'B.mod', 'C.mod'];
     expect(placeMod(l, 'c.mod', { top: true })).toEqual(['C.mod', 'A.mod', 'B.mod']);
     expect(placeMod(l, 'A.mod', { bottom: true })).toEqual(['B.mod', 'C.mod', 'A.mod']);
@@ -75,7 +75,7 @@ describe('порядок загрузки (mods.cfg) без диска', () => {
     expect(setModEnabled(l, 'b.mod', true)).toEqual(l);
   });
 
-  it('изменения mods.cfg: move только для включённых, enable/disable, описание «было → стало»', () => {
+  it('mods.cfg changes: move only for enabled ones, enable/disable, "was → became" description', () => {
     const l = ['A.mod', 'B.mod', 'C.mod'];
     expect(applyModsCfgChange(l, { op: 'move', name: 'C.mod', place: { top: true } })).toEqual(['C.mod', 'A.mod', 'B.mod']);
     expect(() => applyModsCfgChange(l, { op: 'move', name: 'D.mod', place: { top: true } })).toThrow(/enable it first/);
@@ -92,8 +92,8 @@ describe('порядок загрузки (mods.cfg) без диска', () => {
   });
 });
 
-describe('установленные моды', () => {
-  it('список: источник, номер мастерской, место в mods.cfg, затенённые и отсутствующие', () => {
+describe('installed mods', () => {
+  it('list: origin, Workshop number, place in mods.cfg, shadowed and missing', () => {
     const g = game();
     const { mods, missing, order } = listInstalledMods(g);
     expect(order).toEqual(['A.mod', 'Gone.mod', 'B.mod', 'Mine.mod']);
@@ -102,7 +102,7 @@ describe('установленные моды', () => {
     expect(by('B.mod', 'workshop')).toMatchObject({ workshopId: '222', enabled: true, loadIndex: 2 });
     expect(by('Off.mod', 'workshop')).toMatchObject({ enabled: false });
     expect(by('Off.mod', 'workshop').loadIndex).toBeUndefined();
-    // A.mod есть и в mods/, и в мастерской: игра берёт mods/.
+    // A.mod is both in mods/ and in the Workshop: the game takes mods/.
     expect(by('A.mod', 'mods').shadowedBy).toBeUndefined();
     expect(by('A.mod', 'workshop').shadowedBy).toBe(by('A.mod', 'mods').path);
     expect(missing).toEqual([{ fileName: 'Gone.mod', loadIndex: 1 }]);
@@ -110,7 +110,7 @@ describe('установленные моды', () => {
     expect(workshopIdOf(g, by('Mine.mod', 'mods').path)).toBeUndefined();
   });
 
-  it('заголовок по началу файла; длинное описание — по всему файлу', () => {
+  it('header from the start of the file; long description — from the whole file', () => {
     const g = game();
     const { mods } = listInstalledMods(g);
     const mine = readModSummary(mods.find((m) => m.fileName === 'Mine.mod')!.path);
@@ -123,10 +123,10 @@ describe('установленные моды', () => {
     expect(readModSummary(bad).error).toBeTruthy();
   });
 
-  it('моды контекста: на местах по mods.cfg, в заголовок не идут, отсутствующие не считаются ошибкой', () => {
+  it('context mods: in their mods.cfg places, not added to the header, missing ones are not an error', () => {
     const g = game();
     const plan = planModLoad(g, { modPath: join(g.kenshi, 'mods', 'Mine', 'Mine.mod'), context: ['B.mod', 'Off.mod', 'A.mod', 'Nope.mod', 'Mine.mod'] });
-    // A — зависимость; B (место 2), Off (не в mods.cfg — в конец) — контекст; сам мод и отсутствующий — нет.
+    // A is a dependency; B (place 2), Off (not in mods.cfg — at the end) — context; the mod itself and the missing one — no.
     expect(plan.dependencies.map((d) => d.name)).toEqual(['A.mod', 'B.mod', 'Off.mod']);
     expect(plan.context).toEqual(['B.mod', 'Off.mod']);
     expect(plan.missingDependencies).toEqual([]);
@@ -134,8 +134,8 @@ describe('установленные моды', () => {
   });
 });
 
-describe('запись mods.cfg', () => {
-  it('копия перед записью, CRLF как было, без изменений — не пишет', () => {
+describe('writing mods.cfg', () => {
+  it('copy before writing, CRLF as it was, no changes — does not write', () => {
     const g = game();
     const cfg = join(g.kenshi, 'data', 'mods.cfg');
     const before = readFileSync(cfg, 'utf-8');
@@ -151,8 +151,8 @@ describe('запись mods.cfg', () => {
   });
 });
 
-describe('копия чужого мода для правки', () => {
-  it('из мастерской в mods/<имя>/<имя>.mod байт в байт + файл происхождения; оригинал не тронут', () => {
+describe('copy of another mod for editing', () => {
+  it('from the Workshop into mods/<name>/<name>.mod byte for byte + origin file; the original is untouched', () => {
     const g = game();
     const src = join(g.workshop, '222', 'B.mod');
     const before = readFileSync(src);
@@ -174,16 +174,16 @@ describe('копия чужого мода для правки', () => {
     const origin = readModOrigin(plan.dest)!;
     expect(origin).toMatchObject({ source: src, workshopId: '222', sha256: plan.origin.sha256 });
     expect(originChanged(origin)).toBe(false);
-    // Игра и редактор теперь берут копию: оригинал затенён.
+    // The game and the editor now take the copy: the original is shadowed.
     const b = listInstalledMods(g).mods.filter((m) => m.fileName === 'B.mod');
     expect(b.find((m) => m.source === 'workshop')!.shadowedBy).toBe(plan.dest);
-    // Вторая копия в ту же папку — ошибка, ничего не перезаписывается.
+    // A second copy into the same folder — error, nothing is overwritten.
     expect(() => copyModForEditing(g, src)).toThrow(/already exists/);
     writeFileSync(src, Buffer.concat([before, Buffer.from([0])]));
     expect(originChanged(origin)).toBe(true);
   });
 
-  it('под другим именем: не закрывает оригинал, предупреждает про mods.cfg; плохие имена — ошибка', () => {
+  it('under another name: does not shadow the original, warns about mods.cfg; bad names — error', () => {
     const g = game();
     const src = join(g.workshop, '222', 'B.mod');
     const plan = copyModForEditing(g, src, { name: 'B (правка).mod' });
@@ -195,7 +195,7 @@ describe('копия чужого мода для правки', () => {
     expect(planModCopy(g, src, { name: 'a\\b' }).error).toMatch(/Bad mod name/);
     expect(planModCopy(g, src, { name: `a${String.fromCharCode(9)}b` }).error).toMatch(/Bad mod name/);
     expect(planModCopy(g, src, { name: '  ' }).error).toMatch(/Bad mod name/);
-    // Мод из mods/ под тем же именем — это он сам.
+    // A mod from mods/ with the same name is the mod itself.
     expect(planModCopy(g, join(g.kenshi, 'mods', 'Mine', 'Mine.mod')).error).toMatch(/another name/);
     expect(readModOrigin(join(g.kenshi, 'mods', 'Mine', 'Mine.mod'))).toBeUndefined();
   });

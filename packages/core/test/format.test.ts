@@ -30,7 +30,7 @@ function richRecord(): GameRecord {
   r.files.set('mesh', b('data/items/test.mesh'));
   r.refs.set('vendors', [
     { target: '200-test.mod', v0: 1, v1: 2, v2: 3 },
-    { target: '200-test.mod', v0: 1, v1: 2, v2: 3 }, // повторы сохраняются
+    { target: '200-test.mod', v0: 1, v1: 2, v2: 3 }, // repeats are kept
   ]);
   r.refs.set('empty category', []);
   r.instances.set('inst1', {
@@ -65,8 +65,8 @@ function roundTrip(file: DataFile): { bytes: Uint8Array; back: DataFile; again: 
   return { bytes, back, again: writeDataFile(back) };
 }
 
-describe('формат .mod/.base', () => {
-  it('формат 16: значения всех видов туда и обратно', () => {
+describe('.mod/.base format', () => {
+  it('format 16: values of all kinds there and back', () => {
     const { bytes, back, again } = roundTrip(modFile(FileType.Mod));
     expect(bytesEqual(bytes, again)).toBe(true);
     const r = back.records[0]!;
@@ -86,7 +86,7 @@ describe('формат .mod/.base', () => {
     expect(r.quirks?.nanBits).toEqual(new Map([['float:broken', 0x7fc00123], ['inst:inst1:5', 0xffc00000]]));
   });
 
-  it('формат 17: длина заголовка, данные слияния, запросы удаления и лишние байты', () => {
+  it('format 17: header length, merge data, delete requests and extra bytes', () => {
     const file = modFile(FileType.MergeMod);
     file.header!.merge = {
       saveCount: 7,
@@ -95,17 +95,17 @@ describe('формат .mod/.base', () => {
       deleteRequests: [{ key: '1-x.mod', a: 3, value: b('val') }],
     };
     file.header!.extra = new Uint8Array([9, 9, 9]);
-    file.records[0]!.lead = 1; // ненулевой — будет пересчитан
+    file.records[0]!.lead = 1; // non-zero — will be recalculated
     const { bytes, back, again } = roundTrip(file);
     expect(bytesEqual(bytes, again)).toBe(true);
     expect(back.header!.merge).toEqual(file.header!.merge);
     expect([...back.header!.extra!]).toEqual([9, 9, 9]);
     const lead = back.records[0]!.lead;
     expect(lead).toBeGreaterThan(60);
-    expect(back.records[1]!.lead).toBe(0); // ноль остаётся нулём
+    expect(back.records[1]!.lead).toBe(0); // zero stays zero
   });
 
-  it('формат 17 без блока удалений отличается от пустого блока', () => {
+  it('format 17 without a deletion block differs from an empty block', () => {
     const file = modFile(FileType.MergeMod);
     file.header!.merge = { saveCount: 1, lastMerge: 0, mergeEntries: [] };
     const without = writeDataFile(file);
@@ -116,7 +116,7 @@ describe('формат .mod/.base', () => {
     expect(readDataFile(withEmpty).header!.merge!.deleteRequests).toEqual([]);
   });
 
-  it('формат 15: без заголовка, хвост сохраняется', () => {
+  it('format 15: no header, the tail is kept', () => {
     const file: DataFile = { fileType: FileType.Data, lastId: 0, records: [richRecord()], tail: new Uint8Array([1, 2, 3, 4]) };
     const { bytes, back, again } = roundTrip(file);
     expect(bytesEqual(bytes, again)).toBe(true);
@@ -124,7 +124,7 @@ describe('формат .mod/.base', () => {
     expect([...back.tail]).toEqual([1, 2, 3, 4]);
   });
 
-  it('булевы не 0/1 и идентификаторы не в UTF-8 пишутся как были', () => {
+  it('bools other than 0/1 and non-UTF-8 ids are written as they were', () => {
     const file = modFile(FileType.Mod);
     const r = file.records[0]!;
     r.quirks = { ...r.quirks, boolBytes: new Map([['is trader', 2]]) };
@@ -137,14 +137,14 @@ describe('формат .mod/.base', () => {
     expect(back.records[0]!.stringId).toBe('100-tést.mod');
   });
 
-  it('ошибки: оборванный файл, неизвестный тип, повтор ключа', () => {
+  it('errors: truncated file, unknown type, repeated key', () => {
     const bytes = writeDataFile(modFile(FileType.Mod));
     expect(() => readDataFile(bytes.slice(0, bytes.length - 3))).toThrow(FormatError);
     const unknown = bytes.slice();
     unknown[0] = 99;
     expect(() => readDataFile(unknown)).toThrow();
 
-    // Два булевых поля 'aa' и 'ab' → одинаковые ключи 'aa'.
+    // Two bool fields 'aa' and 'ab' → identical keys 'aa'.
     const f = modFile(FileType.Mod);
     f.records[0]!.bools = new Map([['aa', true], ['ab', true]]);
     const dup = writeDataFile(f);

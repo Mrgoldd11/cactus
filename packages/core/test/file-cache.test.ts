@@ -22,7 +22,7 @@ afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-/** Файл с повторяющимися ключами (кэш строк в разборе), длинными, UTF-8 и latin1 id. */
+/** File with repeated keys (string cache in parsing), long, UTF-8 and latin1 ids. */
 function sample(word: string, count = 50): Uint8Array {
   const file: DataFile = { fileType: FileType.MergeMod, lastId: 7, records: [], tail: new Uint8Array() };
   file.header = { version: 1, author: encodeText('a'), description: encodeText(''), dependencies: encodeText(''), references: encodeText('') };
@@ -40,8 +40,8 @@ function sample(word: string, count = 50): Uint8Array {
   return writeDataFile(file);
 }
 
-describe('кэш разобранных файлов', () => {
-  it('из кэша — тот же результат, что разбор без кэша, байт в байт', () => {
+describe('parsed file cache', () => {
+  it('from the cache — the same result as parsing without the cache, byte for byte', () => {
     const path = join(dir, 'a.mod');
     const bytes = sample('alpha');
     writeFileSync(path, bytes);
@@ -52,7 +52,7 @@ describe('кэш разобранных файлов', () => {
     expect(parsed).toEqual(readDataFile(first.bytes!));
     expect(bytesEqual(writeDataFile(parsed), bytes)).toBe(true);
 
-    // Второй раз файл не читается и не разбирается: тот же объект из памяти.
+    // The second time the file is not read or parsed: the same object from memory.
     const second = readIfUnknown(path, new Set(cache.keys()));
     expect(second.bytes).toBeUndefined();
     expect(second.key).toBe(first.key);
@@ -61,14 +61,14 @@ describe('кэш разобранных файлов', () => {
     expect(cache.misses).toBe(1);
   });
 
-  it('изменилось время файла — ключ новый, файл читается заново, старая запись выброшена', () => {
+  it('file time changed — new key, the file is read again, the old entry is dropped', () => {
     const path = join(dir, 'b.mod');
     writeFileSync(path, sample('beta'));
     const cache = new ParsedFileCache();
     const a = readIfUnknown(path, new Set(cache.keys()));
     cache.take(a.key, a.bytes);
 
-    // Тот же размер, другое содержимое и время изменения.
+    // Same size, different contents and modification time.
     const changed = sample('gamma');
     writeFileSync(path, changed);
     const t = statSync(path).mtimeMs / 1000 + 10;
@@ -82,22 +82,22 @@ describe('кэш разобранных файлов', () => {
     expect(cache.keys()).toEqual([b.key]);
   });
 
-  it('нет в кэше и нет байтов — CacheMissError; лишнее вытесняется по лимиту', () => {
+  it('not in cache and no bytes — CacheMissError; extras are evicted by the limit', () => {
     const cache = new ParsedFileCache(2);
     expect(() => cache.take('v1|1|1|nope', undefined)).toThrow(CacheMissError);
     const bytes = sample('d');
     cache.take('v1|1|1|p1', bytes);
     cache.take('v1|1|1|p2', bytes);
-    cache.take('v1|1|1|p1', undefined); // p1 — недавно использован
+    cache.take('v1|1|1|p1', undefined); // p1 — recently used
     cache.take('v1|1|1|p3', bytes);
     expect(cache.keys().sort()).toEqual(['v1|1|1|p1', 'v1|1|1|p3']);
   });
 
-  it('разбор кусками с паузами — тот же файл, что обычный разбор', async () => {
+  it('parsing in chunks with pauses — the same file as a normal parse', async () => {
     const bytes = sample('epsilon', 300);
     let pauses = 0;
     const sliced = await readDataFileSliced(bytes, () => { pauses++; return Promise.resolve(); }, 0);
-    expect(pauses).toBe(2); // 301 запись: пауза после 128-й и 256-й
+    expect(pauses).toBe(2); // 301 records: a pause after the 128th and 256th
     expect(sliced).toEqual(readDataFile(bytes));
     const cache = new ParsedFileCache();
     const a = await cache.takeSliced('v1|1|1|s', bytes, () => Promise.resolve());

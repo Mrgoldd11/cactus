@@ -1,5 +1,5 @@
 /**
- * Контекст редактирования на файлах установленной игры. Без игры тесты пропускаются.
+ * Editing context on the files of the installed game. Without the game the tests are skipped.
  */
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
@@ -16,7 +16,7 @@ let vanillaCache: Layer[] | undefined;
 const vanilla = (): Layer[] => (vanillaCache ??= loadVanillaLayers(paths));
 
 describe.skipIf(!game)('контекст на модах игры', () => {
-  it('нетронутый мод собирается обратно байт в байт (все установленные моды)', () => {
+  it('an untouched mod is rebuilt byte for byte (all installed mods)', () => {
     const bad: string[] = [];
     for (const m of installedModFiles(paths)) {
       const bytes = readFileSync(m.path);
@@ -27,7 +27,7 @@ describe.skipIf(!game)('контекст на модах игры', () => {
     expect(bad).toEqual([]);
   });
 
-  it('ванильные слои: rebirth.mod меняет записи gamedata.base', () => {
+  it('vanilla layers: rebirth.mod changes gamedata.base records', () => {
     const { ctx } = loadModContext({ paths, dependencies: [], vanilla: vanilla(), schema: false, po: false });
     const o = ctx.origin('2604-gamedata.base')!;
     expect(o.status).toBe('base');
@@ -38,21 +38,21 @@ describe.skipIf(!game)('контекст на модах игры', () => {
   describe.skipIf(!scfPath)(SCF, () => {
     const load = (): ReturnType<typeof loadModContext> => loadModContext({ paths, modPath: scfPath!, vanilla: vanilla() });
 
-    it('статусы, поиск по-русски, проверка без ошибок', () => {
+    it('statuses, search in Russian, validation without errors', () => {
       const { ctx, missingDependencies } = load();
       expect(missingDependencies).toEqual([]);
       const st = new Map<string, number>();
       for (const r of ctx.modRecords()) st.set(ctx.status(r.stringId)!, (st.get(ctx.status(r.stringId)!) ?? 0) + 1);
       expect(st.get('new')).toBeGreaterThan(200);
       expect(st.get('changed')).toBeGreaterThan(10);
-      // «Людоед» есть только в русских названиях.
+      // "Людоед" exists only in the Russian names.
       const hits = searchRecords(ctx, { text: 'людоед', type: 'CHARACTER' });
       expect(hits.some((h) => h.localizedName !== undefined && h.stringId.endsWith('gamedata.base'))).toBe(true);
       expect(searchRecords(ctx, { modOnly: true, type: 'DIALOGUE' }).length).toBeGreaterThan(3);
       expect(validateMod(ctx).filter((i) => i.severity === 'error')).toEqual([]);
     });
 
-    it('правка и отмена возвращают файл байт в байт', () => {
+    it('edit and undo give the file back byte for byte', () => {
       const { ctx } = load();
       const bytes = readFileSync(scfPath!);
       const sid = ctx.modRecords().find((r) => ctx.status(r.stringId) === 'changed')!.stringId;

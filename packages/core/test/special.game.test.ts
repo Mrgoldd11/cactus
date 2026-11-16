@@ -1,5 +1,5 @@
 /**
- * Специальные редакторы (этап 5) на ванили установленной игры. Без игры тесты пропускаются.
+ * Special editors (stage 5) on the installed game's vanilla. Without the game the tests are skipped.
  */
 import { describe, expect, it } from 'vitest';
 import { applyBulk, censusNoPackage, compareTable, craftingStations, npcCensus, factionMatrix, parseFieldFilter, previewBulk, researchGraph, squadComposition, townComposition, type Layer, type ModContext } from '../src/index.ts';
@@ -14,17 +14,17 @@ let ctxCache: ModContext | undefined;
 const ctx = (): ModContext => (ctxCache ??= loadModContext({ paths, dependencies: [], vanilla: vanilla(), schema: false }).ctx);
 
 describe.skipIf(!game)('специальные редакторы на ванили', () => {
-  it('матрица отношений: Священная нация враждует с Объединёнными городами', () => {
+  it('relation matrix: the Holy Nation is hostile to the United Cities', () => {
     const m = factionMatrix(ctx());
     expect(m.factions.length).toBeGreaterThan(90);
     const hn = m.factions.find((f) => f.sid === '1083-gamedata.base')!;
     expect(hn.name).toBe('The Holy Nation');
     expect(m.cell('1083-gamedata.base', 'defaultEmpireFactionSID')).toMatchObject({ value: -100, explicit: true, kind: 'enemy' });
-    // Ваниль — не «моды»: кто поменял — пусто.
+    // Vanilla is not "mods": who changed it — empty.
     expect(m.layers).toEqual([]);
   });
 
-  it('таблица сравнения оружия: столбцы из схемы, катана, диапазон урона', () => {
+  it('weapon comparison table: columns from the schema, katana, damage range', () => {
     const t = compareTable(ctx(), 'WEAPON');
     expect(t.rows.length).toBeGreaterThan(40);
     expect(t.defaultColumns).toContain('cut damage multiplier');
@@ -35,7 +35,7 @@ describe.skipIf(!game)('специальные редакторы на вани�
     expect(r.max).toBeGreaterThan(r.min);
   });
 
-  it('массовая правка: цена оружия от 300 × 2 — одна правка, в моде только поле value', () => {
+  it('bulk edit: weapon price from 300 × 2 — one edit, only the value field in the mod', () => {
     const c = loadModContext({ paths, dependencies: [], vanilla: vanilla(), schema: false }).ctx;
     const p = previewBulk(c, { type: 'WEAPON', fields: [parseFieldFilter('value>=300')] }, { kind: 'mul', field: 'value', value: '2' });
     expect(p.matched).toBeGreaterThan(5);
@@ -50,7 +50,7 @@ describe.skipIf(!game)('специальные редакторы на вани�
     expect(c.modRecords()).toHaveLength(0);
   });
 
-  it('графы: исследования с требованиями и ценой, станки крафта, состав Bark и отряда людоедов', () => {
+  it('graphs: research with requirements and cost, crafting benches, makeup of Bark and a cannibal squad', () => {
     const g = researchGraph(ctx());
     expect(g.nodes.length).toBeGreaterThan(150);
     expect(g.categories).toContain('Defence');
@@ -74,7 +74,7 @@ describe.skipIf(!game)('специальные редакторы на вани�
     expect(cannibals.members.some((m) => m.field === 'squad' && m.max > m.min)).toBe(true);
   });
 
-  it('перепись NPC: сотни персонажей, Bark и Объединённые города в группах, вес по городам', () => {
+  it('NPC census: hundreds of characters, Bark and the United Cities in groups, weight by towns', () => {
     const c = npcCensus(ctx());
     expect(c.chars.length).toBeGreaterThan(500);
     expect(c.chars.some((x) => x.unique)).toBe(true);

@@ -1,6 +1,6 @@
 /**
- * «Где в игре» на файлах установленной игры. Без игры тесты пропускаются.
- * Эталон: катана → список торговца оружием → отряд торговца → города Груз (Heft) и Хэн (Heng).
+ * "Where in the game" on the installed game's files. Without the game the tests are skipped.
+ * Reference: katana → weaponsmith trader list → trader squad → the towns Heft and Heng.
  */
 import { describe, expect, it } from 'vitest';
 import { formatWhere, whereInGame } from '../src/index.ts';
@@ -13,14 +13,14 @@ describe.skipIf(!game)('где в игре: ваниль', () => {
   const { ctx } = loadModContext({ paths, schema: false });
   const { world, errors } = loadWorld(paths);
 
-  it('мир ванили читается целиком', () => {
+  it('the vanilla world reads in full', () => {
     expect(errors).toEqual([]);
     const s = world.stats();
     expect(s.towns).toBeGreaterThan(100);
     expect(s.buildings).toBeGreaterThan(5000);
   });
 
-  it('катана: VENDOR_LIST 52318 → SQUAD_TEMPLATE 56131 → Heft и Heng с координатами', () => {
+  it('katana: VENDOR_LIST 52318 → SQUAD_TEMPLATE 56131 → Heft and Heng with coordinates', () => {
     const res = whereInGame(ctx, '476-gamedata.base', { world });
     const f = res.facts.find((x) => x.role === 'sold' && x.holder?.id === '56131-rebirth.mod')!;
     expect(f).toBeDefined();

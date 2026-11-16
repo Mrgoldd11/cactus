@@ -1,8 +1,8 @@
 /**
- * Инструменты интерьеров: что внутри здания (`interior`), поставить / сдвинуть / убрать мебель и
- * точки предметов в раскладке (`interior_place`, `interior_move`, `interior_remove`). Правки — в
- * `leveldata/interiors.level` мода, та же история отмены, что у правок мира (`world_undo`).
- * Координаты — от начала модели здания (у «Дома знати» Аванпоста пол на y≈182 и 229).
+ * Interior tools: what is inside a building (`interior`), place / move / remove furniture and
+ * item spots in a layout (`interior_place`, `interior_move`, `interior_remove`). Edits go into the
+ * mod's `leveldata/interiors.level`, the same undo history as world edits (`world_undo`).
+ * Coordinates are from the origin of the building model (in the Outpost "Noble House" the floor is at y≈182 and 229).
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
@@ -62,7 +62,7 @@ function parseObject(spec: string): { layout: string; key: string } {
 }
 
 export function registerInteriorTools(server: McpServer, session: Session, { run, resolveId }: WorldToolHelpers): void {
-  /** Раскладка: id, или здание (id / имя / объект мира) + имя раскладки. */
+  /** Layout: an id, or a building (id / name / world object) + layout name. */
   const layoutFrom = (ctx: ModContext, edits: WorldEdits, spec: { building?: string | undefined; layout?: string | undefined }): { building?: string; layout?: InteriorLayout; note?: string } => {
     if (spec.layout !== undefined) {
       const direct = interiorLayout(edits, spec.layout);

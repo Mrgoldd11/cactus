@@ -1,6 +1,6 @@
 /**
- * Матрица отношений фракций: значения по умолчанию, цвет, асимметрия, «кто поменял», правка
- * одной отменой, сохранение только разницы.
+ * Faction relation matrix: default values, colour, asymmetry, "who changed it", edit
+ * as one undo, saving only the diff.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -50,8 +50,8 @@ function ctxOf(mods: { name: string; records: GameRecord[] }[] = [], mod?: DataF
   });
 }
 
-describe('матрица отношений', () => {
-  it('значение из списка или по умолчанию; цвет по enemy classification и порогу 50', () => {
+describe('relation matrix', () => {
+  it('value from the list or the default; colour by enemy classification and threshold 50', () => {
     const m = factionMatrix(ctxOf());
     expect(m.factions.map((f) => f.sid)).toEqual(['hn', 'uc', 'dc']);
     expect(m.cell('hn', 'uc')).toMatchObject({ value: -100, explicit: true, kind: 'enemy' });
@@ -66,11 +66,11 @@ describe('матрица отношений', () => {
     expect(m.layers).toEqual([]);
   });
 
-  it('видно, какой мод что поменял (и убрал)', () => {
+  it('shows which mod changed what (and removed)', () => {
     const a = { name: 'A.mod', records: [fac('hn', 'Holy Nation', (r) => r.refs.set('relations', [rel('uc', 20)]))] };
     const b = { name: 'B.mod', records: [fac('hn', 'Holy Nation', (r) => r.refs.set('relations', [{ target: 'uc', v0: R, v1: R, v2: R }, rel('dc', 60)]))] };
     const m = factionMatrix(ctxOf([a, b]));
-    // Итог: B убрал hn → uc (снова по умолчанию 0), hn → dc = 60.
+    // Result: B removed hn → uc (back to the default 0), hn → dc = 60.
     expect(m.cell('hn', 'uc')).toMatchObject({ value: 0, explicit: false });
     expect(m.cell('hn', 'dc').value).toBe(60);
     expect(m.cell('hn', 'uc').touches).toEqual([{ layer: 'A.mod', value: 20 }, { layer: 'B.mod' }]);
@@ -80,20 +80,20 @@ describe('матрица отношений', () => {
     expect(m.layersOf('uc')).toEqual([]);
   });
 
-  it('вернули исходное значение — отношение не считается тронутым, шаги в истории остаются', () => {
+  it('original value restored — the relation does not count as touched, history steps remain', () => {
     const ctx = ctxOf();
     setFactionRelation(ctx, 'hn', 'dc', 5, { both: true });
     expect(factionMatrix(ctx).cell('hn', 'dc').touches).toEqual([{ layer: 'My.mod', value: 5 }]);
     setFactionRelation(ctx, 'hn', 'dc', 0, { both: true });
     const m = factionMatrix(ctx);
-    // hn → dc в ваниле 0 — вернули, не тронуто. dc → hn было −100 (default relation dc), стало 0 — это правда правка.
+    // hn → dc in vanilla is 0 — restored, untouched. dc → hn was −100 (default relation dc), became 0 — that is a real edit.
     expect(m.cell('hn', 'dc')).toMatchObject({ value: 0, touches: [] });
     expect(m.cell('dc', 'hn').touches).toEqual([{ layer: 'My.mod', value: 0 }]);
     expect(ctx.history().undo).toHaveLength(2);
     expect(m.layersOf('hn')).toEqual([]);
   });
 
-  it('правка: одна отмена, обе стороны, сброс; в мод — только разница; понятное название шага', () => {
+  it('edit: one undo, both sides, reset; into the mod — only the diff; a clear step name', () => {
     const ctx = ctxOf();
     setFactionRelation(ctx, 'hn', 'uc', 20, { both: true });
     expect(ctx.history().undo).toHaveLength(1);
@@ -112,7 +112,7 @@ describe('матрица отношений', () => {
     expect(m.cell('hn', 'dc')).toMatchObject({ value: 0, explicit: false });
     expect(describeChangeset(ctx, ctx.history().undo.at(-1)!).text.en).toBe('Relation «Holy Nation» → «Deadcat»: default');
 
-    // В мод — только изменённые ссылки; снятие ванильной — маркер «убрать».
+    // Into the mod — only changed references; removing a vanilla one — a "remove" marker.
     const saved = readDataFile(writeDataFile(ctx.buildModFile()));
     const hn = saved.records.find((r) => r.stringId === 'hn')!;
     expect(hn.refs.get('relations')).toEqual([rel('uc', 20), { target: 'dc', v0: R, v1: R, v2: R }]);
@@ -124,7 +124,7 @@ describe('матрица отношений', () => {
     expect(ctx.modRecords()).toHaveLength(0);
   });
 
-  it('ошибки: не фракция, значение вне диапазона', () => {
+  it('errors: not a faction, value out of range', () => {
     const ctx = ctxOf();
     expect(() => { setFactionRelation(ctx, 'hn', 'nope', 1); }).toThrow(/No record/);
     expect(() => { setFactionRelation(ctx, 'hn', 'uc', 101); }).toThrow(/−100/);

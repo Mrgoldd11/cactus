@@ -1,6 +1,6 @@
 /**
- * Этап 3, редактор диалогов: правки командами ядра (одна отмена на операцию), слои поверх ванили,
- * постоянные id, проверки на графе.
+ * Stage 3, dialogue editor: edits via core commands (one undo per operation), layers on top of vanilla,
+ * stable ids, checks on the graph.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -56,7 +56,7 @@ function rec(type: string, sid: string, fill: (r: GameRecord) => void = () => un
 
 const file = (records: GameRecord[]): DataFile => ({ fileType: FileType.Data, lastId: 0, records, tail: new Uint8Array() });
 
-/** D → L (NPC, условие C) → P1, P2 (ответы игрока); P1 → L (петля). */
+/** D → L (NPC, condition C) → P1, P2 (player replies); P1 → L (loop). */
 function base(): DataFile {
   return file([
     rec('DIALOGUE', 'D', (r) => r.refs.set('lines', [ref('L')])),
@@ -92,8 +92,8 @@ function base(): DataFile {
 const ctxOf = (mod?: DataFile): ModContext => new ModContext({ layers: [{ name: 'gamedata.base', file: base() }], modName: 'Test.mod', ...(mod ? { mod } : {}) });
 const targets = (ctx: ModContext, sid: string, cat = 'lines'): string[] => (ctx.get(sid)?.refs.get(cat) ?? []).map((r) => r.target);
 
-describe('правка диалогов', () => {
-  it('новая реплика: постоянный id мода, одна отмена, повтор', () => {
+describe('dialogue edits', () => {
+  it('new line: permanent mod id, one undo, redo', () => {
     const ctx = ctxOf();
     const sid = addLine(ctx, 'L', { speaker: 1, text: 'Who are you?' });
     expect(sid).toBe('1-Test.mod');
@@ -106,11 +106,11 @@ describe('правка диалогов', () => {
     expect(targets(ctx, 'L')).toEqual(['P1', 'P2']);
     ctx.redo();
     expect(targets(ctx, 'L')).toEqual(['P1', 'P2', sid]);
-    // Следующая запись — следующий номер, даже после отмены и повтора.
+    // The next record gets the next number, even after undo and redo.
     expect(addLine(ctx, sid, { speaker: 0, text: 'A friend.' })).toBe('2-Test.mod');
   });
 
-  it('связи: петля к существующей реплике, повтор и сам на себя — нельзя, разрыв', () => {
+  it('links: a loop to an existing line, a repeat and a link to itself — not allowed, unlink', () => {
     const ctx = ctxOf();
     expect(linkProblem(ctx, 'P2', 'L')).toBeUndefined();
     linkLine(ctx, 'P2', 'L');
@@ -126,7 +126,7 @@ describe('правка диалогов', () => {
     expect(targets(ctx, 'P1')).toEqual(['L']);
   });
 
-  it('порядок: добавленные двигаются свободно, ванильная — через копию; переживает сохранение', () => {
+  it('order: added lines move freely, a vanilla one — via a copy; survives saving', () => {
     const ctx = ctxOf();
     const a = addLine(ctx, 'L', { speaker: 1, text: 'A' });
     const c = addLine(ctx, 'L', { speaker: 1, text: 'C' });
@@ -135,7 +135,7 @@ describe('правка диалогов', () => {
     expect(moveCopies(ctx, 'L', c, -1)).toEqual([]);
     moveLine(ctx, 'L', c, -1);
     expect(targets(ctx, 'L')).toEqual(['P1', 'P2', c, a]);
-    // Ванильный P1 вниз: P1 после P2 — его заменит копия, P2 остаётся как в игре.
+    // Vanilla P1 down: P1 after P2 — a copy will replace it, P2 stays as in the game.
     expect(moveCopies(ctx, 'L', 'P1', 1)).toEqual(['P1']);
     const rep = moveLine(ctx, 'L', 'P1', 1);
     const p1 = rep.get('P1')!;
@@ -143,12 +143,12 @@ describe('правка диалогов', () => {
     expect(targets(ctx, 'L')).toEqual(['P2', p1, c, a]);
     expect(lineTexts(ctx.get(p1)!)).toEqual(['Again']);
     expect(targets(ctx, p1)).toEqual(['L']);
-    // Ванильная после добавленной тоже идёт копией.
+    // A vanilla one after an added one also goes as a copy.
     expect(moveCopies(ctx, 'L', 'P2', 1)).toEqual(['P2']);
-    // После сохранения и загрузки порядок тот же.
+    // After saving and loading the order is the same.
     const saved = readDataFile(writeDataFile(ctx.buildModFile()));
     expect(targets(ctxOf(saved), 'L')).toEqual(['P2', p1, c, a]);
-    // «Как в игре»: связи ветки возвращаются к ванильным; одна отмена.
+    // "As in the game": the branch links go back to vanilla ones; one undo.
     revertLinks(ctx, 'L');
     expect(targets(ctx, 'L')).toEqual(['P1', 'P2']);
     ctx.undo();
@@ -158,7 +158,7 @@ describe('правка диалогов', () => {
     expect(ctx.get(p1)).toBeUndefined();
   });
 
-  it('копия реплики: свои условия, общие продолжения, встаёт в ветку', () => {
+  it('line copy: own conditions, shared continuations, goes into the branch', () => {
     const ctx = ctxOf();
     const copy = duplicateLine(ctx, 'L', 'D');
     const cond = ctx.get(copy)!.refs.get('conditions')![0]!;
@@ -172,14 +172,14 @@ describe('правка диалогов', () => {
     expect(ctx.modRecords()).toHaveLength(0);
   });
 
-  it('условия и действия: значение в ссылке, общая запись условия копируется при правке', () => {
+  it('conditions and effects: value in the reference, a shared condition record is copied on edit', () => {
     const ctx = ctxOf();
     const a = addCondition(ctx, 'P2', { cond: 7, who: 1, cmp: 1, value: 20 });
     expect(ctx.get('P2')!.refs.get('conditions')).toEqual([ref(a, 20)]);
     expect(ctx.get(a)!.ints.get('tag')).toBe(-1);
     updateCondition(ctx, 'P2', a, { value: 30, cmp: 2 });
     expect(conditionOf(ctx, ctx.get('P2')!.refs.get('conditions')![0]!)).toEqual({ cond: 7, who: 1, cmp: 2, value: 30 });
-    // C используют двое — правка у P1 не трогает L.
+    // C is used by two — an edit on P1 does not touch L.
     ctx.addReference('P1', 'conditions', 'C', [1, 0, 0]);
     const own = updateCondition(ctx, 'P1', 'C', { value: 0 });
     expect(own).not.toBe('C');
@@ -192,7 +192,7 @@ describe('правка диалогов', () => {
     expect(ctx.get('P2')!.refs.get('effects') ?? []).toEqual([]);
   });
 
-  it('удаление: ссылки на реплику убираются вместе с её условиями; отмена всё возвращает', () => {
+  it('deletion: references to the line are removed together with its conditions; undo brings everything back', () => {
     const ctx = ctxOf();
     const n = addLine(ctx, 'P2', { speaker: 0, text: 'Bye then' });
     const a = addCondition(ctx, n, { cond: 7, who: 0, cmp: 0, value: 1 });
@@ -203,16 +203,16 @@ describe('правка диалогов', () => {
     ctx.undo();
     expect(targets(ctx, 'P2')).toEqual([n]);
     expect(ctx.get(a)).toBeDefined();
-    // Ванильная реплика помечается удалённой, ссылки на неё убраны, её условие C из игры остаётся.
+    // The vanilla line is marked deleted, references to it are removed, its condition C from the game stays.
     deleteLine(ctx, 'L');
     expect(ctx.status('L')).toBe('deleted');
     expect(targets(ctx, 'D')).toEqual([]);
     expect(ctx.get('C')).toBeDefined();
   });
 
-  it('граф: вставить реплику между, удалить выделенное и копии — каждое одной отменой', () => {
+  it('graph: insert a line in between, delete the selection and copies — each with one undo', () => {
     const ctx = ctxOf();
-    // L → P2 (связь из игры) становится L → N → P2.
+    // L → P2 (a link from the game) becomes L → N → P2.
     const n = insertLineBetween(ctx, 'L', 'P2', { speaker: 0, text: 'Wait' });
     expect(targets(ctx, 'L')).toEqual(['P1', n]);
     expect(targets(ctx, n)).toEqual(['P2']);
@@ -222,7 +222,7 @@ describe('правка диалогов', () => {
     expect(targets(ctx, 'L')).toEqual(['P1', 'P2']);
     expect(() => insertLineBetween(ctx, 'P2', 'L', { speaker: 0 })).toThrow(/no such link/);
 
-    // Две новые реплики и связь петли — одна отмена; связи удаляемых реплик не мешают.
+    // Two new lines and a loop link — one undo; links of the lines being deleted do not get in the way.
     const a = addLine(ctx, 'P2', { speaker: 0, text: 'a' });
     const c = addLine(ctx, a, { speaker: 1, text: 'c' });
     deleteGraphItems(ctx, { lines: [a, c], links: [{ parent: 'P1', child: 'L' }, { parent: 'P2', child: a }] });
@@ -243,7 +243,7 @@ describe('правка диалогов', () => {
     expect(ctx.get(x!)).toBeUndefined();
   });
 
-  it('тексты: у ванильной реплики лишние становятся пустыми, у новой — убираются', () => {
+  it('texts: on a vanilla line the extra ones become empty, on a new one — removed', () => {
     const ctx = ctxOf();
     setLineTexts(ctx, 'L', ['Hey']);
     expect(decodeText(ctx.get('L')!.strings.get('text1')!)).toBe('');
@@ -254,7 +254,7 @@ describe('правка диалогов', () => {
     expect(ctx.get(n)!.strings.has('text1')).toBe(false);
   });
 
-  it('проверки на графе: конец разговора, запертый диалог, без текста, ничейная реплика', () => {
+  it('graph checks: end of conversation, locked dialogue, no text, orphan line', () => {
     const ctx = ctxOf();
     const silent = addLine(ctx, 'P1', { speaker: 0, text: '' });
     const orphan = addLine(ctx, 'P1', { speaker: 0, text: 'lost' });
@@ -267,7 +267,7 @@ describe('правка диалогов', () => {
     expect(kinds('LOCKED')).not.toContain('locked:LOCKED');
   });
 
-  it('«как в игре»: правки реплики убираются, удалённая возвращается на своё место', () => {
+  it('"as in the game": line edits are removed, a deleted line goes back to its place', () => {
     const ctx = ctxOf();
     setLineTexts(ctx, 'P1', ['Again!']);
     const own = addCondition(ctx, 'P1', { cond: 7, who: 0, cmp: 0, value: 1 });
@@ -283,14 +283,14 @@ describe('правка диалогов', () => {
     expect(ctx.status('P1')).toBe('base');
     expect(targets(ctx, 'L')).toEqual(['P1', 'P2']);
     expect(linksChanged(ctx, 'L')).toBe(false);
-    // Связь из игры, убранная и снова проведённая, встаёт на своё место.
+    // A link from the game, removed and drawn again, goes back to its place.
     unlinkLine(ctx, 'L', 'P1');
     linkLine(ctx, 'L', 'P1');
     expect(targets(ctx, 'L')).toEqual(['P1', 'P2']);
     expect(() => { revertLine(ctx, addLine(ctx, 'L', { speaker: 1, text: 'x' })); }).toThrow(/not in the game/);
   });
 
-  it('какие условия и действия есть в данных', () => {
+  it('which conditions and effects exist in the data', () => {
     const ctx = ctxOf();
     addEffect(ctx, 'P2', { action: 5 });
     const u = dialogEnumUsage(ctx);

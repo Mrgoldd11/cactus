@@ -1,6 +1,6 @@
 /**
- * Инструменты моста к игре (плагин Kenshi Bridge): состояние игры, команды и трассировка диалога.
- * Чтение — свободно; команды, меняющие игру, выполняются только с confirm: true (после согласия пользователя).
+ * Game bridge tools (the Kenshi Bridge plugin): game state, commands and dialogue trace.
+ * Reading is free; commands that change the game run only with confirm: true (after the user agrees).
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';

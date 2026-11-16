@@ -38,7 +38,7 @@ describe('fcs.def', () => {
   const def = parseFcsDef(FCS_DEF);
   const fields = new Map(def.sections[0]!.fields.map((f) => [f.name, f]));
 
-  it('разбирает все виды значений', () => {
+  it('parses all kinds of values', () => {
     expect(def.warnings).toEqual([]);
     expect(fields.get('enabled')).toMatchObject({ kind: 'bool', default: true, category: 'general', description: 'включено' });
     expect(fields.get('priority')).toMatchObject({ kind: 'int', default: 5 });
@@ -54,7 +54,7 @@ describe('fcs.def', () => {
     expect(fields.get('hidden')).toMatchObject({ kind: 'null' });
   });
 
-  it('условия, OWNED, TRANSLATE, секции на несколько типов', () => {
+  it('conditions, OWNED, TRANSLATE, sections for several types', () => {
     const s = def.sections[0]!;
     expect(s.conditions).toEqual([{ field: 'speed', dependsOn: 'kind', negate: true, values: ['taskType.IDLE', 'taskType.WANDER'], line: 15 }]);
     expect(s.owned).toEqual([{ category: 'next', line: 16 }]);
@@ -62,14 +62,14 @@ describe('fcs.def', () => {
     expect(def.sections[1]!.translate).toEqual([{ mode: 'NAME', condition: 'named is false', line: 19 }]);
   });
 
-  it('предупреждает о неразобранных строках', () => {
+  it('warns about unparsed lines', () => {
     const bad = parseFcsDef('[ITEM]\nfoo: ???\nbar baz\n');
     expect(bad.warnings.map((w) => w.line)).toEqual([2, 3]);
   });
 });
 
 describe('fcs_enums.def', () => {
-  it('значения, =N, группы, описания, однострочные enum', () => {
+  it('values, =N, groups, descriptions, one-line enums', () => {
     const e = parseFcsEnums(
       [
         'enum Axis { X, Y, Z }',
@@ -99,7 +99,7 @@ describe('fcs_enums.def', () => {
 });
 
 describe('fcs_layout.def', () => {
-  it('дерево по табам и фильтры', () => {
+  it('tree by tabs and filters', () => {
     const l = parseFcsLayout(
       '[FCS_LAYOUT]\r\nBuildings :   BUILDING "building category!=DOORS;is node=false"\r\n\tDoors:  BUILDING "building category==DOORS"\r\n\t\tParts:  BUILDING_PART\r\n\tLights: LIGHT\r\n\r\nEverything: NULL_ITEM\r\n',
     );
@@ -143,7 +143,7 @@ describe('gamedata.po', () => {
     ].join('\n'),
   );
 
-  it('записи, многострочные строки, экранирование, устаревшие', () => {
+  it('records, multi-line strings, escaping, obsolete ones', () => {
     expect(po.warnings).toEqual([]);
     expect(po.headers.get('Language')).toBe('ru_RU');
     expect(po.entries).toHaveLength(3);
@@ -155,7 +155,7 @@ describe('gamedata.po', () => {
     expect(poTranslationMap(po).get('Old')).toBeUndefined();
   });
 
-  it('индекс по строковым id записей', () => {
+  it('index by record string ids', () => {
     expect(parsePoReference('5316-TwoStorey.mod:12')).toEqual({ stringId: '5316-TwoStorey.mod', field: 12 });
     const idx = indexPoByRecord(po);
     const rec = idx.get('5316-TwoStorey.mod')!;
@@ -166,8 +166,8 @@ describe('gamedata.po', () => {
   });
 });
 
-describe('сборка схемы', () => {
-  it('сливает секции, ищет повторяющиеся поля, проверяет enum и фильтры', () => {
+describe('schema assembly', () => {
+  it('merges sections, finds repeated fields, checks enums and filters', () => {
     const s = parseGameSchema({
       fcsDef: `${FCS_DEF}\n[AI_TASK]\nextra: 1\nkind: NoSuchEnum.X\n`,
       fcsEnums: 'enum taskType { IDLE, WANDER }',

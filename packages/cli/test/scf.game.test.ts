@@ -1,7 +1,7 @@
 /**
- * Критерий готовности этапа 1: Skeleton Cannibal Friend, собранный через ядро
- * (examples/skeleton-cannibal-friend), совпадает с установленным модом, который собрал
- * tools/build_skeleton_cannibal.py. Без игры или без мода тесты пропускаются.
+ * Stage 1 acceptance criterion: Skeleton Cannibal Friend built through the core
+ * (examples/skeleton-cannibal-friend) matches the installed mod built by
+ * tools/build_skeleton_cannibal.py. Without the game or the mod the tests are skipped.
  */
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -33,7 +33,7 @@ const view = (r: GameRecord): string =>
   );
 
 describe.skipIf(installed === undefined)('Skeleton Cannibal Friend через ядро', () => {
-  it('ваниль как у kdata.py: байт в байт как установленный мод', async () => {
+  it('vanilla as in kdata.py: byte for byte like the installed mod', async () => {
     const expected = readFileSync(installed!);
     const { bytes, log } = await build('kdata.mod');
     expect(log, 'в scf_ids.json есть все уникальные записи').toEqual([]);
@@ -41,14 +41,14 @@ describe.skipIf(installed === undefined)('Skeleton Cannibal Friend через я
     expect(firstDifference(expected, bytes)).toBe(-1);
   });
 
-  it('ваниль слоями: единственное отличие объяснено', async () => {
+  it('layered vanilla: the only difference is explained', async () => {
     const python = readDataFile(readFileSync(installed!));
     const layered = readDataFile((await build('layered.mod', ['--layered'])).bytes);
     expect(layered.records.map((r) => r.stringId)).toEqual(python.records.map((r) => r.stringId));
     const differ = python.records.filter((r, i) => view(r) !== view(layered.records[i]!)).map((r) => `${r.stringId} «${decodeText(r.name)}»`);
-    // «Тюрьма Столицы людоедов» — копия отряда 2609-gamedata.base. kdata.py сливает файлы ванили,
-    // дописывая ссылки: в копию попали и Cannibal 5–15 из gamedata.base, и 9–13 из rebirth.mod.
-    // Наложением слоёв rebirth.mod заменяет значения ссылки, и остаётся одна: 9–13 (так видит игра).
+    // "Cannibal Capital Prison" is a copy of squad 2609-gamedata.base. kdata.py merges the vanilla files,
+    // appending references: the copy got both Cannibal 5–15 from gamedata.base and 9–13 from rebirth.mod.
+    // With a layer overlay rebirth.mod replaces the reference values, and one remains: 9–13 (as the game sees it).
     expect(differ).toEqual(['301-Skeleton Cannibal Friend.mod «Тюрьма Столицы людоедов»']);
     const i = python.records.findIndex((r) => r.stringId === '301-Skeleton Cannibal Friend.mod');
     const squad = (f: typeof python): unknown => f.records[i]!.refs.get('squad');
@@ -57,7 +57,7 @@ describe.skipIf(installed === undefined)('Skeleton Cannibal Friend через я
       { target: '2604-gamedata.base', v0: 9, v1: 13, v2: 0 },
     ]);
     expect(squad(layered)).toEqual([{ target: '2604-gamedata.base', v0: 9, v1: 13, v2: 0 }]);
-    // Других отличий нет: с исправленной ссылкой файлы совпадают байт в байт.
+    // No other differences: with the reference fixed the files match byte for byte.
     python.records[i]!.refs.set('squad', [{ target: '2604-gamedata.base', v0: 9, v1: 13, v2: 0 }]);
     expect(firstDifference(writeDataFile(python), writeDataFile(layered))).toBe(-1);
   });

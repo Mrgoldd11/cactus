@@ -1,6 +1,6 @@
 /**
- * Этап 3, «Где в игре»: модель мира (города, здания, экземпляры в зонах) и цепочка обратных
- * ссылок от записи до места в мире — на синтетических данных.
+ * Stage 3, "Where in the game": world model (towns, buildings, instances in zones) and the chain of back
+ * references from a record to a place in the world — on synthetic data.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -42,7 +42,7 @@ function file(records: GameRecord[], fileType: number = FileType.Mod): DataFile 
   };
 }
 
-/** Данные: катана → список торговца → отряд торговца → города Town A и Town B; ещё отряд вора. */
+/** Data: katana → trader list → trader squad → towns Town A and Town B; plus a thief squad. */
 function gameData(): DataFile {
   return file([
     rec('WEAPON', 'KAT', 'Katana', (r) => r.files.set('icon', b('.\\data\\items\\icons\\katana.png'))),
@@ -58,7 +58,7 @@ function gameData(): DataFile {
       r.refs.set('residents', [ref('SQ')]);
       r.refs.set('override town', [ref('TB2')]);
     }),
-    // Вариант города (база → вариант через `override town`), своего места в мире нет.
+    // A town variant (base → variant via `override town`), it has no place of its own in the world.
     rec('TOWN', 'TB2', 'Town B (override)', (r) => r.refs.set('residents', [ref('SQ')])),
     rec('CHARACTER', 'THIEF', 'Thief', (r) => r.refs.set('weapons', [ref('KAT')])),
     rec('BUILDING', 'SHOP', 'Weapon Shop'),
@@ -66,7 +66,7 @@ function gameData(): DataFile {
   ]);
 }
 
-/** Уровень: список городов (A в зоне 1.1, B в зоне 2.2) и зона 2.2 с магазином и камнем. */
+/** Level: the town list (A in zone 1.1, B in zone 2.2) and zone 2.2 with a shop and a rock. */
 function worldFiles(): WorldFile[] {
   const level = file(
     [
@@ -97,7 +97,7 @@ function worldFiles(): WorldFile[] {
         r.instances.set('s', { target: 'SHOP', position: [5100, 0, 6050], rotation: [1, 0, 0, 0], states: [b('GS')] });
         r.instances.set('r', { target: 'ROCK', position: [5200, 0, 6100], rotation: [1, 0, 0, 0], states: [] });
       }),
-      // Ручка города устаревшая (нет такого города) — привязка по ближайшему городу зоны.
+      // The town handle is stale (no such town) — bound to the nearest town of the zone.
       rec('GAMESTATE_BUILDING', 'GS', 'shop state', (r) => {
         r.strings.set('name', b('Weapon Shop'));
         r.strings.set('squad template', b('SQ'));
@@ -115,17 +115,17 @@ function worldFiles(): WorldFile[] {
 
 const ctxOf = (): ModContext => new ModContext({ layers: [{ name: 'gamedata.base', file: gameData() }], modName: 'test.mod' });
 
-describe('мир: города и здания', () => {
+describe('world: towns and buildings', () => {
   const world = new WorldIndex(worldFiles());
 
-  it('зона из имени файла и координаты для людей', () => {
+  it('zone from the file name and human-readable coordinates', () => {
     expect(zoneOfPath('zone.42.22.zone')).toEqual({ x: 42, y: 22 });
     expect(zoneOfPath('sub/zone.-3.7.zone')).toEqual({ x: -3, y: 7 });
     expect(zoneOfPath('leveldata.level')).toBeUndefined();
     expect(formatPosition([48030.4, 5, -41953.6], { x: 42, y: 22 })).toBe('48030 -41954 (зона 42.22)');
   });
 
-  it('города из списка городов, с зонами', () => {
+  it('towns from the town list, with zones', () => {
     const t = world.towns('TB');
     expect(t).toHaveLength(1);
     expect(t[0]!.position).toEqual([5000, 10, 6000]);
@@ -133,7 +133,7 @@ describe('мир: города и здания', () => {
     expect(world.towns('nope')).toEqual([]);
   });
 
-  it('здание с отрядом; устаревшая ручка города → ближайший город зоны', () => {
+  it('building with a squad; stale town handle → nearest town of the zone', () => {
     const bl = world.buildingsWithSquad('SQ');
     expect(bl).toHaveLength(1);
     expect(bl[0]!.name).toBe('Weapon Shop');
@@ -143,7 +143,7 @@ describe('мир: города и здания', () => {
     expect(world.stats()).toMatchObject({ files: 2, towns: 2, buildings: 1, placements: 4 });
   });
 
-  it('слои одного файла сливаются; удаление экземпляра в моде', () => {
+  it('layers of one file merge; instance deletion in the mod', () => {
     const modZone = file(
       [
         rec('INSTANCE_COLLECTION', '0-buildinglist', 'buildings', (r) => {
@@ -153,18 +153,18 @@ describe('мир: города и здания', () => {
       FileType.Data,
     );
     const w = new WorldIndex([...worldFiles(), { layer: 'my.mod', path: 'ZONE.2.2.zone', file: modZone }]);
-    // Пустая цель = удалённый экземпляр (как в .mod).
+    // Empty target = deleted instance (as in .mod).
     expect(w.instancesOf('ROCK')).toHaveLength(0);
     expect(w.instancesOf('SHOP')).toHaveLength(1);
     expect(w.files()).toHaveLength(2);
   });
 });
 
-describe('где в игре', () => {
+describe('where in the game', () => {
   const ctx = ctxOf();
   const world = new WorldIndex(worldFiles());
 
-  it('предмет → список торговца → отряд → города, с координатами и зданием', () => {
+  it('item → trader list → squad → towns, with coordinates and building', () => {
     const res = whereInGame(ctx, 'KAT', { world });
     expect(res.hasWorld).toBe(true);
     expect(res.root.icon).toBe('.\\data\\items\\icons\\katana.png');
@@ -179,7 +179,7 @@ describe('где в игре', () => {
     const tb = towns.find((p) => p.id === 'TB')!;
     expect(tb.path.map((s) => [s.id, s.category])).toEqual([['TB', 'residents']]);
     expect(tb.positions[0]!.position).toEqual([5000, 10, 6000]);
-    // Вариант города без своего места свёрнут в базовый город.
+    // A town variant without its own place is folded into the base town.
     expect(sold.places.some((p) => p.id === 'TB2')).toBe(false);
     const shop = sold.places.find((p) => p.kind === 'building')!;
     expect(shop.positions[0]!.town?.id).toBe('TB');
@@ -193,14 +193,14 @@ describe('где в игре', () => {
     expect(text).toContain('5000 6000 (зона 2.2)');
   });
 
-  it('без мира — цепочка без координат', () => {
+  it('without the world — a chain without coordinates', () => {
     const res = whereInGame(ctx, 'KAT');
     expect(res.hasWorld).toBe(false);
     const sold = res.facts.find((f) => f.role === 'sold')!;
     expect(sold.places.every((p) => p.positions.length === 0)).toBe(true);
   });
 
-  it('запись, размещённая прямо в зоне', () => {
+  it('a record placed directly in a zone', () => {
     const res = whereInGame(ctx, 'ROCK', { world });
     const placed = res.facts.find((f) => f.role === 'placed')!;
     expect(placed.places[0]!.id).toBe('TB');
@@ -208,7 +208,7 @@ describe('где в игре', () => {
     expect(formatWhere(res)).toContain('Placed in the world');
   });
 
-  it('нет восходящих связей', () => {
+  it('no upward links', () => {
     const text = formatWhere(whereInGame(ctx, 'TRADER'), { lang: 'ru' });
     expect(text).toContain('Состоит в');
     expect(() => whereInGame(ctx, 'nope')).toThrow();

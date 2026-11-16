@@ -1,14 +1,14 @@
 /**
- * Сборка «Skeleton Cannibal Friend» через ядро: `kedit build examples/skeleton-cannibal-friend/build.ts --out out/…`.
+ * Building "Skeleton Cannibal Friend" through the core: `kedit build examples/skeleton-cannibal-friend/build.ts --out out/…`.
  *
- * Режимы:
- * - по умолчанию — ваниль как её видел tools/kdata.py (четыре файла слиты в одну запись, см. kdata.ts):
- *   файл совпадает с собранным Python-сборщиком байт в байт;
- * - `-- --layered` — ваниль настоящим наложением слоёв (как в игре). Отличия от Python-файла
- *   разобраны в test/scf.game.test.ts.
+ * Modes:
+ * - default — vanilla as tools/kdata.py saw it (four files merged into one record, see kdata.ts):
+ *   the file matches the one built by the Python builder byte for byte;
+ * - `-- --layered` — vanilla as a real layer overlay (as in the game). The differences from the Python file
+ *   are explained in test/scf.game.test.ts.
  *
- * Постоянные id — из scf_ids.json рядом (копия tools/scf_ids.json, только чтение). Если появились
- * новые уникальные пары (тип, имя), сборщик пишет об этом: их номера надо добавить в таблицу.
+ * Stable ids come from scf_ids.json next to it (a copy of tools/scf_ids.json, read only). If new
+ * unique (type, name) pairs appear, the builder reports them: their numbers must be added to the table.
  */
 import { readFileSync } from 'node:fs';
 import { ModContext, type GameRecord } from '@kenshi-editor/core';

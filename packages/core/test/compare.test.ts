@@ -1,5 +1,5 @@
 /**
- * Таблицы сравнения: столбцы из данных, кто поменял значение (мод / другие моды), диапазон.
+ * Comparison tables: columns from the data, who changed a value (the mod / other mods), range.
  */
 import { describe, expect, it } from 'vitest';
 import { compareTable, emptyRecord, encodeText, FileType, itemTypeId, ModContext, type DataFile, type GameRecord } from '../src/index.ts';
@@ -12,8 +12,8 @@ function weapon(sid: string, name: string, fill: (r: GameRecord) => void = () =>
   return r;
 }
 
-describe('таблица сравнения', () => {
-  it('значения, отметки «мод» и «другие моды», выбросы, добавленные записи', () => {
+describe('comparison table', () => {
+  it('values, "mod" and "other mods" marks, outliers, added records', () => {
     const base = file([
       weapon('k', 'Katana', (r) => {
         r.floats.set('cut damage multiplier', 1);

@@ -1,6 +1,6 @@
 /**
- * Этап 3, граф диалога: узлы по одному разу, петли, русский текст из `.translation`,
- * проверки (нет записи, диалог без реплик, реплика, которую игра не выберет).
+ * Stage 3, dialogue graph: nodes once each, loops, Russian text from `.translation`,
+ * checks (no record, dialogue without lines, a line the game will not pick).
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -41,8 +41,8 @@ function file(records: GameRecord[]): DataFile {
 }
 
 /**
- * D: приветствие G1 (без условий, +5) и G2 (+0, будет перебито), G3 (с условием, +10);
- * G1 → выбор игрока P1 «Торговля?» (действие) и P2 «Пока»; P1 → ответ A1 → снова P1 (петля).
+ * D: greeting G1 (no conditions, +5) and G2 (+0, will be outscored), G3 (with a condition, +10);
+ * G1 → player choice P1 "Trade?" (effect) and P2 "Bye"; P1 → answer A1 → P1 again (loop).
  */
 function data(): DataFile {
   return file([
@@ -84,8 +84,8 @@ function translation(): DataFile {
 
 const ctx = (): ModContext => new ModContext({ layers: [{ name: 'gamedata.base', file: data() }], modName: 'x.mod' });
 
-describe('граф диалога', () => {
-  it('узлы по одному разу, петля — обратное ребро, выбор игрока, тексты по-русски', () => {
+describe('dialogue graph', () => {
+  it('nodes once each, a loop is a back edge, player choice, texts in Russian', () => {
     const tr = indexTranslation(translation());
     const g = buildDialogueGraph(ctx(), 'D', { translation: tr });
     expect(g.nodes.map((n) => n.id)).toEqual(['D', 'G1', 'P1', 'A1', 'GONE', 'P2', 'G2', 'G3']);
@@ -95,23 +95,23 @@ describe('граф диалога', () => {
     expect(byId.get('P1')!.choice).toBe(true);
     expect(byId.get('G1')!.choice).toBe(false);
     expect(byId.get('G1')!.texts).toEqual([{ en: 'Hello', localized: 'Привет' }]);
-    // Перевод сделан с другого английского текста — не подходит.
+    // The translation was made from a different English text — does not fit.
     expect(byId.get('P2')!.texts).toEqual([{ en: 'Bye' }]);
     expect(byId.get('P1')!.effects).toEqual(['DA_TRADE']);
     expect(byId.get('G3')!.conditions[0]).toContain('= 50');
     expect(byId.get('A1')!.depth).toBe(3);
   });
 
-  it('проверки: нет записи, реплика, которую не выберут', () => {
+  it('checks: no record, a line that will not be picked', () => {
     const g = buildDialogueGraph(ctx(), 'D');
     expect(g.issues.map((i) => `${i.kind}:${i.node}${i.by ? `<${i.by}` : ''}`).sort()).toEqual(['missing:GONE', 'shadowed:G2<G1']);
-    // G3 с условием и бо́льшими очками: побеждает, когда условие выполнено.
+    // G3 with a condition and a higher score: wins when the condition holds.
     expect(shadowedLines(ctx(), 'D')).toEqual([{ line: 'G2', by: 'G1' }]);
-    // Реплики игрока — варианты выбора, не сравниваются.
+    // Player lines are choice options, they are not compared.
     expect(shadowedLines(ctx(), 'G1')).toEqual([]);
   });
 
-  it('пакет: событие на ребре и в узле, диалог без реплик', () => {
+  it('package: event on an edge and in a node, dialogue without lines', () => {
     const g = buildDialogueGraph(ctx(), 'PKG');
     const empty = g.nodes.find((n) => n.id === 'EMPTY')!;
     expect(empty.event).toBe(3);
@@ -120,7 +120,7 @@ describe('граф диалога', () => {
     expect(g.edges.filter((e) => e.source === 'PKG').every((e) => e.category === 'dialogs')).toBe(true);
   });
 
-  it('translatedText: без исходного текста перевод берётся как есть', () => {
+  it('translatedText: without the source text the translation is taken as is', () => {
     const idx = indexTranslation(file([rec('DIALOGUE_LINE', 'X', (r) => r.strings.set('text1', b('Да')))]));
     expect(translatedText(idx, 'X', 'text1', 'Yes')).toBe('Да');
     expect(translatedText(idx, 'X', 'text0', 'Yes')).toBeUndefined();

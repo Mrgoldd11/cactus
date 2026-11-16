@@ -1,6 +1,6 @@
 /**
- * Рельеф: математика тайлов и зон без игры; на установленной игре — заголовок карты высот,
- * чтение тайлов и сверка высот с y зданий ванили.
+ * Terrain: tile and zone math without the game; on the installed game — the heightmap header,
+ * reading tiles and checking heights against the y of vanilla buildings.
  */
 import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -11,8 +11,8 @@ const paths = resolveGamePaths();
 const map = hasGame(paths) ? heightmapPath(paths.kenshi) : '';
 const game = map !== '' && existsSync(map);
 
-describe('рельеф: тайлы и зоны', () => {
-  it('квадродерево покрывает мир, самый мелкий шаг — пиксель', () => {
+describe('terrain: tiles and zones', () => {
+  it('the quadtree covers the world, the finest step is a pixel', () => {
     expect(TERRAIN_MAX_LEVEL).toBe(7);
     expect(HEIGHTMAP_STEP).toBe(18);
     expect(tileBounds(0, 0, 0)).toMatchObject({ x: -WORLD_HALF, z: -WORLD_HALF, size: 2 * WORLD_HALF, col: 0, row: 0, step: 128 });
@@ -22,21 +22,21 @@ describe('рельеф: тайлы и зоны', () => {
     expect(() => tileBounds(8, 0, 0)).toThrow();
     expect(() => tileBounds(1, 2, 0)).toThrow();
   });
-  it('зона точки как в именах файлов', () => {
+  it('zone of a point as in the file names', () => {
     expect(zoneOfPoint(47063, -43572)).toEqual({ x: 42, y: 22 });
     expect(zoneOfPoint(-1, 0)).toEqual({ x: 31, y: 32 });
   });
 });
 
 describe.skipIf(!game)('рельеф на файлах игры', () => {
-  it('тайлы читаются; соседние уровни сходятся в общих точках', async () => {
+  it('tiles are read; neighbouring levels agree at shared points', async () => {
     const hm = await Heightmap.open(map);
     try {
       expect(hm.layout).toMatchObject({ width: 16385, height: 16385 });
       const root = await hm.readTile(0, 0, 0);
       expect(root.length).toBe(TILE_SAMPLES * TILE_SAMPLES);
       expect(Math.max(...root)).toBeGreaterThan(10000);
-      // Угол тайла 1/1/1 — это центр мира, он же точка (64, 64) корня.
+      // The corner of tile 1/1/1 is the world centre, which is also point (64, 64) of the root.
       const child = await hm.readTile(1, 1, 1);
       expect(child[0]).toBe(root[64 * TILE_SAMPLES + 64]);
       const fine = await hm.readTile(7, 64, 64);
@@ -46,7 +46,7 @@ describe.skipIf(!game)('рельеф на файлах игры', () => {
     }
   });
 
-  it('y здания — высота над рельефом: `world Y pos` = рельеф + y у большинства', async () => {
+  it('building y is the height above terrain: `world Y pos` = terrain + y for most', async () => {
     const { world } = loadWorld(paths);
     const pts: { x: number; z: number; y: number; wy: number }[] = [];
     for (const file of world.files()) {
@@ -55,7 +55,7 @@ describe.skipIf(!game)('рельеф на файлах игры', () => {
       if (!rec) continue;
       for (const inst of rec.instances.values()) {
         if (!inst.target || pts.length >= 20000) continue;
-        // Здания (есть состояние с «world Y pos»).
+        // Buildings (there is a state with "world Y pos").
         const wy = inst.states.map((s) => world.record(file, decodeText(s))?.floats.get('world Y pos')).find((v) => v !== undefined);
         if (wy === undefined) continue;
         pts.push({ x: inst.position[0], z: inst.position[2], y: inst.position[1], wy });
@@ -68,7 +68,7 @@ describe.skipIf(!game)('рельеф на файлах игры', () => {
       const err = hs.map((h, i) => Math.abs(h + pts[i]!.y - pts[i]!.wy)).sort((a, b) => a - b);
       expect(err[err.length >> 1]).toBeLessThan(3);
       expect(err.filter((e) => e < 3).length / err.length).toBeGreaterThan(0.5);
-      // То же через тайл: билинейная выборка из самого подробного уровня.
+      // The same via the tile: bilinear sampling from the most detailed level.
       const p = pts[0]!;
       const n = 2 ** 7;
       const tx = Math.floor(((p.x + WORLD_HALF) / (2 * WORLD_HALF)) * n);
