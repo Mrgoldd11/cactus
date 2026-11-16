@@ -124,12 +124,19 @@ test('vanilla: search, field edit, undo, save to a temp folder', async () => {
     await search.fill('type=WEAPON; weight kg>10');
     await expect(page.getByTestId('list-count')).toHaveText(/: 4$/);
     await expect(list.locator('[data-sid="478-gamedata.base"]')).toBeVisible();
+    // The game weighs weapons by the blunt multiplier (1.0 = 40 kg); the Plank is in, the Katana is not.
+    await search.fill('type=WEAPON; blunt damage multiplier>=0.5');
+    await expect(list.locator('[data-sid="902-gamedata.base"]')).toBeVisible();
     await expect(list.locator(`[data-sid="${KATANA}"]`)).toHaveCount(0);
+    const heavyCount = (await page.getByTestId('list-count').textContent()) ?? '';
     await search.fill('katana; type=WEAPON');
     await expect(page.getByTestId('list-count')).toHaveText(/: 3$/);
     await expect(list.locator(`[data-sid="${KATANA}"]`)).toBeVisible();
     await search.fill('type=CHARACTER; vendors.weapons:katana');
     await expect(list.locator('[data-sid="51731-rebirth.mod"]')).toBeVisible();
+    // Shops are squads: the Ronin weapon shop sells katanas through its vendor list.
+    await search.fill('type=SQUAD_TEMPLATE; vendors.weapons:katana');
+    await expect(list.locator('[data-sid="2239-gamedata.base"]')).toBeVisible();
     await expect(page.getByTestId('search-hint')).toHaveCount(0);
     // A bad regular expression and an unknown field give a hint; the other conditions still filter.
     await search.fill('type=WEAPON; name?([; weight kgg>1');
@@ -141,9 +148,9 @@ test('vanilla: search, field edit, undo, save to a temp folder', async () => {
     await page.getByTestId('search-help').click();
     await expect(page.getByTestId('search-help-popover')).toBeVisible();
     await page.screenshot({ path: join(shots, '02b-search-operators.png') });
-    await page.getByTestId('search-help-popover').locator('button', { hasText: 'weight kg>10' }).click();
-    await expect(search).toHaveValue('type=WEAPON; weight kg>10');
-    await expect(page.getByTestId('list-count')).toHaveText(/: 4$/);
+    await page.getByTestId('search-help-popover').locator('button', { hasText: 'blunt damage multiplier>=0.5' }).click();
+    await expect(search).toHaveValue('type=WEAPON; blunt damage multiplier>=0.5');
+    await expect(page.getByTestId('list-count')).toHaveText(heavyCount);
     await page.getByTestId('search-help').click();
     await expect(page.getByTestId('search-help-popover')).toHaveCount(0);
 

@@ -210,8 +210,11 @@ share one syntax. Plain words are looked up in the name, the translated name and
 | `list.v0>50` | a reference value v0/v1/v2 |
 | `"type"=…` | a real field called `type` (quotes turn off keywords and paths) |
 
-Examples: `bandit; type=CHARACTER`, `type=WEAPON; weight kg>10`, `state=mod`,
-`type=CHARACTER; vendors.weapons:katana` (traders whose shop lists sell katanas). A broken
+Examples: `bandit; type=CHARACTER`, `type=WEAPON; blunt damage multiplier>=0.5` (heavy weapons:
+the game weighs a weapon as 40 kg × blunt multiplier, `weight kg` is only the minimum), `state=mod`,
+`type=SQUAD_TEMPLATE; vendors.weapons:katana` (shops whose trade lists name the katana; in Kenshi
+shops are squads, and katanas made by weapon manufacturers sit one level deeper,
+`vendors.weapon manufacturers.weapon types:katana`). A broken
 condition (bad regular expression, unknown field) shows a hint under the box and the other
 conditions keep filtering; the `?` button next to the box lists the syntax.
 
