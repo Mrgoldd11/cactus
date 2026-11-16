@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<ModData xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <id>3835566412</id>
+  <mod>Cactus Info</mod>
+  <title>Cactus - Mod Editor for Kenshi (external tool)</title>
+  <tags>
+    <string>Environment/Map</string>
+  </tags>
+  <visibility>0</visibility>
+  <lastUpdate>2026-11-07T22:38:27.6001766+03:00</lastUpdate>
+</ModData>
