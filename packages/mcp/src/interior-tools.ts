@@ -102,7 +102,7 @@ export function registerInteriorTools(server: McpServer, session: Session, { run
       title: 'Inside a building',
       description: [
         'Building interior: layouts (a building has many: "Noble house", "Bar", "Shop"…; "exterior" are signs and flags) and the objects of the chosen layout: furniture (BUILDING: walls, beds, chests) and item points (ITEM_PLACEMENT_GROUP).',
-        'building is a building (id or name, English or Russian) or a world object "file|owner|key" from list_in_area (then the layout of that building is taken); layout is a layout name or id.',
+        'building is a building (id or name, English or translated) or a world object "file|owner|key" from list_in_area (then the layout of that building is taken); layout is a layout name or id.',
         'An object is a line "interiors.level|layout|key" (interior_move and interior_remove accept it). Coordinates are from the origin of the building model.',
         'A layout is shared: an edit changes it in every building of this type where the game uses it. Residents, guards and goods are placed by the game itself (they are not in the layout).',
       ].join('\n'),
@@ -155,7 +155,7 @@ export function registerInteriorTools(server: McpServer, session: Session, { run
         'Written to the mod leveldata/interiors.level on save; undo with world_undo. Changes the layout in every building where the game uses it.',
       ].join('\n'),
       inputSchema: {
-        target: z.string().describe('What to place: id or name of a record (English or Russian)'),
+        target: z.string().describe('What to place: id or name of a record (English or translated)'),
         building: z.string().optional().describe('Building (id, name or a world object): together with the layout name'),
         layout: z.string().describe('Layout: id or name'),
         x: z.number(),

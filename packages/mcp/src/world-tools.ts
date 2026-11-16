@@ -94,7 +94,7 @@ export function registerWorldTools(server: McpServer, session: Session, { run, r
     {
       title: 'World objects around a point',
       description: [
-        'What stands in the world around a point (x, z) or near a town / building (near is an id or a name, English or Russian): buildings, walls, items.',
+        'What stands in the world around a point (x, z) or near a town / building (near is an id or a name, English or translated): buildings, walls, items.',
         'Each object is a line "file|owner|key" (move and remove accept it), the record, distance, position (y for zone objects is above ground; for towns from leveldata.level it is as in the file), rotation in degrees.',
         'Includes unsaved world edits of the mod (place / move / remove).',
       ].join('\n'),
@@ -144,7 +144,7 @@ export function registerWorldTools(server: McpServer, session: Session, { run, r
         'A building is placed finished (state GAMESTATE_BUILDING: is complete, materials from the record); without it the game makes a for-sale construction site. No factions, residents or interior layout: the game picks the interior itself.',
       ].join('\n'),
       inputSchema: {
-        target: z.string().describe('What to place: id or name of a record (English or Russian)'),
+        target: z.string().describe('What to place: id or name of a record (English or translated)'),
         x: z.number(),
         z: z.number(),
         y: z.number().optional().describe('Height above ground, default 0'),

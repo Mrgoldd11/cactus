@@ -183,7 +183,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
     {
       instructions: [
         'Kenshi data: vanilla (gamedata.base → Newwworld.mod → Dialogue.mod → rebirth.mod), the mod dependencies, and the mod itself.',
-        'Call open_mod first (or work on vanilla without it). Address records by string id or name (show, tree, refs, diff); find searches English and Russian names.',
+        'Call open_mod first (or work on vanilla without it). Address records by string id or name (show, tree, refs, diff); find searches English and translated names.',
         'Edits (edit) go in batches of operations, one undo per batch; save writes only the changes. save writes into the game folder only with force: true.',
         'Schema of types and fields with descriptions from fcs.def: the schema tool and kenshi://schema/… resources.',
         'A mod can extend the schema with FCS Extended files in its folder (fcs.def, fcs_preload.def, *.def.patch): open_mod applies those of the mod and of its dependencies and lists what they add; schema marks such types, fields and enum values with [extension NAME], and schema with extension shows the warnings about those files. DLL plugins of FCS Extended are not run.',
@@ -225,7 +225,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
     'find',
     {
       title: 'Find records',
-      description: 'Records by name (English or Russian) or id, type, field values, status. Line: id  TYPE  "name" (Russian)  [status].',
+      description: 'Records by name (English or translated) or id, type, field values, status. Line: id  TYPE  "name" (translated)  [status].',
       inputSchema: {
         text: z.string().optional().describe('Substring of name or id'),
         type: z.union([z.string(), z.number()]).optional().describe('Type: name (DIALOGUE) or number'),
@@ -263,7 +263,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
       title: 'Show record',
       description: 'Resulting fields and references of a record (references with target names), status; layers shows which layers define it.',
       inputSchema: {
-        id: z.string().describe('String id or record name (English or Russian)'),
+        id: z.string().describe('String id or record name (English or translated)'),
         max_refs: z.number().int().min(0).optional().describe('References per category, default 20; 0 for all'),
         layers: z.boolean().optional(),
       },
@@ -506,7 +506,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
       ].join('\n'),
       inputSchema: {
         type: z.union([z.string(), z.number()]).describe('Record type: name (WEAPON) or number'),
-        text: z.string().optional().describe('Substring of name (English or Russian) or id'),
+        text: z.string().optional().describe('Substring of name (English or translated) or id'),
         fields: z.array(z.string()).optional().describe('Conditions: key=val, key~substring (or key:substring), key!:substring (does not contain), key?regexp, != < > <= >=, key? (field exists); for references: list>5, list.v0=4, Ref>0'),
         mod_only: z.boolean().optional().describe('Only records that already exist in the mod'),
         op: z.enum(['set', 'mul', 'add', 'replace', 'refAdd', 'refRemove']),
