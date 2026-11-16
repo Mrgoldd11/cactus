@@ -2,7 +2,7 @@ Cactus {VERSION} - quick start
 ==============================
 
 Cactus is a mod editor for Kenshi (a replacement for FCS) with a dialogue graph, a
-world view and AI assistant integration (Claude). This is a beta: keep a copy of your
+world view and AI assistant integration (MCP). This is a beta: keep a copy of your
 .mod files before editing them.
 
 RUN
@@ -20,13 +20,15 @@ THINGS TO TRY
 - Your own mod: type a name on the start screen -> "New mod" -> edit -> Ctrl+S.
   It is saved to <game folder>\mods\<Name>\; tick it in the Kenshi launcher.
 
-AI (Claude Desktop or Claude Code)
+AI (any MCP client: Claude Desktop, Claude Code and others)
 1. In Cactus: "Help" -> "Connect AI (MCP)..." -> "Copy".
 2. Claude Desktop: Settings -> Developer -> Edit Config, paste into claude_desktop_config.json,
    save and fully restart Claude (tray -> Quit). Claude Code: paste the copied command
    into PowerShell.
 3. Ask: "Find the katana and show where it is sold in the game".
-(Other AI providers are planned, not implemented yet.)
+Cactus speaks standard MCP (stdio), so any AI client that supports MCP can connect;
+for other clients use the same command that "Copy" puts on the clipboard. Tested with
+Claude only so far; reports about other clients are welcome.
 
 PROBLEMS
 Open an issue: https://github.com/Mrgoldd11/Cactus/issues - attach the version
