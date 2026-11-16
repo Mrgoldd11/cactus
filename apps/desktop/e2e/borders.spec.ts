@@ -1,5 +1,5 @@
 /**
- * E2E: town borders in the «Мир» panel — a checkbox turns on rings around The Hub. Screenshot: `out/screenshots/58-*`.
+ * E2E: town borders in the «World» panel — a checkbox turns on rings around The Hub. Screenshot: `out/screenshots/58-*`.
  */
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';

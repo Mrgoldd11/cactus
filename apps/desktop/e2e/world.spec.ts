@@ -1,5 +1,5 @@
 /**
- * E2E: the «Мир» panel — terrain of the whole map, flight to a town, WASD movement, speed measurements,
+ * E2E: the «World» panel — terrain of the whole map, flight to a town, WASD movement, speed measurements,
  * click on a building — highlight and card, foliage up close. Screenshots: `out/screenshots/53-*`…`57-*`.
  */
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -32,7 +32,7 @@ test('World panel: terrain, flight, click on a building shows a card', async () 
     await page.getByTestId('open-vanilla').click();
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
 
-    // «Сцена» layout: «Мир» is the first tab in the centre.
+    // «Scene» layout: «World» is the first tab in the centre.
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-scene').click();
     const view = page.getByTestId('world-view');
@@ -143,7 +143,7 @@ test('World panel: terrain, flight, click on a building shows a card', async () 
     await expect(lastStep).toHaveText('');
     await expect(page.getByTestId('world-undo')).toBeDisabled();
 
-    // «Поставить…»: clicking the field opens the whole list (it can be scrolled), text narrows it, Esc closes.
+    // «Place…»: clicking the field opens the whole list (it can be scrolled), text narrows it, Esc closes.
     const placeBox = page.getByTestId('world-place');
     const placeHits = page.getByTestId('world-place-hits');
     await placeBox.click();

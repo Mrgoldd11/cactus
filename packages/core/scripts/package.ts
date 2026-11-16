@@ -1,16 +1,16 @@
 /**
- * Пакет `@kedit/core` для скриптов внешних модов: ядро, собранное в обычный JavaScript
- * с типами (.d.ts), — его можно подключить из любой папки, без исходников редактора.
+ * The `@kedit/core` package for external mod scripts: the core built into plain JavaScript
+ * with types (.d.ts) — it can be used from any folder, without the editor sources.
  *
  *   pnpm core:package                     → editor/out/kedit-core/
- *   node packages/core/scripts/package.ts --out <папка> [--tgz]
+ *   node packages/core/scripts/package.ts --out <folder> [--tgz]
  *
- * В своём проекте: `npm install <путь>/out/kedit-core` (или .tgz из `--tgz`), затем
- * `import { … } from '@kedit/core'` и `import { … } from '@kedit/core/node'`.
+ * In your project: `npm install <path>/out/kedit-core` (or the .tgz from `--tgz`), then
+ * `import { … } from '@kedit/core'` and `import { … } from '@kedit/core/node'`.
  *
- * Внутри рабочей области пакет по-прежнему называется `@kenshi-editor/core` и берётся из
- * исходников; относительный импорт `editor/packages/core/src/index.ts` тоже работает.
- * Пакет помечен `private`: случайно опубликовать его в npm нельзя.
+ * Inside the workspace the package is still called `@kenshi-editor/core` and is taken from
+ * the sources; the relative import `editor/packages/core/src/index.ts` works too.
+ * The package is marked `private`: it cannot be published to npm by accident.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -21,7 +21,7 @@ import { parseArgs } from 'node:util';
 const coreDir = resolve(import.meta.dirname, '..');
 const editorRoot = resolve(coreDir, '../..');
 
-/** Относительные импорты `./x.ts` в .d.ts → `./x.js`: так их понимает любой TypeScript. */
+/** Relative imports `./x.ts` in .d.ts → `./x.js`: any TypeScript understands them that way. */
 export function fixDeclarationImports(text: string): string {
   return text.replace(/((?:from|import)\s*\(?\s*['"])(\.{1,2}\/[^'"]+?)\.ts(['"])/g, '$1$2.js$3');
 }

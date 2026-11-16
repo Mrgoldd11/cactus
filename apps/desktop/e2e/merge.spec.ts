@@ -1,5 +1,5 @@
 /**
- * E2E «Mod merge»: the «Слияние» panel in the window. A temp «game folder» (see mods.spec.ts):
+ * E2E «Mod merge»: the «Merge mods» panel in the window. A temp «game folder» (see mods.spec.ts):
  * vanilla is hard links to the real game files, a foreign mod is in the «Workshop».
  * Scenario: pick a source → accept all records → merge → undo → redo → save;
  * a companion file appears next to the mod, after a reload merged records are not offered again.

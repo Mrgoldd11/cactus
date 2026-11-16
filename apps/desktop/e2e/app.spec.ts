@@ -36,7 +36,7 @@ async function launch(userData = mkdtempSync(join(tmpdir(), 'kedit-e2e-'))): Pro
 
 /**
  * Close the test app. Windows are destroyed without a close event: otherwise an unsaved mod
- * pops up «Закрыть без сохранения?» right on screen and the test waits until Playwright kills the process.
+ * pops up «Close without saving?» right on screen and the test waits until Playwright kills the process.
  */
 async function closeApp(app: ElectronApplication): Promise<void> {
   await app
@@ -148,7 +148,7 @@ test('vanilla: search, field edit, undo, save to a temp folder', async () => {
     expect(recs[0]!.stringId).toBe(KATANA);
     expect(recs[0]!.floats.get(CUT)).toBeCloseTo(1.7, 5);
 
-    // Writing to the game folder only after confirmation; «Отмена» writes nothing.
+    // Writing to the game folder only after confirmation; «Cancel» writes nothing.
     const games = await page.evaluate(() => window.kedit.detectGames());
     const kenshi = games[0]!.kenshi;
     const gamePath = join(kenshi, 'mods', '__kedit_e2e_never_written__', 'x.mod');
@@ -256,7 +256,7 @@ test('scenario: katana copy, name and damage, into the trader stock, save to out
     await expect(page.getByTestId('lang-menu')).toHaveCount(0);
     await expect(page.getByTestId('lang-current')).toContainText('简体中文');
     await expect(page.getByTestId('save')).toHaveText('保存');
-    // Panel titles «Игра», «Модель», «Мир», «Внутри» in the «Окно» menu are in Chinese too.
+    // Panel titles «Game», «Model», «World», «Inside» in the «Window» menu are in Chinese too.
     await page.getByTestId('window-menu').click();
     await expect(page.getByTestId('window-panel-game')).toContainText('游戏');
     await expect(page.getByTestId('window-panel-model')).toContainText('模型');
@@ -353,7 +353,7 @@ test('dialogue graph: lines in Russian, player choice, loops; a line the game wi
     await expect(graph.locator('[data-testid="dg-node"][data-id="61859-Dialogue.mod"] .dg-warn')).toBeInViewport();
     await page.screenshot({ path: join(shots, '13-dialogue-shadowed.png') });
 
-    // Non-dialogue records have no graph tab: the previous «Поля» tab stays in place.
+    // Non-dialogue records have no graph tab: the previous «Fields» tab stays in place.
     await selectRecord(page, 'katana', KATANA);
     await expect(page.getByTestId('tab-graph')).toHaveCount(0);
   } finally {
@@ -387,7 +387,7 @@ test('conversation: which dialogue the game picks for a character, conversation 
     await expect(opening.getByTestId('talk-line-odds').first()).toContainText('при условиях шанс 100%');
     await page.screenshot({ path: join(shots, '16-talk.png') });
 
-    // «Как игра выбирает»: popup with the rules; closes on a second click, a click outside and Esc.
+    // «How the game picks»: popup with the rules; closes on a second click, a click outside and Esc.
     const rulesBtn = talk.getByTestId('talk-rules-btn');
     const rules = page.getByTestId('talk-rules');
     await rulesBtn.click();
@@ -532,12 +532,12 @@ test('workspace: dragged a panel, closed another — same layout after restart',
       await expect(page.locator('.dv-tab')).toHaveCount(3);
       await expect(groupOfTab(page, 'Записи').locator('.dv-tab')).toHaveCount(1);
 
-      // Move the «Записи» tab into the middle of the inspector: one group with two tabs.
+      // Move the «Records» tab into the middle of the inspector: one group with two tabs.
       const target = groupOfTab(page, 'Инспектор').locator('.dv-content-container');
       await page.locator('.dv-tab', { hasText: 'Записи' }).dragTo(target);
       await expect(groupOfTab(page, 'Записи').locator('.dv-tab')).toHaveCount(2);
 
-      // Close «Категории» via the «Окно» menu, open «Где в игре».
+      // Close «Categories» via the «Window» menu, open «Where in game».
       await page.getByTestId('window-menu').click();
       await page.getByTestId('window-panel-categories').click();
       await expect(page.locator('.dv-tab', { hasText: 'Категории' })).toHaveCount(0);
@@ -561,7 +561,7 @@ test('workspace: dragged a panel, closed another — same layout after restart',
     await expect(page.locator('.dv-tab', { hasText: 'Категории' })).toHaveCount(0);
     await expect(page.locator('.dv-tab', { hasText: 'Где в игре' })).toHaveCount(1);
 
-    // «Сбросить раскладку» brings back the preset «Данные» layout.
+    // «Reset layout» brings back the preset «Data» layout.
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-reset').click();
     await expect(page.locator('.dv-tab')).toHaveCount(3);
@@ -636,7 +636,7 @@ test('conversation player: which dialogue is picked and why, answers, as if, exa
     await expect(player).toHaveAttribute('data-sid', '50638-rebirth.mod');
     await page.screenshot({ path: join(shots, '18c-player-line.png') });
 
-    // «Как игра выбирает диалог»: the rule and an example on this character.
+    // «How the game picks a dialogue»: the rule and an example on this character.
     await page.locator('.dv-tab', { hasText: 'Как игра выбирает' }).click();
     const howto = page.getByTestId('howto');
     await expect(howto.getByTestId('howto-example')).toContainText('Трактирщик — диалогов на «разговор»: 5');
@@ -750,7 +750,7 @@ test('dialogue graph: right-click menu, text right in the node, F2, Ctrl+D, Dele
     const edit = graph.getByTestId('dg-edit');
     const editingId = async (): Promise<string> => (await graph.locator('.dg-node.dg-editing').getAttribute('data-id'))!;
 
-    // Right-click on a line opens the menu; «Добавить ответ игрока» makes a new node with a text field at once.
+    // Right-click on a line opens the menu; «Add player answer» makes a new node with a text field at once.
     await node('61861-Dialogue.mod').locator('.dg-text').first().click({ button: 'right' });
     await expect(menu).toBeVisible();
     await expect(menu.getByTestId('dg-menu-delete')).toBeVisible();
@@ -801,7 +801,7 @@ test('dialogue graph: right-click menu, text right in the node, F2, Ctrl+D, Dele
     await expect(stats).toContainText('узлов 6');
     await expect(node(copyId)).toHaveCount(0);
 
-    // Right-click on a link — «Вставить реплику между»: the new line goes in the middle, with a text field at once.
+    // Right-click on a link — «Insert a line in between»: the new line goes in the middle, with a text field at once.
     await edge('61861-Dialogue.mod', answer).dispatchEvent('contextmenu');
     await expect(menu).toHaveAttribute('data-kind', 'edge');
     await menu.getByTestId('dg-menu-insert').click();
@@ -822,7 +822,7 @@ test('dialogue graph: right-click menu, text right in the node, F2, Ctrl+D, Dele
     await page.keyboard.press('Control+y');
     await expect(node(mid)).toContainText('Погоди.');
 
-    // A line from the game: right-click → «Удалить» asks; undo reverts the deletion.
+    // A line from the game: right-click → «Delete» asks; undo reverts the deletion.
     await graph.getByRole('button', { name: /Показать всё/ }).click();
     await page.waitForTimeout(400);
     await node('61860-Dialogue.mod').locator('.dg-text').first().click({ button: 'right' });
@@ -836,7 +836,7 @@ test('dialogue graph: right-click menu, text right in the node, F2, Ctrl+D, Dele
     await page.keyboard.press('Control+z');
     await expect(node('61860-Dialogue.mod')).toBeVisible();
 
-    // «Открыть реплику» shows the selected line in the «Реплика» panel.
+    // «Open line» shows the selected line in the «Dialogue line» panel.
     await node(mid).locator('.dg-text').first().click();
     await graph.getByTestId('dg-open-line').click();
     await expect(page.getByTestId('line-inspector')).toHaveAttribute('data-sid', mid);
@@ -911,13 +911,13 @@ test('edit history: ↶ ↷ circles with step list, History panel, jump to a ste
     await page.getByTestId('redo').click();
     await expect(input).toHaveValue('1.3');
 
-    // «История» panel (from the «Вся история…» list): all steps, where you are now.
+    // «History» panel (from the «Whole history…» list): all steps, where you are now.
     await page.getByTestId('undo-menu').click();
     await page.getByTestId('history-all').click();
     const panel = page.getByTestId('history-panel');
     await expect(panel).toBeVisible();
     const rows = panel.getByTestId('history-step');
-    await expect(rows).toHaveCount(4); // «Мод как при открытии» + 3 steps
+    await expect(rows).toHaveCount(4); // «Mod as opened» + 3 steps
     await expect(rows.nth(3)).toHaveAttribute('data-state', 'current');
     await expect(rows.nth(1)).toContainText(`Изменено «${CUT}»`);
     // Clicking the first step: the last two are undone and greyed out.
@@ -934,7 +934,7 @@ test('edit history: ↶ ↷ circles with step list, History panel, jump to a ste
     await expect(input).toHaveValue('1.3');
     await expect(panel.locator('[data-state="future"]')).toHaveCount(0);
     await expect(rows.nth(3)).toHaveAttribute('data-state', 'current');
-    // «Мод как при открытии» undoes everything.
+    // «Mod as opened» undoes everything.
     await rows.first().click();
     await expect(input).toHaveValue(original);
     await expect(page.getByTestId('undo')).toBeDisabled();

@@ -1,5 +1,5 @@
 /**
- * Screenshot of the katana in the «Модель» panel for the Steam gallery (from the built beta, empty settings):
+ * Screenshot of the katana in the «Model» panel for the Steam gallery (from the built beta, empty settings):
  *
  *   node apps/desktop/scripts/katana-shot.ts [out.jpg] [Cactus.exe]
  */
@@ -32,7 +32,7 @@ try {
   await page.getByTestId('window-menu').click();
   await page.getByTestId('window-preset-scene').click();
   await page.locator('.dv-tab', { hasText: '◈' }).click();
-  // «Модель» sits in the narrow right group — close the «Мир» tab so the group takes the centre.
+  // «Model» sits in the narrow right group — close the «World» tab so the group takes the centre.
   await page.locator('.dv-tab', { hasText: 'World' }).locator('.dv-default-tab-action').click();
   await page.waitForTimeout(400);
   const view = page.getByTestId('model-view');

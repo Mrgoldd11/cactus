@@ -1,5 +1,5 @@
 /**
- * Startup benchmark of the built app (out/): window, start screen, «Ваниль» the first
+ * Startup benchmark of the built app (out/): window, start screen, «Vanilla» the first
  * and second time (via «⌂» back to the start screen). Run: node scripts/bench-app.ts [runs=3]
  * Needs a build: pnpm --filter @kenshi-editor/desktop build.
  */

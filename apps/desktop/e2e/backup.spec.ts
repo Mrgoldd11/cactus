@@ -329,7 +329,7 @@ test('backup found: Open as is keeps it in backups, Delete backup erases it', as
     await expect(page.getByTestId('recovery-modal')).toHaveCount(0);
     await page.getByTestId('home').click();
 
-    // A new copy; «Удалить» — neither the copy nor the window remain.
+    // A new copy; «Delete» — neither the copy nor the window remain.
     await new Promise((r) => setTimeout(r, 50));
     writeAutosave(userData, ref, modFile([katana(8)]));
     await openSharpKatana(page);

@@ -1,7 +1,7 @@
 /**
  * E2E: game link on a fake Kenshi Bridge plugin (TCP on a free port,
- * `KENSHI_BRIDGE_PORT`). Status bar icon, «Показать в игре» in «Где в игре»,
- * the «Игра» panel and «Как было в игре» in the conversation player.
+ * `KENSHI_BRIDGE_PORT`). Status bar icon, «Show in game» in «Where in game»,
+ * the «Game» panel and «As it was in the game» in the conversation player.
  */
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
@@ -109,7 +109,7 @@ test('game link: icon, Show in game, Game panel, How it was in game', async () =
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
     await expect(page.getByTestId('game-link')).toHaveAttribute('data-state', 'game', { timeout: 10_000 });
 
-    // «Где в игре»: the game camera goes to the trader point.
+    // «Where in game»: the game camera goes to the trader point.
     await page.getByTestId('search').fill('katana');
     await page.getByTestId('record-list').locator('[data-sid="476-gamedata.base"]').click();
     await page.getByTestId('tab-where').click();
@@ -127,7 +127,7 @@ test('game link: icon, Show in game, Game panel, How it was in game', async () =
     expect(Array.isArray(cam?.args['pos'])).toBe(true);
     expect(fake.seen.some((s) => s.cmd === 'teleport')).toBe(false);
 
-    // «Игра» panel: the selected character, its template as a link, the trace.
+    // «Game» panel: the selected character, its template as a link, the trace.
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-panel-game').click();
     const panel = page.getByTestId('game-panel');
@@ -138,7 +138,7 @@ test('game link: icon, Show in game, Game panel, How it was in game', async () =
     await expect(panel.getByTestId('game-trace-record')).toBeVisible();
     await page.screenshot({ path: join(shots, '40-game-panel.png') });
 
-    // Player: «как было в игре» next to the editor calculation.
+    // Player: «as it was in the game» next to the editor calculation.
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-dialogue').click();
     await page.getByTestId('search').fill(BARMAN);

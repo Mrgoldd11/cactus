@@ -297,7 +297,7 @@ test('bulk edits: row checkboxes, sort, references in lists, new operators', asy
     await expect(page.getByTestId('bulk-chosen')).toContainText(`${rows - 1} из ${rows}`);
     await expect(page.getByTestId('bulk-apply')).toContainText(String(rows - 1));
     await page.screenshot({ path: join(shots, '35f-bulk-unticked.png') });
-    // Sort by «станет»: the first row is not greater than the last.
+    // Sort by «becomes»: the first row is not greater than the last.
     await page.getByTestId('bulk-sort-after').click();
     const a1 = Number(await panel.getByTestId('bulk-row').first().getAttribute('data-after'));
     const a2 = Number(await panel.getByTestId('bulk-row').last().getAttribute('data-after'));

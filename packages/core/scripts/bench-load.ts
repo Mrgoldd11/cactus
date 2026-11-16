@@ -1,7 +1,7 @@
 /**
- * Бенчмарк загрузки ванили так же, как её открывает окно редактора (project.ts):
- * чтение файлов → разбор → схема → ModContext → индекс поиска → дерево категорий.
- * Запуск: node packages/core/scripts/bench-load.ts [папка игры]
+ * Benchmark of loading vanilla the same way the editor window opens it (project.ts):
+ * read files → parse → schema → ModContext → search index → category tree.
+ * Run: node packages/core/scripts/bench-load.ts [game folder]
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';

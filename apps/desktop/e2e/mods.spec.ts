@@ -184,7 +184,7 @@ test('mods as layers: Mods panel, two mods under vanilla, the later one wins', a
     await expect(page.getByTestId('record-others')).toContainText('Sharp Katana.mod, Katana Rebalance.mod');
     await expect(page.getByTestId('record-conflicts')).toContainText('полей в конфликте: 1');
 
-    // «Конфликты» panel: katana damage, Katana Rebalance wins (lower in mods.cfg).
+    // «Conflicts» panel: katana damage, Katana Rebalance wins (lower in mods.cfg).
     await openPanel(page, 'conflicts');
     const row = page.getByTestId('conflicts-table').locator(`tr[data-sid="${KATANA}"][data-field="floats:${CUT}"]`);
     await expect(row).toBeVisible();
@@ -207,14 +207,14 @@ test('mods as layers: Mods panel, two mods under vanilla, the later one wins', a
     await expect(page.getByTestId('mods-order-changed')).toContainText('модов 2');
     await page.screenshot({ path: join(shots, '30-load-order.png') });
 
-    // «Отмена» in the confirmation box: the file is not touched.
+    // «Cancel» in the confirmation box: the file is not touched.
     await stubMessageBox(app, 1);
     await page.getByTestId('mods-order-save').click();
     await expect.poll(async () => (await messageBox(app)).calls).toBe(1);
     expect(readFileSync(game.cfg, 'utf-8')).toBe('Sharp Katana.mod\r\nKatana Rebalance.mod\r\n');
     await expect(page.getByTestId('mods-order-save')).toBeEnabled();
 
-    // «Записать»: mods.cfg with CRLF, a backup next to it, layers rebuilt — now Sharp Katana wins.
+    // «Write mods.cfg»: mods.cfg with CRLF, a backup next to it, layers rebuilt — now Sharp Katana wins.
     await stubMessageBox(app, 0);
     await page.getByTestId('mods-order-save').click();
     await expect(page.getByTestId('mods-order-msg')).toContainText('mods.cfg записан', { timeout: 60_000 });
@@ -271,13 +271,13 @@ test('foreign Workshop mod: cannot save into the original, a copy for editing in
     expect((await messageBox(app)).calls).toBe(0);
     expect(Buffer.compare(readFileSync(original), before)).toBe(0);
 
-    // «Отмена» in the copy box: nothing is created.
+    // «Cancel» in the copy box: nothing is created.
     await stubMessageBox(app, 1);
     await page.getByTestId('copy-for-editing').click();
     await expect.poll(async () => (await messageBox(app)).calls).toBe(1);
     expect(existsSync(copy)).toBe(false);
 
-    // «Скопировать»: a byte-for-byte copy + an origin file; edits stay and are saved into the copy.
+    // «Copy for editing»: a byte-for-byte copy + an origin file; edits stay and are saved into the copy.
     await stubMessageBox(app, 0);
     await page.getByTestId('copy-for-editing').click();
     await expect(page.getByTestId('copy-banner')).toContainText('900001', { timeout: 30_000 });
@@ -328,7 +328,7 @@ test('translation: Translation panel, original and translation side by side, CSV
     await expect(page.getByTestId('tr-summary')).toHaveText('Переведено: 0 из 4', { timeout: 60_000 });
     await expect(page.getByTestId('tr-source')).toHaveValue('Hats.mod');
 
-    // Translation in a field goes into the mod: status «есть», record in the mod, dependency on the original.
+    // Translation in a field goes into the mod: status «present», record in the mod, dependency on the original.
     const row = (sid: string, field: string) => page.getByTestId('tr-table').locator(`tr[data-sid="${sid}"][data-field="${field}"]`);
     const input = row('1-Hats.mod', 'name').getByTestId('tr-input');
     await input.fill('Соломенная шляпа');

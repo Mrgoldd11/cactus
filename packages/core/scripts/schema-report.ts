@@ -1,10 +1,10 @@
 /**
- * Отчёт о расхождениях fcs.def с данными: `pnpm report`.
- * Пишет reports/schema-report.md и reports/schema-report.json в корне editor/ (папка в .gitignore).
+ * Report of mismatches between fcs.def and the data: `pnpm report`.
+ * Writes reports/schema-report.md and reports/schema-report.json in the editor/ root (the folder is in .gitignore).
  *
- * 1. Ваниль (gamedata.base, Newwworld.mod, Dialogue.mod, rebirth.mod) против fcs.def.
- * 2. Установленные моды против fcs.def + того, что уже есть в ванили: ключи, которые
- *    встречаются только в модах.
+ * 1. Vanilla (gamedata.base, Newwworld.mod, Dialogue.mod, rebirth.mod) against fcs.def.
+ * 2. Installed mods against fcs.def + what vanilla already has: keys that
+ *    occur only in mods.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -35,7 +35,7 @@ for (const m of installedModFiles(paths)) {
 const schema = loadGameSchema(paths);
 const vanillaReport = analyzeCoverage(schema, vanilla);
 const withVanilla = withInferredFields(schema, vanilla.map((v) => v.file));
-// Ссылки модов указывают и на ванильные записи — их типы нужны для проверки целей.
+// Mod references also point to vanilla records — their types are needed to check the targets.
 const modsReport = analyzeCoverage(withVanilla, [...vanilla, ...mods]);
 const modOnly = modsReport.missingInSchema;
 

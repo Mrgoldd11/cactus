@@ -51,7 +51,7 @@ try {
   const width = await page.evaluate(() => window.innerWidth);
   await page.screenshot({ path: join(shots, '1-start.png'), clip: { x: 0, y: 0, width, height: Math.round((mods?.y ?? 260) - 18) } });
 
-  // 2. Vanilla, «Катана», the «Где в игре» tab.
+  // 2. Vanilla, «Катана», the «Where in game» tab.
   await page.getByTestId('open-vanilla').click();
   await page.getByTestId('editor').waitFor({ timeout: 120_000 });
   await page.getByTestId('search').fill('катана');
@@ -61,7 +61,7 @@ try {
   await page.waitForTimeout(300);
   await page.screenshot({ path: join(shots, '2-katana-where.png') });
 
-  // 3. «Диалоги» layout: Beep in the player, his dialogue in the graph, the right-click menu.
+  // 3. «Dialogues» layout: Beep in the player, his dialogue in the graph, the right-click menu.
   await page.getByTestId('window-menu').click();
   await page.getByTestId('window-preset-dialogue').click();
   await page.getByTestId('search').fill('Бип');

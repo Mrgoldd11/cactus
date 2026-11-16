@@ -1,5 +1,5 @@
 /**
- * E2E: the «Внутри» panel — a building interior from the game files (Outpost, layout «Noble House»):
+ * E2E: the «Inside» panel — a building interior from the game files (Outpost, layout «Noble House»):
  * objects, card, exact coordinates, gizmo, undo, a new object from the record list,
  * deletion, writing `leveldata/interiors.level` on save. Screenshots: `out/screenshots/60-*`…
  */
@@ -57,7 +57,7 @@ test('Inside panel: layout, move, new object, delete, write', async () => {
     await expect(card).toHaveAttribute('data-key', key);
     await page.screenshot({ path: join(shots, '61-interior-card.png') });
 
-    // Exact coordinate: x + 10 — step «Сдвиг в интерьере», mark «изменено в моде».
+    // Exact coordinate: x + 10 — step «Move inside», mark «edited in the mod».
     const lastStep = page.getByTestId('interior-last-step');
     const xField = page.getByTestId('interior-pos-x');
     const x0 = Number(await xField.inputValue());

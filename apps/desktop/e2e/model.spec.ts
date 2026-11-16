@@ -1,5 +1,5 @@
 /**
- * E2E: the «Модель» panel — the 3D model of a record from the game files (katana, house), window screenshots and
+ * E2E: the «Model» panel — the 3D model of a record from the game files (katana, house), window screenshots and
  * saving the icon (the save dialog is stubbed).
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
@@ -31,7 +31,7 @@ test('Model panel: katana and house from the game files, icon', async () => {
     await page.getByTestId('open-vanilla').click();
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
 
-    // «Сцена» layout: «Модель» is a tab in the centre next to «Мир».
+    // «Scene» layout: «Model» is a tab in the centre next to «World».
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-scene').click();
     await page.locator('.dv-tab', { hasText: '◈ Модель' }).click();
@@ -60,7 +60,7 @@ test('Model panel: katana and house from the game files, icon', async () => {
     await expect(view.getByTestId('model-stats')).toContainText('частей');
     await page.screenshot({ path: join(shots, '51-model-house.png') });
 
-    // Click on the house: a part is highlighted, next to it a «Что внутри» card with jumps to records.
+    // Click on the house: a part is highlighted, next to it a «What is inside» card with jumps to records.
     const canvas = view.getByTestId('model-canvas');
     const box = (await canvas.boundingBox())!;
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);

@@ -5,7 +5,7 @@ export default defineProject({
     name: 'core',
     include: ['test/**/*.test.ts'],
     exclude: ['test/**/*.game.test.ts'],
-    // Файлы игры большие (Dialogue.mod ~12 МБ), полный прогон модов — несколько секунд.
+    // The game files are big (Dialogue.mod ~12 MB), a full run over the mods takes a few seconds.
     testTimeout: 120_000,
   },
 });
