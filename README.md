@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/Mrgoldd11/Cactus/releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Cactus%20v0.2.0%20Beta-4f8cc9?style=for-the-badge" alt="Download Cactus v0.2.0 Beta"></a>
-  <a href="VIRUSTOTAL_LINK_PLACEHOLDER"><img src="https://img.shields.io/badge/VirusTotal-VT_RESULT_PLACEHOLDER-2ea44f?style=for-the-badge&logo=virustotal&logoColor=white" alt="VirusTotal scan of the release archive"></a>
+  <a href="https://www.virustotal.com/gui/file/37deee3b50f98e377a8d4792374efa1ed3a538dd9294c534ab0f6be33734d866"><img src="https://img.shields.io/badge/VirusTotal-0%20%2F%2065%20detections-2ea44f?style=for-the-badge&logo=virustotal&logoColor=white" alt="VirusTotal: 0 of 65 engines flagged this file"></a>
 </p>
 
 <p align="center"><sub>Windows 10/11 x64 · free · Beta · <a href="https://github.com/Mrgoldd11/Cactus/releases/latest">Releases page</a> → <b>Assets</b> → <code>Cactus-0.2.0-beta-win-x64.zip</code></sub></p>
@@ -30,7 +30,7 @@ Requirements: Windows 10/11 x64, an installed copy of Kenshi. Cactus reads your 
 
 ### Is it safe?
 
-The release archive was scanned on [VirusTotal](VIRUSTOTAL_LINK_PLACEHOLDER): **VT_RESULT_PLACEHOLDER**. You can check that the file you downloaded is the same one:
+The release archive was scanned on [VirusTotal](https://www.virustotal.com/gui/file/37deee3b50f98e377a8d4792374efa1ed3a538dd9294c534ab0f6be33734d866) on 2026-11-17: **0 of 65 engines flagged it**. You can check that the file you downloaded is the same one:
 
 ```
 SHA-256  37deee3b50f98e377a8d4792374efa1ed3a538dd9294c534ab0f6be33734d866
