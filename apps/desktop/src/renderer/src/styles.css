@@ -2942,3 +2942,18 @@ input.invalid {
   max-height: 160px;
   overflow: auto;
 }
+
+/* «Mod» menu: label with an optional reason line for a disabled item */
+.menu-label {
+  display: flex;
+  flex-direction: column;
+}
+.menu-item:disabled {
+  opacity: 0.6;
+}
+.menu-hint {
+  max-width: 320px;
+  white-space: normal;
+  font-size: 11px;
+  color: var(--muted);
+}

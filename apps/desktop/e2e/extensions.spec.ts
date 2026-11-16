@@ -199,6 +199,7 @@ test('schema extension of the opened mod: type name, fields, note in "Mod info",
     await openMod(page, 'Plain Mod.mod');
     await expect(page.getByTestId('ext-badge')).toHaveCount(0);
     expect(await typeOptions(page)).not.toContain('E2E_COUNTER');
+    await page.getByTestId('mod-menu').click();
     await page.getByTestId('mod-info').click();
     await expect(page.locator('.modal')).toBeVisible();
     await expect(page.getByTestId('ext-note')).toHaveCount(0);
@@ -208,6 +209,7 @@ test('schema extension of the opened mod: type name, fields, note in "Mod info",
     // The mod with fcs.def: the schema is rebuilt with its extension.
     await openMod(page, EXT_MOD);
     await expect(page.getByTestId('ext-badge')).toContainText('1');
+    await page.getByTestId('mod-menu').click();
     await page.getByTestId('mod-info').click();
     const note = page.getByTestId('ext-note');
     await expect(note.getByTestId('ext-item')).toHaveCount(1);
@@ -279,6 +281,7 @@ test('WorldStates example of FCS Extended: type 900 is VARIABLE, dialogue fields
   try {
     await openMod(page, 'WorldStates.mod');
     await expect(page.getByTestId('ext-badge')).toContainText('1');
+    await page.getByTestId('mod-menu').click();
     await page.getByTestId('mod-info').click();
     const note = page.getByTestId('ext-note');
     await expect(note).toContainText('VARIABLE=900');

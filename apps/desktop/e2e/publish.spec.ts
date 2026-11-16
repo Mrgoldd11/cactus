@@ -142,7 +142,11 @@ async function openMod(page: Page): Promise<void> {
   const row = page.getByTestId('mods-table').locator('tr', { hasText: MOD_NAME });
   await expect(row).toBeVisible({ timeout: 60_000 });
   await row.getByRole('button').click();
+  await expect(page.getByTestId('mod-menu')).toBeVisible({ timeout: 60_000 });
+  await page.getByTestId('mod-menu').click();
   await expect(page.getByTestId('publish-btn')).toBeEnabled({ timeout: 60_000 });
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('mod-menu-list')).toHaveCount(0);
 }
 
 const fakeCalls = (userData: string): { call: string }[] => {
@@ -166,6 +170,7 @@ test('publish: new item, then update, with the fake Steam', async () => {
   const { app, page } = await launch(game, userData);
   try {
     await openMod(page);
+    await page.getByTestId('mod-menu').click();
     await page.getByTestId('publish-btn').click();
     const modal = page.getByTestId('publish-modal');
     await expect(modal).toBeVisible();
@@ -238,6 +243,7 @@ test('publish: new item, then update, with the fake Steam', async () => {
     await expect(modal).toBeHidden();
 
     // Second publish updates the same item.
+    await page.getByTestId('mod-menu').click();
     await page.getByTestId('publish-btn').click();
     await expect(page.getByTestId('pub-mode')).toContainText(FAKE_ID);
     await expect(page.getByTestId('pub-thumb')).toBeVisible();
@@ -264,6 +270,7 @@ test('publish: Steam missing, errors and cancel, with the fake Steam', async () 
     const modal = page.getByTestId('publish-modal');
 
     // No Steam: the window opens and says what is missing.
+    await page.getByTestId('mod-menu').click();
     await page.getByTestId('publish-btn').click();
     await expect(page.getByTestId('pub-steam-off')).toBeVisible();
     await expect(page.getByTestId('pub-next')).toBeDisabled();
@@ -297,6 +304,7 @@ test('publish: Steam missing, errors and cancel, with the fake Steam', async () 
 
     // Uploader crash is reported, not hung on.
     await setScenario(app, 'crash');
+    await page.getByTestId('mod-menu').click();
     await page.getByTestId('publish-btn').click();
     await page.getByTestId('pub-next').click();
     await page.getByTestId('pub-confirm').click();

@@ -1,5 +1,6 @@
 /** Strings of the «Publish to Steam Workshop» window (merged into `i18n.ts`). */
 export const publishEn = {
+  modMenu: 'Mod',
   publishBtn: 'Publish…',
   publishBtnTip: 'Upload this mod to the Steam Workshop (create a new item or update yours)',
   publishBtnOff: 'Publishing works for a saved mod in the game’s mods folder (mods/<name>/<name>.mod), not for Workshop downloads',
@@ -100,6 +101,7 @@ export const publishEn = {
 };
 
 export const publishRu: typeof publishEn = {
+  modMenu: 'Мод',
   publishBtn: 'Опубликовать…',
   publishBtnTip: 'Загрузить мод в мастерскую Steam (создать новую запись или обновить свою)',
   publishBtnOff: 'Публикация доступна для сохранённого мода в папке mods игры (mods/<имя>/<имя>.mod), не для загрузок из мастерской',
@@ -200,6 +202,7 @@ export const publishRu: typeof publishEn = {
 };
 
 export const publishZh: typeof publishEn = {
+  modMenu: 'Mod',
   publishBtn: '发布…',
   publishBtnTip: '将此 Mod 上传到 Steam 创意工坊（创建新条目或更新您的条目）',
   publishBtnOff: '只能发布已保存在游戏 mods 文件夹中的 Mod（mods/<名称>/<名称>.mod），不能发布创意工坊下载内容',

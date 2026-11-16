@@ -88,6 +88,14 @@ async function waitEditor(page: Page): Promise<void> {
   await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
 }
 
+/** The toolbar must stay one row at the default window width (1400 px): a wrap costs list rows. */
+async function expectOneRowToolbar(page: Page): Promise<void> {
+  const bar = await page.locator('.editor > .toolbar').boundingBox();
+  const btn = await page.getByTestId('save').boundingBox();
+  expect(bar && btn).toBeTruthy();
+  expect(bar!.height).toBeLessThan(btn!.height * 2);
+}
+
 async function selectRecord(page: Page, query: string, sid: string): Promise<void> {
   await page.getByTestId('search').fill(query);
   const row = page.getByTestId('record-list').locator(`[data-sid="${sid}"]`);
@@ -113,6 +121,14 @@ test('vanilla: search, field edit, undo, save to a temp folder', async () => {
     await page.getByTestId('open-vanilla').click();
     await waitEditor(page);
     await page.screenshot({ path: join(shots, '02-vanilla.png') });
+    await expectOneRowToolbar(page);
+    // Rare mod actions live in the «Mod» menu; vanilla has no mod folder, so Publish is off and says why.
+    await page.getByTestId('mod-menu').click();
+    await expect(page.getByTestId('publish-btn')).toBeDisabled();
+    await expect(page.getByTestId('publish-btn').locator('.menu-hint')).toBeVisible();
+    await page.screenshot({ path: join(shots, '02b-mod-menu.png') });
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('mod-menu-list')).toHaveCount(0);
 
     // Search in Russian works too: «Катана».
     await page.getByTestId('search').fill('катана');
@@ -135,7 +151,8 @@ test('vanilla: search, field edit, undo, save to a temp folder', async () => {
     await search.fill('type=CHARACTER; vendors.weapons:katana');
     await expect(list.locator('[data-sid="51731-rebirth.mod"]')).toBeVisible();
     // Shops are squads: the Ronin weapon shop sells katanas through its vendor list.
-    await search.fill('type=SQUAD_TEMPLATE; vendors.weapons:katana');
+    // The name word keeps the result short, so the row is rendered whatever the list height.
+    await search.fill('ronin; type=SQUAD_TEMPLATE; vendors.weapons:katana');
     await expect(list.locator('[data-sid="2239-gamedata.base"]')).toBeVisible();
     await expect(page.getByTestId('search-hint')).toHaveCount(0);
     // A bad regular expression and an unknown field give a hint; the other conditions still filter.
@@ -281,6 +298,7 @@ test('scenario: katana copy, name and damage, into the trader stock, save to out
     await page.getByTestId('lang-current').click();
     await page.getByTestId('lang-en').click();
     await expect(page.getByTestId('save')).toHaveText('Save');
+    await expectOneRowToolbar(page);
     await page.getByTestId('cat-mod').click();
     await page.getByTestId('record-list').locator(`[data-sid="${sid}"]`).click();
     await page.getByTestId('tab-fields').click();
@@ -293,6 +311,7 @@ test('scenario: katana copy, name and damage, into the trader stock, save to out
     await expect(page.getByTestId('lang-menu')).toHaveCount(0);
     await expect(page.getByTestId('lang-current')).toContainText('简体中文');
     await expect(page.getByTestId('save')).toHaveText('保存');
+    await expectOneRowToolbar(page);
     // Panel titles «Game», «Model», «World», «Inside» in the «Window» menu are in Chinese too.
     await page.getByTestId('window-menu').click();
     await expect(page.getByTestId('window-panel-game')).toContainText('游戏');

@@ -1,0 +1,86 @@
+/**
+ * «Mod» menu of the editor toolbar: rarely used mod-level actions (mod info, dependencies,
+ * backups, publish) grouped in one dropdown so the toolbar fits one row. Built like the «Window» menu.
+ */
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useT } from '../i18n.ts';
+
+export interface ModMenuItem {
+  testId: string;
+  label: ReactNode;
+  title?: string;
+  /** When set, the item is disabled and this text is shown under its label. */
+  disabledHint?: string;
+  onClick: () => void;
+}
+
+interface Props {
+  items: ModMenuItem[];
+  /** Extra content on the menu button itself (e.g. the FCS Extended badge). */
+  badge?: ReactNode;
+  title?: string;
+}
+
+export function ModMenu({ items, badge, title }: Props): ReactNode {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent): void => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('keydown', esc);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', esc);
+    };
+  }, [open]);
+
+  return (
+    <div className="menu-wrap" ref={ref}>
+      <button
+        data-testid="mod-menu"
+        className={open ? 'active' : ''}
+        title={title}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => {
+          setOpen((o) => !o);
+        }}
+      >
+        {t.modMenu}
+        {badge}
+        {' ▾'}
+      </button>
+      {open && (
+        <div className="menu" role="menu" data-testid="mod-menu-list">
+          {items.map((it) => (
+            <button
+              key={it.testId}
+              role="menuitem"
+              className="menu-item"
+              data-testid={it.testId}
+              title={it.disabledHint ?? it.title}
+              disabled={it.disabledHint !== undefined}
+              onClick={() => {
+                setOpen(false);
+                it.onClick();
+              }}
+            >
+              <span className="menu-check" />
+              <span className="menu-label">
+                {it.label}
+                {it.disabledHint !== undefined && <span className="menu-hint">{it.disabledHint}</span>}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

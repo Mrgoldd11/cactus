@@ -192,7 +192,7 @@ import back, undo). Screenshots go to `out/screenshots/`.
 
 ## Publishing to the Workshop
 
-The **Publish…** button on the editor toolbar uploads the open mod to the Kenshi Steam Workshop,
+**Mod → Publish…** on the editor toolbar uploads the open mod to the Kenshi Steam Workshop,
 or updates your existing item. It is enabled only for a saved mod in the game's `mods` folder
 (`mods/<name>/<name>.mod`); Workshop downloads cannot be published.
 

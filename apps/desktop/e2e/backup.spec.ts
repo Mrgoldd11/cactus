@@ -248,6 +248,7 @@ test('crash: edit → autosave → hard close → recovery → save → kedit va
     expect(report).toContain('errors 0');
 
     // Backups: the version before saving (1.5) — restore as an edit and export as a separate file.
+    await page.getByTestId('mod-menu').click();
     await page.getByTestId('backups-btn').click();
     const list = page.getByTestId('backup-list');
     await expect(list).toContainText('до сохранения');
@@ -318,6 +319,7 @@ test('backup found: Open as is keeps it in backups, Delete backup erases it', as
     expect(await cutValue(page)).toBe('1.5');
     expect(autosaveFiles(userData)).toHaveLength(0);
     expect(backupFiles(userData)).toHaveLength(1);
+    await page.getByTestId('mod-menu').click();
     await page.getByTestId('backups-btn').click();
     await expect(page.getByTestId('backup-list')).toContainText('автосохранение');
     await page.getByTestId('backups-modal').getByText('✕').click();

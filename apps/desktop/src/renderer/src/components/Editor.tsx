@@ -13,6 +13,7 @@ import { LangSwitch } from '../App.tsx';
 import { BackupsModal, SettingsModal, formatClock, formatTime } from './BackupModals.tsx';
 import { DependenciesModal, ModInfoModal, NewRecordModal } from './Modals.tsx';
 import { PublishModal } from './PublishModal.tsx';
+import { ModMenu } from './ModMenu.tsx';
 import { RESCAN_EVENT } from './IssueFixer.tsx';
 import { useAiChangesets, useLiveStatus } from '../live.ts';
 import { SelectionService, useSelectionVersion } from '../workbench/selection.ts';
@@ -301,28 +302,50 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
           →
         </button>
         <span className="sep" />
-        <button
-          data-testid="deps"
-          onClick={() => {
-            setModal('deps');
-          }}
-        >
-          {t.dependencies} ({ctx.info.dependencies.length})
-        </button>
-        <button
-          data-testid="mod-info"
+        <ModMenu
           title={extensionCount > 0 ? t.extBadgeTip : undefined}
-          onClick={() => {
-            setModal('info');
-          }}
-        >
-          {t.modInfo}
-          {extensionCount > 0 && (
-            <span className="badge tiny" data-testid="ext-badge">
-              {t.extBadge(extensionCount)}
-            </span>
-          )}
-        </button>
+          badge={
+            extensionCount > 0 && (
+              <span className="badge tiny" data-testid="ext-badge">
+                {t.extBadge(extensionCount)}
+              </span>
+            )
+          }
+          items={[
+            {
+              testId: 'mod-info',
+              label: t.modInfo,
+              title: extensionCount > 0 ? t.extBadgeTip : undefined,
+              onClick: () => {
+                setModal('info');
+              },
+            },
+            {
+              testId: 'deps',
+              label: `${t.dependencies} (${ctx.info.dependencies.length})`,
+              onClick: () => {
+                setModal('deps');
+              },
+            },
+            {
+              testId: 'backups-btn',
+              label: t.backups,
+              title: t.backupsTip,
+              onClick: () => {
+                setModal('backups');
+              },
+            },
+            {
+              testId: 'publish-btn',
+              label: t.publishBtn,
+              title: t.publishBtnTip,
+              disabledHint: publishable(project) ? undefined : t.publishBtnOff,
+              onClick: () => {
+                setModal('publish');
+              },
+            },
+          ]}
+        />
         <button
           data-testid="validate"
           onClick={() => {
@@ -331,25 +354,6 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
           }}
         >
           {t.panel_diagnostics}
-        </button>
-        <button
-          data-testid="backups-btn"
-          title={t.backupsTip}
-          onClick={() => {
-            setModal('backups');
-          }}
-        >
-          {t.backups}
-        </button>
-        <button
-          data-testid="publish-btn"
-          title={publishable(project) ? t.publishBtnTip : t.publishBtnOff}
-          disabled={!publishable(project)}
-          onClick={() => {
-            setModal('publish');
-          }}
-        >
-          {t.publishBtn}
         </button>
         <span className="sep" />
         <WindowMenu api={apiRef.current} preset={preset} onPreset={choosePreset} onOpen={open} />
