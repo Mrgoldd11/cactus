@@ -27,3 +27,5 @@ export * from './game-dump.ts';
 export * from './merge-store.ts';
 export * from './backup.ts';
 export * from './validation-store.ts';
+export * from './workshop.ts';
+export * from './workshop-upload.ts';

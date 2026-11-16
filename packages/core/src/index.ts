@@ -17,3 +17,6 @@ export * from './mesh/index.ts';
 export * from './live/index.ts';
 export * from './dialog/index.ts';
 export * from './game/bridge.ts';
+export * from './workshop/info.ts';
+export * from './workshop/publish.ts';
+export * from './workshop/protocol.ts';
