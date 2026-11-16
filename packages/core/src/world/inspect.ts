@@ -90,28 +90,36 @@ export function inspectRecord(ctx: ModContext, sid: string, options: { limit?: n
   return out;
 }
 
-function linkText(l: InsideLink): string {
-  if (l.name === undefined) return `${l.sid} — записи нет`;
+/** Words of the text card per language (English when there is none for it). */
+const INSIDE_WORDS: Record<string, { noRecord: string; notInData: string; from: string; changedBy: string; inMod: string; inside: string; empty: string; placed: string; usedBy: string; placedIn: string }> = {
+  en: { noRecord: 'no record', notInData: 'no record in the data', from: 'from', changedBy: 'changed by', inMod: 'in the mod', inside: 'inside / references:', empty: 'empty', placed: 'placed objects', usedBy: 'used by', placedIn: 'placed in' },
+  ru: { noRecord: 'записи нет', notInData: 'записи нет в данных', from: 'из', changedBy: 'меняют', inMod: 'в моде', inside: 'внутри / ссылки:', empty: 'пусто', placed: 'размещённые объекты', usedBy: 'кто ссылается', placedIn: 'размещён в' },
+  zh: { noRecord: '无记录', notInData: '数据中无此记录', from: '来自', changedBy: '修改者', inMod: 'Mod 中', inside: '内部 / 引用：', empty: '空', placed: '放置的对象', usedBy: '被引用于', placedIn: '放置于' },
+};
+
+function linkText(l: InsideLink, w: (typeof INSIDE_WORDS)[string]): string {
+  if (l.name === undefined) return `${l.sid} — ${w.noRecord}`;
   return `${l.type ?? ''} «${l.name}»${l.localizedName ? ` (${l.localizedName})` : ''} [${l.sid}]`;
 }
 
 /** Карточка текстом (для ИИ): шапка, «внутри» по категориям, «кто ссылается». */
-export function formatInside(card: RecordInside): string {
-  if (!card.exists) return `${card.sid}: записи нет в данных`;
+export function formatInside(card: RecordInside, lang = 'en'): string {
+  const w = INSIDE_WORDS[lang] ?? INSIDE_WORDS.en!;
+  if (!card.exists) return `${card.sid}: ${w.notInData}`;
   const lines = [`${card.type ?? ''} «${card.name ?? ''}»${card.localizedName ? ` (${card.localizedName})` : ''} [${card.sid}]`];
   const changed = card.layers.slice(1);
-  lines.push(`из: ${card.origin ?? '?'}${changed.length > 0 ? `; меняют: ${changed.join(', ')}` : ''}${card.status && card.status !== 'base' ? `; в моде: ${card.status}` : ''}`);
-  lines.push('внутри / ссылки:');
-  if (card.links.length === 0) lines.push('  пусто');
+  lines.push(`${w.from}: ${card.origin ?? '?'}${changed.length > 0 ? `; ${w.changedBy}: ${changed.join(', ')}` : ''}${card.status && card.status !== 'base' ? `; ${w.inMod}: ${card.status}` : ''}`);
+  lines.push(w.inside);
+  if (card.links.length === 0) lines.push(`  ${w.empty}`);
   for (const g of card.links) {
-    lines.push(`  ${g.category === 'instances' ? 'размещённые объекты' : g.category} (${g.links.length}):`);
-    for (const l of g.links) lines.push(`    ${linkText(l)}${l.values ? `  ${l.values.map((v) => Math.round(v * 100) / 100).join(' ')}` : ''}`);
+    lines.push(`  ${g.category === 'instances' ? w.placed : g.category} (${g.links.length}):`);
+    for (const l of g.links) lines.push(`    ${linkText(l, w)}${l.values ? `  ${l.values.map((v) => Math.round(v * 100) / 100).join(' ')}` : ''}`);
   }
-  lines.push(`кто ссылается${card.usedByTotal > 0 ? ` (${card.usedByTotal})` : ''}:`);
-  if (card.usedBy.length === 0) lines.push('  пусто');
+  lines.push(`${w.usedBy}${card.usedByTotal > 0 ? ` (${card.usedByTotal})` : ''}:`);
+  if (card.usedBy.length === 0) lines.push(`  ${w.empty}`);
   for (const g of card.usedBy) {
-    lines.push(`  ${g.category === 'instances' ? 'размещён в' : g.category}:`);
-    for (const l of g.links) lines.push(`    ${linkText(l)}`);
+    lines.push(`  ${g.category === 'instances' ? w.placedIn : g.category}:`);
+    for (const l of g.links) lines.push(`    ${linkText(l, w)}`);
   }
   return lines.join('\n');
 }

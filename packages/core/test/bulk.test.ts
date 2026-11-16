@@ -101,7 +101,7 @@ describe('массовые правки', () => {
     const skip = previewBulk(ctx, { type: 'WEAPON' }, { kind: 'mul', field: 'description', value: '2' });
     expect(skip.changes).toHaveLength(0);
     expect(skip.skipped).toHaveLength(3);
-    expect(skip.skipped[0]!.reason).toMatch(/не число/);
+    expect(skip.skipped[0]!.reason).toMatch(/not a number/);
     const bad = previewBulk(ctx, { type: 'WEAPON' }, { kind: 'set', field: 'value', value: '1.5' });
     expect(bad.skipped).toHaveLength(3);
   });

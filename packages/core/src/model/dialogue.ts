@@ -124,34 +124,45 @@ export function buildDialogueTree(ctx: ModContext, stringId: string, options: Di
 export interface FormatTreeOptions {
   /** Как `kdata.py tree`: все поля и ссылки каждой записи. */
   full?: boolean;
+  /** Interface language of the texts (default English). */
+  lang?: string;
 }
 
-function eventLabel(ctx: ModContext, event: number): string {
+/** Words of the dialogue tree text per interface language. */
+const TREE_WORDS: Record<string, { event: string; missing: string; above: string; noLines: string; unexpanded: string }> = {
+  en: { event: 'event', missing: '<no record', above: '(already above)', noLines: 'dialogue without lines (lines is empty) — says nothing in the game', unexpanded: '(not expanded)' },
+  ru: { event: 'событие', missing: '<нет записи', above: '(уже выше)', noLines: 'диалог без реплик (lines пуст) — в игре ничего не скажет', unexpanded: '(не развёрнуто)' },
+  zh: { event: '事件', missing: '<没有记录', above: '（已在上方）', noLines: '没有台词的对话（lines 为空）——游戏中什么也不会说', unexpanded: '（未展开）' },
+};
+
+function eventLabel(ctx: ModContext, event: number, lang: string): string {
   const def = refValueEnum(ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0);
-  return `событие ${def ? formatEnumValue(def, event) : String(event)}`;
+  return `${(TREE_WORDS[lang] ?? TREE_WORDS.en!).event} ${def ? formatEnumValue(def, event, lang) : String(event)}`;
 }
 
 /** Дерево текстом с отступами по два пробела на уровень. */
 export function formatDialogueTree(ctx: ModContext, root: DialogueNode, options: FormatTreeOptions = {}): string[] {
   const out: string[] = [];
+  const lang = options.lang ?? 'en';
+  const w = TREE_WORDS[lang] ?? TREE_WORDS.en!;
   const walk = (n: DialogueNode, depth: number): void => {
     const pad = '  '.repeat(depth);
-    const ev = n.event !== undefined ? `[${eventLabel(ctx, n.event)}] ` : '';
+    const ev = n.event !== undefined ? `[${eventLabel(ctx, n.event, lang)}] ` : '';
     if (n.missing) {
-      out.push(`${pad}${ev}<нет записи ${n.stringId}>`);
+      out.push(`${pad}${ev}${w.missing} ${n.stringId}>`);
       return;
     }
     if (n.repeated) {
-      out.push(`${pad}${ev}↻ ${n.type} ${n.stringId} «${n.name}» (уже выше)`);
+      out.push(`${pad}${ev}↻ ${n.type} ${n.stringId} «${n.name}» ${w.above}`);
       return;
     }
     if (options.full) {
       const rec = ctx.get(n.stringId)!;
-      const lines = formatRecord(ctx, rec, { hideCategories: [...TREE_CATEGORIES] });
+      const lines = formatRecord(ctx, rec, { hideCategories: [...TREE_CATEGORIES], lang });
       if (ev) lines[0] = ev + lines[0]!;
       out.push(...lines.map((l) => pad + l));
     } else {
-      const who = n.speaker !== undefined ? ` speaker=${formatEnumValue(getEnum(ctx.schema, 'TalkerEnum')!, n.speaker)}` : '';
+      const who = n.speaker !== undefined ? ` speaker=${formatEnumValue(getEnum(ctx.schema, 'TalkerEnum')!, n.speaker, lang)}` : '';
       out.push(`${pad}${ev}${n.type} ${n.stringId} «${n.name}»${who}`);
       for (const t of n.texts) out.push(`${pad}  "${t}"`);
       if (n.fields.length) out.push(`${pad}  · ${n.fields.join(', ')}`);
@@ -159,8 +170,8 @@ export function formatDialogueTree(ctx: ModContext, root: DialogueNode, options:
       for (const e of n.effects) out.push(`${pad}  ! ${e.text ?? `${e.name} ${e.fields.join(' ')}`} [${e.stringId}]`);
       for (const r of n.refs) out.push(`${pad}  → ${r.category}: ${r.targets.join('; ')}`);
     }
-    if (n.noLines) out.push(`${pad}  ⚠ диалог без реплик (lines пуст) — в игре ничего не скажет`);
-    if (n.truncated) out.push(`${pad}  … (не развёрнуто)`);
+    if (n.noLines) out.push(`${pad}  ⚠ ${w.noLines}`);
+    if (n.truncated) out.push(`${pad}  … ${w.unexpanded}`);
     for (const c of n.children) walk(c, depth + 1);
   };
   walk(root, 0);

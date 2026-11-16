@@ -5,7 +5,7 @@
  */
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { applyBulk, bulkFieldValue, bulkSelect, BULK_KINDS, BULK_REF_KINDS, restrictBulk, enumValue, fieldEnum, COMPARE_TYPES, DICT_FOR_KIND, BULK_NAME_FIELD, parseFieldFilter, previewBulk, type BulkKind, type BulkPreview, type FieldDef, type FieldFilter, type ModContext } from '@kenshi-editor/core';
-import { useT, type Strings } from '../../i18n.ts';
+import { errorText, useLang, useT, type Strings } from '../../i18n.ts';
 import { tryEdit, useProjectVersion } from '../../hooks.ts';
 import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
@@ -92,6 +92,7 @@ function kindLabel(t: Strings, k: BulkKind): string {
 
 function BulkPanel(): ReactNode {
   const t = useT();
+  const lang = useLang();
   const { project, go, report } = useWorkbench();
   const version = useProjectVersion(project);
   const ctx = project.ctx;
@@ -224,12 +225,13 @@ function BulkPanel(): ReactNode {
         ctx,
         query,
         { kind: input.kind, field: input.field, value: input.value, ...(values ? { values } : {}), ...(input.kind === 'replace' ? { find: input.find, regex: input.regex, caseSensitive: input.caseSensitive } : {}) },
+        lang,
       );
       return { preview, condKeys };
     } catch (e) {
-      return { error: (e as Error).message, condKeys, ...(missing ? { missing } : {}) };
+      return { error: errorText(e), condKeys, ...(missing ? { missing } : {}) };
     }
-  }, [ctx, byType, input, version]);
+  }, [ctx, byType, input, version, lang]);
   const p = result.preview;
   // С учётом снятых галочек: что реально применится.
   const chosen = useMemo(() => (p ? restrictBulk(p, (sid) => !excluded.has(sid)) : undefined), [p, excluded]);

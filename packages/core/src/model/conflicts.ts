@@ -79,6 +79,7 @@ export interface ConflictOptions {
   only?: string;
 }
 
+// Value keys of conflicts stay Russian (the window maps them per language; see conflictValue).
 const REMOVE_TEXT = 'удалить';
 const CHANGE_TEXT = 'изменить';
 
@@ -101,7 +102,7 @@ export function layerFields(rec: GameRecord, below: GameRecord | undefined): Fie
   for (const [category, list] of rec.refs) {
     for (const r of list) {
       if (isRemovedRef(r) && !below) continue;
-      out.push({ id: `ref:${category}:${r.target}`, kind: 'ref', category, target: r.target, value: formatRefValues(r) });
+      out.push({ id: `ref:${category}:${r.target}`, kind: 'ref', category, target: r.target, value: formatRefValues(r, 'ru') });
     }
   }
   for (const [key, inst] of rec.instances) out.push({ id: `inst:${key}`, kind: 'instance', key, value: formatInstance(inst) });
@@ -122,7 +123,7 @@ export function fieldValue(rec: GameRecord | undefined, f: FieldRef): string | u
     }
     case 'ref': {
       const r = rec.refs.get(f.category!)?.find((x) => x.target === f.target);
-      return r ? formatRefValues(r) : undefined;
+      return r ? formatRefValues(r, 'ru') : undefined;
     }
     case 'instance': {
       const i = rec.instances.get(f.key!);
@@ -264,39 +265,61 @@ export function contextLayers(ctx: ModContext): ConflictLayer[] {
   return records.length > 0 ? [...ctx.layers, { name: ctx.modName, file: { records } }] : [...ctx.layers];
 }
 
+/** Words of the conflict texts in one interface language. */
+interface ConflictWords {
+  wholeRecord: string;
+  name: string;
+  object: (key: string) => string;
+  mods: (n: number, list: string) => string;
+  vanilla: (v: string) => string;
+  wins: (layer: string) => string;
+  removes: string;
+  creates: string;
+}
+
+const CONFLICT_WORDS: Record<string, ConflictWords> = {
+  en: { wholeRecord: 'whole record', name: 'name', object: (k) => `object ${k}`, mods: (n, l) => `mods: ${n} (${l})`, vanilla: (v) => ` (vanilla ${v})`, wins: (l) => `wins ${l}`, removes: ' — DELETES the record', creates: ' — creates the record' },
+  ru: { wholeRecord: 'запись целиком', name: 'имя', object: (k) => `объект ${k}`, mods: (n, l) => `модов: ${n} (${l})`, vanilla: (v) => ` (ваниль ${v})`, wins: (l) => `победит ${l}`, removes: ' — УДАЛЯЕТ запись', creates: ' — создаёт запись' },
+  zh: { wholeRecord: '整条记录', name: '名称', object: (k) => `对象 ${k}`, mods: (n, l) => `Mod：${n}（${l}）`, vanilla: (v) => `（原版 ${v}）`, wins: (l) => `生效：${l}`, removes: ' — 删除该记录', creates: ' — 创建该记录' },
+};
+const conflictWords = (lang: string): ConflictWords => CONFLICT_WORDS[lang] ?? CONFLICT_WORDS.en!;
+
 /** Подпись поля для людей: `cut damage multiplier`, `<категория> → <цель>`, `объект <ключ>`. */
-export function fieldLabel(f: FieldRef, nameOf: (sid: string) => string = (s) => s): string {
+export function fieldLabel(f: FieldRef, nameOf: (sid: string) => string = (s) => s, lang = 'en'): string {
+  const w = conflictWords(lang);
   switch (f.kind) {
     case 'record':
-      return 'запись целиком';
+      return w.wholeRecord;
     case 'name':
-      return 'имя';
+      return w.name;
     case 'scalar':
       return f.key!;
     case 'ref':
       return `${f.category} → ${nameOf(f.target!)}`;
     case 'instance':
-      return `объект ${f.key}`;
+      return w.object(f.key!);
   }
 }
 
 /** Конфликт записи текстом для CLI/MCP. */
-export function formatConflict(c: RecordConflict, nameOf?: (sid: string) => string): string[] {
-  const lines = [`${c.sid} «${c.name}» — модов: ${c.layers.length} (${c.layers.join(', ')})`];
+export function formatConflict(c: RecordConflict, nameOf?: (sid: string) => string, lang = 'en'): string[] {
+  const w = conflictWords(lang);
+  const lines = [`${c.sid} «${c.name}» — ${w.mods(c.layers.length, c.layers.join(', '))}`];
   for (const f of c.fields) {
-    lines.push(`  ${fieldLabel(f, nameOf)}${f.base !== undefined ? ` (ваниль ${f.base})` : ''}: победит ${f.winner}`);
+    lines.push(`  ${fieldLabel(f, nameOf, lang)}${f.base !== undefined ? w.vanilla(f.base) : ''}: ${w.wins(f.winner)}`);
     for (const v of f.values) lines.push(`    ${v.layer === f.winner ? '→' : ' '} ${v.layer}: ${v.value}`);
   }
   return lines;
 }
 
 /** Отчёт `touchedBy` текстом для CLI/MCP. */
-export function formatTouches(r: TouchReport, nameOf?: (sid: string) => string): string[] {
+export function formatTouches(r: TouchReport, nameOf?: (sid: string) => string, lang = 'en'): string[] {
+  const w = conflictWords(lang);
   const lines: string[] = [];
   for (const t of r.touches) {
-    lines.push(`  ${t.layer}${t.removes ? ' — УДАЛЯЕТ запись' : t.creates ? ' — создаёт запись' : ''}`);
+    lines.push(`  ${t.layer}${t.removes ? w.removes : t.creates ? w.creates : ''}`);
     if (t.removes) continue;
-    for (const f of t.fields) lines.push(`    ${fieldLabel(f, nameOf)} = ${f.value}`);
+    for (const f of t.fields) lines.push(`    ${fieldLabel(f, nameOf, lang)} = ${f.value}`);
   }
   return lines;
 }

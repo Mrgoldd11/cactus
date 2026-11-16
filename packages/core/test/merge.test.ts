@@ -140,7 +140,8 @@ describe('слияние: список изменений', () => {
   it('текстовый отчёт содержит поля «было → станет»', () => {
     const { ctx, ledger } = make();
     const text = formatMergePlan(planMerge(ctx, sourceMod(), ledger)).join('\n');
-    expect(text).toContain('новых 4, изменённых 2, удалённых 1');
+    expect(text).toContain('new 4, changed 2, deleted 1');
+    expect(formatMergePlan(planMerge(ctx, sourceMod(), ledger, { lang: 'ru' }), 30, 'ru').join('\n')).toContain('новых 4, изменённых 2, удалённых 1');
     expect(text).toContain('~ int value: 100 → 150');
   });
 });
@@ -324,7 +325,7 @@ describe('слияние: применение', () => {
     const plan = planMerge(ctx, sourceMod(), ledger, { levelData });
     expect(plan.levelData?.files).toHaveLength(2);
     const r = applyMerge(ctx, sourceMod(), ledger, { accept: ['k'], levelData: true }, { levelData });
-    expect(r.notes.join(' ')).toContain('не слиты');
+    expect(r.notes.join(' ')).toContain('is not merged');
     expect(r.accepted).toEqual(['k']);
   });
 });

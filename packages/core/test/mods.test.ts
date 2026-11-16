@@ -83,7 +83,7 @@ describe('порядок загрузки (mods.cfg) без диска', () => {
     expect(applyModsCfgChange(l, { op: 'enable', name: 'D.mod', place: { after: 'A.mod' } })).toEqual(['A.mod', 'D.mod', 'B.mod', 'C.mod']);
     expect(applyModsCfgChange(l, { op: 'enable', name: 'b.mod' })).toEqual(l);
     expect(applyModsCfgChange(l, { op: 'disable', name: 'b.mod' })).toEqual(['A.mod', 'C.mod']);
-    expect(describeOrderChange(l, ['C.mod', 'A.mod', 'D.mod'])).toEqual([
+    expect(describeOrderChange(l, ['C.mod', 'A.mod', 'D.mod'], 'ru')).toEqual([
       '  C.mod: место 3 → 1',
       '  A.mod: место 1 → 2',
       '+ D.mod: включён, место 3',
@@ -165,7 +165,7 @@ describe('копия чужого мода для правки', () => {
     expect(plan.shadowsOriginal).toBe(true);
     expect(plan.enabled).toBe(true);
     expect(plan.origin).toMatchObject({ workshopId: '222', sourceFileName: 'B.mod', author: 'автор', size: before.length });
-    expect(plan.warnings.join(' ')).toMatch(/закроет оригинал/);
+    expect(plan.warnings.join(' ')).toMatch(/hides the/);
     expect(existsSync(plan.dest)).toBe(false);
 
     copyModForEditing(g, src);
@@ -178,7 +178,7 @@ describe('копия чужого мода для правки', () => {
     const b = listInstalledMods(g).mods.filter((m) => m.fileName === 'B.mod');
     expect(b.find((m) => m.source === 'workshop')!.shadowedBy).toBe(plan.dest);
     // Вторая копия в ту же папку — ошибка, ничего не перезаписывается.
-    expect(() => copyModForEditing(g, src)).toThrow(/уже есть/);
+    expect(() => copyModForEditing(g, src)).toThrow(/already exists/);
     writeFileSync(src, Buffer.concat([before, Buffer.from([0])]));
     expect(originChanged(origin)).toBe(true);
   });
@@ -189,14 +189,14 @@ describe('копия чужого мода для правки', () => {
     const plan = copyModForEditing(g, src, { name: 'B (правка).mod' });
     expect(plan.dest).toBe(join(g.kenshi, 'mods', 'B (правка)', 'B (правка).mod'));
     expect(plan.shadowsOriginal).toBe(false);
-    expect(plan.warnings.join(' ')).toMatch(/включить отдельно/);
+    expect(plan.warnings.join(' ')).toMatch(/enable the copy separately/);
     expect(existsSync(join(g.kenshi, 'mods', 'B (правка)', 'B (правка).kedit-origin.json'))).toBe(true);
-    expect(planModCopy(g, src, { name: 'a/b' }).error).toMatch(/Плохое имя/);
-    expect(planModCopy(g, src, { name: 'a\\b' }).error).toMatch(/Плохое имя/);
-    expect(planModCopy(g, src, { name: `a${String.fromCharCode(9)}b` }).error).toMatch(/Плохое имя/);
-    expect(planModCopy(g, src, { name: '  ' }).error).toMatch(/Плохое имя/);
+    expect(planModCopy(g, src, { name: 'a/b' }).error).toMatch(/Bad mod name/);
+    expect(planModCopy(g, src, { name: 'a\\b' }).error).toMatch(/Bad mod name/);
+    expect(planModCopy(g, src, { name: `a${String.fromCharCode(9)}b` }).error).toMatch(/Bad mod name/);
+    expect(planModCopy(g, src, { name: '  ' }).error).toMatch(/Bad mod name/);
     // Мод из mods/ под тем же именем — это он сам.
-    expect(planModCopy(g, join(g.kenshi, 'mods', 'Mine', 'Mine.mod')).error).toMatch(/другое имя/);
+    expect(planModCopy(g, join(g.kenshi, 'mods', 'Mine', 'Mine.mod')).error).toMatch(/another name/);
     expect(readModOrigin(join(g.kenshi, 'mods', 'Mine', 'Mine.mod'))).toBeUndefined();
   });
 });

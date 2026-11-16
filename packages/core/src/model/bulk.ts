@@ -5,7 +5,7 @@
  * выражены обычными операциями `set`/`rename` — их же отправляет MCP в окно редактора.
  */
 import { decodeText } from '../text.ts';
-import type { UiText } from '../ui-text.ts';
+import { errorMessage, type UiText } from '../ui-text.ts';
 import type { GameRecord } from '../format/types.ts';
 import { DICT_FOR_KIND, findField } from '../schema/game-schema.ts';
 import { EditError, type ModContext } from './context.ts';
@@ -135,6 +135,56 @@ function fieldOf(ctx: ModContext, rec: GameRecord, key: string): { dict: ScalarD
   return { dict, value };
 }
 
+/** Words of the bulk edit texts in one interface language. */
+interface BulkWords {
+  noField: (key: string) => string;
+  notText: (key: string) => string;
+  notNumber: (key: string) => string;
+  noValue: (key: string) => string;
+  noRefList: (category: string) => string;
+  moreChanges: (n: number) => string;
+  skip: (sid: string, name: string, why: string) => string;
+  moreSkips: (n: number) => string;
+  total: (matched: number, changes: number, skipped: number) => string;
+}
+
+const BULK_WORDS: Record<string, BulkWords> = {
+  en: {
+    noField: (k) => `no field «${k}»`,
+    notText: (k) => `«${k}» is not text`,
+    notNumber: (k) => `«${k}» is not a number`,
+    noValue: (k) => `«${k}» has no value`,
+    noRefList: (c) => `no reference list «${c}»`,
+    moreChanges: (n) => `… ${n} more changes (--limit 0 — all)`,
+    skip: (s, n, w) => `skip ${s} «${n}»: ${w}`,
+    moreSkips: (n) => `… ${n} more skipped`,
+    total: (m, c, s) => `records matched ${m}, will change ${c}, skipped ${s}`,
+  },
+  ru: {
+    noField: (k) => `нет поля «${k}»`,
+    notText: (k) => `«${k}» — не текст`,
+    notNumber: (k) => `«${k}» — не число`,
+    noValue: (k) => `у «${k}» нет значения`,
+    noRefList: (c) => `нет списка ссылок «${c}»`,
+    moreChanges: (n) => `… ещё изменений: ${n} (--limit 0 — все)`,
+    skip: (s, n, w) => `пропуск ${s} «${n}»: ${w}`,
+    moreSkips: (n) => `… ещё пропусков: ${n}`,
+    total: (m, c, s) => `подошло записей ${m}, изменится ${c}, пропущено ${s}`,
+  },
+  zh: {
+    noField: (k) => `没有字段 «${k}»`,
+    notText: (k) => `«${k}» 不是文本`,
+    notNumber: (k) => `«${k}» 不是数字`,
+    noValue: (k) => `«${k}» 没有值`,
+    noRefList: (c) => `没有引用列表 «${c}»`,
+    moreChanges: (n) => `… 还有 ${n} 处更改（--limit 0 显示全部）`,
+    skip: (s, n, w) => `跳过 ${s} «${n}»：${w}`,
+    moreSkips: (n) => `… 还有 ${n} 个跳过`,
+    total: (m, c, s) => `匹配记录 ${m}，将更改 ${c}，跳过 ${s}`,
+  },
+};
+const bulkWords = (lang: string): BulkWords => BULK_WORDS[lang] ?? BULK_WORDS.en!;
+
 const KIND_RU: Record<BulkKind, string> = { set: '=', mul: '×', add: '+', replace: 'замена', refAdd: '+ ссылка', refRemove: '− ссылка' };
 
 /** Подпись шага: `массово: WEAPON.value × 1.5 (12 записей)`. */
@@ -147,13 +197,14 @@ export function bulkLabel(typeName: string, op: BulkOperation, count: number): s
  * Предпросмотр: что изменится у подходящих записей. Ничего не меняет. Ошибки ввода (не число,
  * неверный regex, неизвестный тип) — исключение `EditError`.
  */
-export function previewBulk(ctx: ModContext, query: BulkQuery, op: BulkOperation): BulkPreview {
+export function previewBulk(ctx: ModContext, query: BulkQuery, op: BulkOperation, lang = 'en'): BulkPreview {
+  const w = bulkWords(lang);
   if (!BULK_KINDS.includes(op.kind)) throw new EditError({ en: `Unknown operation «${op.kind as string}»: ${BULK_KINDS.join(', ')}`, ru: `Неизвестная операция «${op.kind as string}»: ${BULK_KINDS.join(', ')}`, zh: `未知操作 «${op.kind as string}»：${BULK_KINDS.join(', ')}` });
   const key = op.field.trim();
   if (key === '') throw new EditError({ en: 'Choose a field', ru: 'Укажите поле', zh: '请指定字段' });
   const recs = bulkSelect(ctx, query);
   const typeName = typeof query.type === 'number' ? ctx.typeName(query.type) : query.type.toUpperCase();
-  if (op.kind === 'refAdd' || op.kind === 'refRemove') return previewRefs(ctx, recs, typeName, op, key);
+  if (op.kind === 'refAdd' || op.kind === 'refRemove') return previewRefs(ctx, recs, typeName, op, key, lang);
   const re = op.kind === 'replace' ? pattern(op) : undefined;
   const factor = op.kind === 'mul' || op.kind === 'add' ? number(op.value, op.kind === 'mul' ? { en: 'Multiply by', ru: 'Умножить на', zh: '乘以' } : { en: 'Add', ru: 'Прибавить', zh: '加上' }) : 0;
   const changes: BulkChange[] = [];
@@ -176,7 +227,7 @@ export function previewBulk(ctx: ModContext, query: BulkQuery, op: BulkOperation
       continue;
     }
     if (!field) {
-      skip(`нет поля «${key}»`);
+      skip(w.noField(key));
       continue;
     }
     const { dict, value } = field;
@@ -187,17 +238,17 @@ export function previewBulk(ctx: ModContext, query: BulkQuery, op: BulkOperation
         next = applyProbe(ctx, rec, dict, key, op.value);
       } else if (op.kind === 'replace') {
         if (dict !== 'strings' && dict !== 'files') {
-          skip(`«${key}» — не текст`);
+          skip(w.notText(key));
           continue;
         }
         next = coerceValue(dict, decodeText((value as Uint8Array | undefined) ?? new Uint8Array()).replace(re!, op.value), key);
       } else {
         if (dict !== 'ints' && dict !== 'floats') {
-          skip(`«${key}» — не число`);
+          skip(w.notNumber(key));
           continue;
         }
         if (typeof value !== 'number') {
-          skip(`у «${key}» нет значения`);
+          skip(w.noValue(key));
           continue;
         }
         let n = op.kind === 'mul' ? value * factor : value + factor;
@@ -205,7 +256,7 @@ export function previewBulk(ctx: ModContext, query: BulkQuery, op: BulkOperation
         next = coerceValue(dict, n, key);
       }
     } catch (e) {
-      skip((e as Error).message);
+      skip(errorMessage(e, lang));
       continue;
     }
     if (value !== undefined && scalarEqual(value, next)) continue;
@@ -233,7 +284,7 @@ function refTarget(ctx: ModContext, spec: string): string {
 }
 
 /** Добавить ссылку (или обновить её значения) / убрать ссылку во всех подходящих записях. */
-function previewRefs(ctx: ModContext, recs: GameRecord[], typeName: string, op: BulkOperation, category: string): BulkPreview {
+function previewRefs(ctx: ModContext, recs: GameRecord[], typeName: string, op: BulkOperation, category: string, lang: string): BulkPreview {
   const target = refTarget(ctx, op.value);
   const wanted = op.values;
   const changes: BulkChange[] = [];
@@ -246,7 +297,7 @@ function previewRefs(ctx: ModContext, recs: GameRecord[], typeName: string, op: 
     const ts = ctx.schema?.types.get(ctx.typeName(rec.type));
     const known = list !== undefined || (ts ? findField(ts, category)?.kind === 'reference' : false);
     if (!known) {
-      skipped.push({ sid, name, reason: `нет списка ссылок «${category}»` });
+      skipped.push({ sid, name, reason: bulkWords(lang).noRefList(category) });
       continue;
     }
     const old = list?.find((r) => r.target === target);
@@ -300,12 +351,13 @@ function jsonOf(dict: ScalarDict, v: ScalarValue): string | number | boolean {
 }
 
 /** Строки предпросмотра (CLI и MCP): `id  «имя»  поле: было → станет`, пропуски, итог. */
-export function formatBulkPreview(p: BulkPreview, limit: number): string[] {
+export function formatBulkPreview(p: BulkPreview, limit: number, lang = 'en'): string[] {
+  const w = bulkWords(lang);
   const lines = p.changes.slice(0, limit).map((c) => `${c.sid}  «${c.name}»  ${c.field}: ${c.before === '' ? '—' : c.before} → ${c.after === '' ? '—' : c.after}`);
-  if (p.changes.length > limit) lines.push(`… ещё изменений: ${p.changes.length - limit} (--limit 0 — все)`);
-  for (const s of p.skipped.slice(0, 10)) lines.push(`пропуск ${s.sid} «${s.name}»: ${s.reason}`);
-  if (p.skipped.length > 10) lines.push(`… ещё пропусков: ${p.skipped.length - 10}`);
-  lines.push(`подошло записей ${p.matched}, изменится ${p.changes.length}, пропущено ${p.skipped.length}`);
+  if (p.changes.length > limit) lines.push(w.moreChanges(p.changes.length - limit));
+  for (const s of p.skipped.slice(0, 10)) lines.push(w.skip(s.sid, s.name, s.reason));
+  if (p.skipped.length > 10) lines.push(w.moreSkips(p.skipped.length - 10));
+  lines.push(w.total(p.matched, p.changes.length, p.skipped.length));
   return lines;
 }
 

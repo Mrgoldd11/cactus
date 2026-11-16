@@ -2,7 +2,7 @@
  * Что нужно всем командам: пути к игре, ванильные слои (читаются один раз), контекст мода.
  */
 import { basename } from 'node:path';
-import { ModContext, type Layer } from '@kenshi-editor/core';
+import { ModContext, UiTextError, uiText, type Layer, type UiText } from '@kenshi-editor/core';
 import {
   defaultWorkshopDir,
   hasGame,
@@ -16,8 +16,23 @@ import {
   type LoadedContext,
 } from '@kenshi-editor/core/node';
 
-export class UsageError extends Error {
+export class UsageError extends UiTextError {
   override name = 'UsageError';
+}
+
+/** A usage error from any error, keeping its texts in every language. */
+export function usageFrom(e: unknown): UsageError {
+  return new UsageError(e instanceof UiTextError ? e.texts : e instanceof Error ? e.message : String(e));
+}
+
+/** Interface languages of the CLI output; the first one is the default. */
+export const CLI_LANGS = ['en', 'ru', 'zh'] as const;
+
+/** CLI language: `--lang`, otherwise KEDIT_LANG, otherwise English. */
+export function resolveCliLang(option: string | undefined, env: NodeJS.ProcessEnv): string {
+  const v = (option ?? env['KEDIT_LANG'] ?? 'en').trim().toLowerCase();
+  if (!(CLI_LANGS as readonly string[]).includes(v)) throw new UsageError({ en: `--lang: ${CLI_LANGS.join(', ')}, not «${v}»`, ru: `--lang: ${CLI_LANGS.join(', ')}, а не «${v}»` });
+  return v;
 }
 
 export interface WorkspaceOptions {
@@ -27,6 +42,8 @@ export interface WorkspaceOptions {
   game?: string;
   /** Data language (locale code or `none`) instead of KENSHI_DATA_LOCALE / the game's settings.cfg. */
   dataLocale?: string;
+  /** Interface language of the output (default English). */
+  lang?: string;
 }
 
 export interface OpenOptions {
@@ -47,13 +64,21 @@ export class Workspace {
   readonly cwd: string;
   /** Locale of translated names and texts; undefined — originals only. */
   readonly dataLocale: string | undefined;
+  /** Interface language of the output. */
+  readonly lang: string;
   private vanillaCache?: Layer[];
 
   constructor(options: WorkspaceOptions) {
     this.cwd = options.cwd;
+    this.lang = options.lang ?? 'en';
     const found = resolveGamePaths(options.cwd, options.env);
     this.paths = options.game ? { kenshi: options.game, workshop: defaultWorkshopDir(options.game) } : found;
     this.dataLocale = resolveDataLocale(this.paths, options.dataLocale ?? options.env['KENSHI_DATA_LOCALE']);
+  }
+
+  /** A text in the output language (English when it has no entry for it). */
+  t(text: UiText): string {
+    return uiText(text, this.lang);
   }
 
   get hasGame(): boolean {
@@ -61,7 +86,7 @@ export class Workspace {
   }
 
   requireGame(): void {
-    if (!this.hasGame) throw new UsageError(`Нет игры в ${this.paths.kenshi}: укажите --game <папка Kenshi> или KENSHI_DIR`);
+    if (!this.hasGame) throw new UsageError({ en: `No game in ${this.paths.kenshi}: pass --game <Kenshi folder> or KENSHI_DIR`, ru: `Нет игры в ${this.paths.kenshi}: укажите --game <папка Kenshi> или KENSHI_DIR` });
   }
 
   vanilla(): Layer[] {
@@ -73,7 +98,7 @@ export class Workspace {
   modPath(spec: string, mustExist = true): string {
     const p = resolveModPath(this.paths, spec, this.cwd);
     if (p) return p;
-    if (mustExist) throw new UsageError(`Мод не найден: ${spec}`);
+    if (mustExist) throw new UsageError({ en: `Mod not found: ${spec}`, ru: `Мод не найден: ${spec}` });
     return spec;
   }
 

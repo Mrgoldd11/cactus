@@ -535,7 +535,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
 
   const onConnect = (c: Connection): void => {
     const p = linkProblem(ctx, c.source, c.target);
-    report(p ?? tryEdit(() => { linkLine(ctx, c.source, c.target); }));
+    report(p ? inLang(p, lang) : tryEdit(() => { linkLine(ctx, c.source, c.target); }));
   };
 
   const finishLink = (to: string): void => {
@@ -543,7 +543,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     setLinkFrom(undefined);
     if (to === from) return;
     const p = linkProblem(ctx, from, to);
-    report(p ?? tryEdit(() => { linkLine(ctx, from, to); }));
+    report(p ? inLang(p, lang) : tryEdit(() => { linkLine(ctx, from, to); }));
   };
 
   const onNodesChange = (changes: NodeChange<LineNode>[]): void => {

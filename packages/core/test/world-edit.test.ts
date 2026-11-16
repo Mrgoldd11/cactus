@@ -76,7 +76,7 @@ describe('правки мира в моде', () => {
     const ed = new WorldEdits([vanilla(), mod], 'My Mod.mod');
     expect(ed.dirtyFiles()).toEqual([]);
     ed.move(ZONE, '0-buildinglist', '1-base', [120, 2, 210], [0.7071, 0, 0.7071, 0], { worldY: 510 });
-    expect(ed.undoLabel()).toBe('Сдвиг объекта');
+    expect(ed.undoLabel()).toBe('Move object');
     expect(ed.dirtyFiles()).toEqual([ZONE]);
     const out = ed.buildFile(ZONE)!;
     expect(out.fileType).toBe(FileType.Data);
@@ -119,7 +119,7 @@ describe('правки мира в моде', () => {
     ed.remove(ZONE, '0-buildinglist', '1-base');
     expect(ed.buildFile(ZONE)!.records[0]!.instances.get('1-base')).toEqual({ target: '', position: [0, 0, 0], rotation: [1, 0, 0, 0], states: [] });
     expect(new WorldIndex(ed.files()).buildings()).toHaveLength(0);
-    expect(ed.history().undo).toEqual(['Новый объект', 'Удаление объекта', 'Удаление объекта']);
+    expect(ed.history().undo).toEqual(['New object', 'Remove object', 'Remove object']);
     ed.undo();
     ed.undo();
     ed.undo();

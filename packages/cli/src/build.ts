@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { applyOps, parseStableIds, StableIds, type EditOp, type Layer, type ModContext, type ModInfo } from '@kenshi-editor/core';
+import { applyOps, parseStableIds, StableIds, type EditOp, type Layer, type ModContext, type ModInfo, type UiText } from '@kenshi-editor/core';
 import { isInGameFolders, isInWorkshop, saveModContext, type GamePaths, type LoadedContext } from '@kenshi-editor/core/node';
 import { UsageError, type OpenOptions, type Workspace } from './workspace.ts';
 
@@ -66,10 +66,10 @@ export async function runBuild(ws: Workspace, req: BuildRequest, log: (line: str
   const source = resolve(ws.cwd, req.source);
   const outPath = resolve(ws.cwd, req.out);
   if (isInWorkshop(ws.paths, outPath)) {
-    throw new UsageError(`${outPath} — в мастерской Steam; туда не пишем никогда. Сделайте копию: kedit mods copy <мод>`);
+    throw new UsageError({ en: `${outPath} is in the Steam workshop; the editor never writes there. Make a copy: kedit mods copy <mod>`, ru: `${outPath} — в мастерской Steam; туда не пишем никогда. Сделайте копию: kedit mods copy <мод>` });
   }
   if (!req.force && isInGameFolders(ws.paths, outPath)) {
-    throw new UsageError(`${outPath} — в папке игры или мастерской; запись туда только с --force`);
+    throw new UsageError({ en: `${outPath} is in the game or workshop folder; writing there needs --force`, ru: `${outPath} — в папке игры или мастерской; запись туда только с --force` });
   }
   const modName = req.name ?? basename(outPath);
   let ctx: ModContext;
@@ -88,7 +88,7 @@ export async function runBuild(ws: Workspace, req: BuildRequest, log: (line: str
     applyOps(ctx, ops, basename(source));
   } else {
     const mod = (await import(pathToFileURL(source).href)) as { default?: unknown };
-    if (typeof mod.default !== 'function') throw new UsageError(`${req.source}: нет функции по умолчанию (export default)`);
+    if (typeof mod.default !== 'function') throw new UsageError({ en: `${req.source}: no default function (export default)`, ru: `${req.source}: нет функции по умолчанию (export default)` });
     const table = (): StableIds =>
       (ids ??= new StableIds(modName, existsSync(idsPath) ? parseStableIds(readFileSync(idsPath, 'utf8')) : undefined));
     const env: BuildEnv = {
@@ -106,19 +106,22 @@ export async function runBuild(ws: Workspace, req: BuildRequest, log: (line: str
   }
   saveModContext(ctx, outPath);
   // Таблица дописывается только после удачной записи мода.
-  if (ids) finishStableIds(ids, idsPath, log);
+  if (ids) finishStableIds(ids, idsPath, (t) => { log(ws.t(t)); });
   return { ctx, outPath, bytes: statSync(outPath).size };
 }
 
 /** Дописать новые имена в ids.json и предупредить об именах, которые больше не собираются. */
-function finishStableIds(ids: StableIds, idsPath: string, log: (line: string) => void): void {
+function finishStableIds(ids: StableIds, idsPath: string, log: (text: UiText) => void): void {
   if (ids.added.length) {
     writeFileSync(idsPath, JSON.stringify(ids.data, null, 1) + '\n');
-    log(`ids.json: добавлено ${ids.added.length} id (next=${ids.data.next})`);
+    log({ en: `ids.json: added ${ids.added.length} id (next=${ids.data.next})`, ru: `ids.json: добавлено ${ids.added.length} id (next=${ids.data.next})` });
   }
   const orphan = ids.orphans();
   if (orphan.length) {
-    const sample = orphan.slice(0, 3).map((n) => `«${n}»`).join(', ');
-    log(`предупреждение: в ids.json ${orphan.length} имён больше не собираются (номера не переиспользуются): ${sample}${orphan.length > 3 ? '…' : ''}`);
+    const sample = orphan.slice(0, 3).map((n) => `«${n}»`).join(', ') + (orphan.length > 3 ? '…' : '');
+    log({
+      en: `warning: ${orphan.length} names in ids.json are no longer built (numbers are not reused): ${sample}`,
+      ru: `предупреждение: в ids.json ${orphan.length} имён больше не собираются (номера не переиспользуются): ${sample}`,
+    });
   }
 }

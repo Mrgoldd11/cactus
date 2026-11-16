@@ -232,7 +232,7 @@ function MergePanel(): ReactNode {
     };
   }, [project, session]);
 
-  const options = useMemo(() => ({ showRejected: session.showSkipped, ...(session.levelData ? { levelData: session.levelData } : {}) }), [session.showSkipped, session.levelData]);
+  const options = useMemo(() => ({ showRejected: session.showSkipped, lang, ...(session.levelData ? { levelData: session.levelData } : {}) }), [session.showSkipped, session.levelData, lang]);
 
   const { plan, planError } = useMemo((): { plan?: MergePlan; planError?: string } => {
     if (!session.source) return {};

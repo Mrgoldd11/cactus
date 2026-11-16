@@ -29,7 +29,7 @@ import {
   type RefRow,
   type ScalarValue,
 } from '@kenshi-editor/core';
-import { useT, type Strings } from '../i18n.ts';
+import { useLang, useT, type Strings } from '../i18n.ts';
 import { tryEdit } from '../hooks.ts';
 import type { Project } from '../project.ts';
 import { CommitInput } from './widgets.tsx';
@@ -639,6 +639,7 @@ const BACK_LIMIT = 1000;
 
 function BackRefsTab({ project, sid, entries, onGo }: { project: Project; sid: string; entries: ReturnType<ModContext['referencesTo']>; onGo: (sid: string) => void }): ReactNode {
   const t = useT();
+  const lang = useLang();
   if (entries.length === 0) return <p className="muted">{t.noBackRefs}</p>;
   return (
     <div className="backrefs" data-testid="backrefs" data-sid={sid}>
@@ -669,7 +670,7 @@ function BackRefsTab({ project, sid, entries, onGo }: { project: Project; sid: s
                 </td>
                 <td>{src?.type}</td>
                 <td>{e.category}</td>
-                <td className="mono">{e.ref ? formatRefValues(e.ref) : ''}</td>
+                <td className="mono">{e.ref ? formatRefValues(e.ref, lang) : ''}</td>
               </tr>
             );
           })}
@@ -682,7 +683,7 @@ function BackRefsTab({ project, sid, entries, onGo }: { project: Project; sid: s
 
 // ---------------------------------------------------------------- разница с ванилью
 
-function changeCells(ctx: ModContext, rec: GameRecord, c: FieldChange): [string, string, string] {
+function changeCells(ctx: ModContext, rec: GameRecord, c: FieldChange, lang: string): [string, string, string] {
   switch (c.kind) {
     case 'name':
       return ['name', decodeText(c.before), decodeText(c.after)];
@@ -691,13 +692,13 @@ function changeCells(ctx: ModContext, rec: GameRecord, c: FieldChange): [string,
     case 'flags':
       return ['flags', `0x${c.before.toString(16)}`, `0x${c.after.toString(16)}`];
     case 'field': {
-      const fmt = (v: ScalarValue | undefined): string => (v === undefined ? '—' : c.dict === 'ints' ? formatFieldValue(ctx, rec, c.dict, c.key, v) : formatScalar(c.dict, v));
+      const fmt = (v: ScalarValue | undefined): string => (v === undefined ? '—' : c.dict === 'ints' ? formatFieldValue(ctx, rec, c.dict, c.key, v, lang) : formatScalar(c.dict, v));
       return [c.key, fmt(c.before), fmt(c.after)];
     }
     case 'ref': {
       const target = c.target.replace(/#\d+$/, '');
       const fmt = (r: typeof c.before): string => (!r || isRemovedRef(r) ? '—' : formatRefValues(r));
-      return [`${c.category} → ${refLabel(ctx, target)}`, fmt(c.before), fmt(c.after)];
+      return [`${c.category} → ${refLabel(ctx, target, lang)}`, fmt(c.before), fmt(c.after)];
     }
     case 'refOrder':
       return [c.category, c.before.length.toString(), c.after.length.toString()];
@@ -708,6 +709,7 @@ function changeCells(ctx: ModContext, rec: GameRecord, c: FieldChange): [string,
 
 function DiffTab({ ctx, sid, version, onGo }: { ctx: ModContext; sid: string; version: number; onGo: (sid: string) => void }): ReactNode {
   const t = useT();
+  const lang = useLang();
   const diff = useMemo(() => modRecordDiff(ctx, sid), [ctx, sid, version]);
   const status = ctx.status(sid);
   if (status === 'deleted') return <p className="error">{t.status_deleted}</p>;
@@ -726,7 +728,7 @@ function DiffTab({ ctx, sid, version, onGo }: { ctx: ModContext; sid: string; ve
         </thead>
         <tbody>
           {diff.fields.map((c, i) => {
-            const [field, before, after] = changeCells(ctx, rec, c);
+            const [field, before, after] = changeCells(ctx, rec, c, lang);
             const kind = c.kind === 'field' || c.kind === 'ref' || c.kind === 'instance' ? (c.before === undefined ? 'added' : c.after === undefined ? 'removed' : 'changed') : 'changed';
             return (
               <tr key={i} className={`fs-${kind}`}>

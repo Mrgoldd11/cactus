@@ -49,7 +49,8 @@ describe('конфликты модов', () => {
     expect(found[0]!.fields).toEqual([
       { id: 'floats:cut', kind: 'scalar', dict: 'floats', key: 'cut', base: '1', values: [{ layer: 'A.mod', value: '1.5' }, { layer: 'B.mod', value: '2' }], winner: 'B.mod' },
     ]);
-    expect(formatConflict(found[0]!).join('\n')).toContain('победит B.mod');
+    expect(formatConflict(found[0]!).join('\n')).toContain('wins B.mod');
+    expect(formatConflict(found[0]!, undefined, 'ru').join('\n')).toContain('победит B.mod');
   });
 
   it('ссылки: разные цели в одной категории — не конфликт; одна цель, удалить против изменить — конфликт', () => {
@@ -93,7 +94,8 @@ describe('конфликты модов', () => {
       ['A.mod', false, false, ['name="Катана"', 'floats:cut=1.5']],
       ['B.mod', true, false, ['record=удалить']],
     ]);
-    expect(formatTouches(rep).join('\n')).toContain('УДАЛЯЕТ');
+    expect(formatTouches(rep).join('\n')).toContain('DELETES');
+    expect(formatTouches(rep, undefined, 'ru').join('\n')).toContain('УДАЛЯЕТ');
     expect(touchedBy([vanilla], '1-k').touches).toEqual([]);
   });
 });

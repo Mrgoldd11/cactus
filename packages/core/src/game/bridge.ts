@@ -4,6 +4,7 @@
  */
 
 import type { Vec3 } from '../format/types.ts';
+import { uiText, type UiText } from '../ui-text.ts';
 
 export const GAME_BRIDGE_PORT = 47801;
 export const GAME_BRIDGE_PROTOCOL = 1;
@@ -198,27 +199,28 @@ export type GameErrorCode =
   | 'no_connection'
   | 'timeout';
 
-const ERROR_TEXT: Record<GameErrorCode, string> = {
-  bad_json: 'the plugin did not understand the request',
-  bad_request: 'invalid request',
-  unknown_cmd: 'the plugin does not know this command',
-  bad_args: 'invalid command arguments',
-  not_in_game: 'the game is not in a world (menu or loading)',
-  no_selection: 'no character is selected in the game',
-  no_camera: 'the game camera is unavailable',
-  no_world: 'the world is not loaded yet',
-  no_renderer: 'the game renderer is not ready',
-  unsupported: 'this game version does not support the command',
-  busy: 'the game is busy, try again',
-  nothing_to_resume: 'there is no stopped fly-over to resume',
-  crash: 'the command crashed inside the game (the game keeps running)',
-  no_connection: 'the game is not connected: start Kenshi with RE_Kenshi and the KenshiBridge mod (the plugin is optional, download: https://github.com/Mrgoldd11/Kenshi-Bridge)',
-  timeout: 'the game did not answer',
+const ERROR_TEXT: Record<GameErrorCode, UiText> = {
+  bad_json: { en: 'the plugin did not understand the request', ru: 'плагин не понял запрос', zh: '插件无法理解该请求' },
+  bad_request: { en: 'invalid request', ru: 'неверный запрос', zh: '无效请求' },
+  unknown_cmd: { en: 'the plugin does not know this command', ru: 'плагин не знает такой команды', zh: '插件不认识这个命令' },
+  bad_args: { en: 'invalid command arguments', ru: 'неверные аргументы команды', zh: '命令参数无效' },
+  not_in_game: { en: 'the game is not in a world (menu or loading)', ru: 'игра не в мире (меню или загрузка)', zh: '游戏不在世界中（菜单或加载中）' },
+  no_selection: { en: 'no character is selected in the game', ru: 'в игре не выбран персонаж', zh: '游戏中没有选中角色' },
+  no_camera: { en: 'the game camera is unavailable', ru: 'камера игры недоступна', zh: '游戏摄像机不可用' },
+  no_world: { en: 'the world is not loaded yet', ru: 'мир ещё не загружен', zh: '世界尚未加载' },
+  no_renderer: { en: 'the game renderer is not ready', ru: 'рендерер игры не готов', zh: '游戏渲染器尚未就绪' },
+  unsupported: { en: 'this game version does not support the command', ru: 'эта версия игры не поддерживает команду', zh: '此游戏版本不支持该命令' },
+  busy: { en: 'the game is busy, try again', ru: 'игра занята, повторите', zh: '游戏正忙，请重试' },
+  nothing_to_resume: { en: 'there is no stopped fly-over to resume', ru: 'нет остановленного облёта, который можно продолжить', zh: '没有可继续的已停止飞越' },
+  crash: { en: 'the command crashed inside the game (the game keeps running)', ru: 'команда упала внутри игры (игра работает)', zh: '命令在游戏内部崩溃（游戏仍在运行）' },
+  no_connection: { en: 'the game is not connected: start Kenshi with RE_Kenshi and the KenshiBridge mod (the plugin is optional, download: https://github.com/Mrgoldd11/Kenshi-Bridge)', ru: 'игра не подключена: запустите Kenshi с RE_Kenshi и модом KenshiBridge (плагин необязателен, скачать: https://github.com/Mrgoldd11/Kenshi-Bridge)', zh: '游戏未连接：请用 RE_Kenshi 和 KenshiBridge 模组启动 Kenshi（插件可选，下载：https://github.com/Mrgoldd11/Kenshi-Bridge）' },
+  timeout: { en: 'the game did not answer', ru: 'игра не ответила', zh: '游戏没有响应' },
 };
 
 /** Понятное описание кода ошибки моста. */
-export function gameErrorText(code: string): string {
-  return (ERROR_TEXT as Record<string, string>)[code] ?? code;
+export function gameErrorText(code: string, lang = 'en'): string {
+  const t = (ERROR_TEXT as Record<string, UiText | undefined>)[code];
+  return t ? uiText(t, lang) : code;
 }
 
 const fmt = (v: number): string => (Math.round(v * 10) / 10).toString();

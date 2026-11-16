@@ -93,12 +93,12 @@ export function isLinked(ctx: ModContext, parent: string, child: string): boolea
 }
 
 /** Почему связь нельзя сделать (или undefined — можно). */
-export function linkProblem(ctx: ModContext, parent: string, child: string): string | undefined {
+export function linkProblem(ctx: ModContext, parent: string, child: string): UiText | undefined {
   const pt = typeOf(ctx, parent);
-  if (pt === undefined || !PARENT_TYPES.has(pt)) return 'вести дальше может только диалог или реплика';
-  if (typeOf(ctx, child) !== LINE) return 'вести можно только на реплику';
-  if (parent === child) return 'реплика не может вести сама на себя';
-  if (isLinked(ctx, parent, child)) return 'эта связь уже есть';
+  if (pt === undefined || !PARENT_TYPES.has(pt)) return { en: 'only a dialogue or a line can lead on', ru: 'вести дальше может только диалог или реплика', zh: '只有对话或台词可以继续连接' };
+  if (typeOf(ctx, child) !== LINE) return { en: 'a link can only lead to a line', ru: 'вести можно только на реплику', zh: '只能连接到台词' };
+  if (parent === child) return { en: 'a line cannot lead to itself', ru: 'реплика не может вести сама на себя', zh: '台词不能连接到自身' };
+  if (isLinked(ctx, parent, child)) return { en: 'this link already exists', ru: 'эта связь уже есть', zh: '该连接已存在' };
   return undefined;
 }
 

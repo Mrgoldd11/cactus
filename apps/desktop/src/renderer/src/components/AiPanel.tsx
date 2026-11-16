@@ -5,7 +5,7 @@
 import type { ReactNode } from 'react';
 import { decodeText, formatRecordDiff, type HostedChangeset } from '@kenshi-editor/core';
 import type { LiveStatus } from '../../../shared/api.ts';
-import { useT } from '../i18n.ts';
+import { useLang, useT } from '../i18n.ts';
 import { tryEdit } from '../hooks.ts';
 import { liveHost } from '../live.ts';
 import type { Project } from '../project.ts';
@@ -21,6 +21,7 @@ interface Props {
 
 export function AiPanel({ project, changesets, status, onGo, onReport, onClose }: Props): ReactNode {
   const t = useT();
+  const lang = useLang();
   const list = [...changesets].reverse();
   return (
     <div className="ai-panel" data-testid="ai-panel">
@@ -52,7 +53,7 @@ export function AiPanel({ project, changesets, status, onGo, onReport, onClose }
             </div>
             <div className="muted ai-time">{new Date(c.at).toLocaleTimeString()}</div>
             {c.diffs.map((d) => {
-              const [, ...fields] = formatRecordDiff(project.ctx, d);
+              const [, ...fields] = formatRecordDiff(project.ctx, d, lang);
               const e = project.entry(d.stringId);
               const rec = d.after ?? d.before;
               return (

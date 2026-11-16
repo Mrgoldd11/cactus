@@ -329,7 +329,7 @@ export class WorldEdits {
    * Сдвинуть / повернуть экземпляр. Позиция — как в файле (у зданий y — высота над землёй),
    * `worldY` — высота в мире для состояния здания.
    */
-  move(path: string, holder: string, key: string, position: Vec3, rotation: Vec4, options: MoveOptions = {}, label = 'Сдвиг объекта'): void {
+  move(path: string, holder: string, key: string, position: Vec3, rotation: Vec4, options: MoveOptions = {}, label = 'Move object'): void {
     const cur = this.instance(path, holder, key);
     if (!cur) throw new UiTextError({ en: `No object ${key} in ${holder} (${path})`, ru: `Нет объекта ${key} в ${holder} (${path})`, zh: `${holder}（${path}）中没有对象 ${key}` });
     checkZone(path, position);
@@ -350,7 +350,7 @@ export class WorldEdits {
   }
 
   /** Поставить новый экземпляр записи `target`. Возвращает ключ. */
-  place(path: string, holder: string, target: string, position: Vec3, rotation: Vec4, options: PlaceOptions = {}, label = 'Новый объект'): string {
+  place(path: string, holder: string, target: string, position: Vec3, rotation: Vec4, options: PlaceOptions = {}, label = 'New object'): string {
     const f = this.modFile(path);
     const taken = (k: string): boolean => this.lower(path).get(holder)?.instances.has(k) === true || f.records.get(holder)?.instances.has(k) === true;
     let key = options.key;
@@ -388,7 +388,7 @@ export class WorldEdits {
   }
 
   /** Убрать экземпляр: свой новый — стираем, из нижних слоёв — пишем «удаление». */
-  remove(path: string, holder: string, key: string, label = 'Удаление объекта'): void {
+  remove(path: string, holder: string, key: string, label = 'Remove object'): void {
     if (!this.instance(path, holder, key)) throw new UiTextError({ en: `No object ${key} in ${holder} (${path})`, ru: `Нет объекта ${key} в ${holder} (${path})`, zh: `${holder}（${path}）中没有对象 ${key}` });
     const lo = this.lower(path).get(holder)?.instances.get(key);
     const cur = this.instance(path, holder, key)!;
@@ -415,7 +415,7 @@ export class WorldEdits {
    * Поправить запись файла уровня (состояние объекта). Запись нижних слоёв мод кладёт полной
    * копией, как моды мастерской; вернулась к исходной — правка уходит.
    */
-  editState(path: string, sid: string, edit: (rec: GameRecord) => void, label = `Правка ${sid}`): void {
+  editState(path: string, sid: string, edit: (rec: GameRecord) => void, label = `Edit ${sid}`): void {
     const cur = this.record(path, sid);
     if (!cur) throw new UiTextError({ en: `No record ${sid} in ${path}`, ru: `Нет записи ${sid} в ${path}`, zh: `${path} 中没有记录 ${sid}` });
     this.transaction(label, () => {

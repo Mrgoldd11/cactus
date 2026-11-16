@@ -6,6 +6,7 @@
 import { bytesEqual } from '../text.ts';
 import { emptyRecord, type DataFile, type GameRecord, type Instance, type Reference } from '../format/types.ts';
 import { instanceEqual, refValuesEqual, SCALAR_DICTS, scalarEqual, scalarMap, type ScalarDict, type ScalarValue } from './record-ops.ts';
+import { UiTextError } from '../ui-text.ts';
 
 export type FieldChange =
   | { kind: 'name'; before: Uint8Array; after: Uint8Array }
@@ -134,7 +135,7 @@ export function parseDiffStatuses(text: string): DiffChange[] {
     .filter((s) => s !== '')
     .map((s) => {
       const c = DIFF_CHANGE_ALIASES[s];
-      if (!c) throw new Error(`Неизвестный статус разницы «${s}»: added, changed, removed`);
+      if (!c) throw new UiTextError({ en: `Unknown diff status «${s}»: added, changed, removed`, ru: `Неизвестный статус разницы «${s}»: added, changed, removed`, zh: `未知的差异状态 «${s}»：added、changed、removed` });
       return c;
     });
 }
@@ -151,8 +152,16 @@ export function countDiffs(diffs: readonly RecordDiff[]): Record<DiffChange, num
   return out;
 }
 
+/** Diff totals line per interface language. */
+const DIFF_SUMMARY: Record<string, (total: number, added: number, changed: number, removed: number) => string> = {
+  en: (t, a, c, r) => `total ${t}: new ${a}, changed ${c}, deleted ${r}`,
+  ru: (t, a, c, r) => `всего ${t}: новых ${a}, изменённых ${c}, удалённых ${r}`,
+  zh: (t, a, c, r) => `共 ${t}：新增 ${a}，修改 ${c}，删除 ${r}`,
+};
+
 /** `всего 2950: новых 2628, изменённых 322, удалённых 0`. */
-export function formatDiffSummary(diffs: readonly RecordDiff[]): string {
+export function formatDiffSummary(diffs: readonly RecordDiff[], lang = 'en'): string {
   const n = countDiffs(diffs);
-  return `всего ${diffs.length}: новых ${n.added}, изменённых ${n.changed}, удалённых ${n.removed}`;
+  const f = DIFF_SUMMARY[lang] ?? DIFF_SUMMARY.en!;
+  return f(diffs.length, n.added, n.changed, n.removed);
 }

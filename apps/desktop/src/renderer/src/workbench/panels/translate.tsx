@@ -22,7 +22,7 @@ import {
   type TranslationRow,
 } from '@kenshi-editor/core';
 import type { TextFileKind } from '../../../../shared/api.ts';
-import { errorText, useT } from '../../i18n.ts';
+import { errorText, useLang, useT } from '../../i18n.ts';
 import { tryEdit, useProjectVersion } from '../../hooks.ts';
 import { CommitInput } from '../../components/widgets.tsx';
 import { registerPanel } from '../registry.ts';
@@ -68,7 +68,8 @@ function TranslatePanel(): ReactNode {
 
   const all = useMemo(() => (source === undefined ? [] : translationRows(ctx, source)), [ctx, source, version]);
   const summary = useMemo(() => summarizeTranslation(all), [all]);
-  const extras = useMemo(() => translationExtras(ctx, sources), [ctx, sources, version]);
+  const lang = useLang();
+  const extras = useMemo(() => translationExtras(ctx, sources, lang), [ctx, sources, version, lang]);
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return all.filter((r) => {

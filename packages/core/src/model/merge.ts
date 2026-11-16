@@ -67,8 +67,125 @@ export interface LevelDataInfo {
   files: string[];
 }
 
-export const MERGE_LEVEL_DATA_NOTE =
-  'Данные уровня (зоны, leveldata.level, interiors.level) не слиты: редактор пока не умеет их записывать. Файлы не тронуты — перенесите их вручную или слейте в FCS.';
+/** Words of the merge texts in one interface language. */
+interface MergeWords {
+  levelNote: string;
+  order: string;
+  missingDeps: (list: string) => string;
+  blockedNoLayer: string;
+  skipNotListed: string;
+  skipRejected: string;
+  planHead: (source: string, n: number, ch: number, del: number, conf: number) => string;
+  rejected: (n: number) => string;
+  already: (n: number) => string;
+  identical: (n: number) => string;
+  blocked: (n: number) => string;
+  more: (n: number) => string;
+  conflict: (why: string) => string;
+  rejectedFlag: string;
+  blockedFlag: (why: string) => string;
+  yoursDiffer: (after: string) => string;
+  none: string;
+  levelData: (n: number, dir: string) => string;
+  nothing: string;
+  merged: (n: number, created: number, changed: number, deleted: number) => string;
+  conflicts: (src: number, mine: number) => string;
+  byRefs: (n: number) => string;
+  skipped: (sid: string, why: string) => string;
+  dangling: (list: string) => string;
+}
+
+const MERGE_EN: MergeWords = {
+  levelNote: 'Level data (zones, leveldata.level, interiors.level) is not merged: the editor cannot write it yet. The files are untouched — move them by hand or merge them in FCS.',
+  order: 'order',
+  missingDeps: (l) => `The source depends on mods that are not among your mod's dependencies: ${l}. Records that only change their data cannot be accepted.`,
+  blockedNoLayer: "the record only changes data of a mod that is not among your layers (the source's dependency is not connected)",
+  skipNotListed: 'not in the change list (already merged, same as yours or rejected)',
+  skipRejected: 'rejected — bring it back to the list first',
+  planHead: (s, n, ch, del, conf) => `merge «${s}»: new ${n}, changed ${ch}, deleted ${del}, conflicts ${conf}`,
+  rejected: (n) => `, rejected (hidden) ${n}`,
+  already: (n) => `, already merged ${n}`,
+  identical: (n) => `, identical ${n}`,
+  blocked: (n) => `, cannot accept ${n}`,
+  more: (n) => `… ${n} more`,
+  conflict: (w) => `CONFLICT (${w})`,
+  rejectedFlag: 'rejected',
+  blockedFlag: (w) => `cannot: ${w}`,
+  yoursDiffer: (a) => `   (yours differs: source → ${a})`,
+  none: 'none',
+  levelData: (n, d) => `level data: ${n} files in ${d}`,
+  nothing: 'nothing accepted',
+  merged: (n, c, ch, d) => `merged ${n}: new ${c}, changed ${ch}, deleted ${d}`,
+  conflicts: (s, m) => `; conflicts: from the source ${s}, yours kept ${m}`,
+  byRefs: (n) => `records added by references: ${n}`,
+  skipped: (s, w) => `skipped ${s}: ${w}`,
+  dangling: (l) => `! references to records that exist nowhere: ${l} (merge them too or fix the references)`,
+};
+
+const MERGE_RU: MergeWords = {
+  levelNote: 'Данные уровня (зоны, leveldata.level, interiors.level) не слиты: редактор пока не умеет их записывать. Файлы не тронуты — перенесите их вручную или слейте в FCS.',
+  order: 'порядок',
+  missingDeps: (l) => `Источник зависит от модов, которых нет в зависимостях вашего мода: ${l}. Записи, которые только меняют их данные, принять нельзя.`,
+  blockedNoLayer: 'запись только меняет данные мода, которого нет среди ваших слоёв (зависимость источника не подключена)',
+  skipNotListed: 'нет в списке изменений (уже слита, совпадает с вашей или отклонена)',
+  skipRejected: 'отклонена — сначала верните её в список',
+  planHead: (s, n, ch, del, conf) => `слияние «${s}»: новых ${n}, изменённых ${ch}, удалённых ${del}, конфликтов ${conf}`,
+  rejected: (n) => `, отклонённых (скрыто) ${n}`,
+  already: (n) => `, уже слито ${n}`,
+  identical: (n) => `, совпадает ${n}`,
+  blocked: (n) => `, нельзя принять ${n}`,
+  more: (n) => `… ещё ${n}`,
+  conflict: (w) => `КОНФЛИКТ (${w})`,
+  rejectedFlag: 'отклонена',
+  blockedFlag: (w) => `нельзя: ${w}`,
+  yoursDiffer: (a) => `   (у вас иначе: источник → ${a})`,
+  none: 'нет',
+  levelData: (n, d) => `данные уровня: ${n} файлов в ${d}`,
+  nothing: 'ничего не принято',
+  merged: (n, c, ch, d) => `слито ${n}: новых ${c}, изменённых ${ch}, удалённых ${d}`,
+  conflicts: (s, m) => `; конфликты: из источника ${s}, оставлено ваших ${m}`,
+  byRefs: (n) => `по ссылкам добавлено записей: ${n}`,
+  skipped: (s, w) => `пропущено ${s}: ${w}`,
+  dangling: (l) => `! ссылки на записи, которых нет: ${l} (слейте и их или исправьте ссылки)`,
+};
+
+const MERGE_ZH: MergeWords = {
+  levelNote: '关卡数据（区域、leveldata.level、interiors.level）未合并：编辑器暂时无法写入它们。文件未被改动——请手动移动，或在 FCS 中合并。',
+  order: '顺序',
+  missingDeps: (l) => `来源依赖于你的 Mod 依赖项中没有的 Mod：${l}。只修改这些 Mod 数据的记录无法接受。`,
+  blockedNoLayer: '该记录只修改了不在你的图层中的 Mod 的数据（来源的依赖项未连接）',
+  skipNotListed: '不在更改列表中（已合并、与你的相同或已拒绝）',
+  skipRejected: '已拒绝——请先把它放回列表',
+  planHead: (s, n, ch, del, conf) => `合并 «${s}»：新增 ${n}，修改 ${ch}，删除 ${del}，冲突 ${conf}`,
+  rejected: (n) => `，已拒绝（隐藏）${n}`,
+  already: (n) => `，已合并 ${n}`,
+  identical: (n) => `，相同 ${n}`,
+  blocked: (n) => `，无法接受 ${n}`,
+  more: (n) => `… 还有 ${n} 个`,
+  conflict: (w) => `冲突（${w}）`,
+  rejectedFlag: '已拒绝',
+  blockedFlag: (w) => `无法接受：${w}`,
+  yoursDiffer: (a) => `   （你的不同：来源 → ${a}）`,
+  none: '无',
+  levelData: (n, d) => `关卡数据：${d} 中有 ${n} 个文件`,
+  nothing: '未接受任何内容',
+  merged: (n, c, ch, d) => `已合并 ${n}：新增 ${c}，修改 ${ch}，删除 ${d}`,
+  conflicts: (s, m) => `；冲突：取自来源 ${s}，保留你的 ${m}`,
+  byRefs: (n) => `按引用添加的记录：${n}`,
+  skipped: (s, w) => `已跳过 ${s}：${w}`,
+  dangling: (l) => `! 指向不存在记录的引用：${l}（请一并合并它们或修正引用）`,
+};
+
+const MERGE_WORDS: Record<string, MergeWords> = { en: MERGE_EN, ru: MERGE_RU, zh: MERGE_ZH };
+const mergeWords = (lang: string | undefined): MergeWords => MERGE_WORDS[lang ?? 'en'] ?? MERGE_EN;
+
+/** Why level data is not merged (English; `mergeLevelDataNote` for other languages). */
+export const MERGE_LEVEL_DATA_NOTE = MERGE_EN.levelNote;
+
+/** Why level data is not merged, in the interface language. */
+export function mergeLevelDataNote(lang = 'en'): string {
+  return mergeWords(lang).levelNote;
+}
 
 // ---------------------------------------------------------------- файл-спутник
 
@@ -370,6 +487,8 @@ export interface MergePlanOptions {
   showRejected?: boolean;
   /** Данные уровня источника (определяет вызывающий: у ядра нет файловой системы). */
   levelData?: LevelDataInfo;
+  /** Interface language of the texts in the plan and the result (English by default). */
+  lang?: string;
 }
 
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
@@ -443,9 +562,9 @@ function mineTouched(f: FieldChange, mine: GameRecord, lower: GameRecord | undef
   }
 }
 
-function fieldView(ctx: ModContext, f: FieldChange, rec: GameRecord, conflict: boolean): MergeFieldView {
+function fieldView(ctx: ModContext, f: FieldChange, rec: GameRecord, conflict: boolean, lang = 'en'): MergeFieldView {
   const key = mergeFieldKey(f);
-  const text = formatFieldChange(ctx, f, rec);
+  const text = formatFieldChange(ctx, f, rec, lang);
   const view: MergeFieldView = { key, kind: f.kind, label: key, text, conflict };
   switch (f.kind) {
     case 'name':
@@ -459,23 +578,23 @@ function fieldView(ctx: ModContext, f: FieldChange, rec: GameRecord, conflict: b
       break;
     case 'field':
       view.label = f.key;
-      if (f.before !== undefined) view.before = formatFieldValue(ctx, rec, f.dict, f.key, f.before);
-      if (f.after !== undefined) view.after = formatFieldValue(ctx, rec, f.dict, f.key, f.after);
+      if (f.before !== undefined) view.before = formatFieldValue(ctx, rec, f.dict, f.key, f.before, lang);
+      if (f.after !== undefined) view.after = formatFieldValue(ctx, rec, f.dict, f.key, f.after, lang);
       break;
     case 'ref':
-      view.label = `${f.category} → ${refLabel(ctx, f.target.replace(/#\d+$/, ''))}`;
-      if (f.before) view.before = formatRefValues(f.before);
-      if (f.after) view.after = formatRefValues(f.after);
+      view.label = `${f.category} → ${refLabel(ctx, f.target.replace(/#\d+$/, ''), lang)}`;
+      if (f.before) view.before = formatRefValues(f.before, lang);
+      if (f.after) view.after = formatRefValues(f.after, lang);
       break;
     case 'refOrder':
-      view.label = `${f.category}: порядок`;
+      view.label = `${f.category}: ${mergeWords(lang).order}`;
       view.before = f.before.join(', ');
       view.after = f.after.join(', ');
       break;
     case 'instance':
       view.label = `inst ${f.key}`;
-      if (f.before) view.before = `${refLabel(ctx, f.before.target)} (${f.before.position.join(', ')})`;
-      if (f.after) view.after = `${refLabel(ctx, f.after.target)} (${f.after.position.join(', ')})`;
+      if (f.before) view.before = `${refLabel(ctx, f.before.target, lang)} (${f.before.position.join(', ')})`;
+      if (f.after) view.after = `${refLabel(ctx, f.after.target, lang)} (${f.after.position.join(', ')})`;
       break;
     case 'flags':
       break;
@@ -510,12 +629,13 @@ function flaggedAsChange(file: DataFile, rec: GameRecord): boolean {
 
 function compute(ctx: ModContext, source: MergeSource, state: MergeSourceState, options: MergePlanOptions): Computed {
   checkMergeSource(ctx, source.name);
+  const w = mergeWords(options.lang);
   const counts: MergeCounts = { new: 0, changed: 0, deleted: 0, conflicts: 0, rejected: 0, identical: 0, alreadyMerged: 0, blocked: 0 };
   const warnings: string[] = [];
   const known = new Set([...ctx.layers.map((l) => l.name), ...ctx.info.dependencies, ctx.modName].map((n) => n.toLowerCase()));
   const missingDependencies = (source.file.header ? splitModList(source.file.header.dependencies) : []).filter((d) => !known.has(d.toLowerCase()));
   if (missingDependencies.length > 0) {
-    warnings.push(`Источник зависит от модов, которых нет в зависимостях вашего мода: ${missingDependencies.join(', ')}. Записи, которые только меняют их данные, принять нельзя.`);
+    warnings.push(w.missingDeps(missingDependencies.join(', ')));
   }
 
   const changes: MergeChange[] = [];
@@ -566,7 +686,7 @@ function compute(ctx: ModContext, source: MergeSource, state: MergeSourceState, 
         counts.identical++;
         continue;
       }
-      if (kind === 'new' && flaggedAsChange(source.file, delta)) blocked = 'запись только меняет данные мода, которого нет среди ваших слоёв (зависимость источника не подключена)';
+      if (kind === 'new' && flaggedAsChange(source.file, delta)) blocked = w.blockedNoLayer;
       if (kind === 'changed') {
         const d = diffRecordStates(current, desired);
         if (!d && !mineDeleted) {
@@ -582,7 +702,7 @@ function compute(ctx: ModContext, source: MergeSource, state: MergeSourceState, 
     for (const f of fields) {
       const isConflict = !mineDeleted && mine !== undefined && !isRemovalMarker(mine) && mineTouched(f, mine, lower);
       if (isConflict) conflictCount++;
-      views.push(fieldView(ctx, f, shown, isConflict));
+      views.push(fieldView(ctx, f, shown, isConflict, options.lang));
     }
     if (conflictCount > 0 && !conflict) conflict = 'both';
     if (conflict) conflictCount = Math.max(conflictCount, 1);
@@ -776,12 +896,13 @@ export function mergeLabel(sourceName: string, count: number): string {
  */
 export function applyMerge(ctx: ModContext, source: MergeSource, ledger: MergeLedger, selection: MergeSelection, options: MergePlanOptions = {}): MergeResult {
   const { plan, internals } = compute(ctx, source, ledger.state(ctx, source.name), options);
+  const w = mergeWords(options.lang);
   const bySid = new Map(plan.changes.map((c) => [c.sid, c]));
   const skipped: MergeSkip[] = [];
   const notes: string[] = [];
   let accept: string[] = [];
   for (const sid of selection.accept) {
-    if (!bySid.has(sid)) skipped.push({ sid, reason: 'нет в списке изменений (уже слита, совпадает с вашей или отклонена)' });
+    if (!bySid.has(sid)) skipped.push({ sid, reason: w.skipNotListed });
     else if (!accept.includes(sid)) accept.push(sid);
   }
   const base = new Set(accept);
@@ -794,7 +915,7 @@ export function applyMerge(ctx: ModContext, source: MergeSource, ledger: MergeLe
   const ok = accept.filter((sid) => {
     const c = bySid.get(sid)!;
     if (c.rejected) {
-      skipped.push({ sid, reason: 'отклонена — сначала верните её в список' });
+      skipped.push({ sid, reason: w.skipRejected });
       return false;
     }
     if (c.blocked) {
@@ -804,7 +925,7 @@ export function applyMerge(ctx: ModContext, source: MergeSource, ledger: MergeLe
     return true;
   });
   const ordered = plan.changes.filter((c) => ok.includes(c.sid));
-  if (selection.levelData) notes.push(MERGE_LEVEL_DATA_NOTE);
+  if (selection.levelData) notes.push(w.levelNote);
   const result: MergeResult = {
     changesetId: undefined,
     label: mergeLabel(source.name, ordered.length),
@@ -911,42 +1032,43 @@ export function unrejectMerge(ledger: MergeLedger, source: MergeSource | string,
 const KIND_MARK: Record<MergeKind, string> = { new: '+', changed: '~', deleted: '−' };
 
 /** Список изменений текстом (CLI, MCP): одна строка на запись, под ней поля. */
-export function formatMergePlan(plan: MergePlan, limit = Infinity): string[] {
+export function formatMergePlan(plan: MergePlan, limit = Infinity, lang = 'en'): string[] {
+  const w = mergeWords(lang);
   const c = plan.counts;
   const lines = [
-    `слияние «${plan.source}»: новых ${c.new}, изменённых ${c.changed}, удалённых ${c.deleted}, конфликтов ${c.conflicts}` +
-      (c.rejected ? `, отклонённых (скрыто) ${c.rejected}` : '') +
-      (c.alreadyMerged ? `, уже слито ${c.alreadyMerged}` : '') +
-      (c.identical ? `, совпадает ${c.identical}` : '') +
-      (c.blocked ? `, нельзя принять ${c.blocked}` : ''),
+    w.planHead(plan.source, c.new, c.changed, c.deleted, c.conflicts) +
+      (c.rejected ? w.rejected(c.rejected) : '') +
+      (c.alreadyMerged ? w.already(c.alreadyMerged) : '') +
+      (c.identical ? w.identical(c.identical) : '') +
+      (c.blocked ? w.blocked(c.blocked) : ''),
   ];
   for (const w of plan.warnings) lines.push(`! ${w}`);
   let shown = 0;
   for (const ch of plan.changes) {
     if (shown >= limit) {
-      lines.push(`… ещё ${plan.changes.length - shown}`);
+      lines.push(w.more(plan.changes.length - shown));
       break;
     }
     shown++;
-    const flags = [ch.conflict ? `КОНФЛИКТ (${ch.conflict})` : '', ch.rejected ? 'отклонена' : '', ch.blocked ? `нельзя: ${ch.blocked}` : ''].filter((x) => x !== '');
+    const flags = [ch.conflict ? w.conflict(ch.conflict) : '', ch.rejected ? w.rejectedFlag : '', ch.blocked ? w.blockedFlag(ch.blocked) : ''].filter((x) => x !== '');
     lines.push(`${KIND_MARK[ch.kind]} ${ch.typeName} ${ch.sid} «${ch.name}»${ch.localizedName ? ` (${ch.localizedName})` : ''}${flags.length ? `  [${flags.join('; ')}]` : ''}`);
-    for (const f of ch.fields) lines.push(`    ${f.conflict ? '! ' : ''}${f.text}${f.conflict ? '   (у вас иначе: источник → ' + (f.after ?? 'нет') + ')' : ''}`);
+    for (const f of ch.fields) lines.push(`    ${f.conflict ? '! ' : ''}${f.text}${f.conflict ? w.yoursDiffer(f.after ?? w.none) : ''}`);
   }
-  if (plan.levelData) lines.push(`данные уровня: ${plan.levelData.files.length} файлов в ${plan.levelData.dir} — ${MERGE_LEVEL_DATA_NOTE}`);
+  if (plan.levelData) lines.push(`${w.levelData(plan.levelData.files.length, plan.levelData.dir)} — ${w.levelNote}`);
   return lines;
 }
 
 /** Итог применения текстом. */
-export function formatMergeResult(r: MergeResult): string[] {
+export function formatMergeResult(r: MergeResult, lang = 'en'): string[] {
+  const w = mergeWords(lang);
   const lines = [
     r.accepted.length === 0
-      ? 'ничего не принято'
-      : `слито ${r.accepted.length}: новых ${r.created}, изменённых ${r.changed}, удалённых ${r.deleted}` +
-        (r.tookSource + r.keptMine > 0 ? `; конфликты: из источника ${r.tookSource}, оставлено ваших ${r.keptMine}` : ''),
+      ? w.nothing
+      : w.merged(r.accepted.length, r.created, r.changed, r.deleted) + (r.tookSource + r.keptMine > 0 ? w.conflicts(r.tookSource, r.keptMine) : ''),
   ];
-  if (r.addedByClosure.length) lines.push(`по ссылкам добавлено записей: ${r.addedByClosure.length}`);
-  for (const s of r.skipped) lines.push(`пропущено ${s.sid}: ${s.reason}`);
-  if (r.dangling.length) lines.push(`! ссылки на записи, которых нет: ${r.dangling.slice(0, 10).join(', ')}${r.dangling.length > 10 ? '…' : ''} (слейте и их или исправьте ссылки)`);
+  if (r.addedByClosure.length) lines.push(w.byRefs(r.addedByClosure.length));
+  for (const s of r.skipped) lines.push(w.skipped(s.sid, s.reason));
+  if (r.dangling.length) lines.push(w.dangling(`${r.dangling.slice(0, 10).join(', ')}${r.dangling.length > 10 ? '…' : ''}`));
   lines.push(...r.notes);
   return lines;
 }

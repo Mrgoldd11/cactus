@@ -61,7 +61,7 @@ async function saveAndValidate(app: ElectronApplication, page: Page, out: string
   await expect(page.getByTestId('status-msg')).toContainText('Сохранено');
   const cli = join(editorRoot, 'packages/cli/bin/kedit.js');
   const report = execFileSync(process.execPath, [cli, 'validate', '--mod', out], { cwd: editorRoot, encoding: 'utf8' });
-  expect(report).toContain('ошибок 0');
+  expect(report).toContain('errors 0');
   return readDataFile(readFileSync(out)).records;
 }
 

@@ -135,7 +135,7 @@ describe('интерьеры', () => {
     expect(decodeText(st.strings.get('owner faction ID')!)).toBe('NOBLES');
     expect(st.ints.get('floornum')).toBe(1);
     expect(st.floats.get('player furniture Y offset')).toBe(181 + 48);
-    expect(e.history().undo).toEqual(['Новый объект в интерьере']);
+    expect(e.history().undo).toEqual(['New object in an interior']);
     const file = e.buildFile(INTERIORS)!;
     expect(file.lastId).toBe(1);
     // Раскладка в моде — с полями, но только с новым экземпляром.

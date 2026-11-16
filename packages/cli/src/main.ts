@@ -42,8 +42,12 @@ import {
   formatConflict,
   formatTouches,
   touchedBy,
+  errorMessage,
+  mapUi,
+  uiText,
   type ModContext,
   type Page,
+  type UiText,
   type RecordDiff,
   type RecordStatus,
 } from '@kenshi-editor/core';
@@ -54,7 +58,10 @@ import { runBulk } from './bulk.ts';
 import { runMerge, splitList } from './merge.ts';
 import { modsChange, modsCopy, modsList } from './mods.ts';
 import { runStrings } from './strings.ts';
-import { UsageError, Workspace } from './workspace.ts';
+import { resolveCliLang, usageFrom, UsageError, Workspace } from './workspace.ts';
+
+/** No record by that id or name (the `touched` command then looks for it as is). */
+class NoRecordError extends UsageError {}
 
 export interface Io {
   out(line: string): void;
@@ -70,7 +77,62 @@ export const processIo: Io = {
   env: process.env,
 };
 
-export const HELP = `kedit — данные Kenshi: поиск, просмотр, проверка и сборка модов
+/** Help in English (the default output language). */
+export const HELP = `kedit — Kenshi data: search, view, check and build mods
+
+Commands:
+  find [text] [TYPE]      records by name (English or translated) or id; TYPE — name or number
+      --type TYPE  --field key=value (~ substring, != < > <= >=, key? — field is set; may repeat)
+      --status new,changed,deleted,base  --anywhere text  --exact  --mod-only
+  show <id|name>...       fields and references (with target names)  --layers  --max-refs N
+  tree <id|name>          dialogue tree (dialogs/lines)  --full  --depth N  --max-nodes N
+  mod <file.mod> [text]   records of a mod file with status; text — substring anywhere  --brief
+  refs <id|name>          references from the record and to it  --from  --to
+  where <id|name>         where the record is in the game: back-reference chain to towns/buildings with coordinates
+      --tree  the whole back-reference tree;  --limit N — facts (default 20)
+  talk <character>        which dialogues a character has for an event, from where, which one the game picks, how the talk starts
+      --event N  event (default 1 — player click);  --mods  with the player's mods from mods.cfg
+  diff                    what the mod (--mod) changes over the lower layers; total «new N, changed M»
+      --status added,changed,removed  only records with these changes
+  diff <a.mod> <b.mod>    difference of two files
+  validate                broken references, fields outside the schema, wrong kind; exit code 1 on errors
+  schema [TYPE]           record types / fields of a type with descriptions from fcs.def  --enum NAME
+      --mod M  with the schema extensions of the mod and its dependencies (FCS Extended files), marked [extension NAME]
+  bulk <TYPE> [text]      bulk edit of records of a type (text — substring of name or id), conditions --field, --mod-only
+      --set|--mul|--add FIELD=VALUE  or  --replace FIELD --find TEXT --with TEXT [--regex] [--case] (FIELD name — record name)
+      preview «was → will be» by default; --apply — write into --out or --mod (one edit)
+  merge <source>          merge: what the source mod (name or path) changes over --mod; new / changed / deleted, conflicts
+      preview by default; --apply + choice --only id,id | --type TYPE,… | --kind new,changed,deleted | --all — merge in one edit
+      --recursive  with the records they reference;  --fix-refs  also add new records the accepted ones reference
+      --conflicts source|mine  which side wins conflicts (default mine — your values);  --levels  level data (detected, not merged)
+      --reject id,id  reject and do not show again;  --unreject id,id  restore;  --show-rejected  show rejected ones
+      writes into --out or --mod, with the decisions file <mod>.kedit-merge.json next to it; never into the workshop, into the game folder with --force
+  build <script.ts|plan.json> --out <file.mod> [--name Name.mod] [--mod source] [-- arguments]
+  mods [list]             installed mods: mods.cfg order, where from (mods/workshop)  --full  --json
+  mods move <mod>         move in mods.cfg:  --top (first) | --bottom (wins) | --after X | --before X
+  mods enable|disable <mod>  enable (at the end or --top/--after X…) / disable
+      without --force only shows what changes; --force — write mods.cfg (copy next to it, game closed)
+  mods copy <mod|path>    someone else's mod → copy for editing in mods/<name>/<name>.mod (+ where the copy came from)  --name Name  --force
+      the workshop original is not changed; without --force only shows what will happen
+  touched <id|name>       which mods from mods.cfg change the record and what exactly  --all  all installed
+  conflicts               mods that change one field differently, and who wins (the later one in mods.cfg)
+      --mod <path|name.mod>  only conflicts of this mod;  --all  all installed, not only mods.cfg
+  strings <original.mod>  mod texts for translation: original, translation, status; total «translated N of M»
+      --mod <translation.mod>  statuses in this translation mod (+ check: extra texts, non-text edits)
+      --todo  untranslated only;  --out texts.csv|.json|.po — export (PO — for Poedit)
+      --import <file> --out <translation.mod> [--name Name.mod]  build a translation mod from a file (CSV/JSON/PO)
+
+Common:
+  --game <Kenshi folder>  otherwise KENSHI_DIR, kenshi-paths.json or the found Steam/GOG install
+  --data-locale <code>    language of translated names (de_DE, ru_RU…; none — no translation); otherwise KENSHI_DATA_LOCALE or the game language (settings.cfg)
+  --lang <en|ru|zh>       language of the output; otherwise KEDIT_LANG, otherwise English
+  --mod <path|name.mod>   mod over vanilla (and its dependencies)
+  --deps a.mod,b.mod      dependencies instead of those written in the mod ("" — none)
+  --json  --offset N  --limit N (default 50, 0 — all)
+`;
+
+/** Help in Russian. */
+export const HELP_RU = `kedit — данные Kenshi: поиск, просмотр, проверка и сборка модов
 
 Команды:
   find [текст] [ТИП]      записи по имени (англ. или рус.) или id; ТИП — имя или номер
@@ -117,14 +179,21 @@ export const HELP = `kedit — данные Kenshi: поиск, просмотр
 Общие:
   --game <папка Kenshi>   иначе KENSHI_DIR, kenshi-paths.json или найденная установка Steam/GOG
   --data-locale <код>     язык перевода имён (de_DE, ru_RU…; none — без перевода); иначе KENSHI_DATA_LOCALE или язык игры (settings.cfg)
+  --lang <en|ru|zh>       язык вывода; иначе KEDIT_LANG, иначе английский
   --mod <путь|имя.mod>    мод поверх ванили (и его зависимостей)
   --deps a.mod,b.mod      зависимости вместо записанных в моде ("" — без зависимостей)
   --json  --offset N  --limit N (по умолчанию 50, 0 — все)
 `;
 
+/** Help text in the output language (English when there is none for it). */
+export function helpText(lang: string): string {
+  return lang === 'ru' ? HELP_RU : HELP;
+}
+
 const OPTIONS = {
   game: { type: 'string' },
   'data-locale': { type: 'string' },
+  lang: { type: 'string' },
   mod: { type: 'string' },
   deps: { type: 'string' },
   json: { type: 'boolean' },
@@ -188,7 +257,7 @@ function parse(argv: string[]): ReturnType<typeof parseArgs<{ options: typeof OP
 function int(v: string | undefined, name: string, fallback: number): number {
   if (v === undefined) return fallback;
   const n = Number(v);
-  if (!Number.isInteger(n) || n < 0) throw new UsageError(`--${name}: нужно целое ≥ 0, а не «${v}»`);
+  if (!Number.isInteger(n) || n < 0) throw new UsageError({ en: `--${name}: an integer ≥ 0 is needed, not «${v}»`, ru: `--${name}: нужно целое ≥ 0, а не «${v}»` });
   return n;
 }
 
@@ -199,15 +268,18 @@ class Command {
   readonly io: Io;
   readonly values: Values;
   readonly args: string[];
+  /** Output language. */
+  readonly lang: string;
   private ctxCache?: ModContext;
   /** Файлы .mod, наложенные на ваниль (зависимости, затем мод) — для папок `leveldata`. */
   modFiles: string[] = [];
 
-  constructor(io: Io, values: Values, args: string[]) {
+  constructor(io: Io, values: Values, args: string[], lang: string) {
     this.io = io;
     this.values = values;
     this.args = args;
-    this.ws = new Workspace({ cwd: io.cwd, env: io.env, ...(values.game !== undefined ? { game: values.game } : {}), ...(values['data-locale'] !== undefined ? { dataLocale: values['data-locale'] } : {}) });
+    this.lang = lang;
+    this.ws = new Workspace({ cwd: io.cwd, env: io.env, lang, ...(values.game !== undefined ? { game: values.game } : {}), ...(values['data-locale'] !== undefined ? { dataLocale: values['data-locale'] } : {}) });
   }
 
   get deps(): string[] | undefined {
@@ -234,19 +306,24 @@ class Command {
       ...(deps ? { dependencies: deps } : {}),
     });
     this.modFiles = [...dependencyPaths, ...(mod !== undefined ? [mod] : [])];
-    if (missingDependencies.length) this.io.err(`нет зависимостей: ${missingDependencies.join(', ')}`);
+    if (missingDependencies.length) this.io.err(this.t({ en: `missing dependencies: ${missingDependencies.join(', ')}`, ru: `нет зависимостей: ${missingDependencies.join(', ')}` }));
     return (this.ctxCache = ctx);
+  }
+
+  /** A text in the output language. */
+  t(text: UiText): string {
+    return uiText(text, this.lang);
   }
 
   arg(i: number, what: string): string {
     const v = this.args[i];
-    if (v === undefined) throw new UsageError(`Нужен аргумент: ${what}`);
+    if (v === undefined) throw new UsageError({ en: `Argument needed: ${what}`, ru: `Нужен аргумент: ${what}` });
     return v;
   }
 
   record(ctx: ModContext, sid: string): ReturnType<ModContext['get']> & object {
     const rec = ctx.get(sid) ?? ctx.lower(sid);
-    if (!rec) throw new UsageError(`Нет записи ${sid}`);
+    if (!rec) throw new UsageError({ en: `No record ${sid}`, ru: `Нет записи ${sid}` });
     return rec;
   }
 
@@ -254,11 +331,12 @@ class Command {
   resolve(ctx: ModContext, spec: string, preferTypes?: readonly string[]): string {
     const found = lookupRecord(ctx, spec, preferTypes ? { preferTypes } : {});
     if (found.stringId !== undefined) return found.stringId;
-    if (found.candidates.length === 0) throw new UsageError(`Нет записи «${spec}» (ни id, ни имени)`);
+    if (found.candidates.length === 0) throw new NoRecordError({ en: `No record «${spec}» (neither id nor name)`, ru: `Нет записи «${spec}» (ни id, ни имени)` });
     const shown = found.candidates.slice(0, 20);
     for (const h of shown) this.io.err(`  ${formatHit(h)}`);
-    if (found.candidates.length > shown.length) this.io.err(`  … ещё ${found.candidates.length - shown.length}`);
-    throw new UsageError(`«${spec}»: подходит записей ${found.candidates.length} — укажите id из списка`);
+    const more = found.candidates.length - shown.length;
+    if (more > 0) this.io.err(this.t({ en: `  … ${more} more`, ru: `  … ещё ${more}` }));
+    throw new UsageError({ en: `«${spec}»: ${found.candidates.length} records match — pass an id from the list`, ru: `«${spec}»: подходит записей ${found.candidates.length} — укажите id из списка` });
   }
 
   /** Страница строк (или объектов в --json). */
@@ -270,7 +348,7 @@ class Command {
       return;
     }
     for (const it of p.items) for (const l of text(it)) this.io.out(l);
-    if (p.total > p.items.length || p.total === 0) this.io.out(pageFooter(p));
+    if (p.total > p.items.length || p.total === 0) this.io.out(pageFooter(p, this.lang));
   }
 }
 
@@ -306,7 +384,7 @@ const COMMANDS: Record<string, Handler> = {
       return 0;
     }
     for (const rec of recs) {
-      const lines = formatRecord(ctx, rec, { showLayers: c.values.layers ?? false, ...(max !== undefined ? { maxRefsPerCategory: max } : {}) });
+      const lines = formatRecord(ctx, rec, { showLayers: c.values.layers ?? false, lang: c.lang, ...(max !== undefined ? { maxRefsPerCategory: max } : {}) });
       for (const l of lines) c.io.out(l);
     }
     return 0;
@@ -320,12 +398,12 @@ const COMMANDS: Record<string, Handler> = {
       ...(c.values['max-nodes'] !== undefined ? { maxNodes: int(c.values['max-nodes'], 'max-nodes', 0) } : {}),
     });
     if (c.values.json) c.io.out(JSON.stringify(tree, null, 1));
-    else for (const l of formatDialogueTree(ctx, tree, { full: c.values.full ?? false })) c.io.out(l);
+    else for (const l of formatDialogueTree(ctx, tree, { full: c.values.full ?? false, lang: c.lang })) c.io.out(l);
     return 0;
   },
 
   mod(c) {
-    const path = c.ws.modPath(c.arg(0, '<файл.mod>'));
+    const path = c.ws.modPath(c.arg(0, c.t({ en: '<file.mod>', ru: '<файл.mod>' })));
     const q = c.args[1]?.toLowerCase();
     // С игрой — статусы и имена целей ссылок; без неё — просто содержимое файла.
     const ctx = c.ws.hasGame ? c.ws.open({ mod: path, ...(c.deps ? { dependencies: c.deps } : {}) }).ctx : c.ws.openStandalone(path);
@@ -333,7 +411,7 @@ const COMMANDS: Record<string, Handler> = {
     const recs = ctx.modRecords().filter((r) => q === undefined || recordHaystack(ctx, r).includes(q));
     c.paged(
       recs,
-      (r) => (c.values.brief ? [recordHeadline(ctx, r)] : formatRecord(ctx, r)),
+      (r) => (c.values.brief ? [recordHeadline(ctx, r)] : formatRecord(ctx, r, { lang: c.lang })),
       (r) => recordToJson(ctx, r),
     );
     return 0;
@@ -354,8 +432,8 @@ const COMMANDS: Record<string, Handler> = {
       rows,
       (r) => [
         r.dir === 'from'
-          ? `→ ${r.category}: ${refLabel(ctx, r.target)}${r.values ? `  ${formatRefValues({ target: r.target, v0: r.values[0]!, v1: r.values[1]!, v2: r.values[2]! })}` : ''}`
-          : `← ${refLabel(ctx, r.source)} ${r.category}${r.values ? `  ${r.values.join(' ')}` : ''}`,
+          ? `→ ${r.category}: ${refLabel(ctx, r.target, c.lang)}${r.values ? `  ${formatRefValues({ target: r.target, v0: r.values[0]!, v1: r.values[1]!, v2: r.values[2]! }, c.lang)}` : ''}`
+          : `← ${refLabel(ctx, r.source, c.lang)} ${r.category}${r.values ? `  ${r.values.join(' ')}` : ''}`,
       ],
       (r) => ({ ...r, name: ctx.name(r.dir === 'from' ? r.target : r.source) }),
     );
@@ -367,23 +445,23 @@ const COMMANDS: Record<string, Handler> = {
     const ctx = c.ctx();
     const sid = c.resolve(ctx, c.arg(0, '<id>'));
     const { world, errors } = loadWorld(c.ws.paths, { modFiles: c.modFiles });
-    for (const e of errors) c.io.err(`уровень не прочитан: ${e.path}: ${e.message}`);
+    for (const e of errors) c.io.err(c.t({ en: `level not read: ${e.path}: ${e.message}`, ru: `уровень не прочитан: ${e.path}: ${e.message}` }));
     const res = whereInGame(ctx, sid, { world });
     if (c.values.json) {
       c.io.out(JSON.stringify(res, null, 1));
       return 0;
     }
     const limit = int(c.values.limit, 'limit', 20);
-    c.io.out(formatWhere(res, { tree: c.values.tree ?? false, maxFacts: limit === 0 ? Infinity : limit }));
+    c.io.out(formatWhere(res, { tree: c.values.tree ?? false, maxFacts: limit === 0 ? Infinity : limit, lang: c.lang }));
     return 0;
   },
   talk(c) {
     const ctx = c.ctx();
-    const sid = c.resolve(ctx, c.arg(0, '<персонаж>'), ['CHARACTER']);
+    const sid = c.resolve(ctx, c.arg(0, c.t({ en: '<character>', ru: '<персонаж>' })), ['CHARACTER']);
     const translation = c.ws.dataLocale !== undefined ? loadTranslation(c.ws.paths, c.ws.dataLocale) : undefined;
     const sim = simulateTalk(ctx, sid, int(c.values.event, 'event', 1), translation ? { translation } : {});
     if (c.values.json) c.io.out(JSON.stringify(sim, null, 1));
-    else for (const l of formatTalk(sim)) c.io.out(l);
+    else for (const l of formatTalk(sim, c.lang)) c.io.out(l);
     return 0;
   },
   diff(c) {
@@ -396,7 +474,7 @@ const COMMANDS: Record<string, Handler> = {
       ctx = c.ws.hasGame ? c.ws.open({ dependencies: [], schema: false }).ctx : c.ws.openStandalone(c.ws.modPath(c.args[1]!));
     } else {
       if (c.values.mod === undefined && c.args[0] !== undefined) c.values.mod = c.args[0];
-      if (c.values.mod === undefined) throw new UsageError('diff: укажите --mod или два файла');
+      if (c.values.mod === undefined) throw new UsageError({ en: 'diff: pass --mod or two files', ru: 'diff: укажите --mod или два файла' });
       ctx = c.ctx();
       diffs = ctx.modRecords().flatMap((r) => modRecordDiff(ctx, r.stringId) ?? []);
     }
@@ -404,26 +482,26 @@ const COMMANDS: Record<string, Handler> = {
     try {
       changes = c.values.status !== undefined ? parseDiffStatuses(c.values.status) : undefined;
     } catch (e) {
-      throw new UsageError(`--status: ${(e as Error).message}`);
+      throw new UsageError(mapUi([usageFrom(e).texts], ([m]) => `--status: ${m}`));
     }
     const shown = filterDiffs(diffs, changes);
     if (c.values.json) {
-      c.paged(shown, () => [], (d) => ({ stringId: d.stringId, change: d.change, name: ctx.name(d.stringId), changes: d.fields.map((f) => formatFieldChange(ctx, f, d.after ?? d.before)) }));
+      c.paged(shown, () => [], (d) => ({ stringId: d.stringId, change: d.change, name: ctx.name(d.stringId), changes: d.fields.map((f) => formatFieldChange(ctx, f, d.after ?? d.before, c.lang)) }));
       return 0;
     }
-    c.paged(shown, (d) => formatRecordDiff(ctx, d));
-    c.io.out(`${formatDiffSummary(diffs)}${changes ? `; показаны: ${changes.join(', ')}` : ''}`);
+    c.paged(shown, (d) => formatRecordDiff(ctx, d, c.lang));
+    c.io.out(`${formatDiffSummary(diffs, c.lang)}${changes ? c.t({ en: `; shown: ${changes.join(', ')}`, ru: `; показаны: ${changes.join(', ')}` }) : ''}`);
     return 0;
   },
 
   validate(c) {
     if (c.values.mod === undefined && c.args[0] !== undefined) c.values.mod = c.args[0];
-    if (c.values.mod === undefined) throw new UsageError('validate: укажите --mod');
+    if (c.values.mod === undefined) throw new UsageError({ en: 'validate: pass --mod', ru: 'validate: укажите --mod' });
     const ctx = c.ctx();
     const issues = validateMod(ctx);
     const errors = issues.filter((i) => i.severity === 'error').length;
-    if (issues.length || c.values.json) c.paged(issues, (i) => [formatIssue(ctx, i)]);
-    if (!c.values.json) c.io.out(`ошибок ${errors}, предупреждений ${issues.length - errors}`);
+    if (issues.length || c.values.json) c.paged(issues, (i) => [formatIssue(ctx, i, c.lang)]);
+    if (!c.values.json) c.io.out(c.t({ en: `errors ${errors}, warnings ${issues.length - errors}`, ru: `ошибок ${errors}, предупреждений ${issues.length - errors}` }));
     return errors > 0 ? 1 : 0;
   },
 
@@ -435,28 +513,28 @@ const COMMANDS: Record<string, Handler> = {
         ? c.ws.open({ mod: c.ws.modPath(c.values.mod), po: false, schema: true, ...(deps ? { dependencies: deps } : {}) })
         : c.ws.open({ dependencies: [], po: false, schema: true });
     const schema = ctx.schema;
-    if (!schema) throw new UsageError('Нет fcs.def в папке игры');
+    if (!schema) throw new UsageError({ en: 'No fcs.def in the game folder', ru: 'Нет fcs.def в папке игры' });
     if (c.values.enum !== undefined) {
-      const lines = formatEnum(schema, c.values.enum);
-      if (!lines) throw new UsageError(`Нет перечисления ${c.values.enum}`);
+      const lines = formatEnum(schema, c.values.enum, c.lang);
+      if (!lines) throw new UsageError({ en: `No enum ${c.values.enum}`, ru: `Нет перечисления ${c.values.enum}` });
       if (c.values.json) c.io.out(JSON.stringify(schema.enums.get(c.values.enum) ?? null, null, 1));
       else for (const l of lines) c.io.out(l);
       return 0;
     }
     if (c.args[0] === undefined) {
       if (!c.values.json) for (const s of summarizeExtensions(schema)) for (const l of formatExtensionDetail(s)) c.io.out(l);
-      c.paged(listTypes(schema), (t) => [`${t.name}  полей ${t.fields}, ссылок ${t.references}${t.inferred ? ' (из данных)' : ''}${typeOriginNote(t)}`]);
+      c.paged(listTypes(schema), (t) => [c.t({ en: `${t.name}  fields ${t.fields}, references ${t.references}${t.inferred ? ' (from data)' : ''}`, ru: `${t.name}  полей ${t.fields}, ссылок ${t.references}${t.inferred ? ' (из данных)' : ''}` }) + typeOriginNote(t)]);
       return 0;
     }
     const t = findTypeSchema(schema, c.args[0]);
-    if (!t) throw new UsageError(`Нет типа ${c.args[0]}`);
+    if (!t) throw new UsageError({ en: `No type ${c.args[0]}`, ru: `Нет типа ${c.args[0]}` });
     if (c.values.json) c.io.out(JSON.stringify({ ...t, fields: [...t.fields.values()] }, null, 1));
-    else for (const l of formatTypeSchema(t)) c.io.out(l);
+    else for (const l of formatTypeSchema(t, c.lang)) c.io.out(l);
     return 0;
   },
 
   touched(c) {
-    const spec = c.arg(0, '<id|имя>');
+    const spec = c.arg(0, c.t({ en: '<id|name>', ru: '<id|имя>' }));
     const vanilla = c.ws.open({ po: true });
     const nameOf = (sid: string): string => vanilla.ctx.name(sid) ?? sid;
     let sid = spec;
@@ -464,17 +542,18 @@ const COMMANDS: Record<string, Handler> = {
       sid = c.resolve(vanilla.ctx, spec);
     } catch (e) {
       // Записи нет в ванили — её могут создавать моды: ищем как есть.
-      if (!(e instanceof UsageError) || !e.message.startsWith('Нет записи')) throw e;
+      if (!(e instanceof NoRecordError)) throw e;
     }
     const { layers, broken } = loadModLayers(c.ws.paths, c.ws.vanilla(), { all: c.values.all ?? false });
-    for (const b of broken) c.io.err(`не прочитан ${b.name}: ${b.error}`);
+    for (const b of broken) c.io.err(c.t({ en: `not read ${b.name}: ${b.error}`, ru: `не прочитан ${b.name}: ${b.error}` }));
     const r = touchedBy(layers, sid);
     if (c.values.json) {
       c.io.out(JSON.stringify({ sid, name: nameOf(sid), inVanilla: r.base !== undefined, touches: r.touches }, null, 1));
       return 0;
     }
-    c.io.out(`${sid} ${vanilla.ctx.name(sid) ?? '(нет в ванили)'} — модов: ${r.touches.length}`);
-    for (const l of formatTouches(r, nameOf)) c.io.out(l);
+    const vname = vanilla.ctx.name(sid);
+    c.io.out(c.t({ en: `${sid} ${vname ?? '(not in vanilla)'} — mods: ${r.touches.length}`, ru: `${sid} ${vname ?? '(нет в ванили)'} — модов: ${r.touches.length}` }));
+    for (const l of formatTouches(r, nameOf, c.lang)) c.io.out(l);
     return 0;
   },
 
@@ -483,13 +562,14 @@ const COMMANDS: Record<string, Handler> = {
     const vanilla = c.ws.open({ po: true });
     const nameOf = (sid: string): string => vanilla.ctx.name(sid) ?? sid;
     const { layers, broken } = loadModLayers(c.ws.paths, c.ws.vanilla(), { all: c.values.all ?? false, ...(extra !== undefined ? { extra: { name: basename(extra), path: extra } } : {}) });
-    for (const b of broken) c.io.err(`не прочитан ${b.name}: ${b.error}`);
+    for (const b of broken) c.io.err(c.t({ en: `not read ${b.name}: ${b.error}`, ru: `не прочитан ${b.name}: ${b.error}` }));
     const found = findConflicts(layers, extra !== undefined ? { only: basename(extra) } : {});
     if (!c.values.json) {
       const fields = found.reduce((n, x) => n + x.fields.length, 0);
-      c.io.out(`модов ${layers.length - vanilla.ctx.layers.length}; записей с конфликтами ${found.length}, полей ${fields}`);
+      const nMods = layers.length - vanilla.ctx.layers.length;
+      c.io.out(c.t({ en: `mods ${nMods}; records with conflicts ${found.length}, fields ${fields}`, ru: `модов ${nMods}; записей с конфликтами ${found.length}, полей ${fields}` }));
     }
-    c.paged(found, (x) => formatConflict(x, nameOf));
+    c.paged(found, (x) => formatConflict(x, nameOf, c.lang));
     return 0;
   },
 
@@ -514,7 +594,7 @@ const COMMANDS: Record<string, Handler> = {
 
   strings(c) {
     const v = c.values;
-    return runStrings(c.ws, c.io, c.arg(0, '<оригинал.mod>'), {
+    return runStrings(c.ws, c.io, c.arg(0, c.t({ en: '<original.mod>', ru: '<оригинал.mod>' })), {
       ...(v.mod !== undefined ? { mod: v.mod } : {}),
       ...(c.deps ? { deps: c.deps } : {}),
       ...(v.out !== undefined ? { out: v.out } : {}),
@@ -528,7 +608,7 @@ const COMMANDS: Record<string, Handler> = {
 
   bulk(c) {
     const v = c.values;
-    const type = v.type ?? c.arg(0, '<ТИП>');
+    const type = v.type ?? c.arg(0, c.t({ en: '<TYPE>', ru: '<ТИП>' }));
     const text = v.type !== undefined ? c.args[0] : c.args[1];
     const limit = int(v.limit, 'limit', 50);
     return runBulk(
@@ -561,13 +641,13 @@ const COMMANDS: Record<string, Handler> = {
 
   merge(c) {
     const v = c.values;
-    if (v.mod === undefined) throw new UsageError('merge: нужен --mod <ваш мод> (в него сливаем)');
+    if (v.mod === undefined) throw new UsageError({ en: 'merge: --mod <your mod> is needed (it is merged into)', ru: 'merge: нужен --mod <ваш мод> (в него сливаем)' });
     const limit = int(v.limit, 'limit', 50);
     return runMerge(
       c.ws,
       c.ctx(),
       {
-        source: c.arg(0, '<источник>'),
+        source: c.arg(0, c.t({ en: '<source>', ru: '<источник>' })),
         mod: v.mod,
         only: splitList(v.only),
         types: splitList(v.type),
@@ -594,11 +674,11 @@ const COMMANDS: Record<string, Handler> = {
 
   async build(c) {
     const out = c.values.out;
-    if (out === undefined) throw new UsageError('build: нужен --out <файл.mod>');
+    if (out === undefined) throw new UsageError({ en: 'build: --out <file.mod> is needed', ru: 'build: нужен --out <файл.mod>' });
     const r = await runBuild(
       c.ws,
       {
-        source: c.arg(0, '<скрипт.ts|план.json>'),
+        source: c.arg(0, c.t({ en: '<script.ts|plan.json>', ru: '<скрипт.ts|план.json>' })),
         out,
         args: c.args.slice(1),
         force: c.values.force ?? false,
@@ -616,34 +696,48 @@ const COMMANDS: Record<string, Handler> = {
     }
     const issues = validateMod(r.ctx);
     const errors = issues.filter((i) => i.severity === 'error');
-    c.io.out(`${r.outPath}: ${r.bytes} байт, записей ${r.ctx.modRecords().length} (${[...counts].map(([k, n]) => `${k} ${n}`).join(', ')})`);
-    for (const i of errors.slice(0, 20)) c.io.out(formatIssue(r.ctx, i));
-    if (errors.length) c.io.out(`ошибок проверки: ${errors.length}`);
+    const byType = [...counts].map(([k, n]) => `${k} ${n}`).join(', ');
+    const nRecs = r.ctx.modRecords().length;
+    c.io.out(c.t({ en: `${r.outPath}: ${r.bytes} bytes, records ${nRecs} (${byType})`, ru: `${r.outPath}: ${r.bytes} байт, записей ${nRecs} (${byType})` }));
+    for (const i of errors.slice(0, 20)) c.io.out(formatIssue(r.ctx, i, c.lang));
+    if (errors.length) c.io.out(c.t({ en: `validation errors: ${errors.length}`, ru: `ошибок проверки: ${errors.length}` }));
     return 0;
   },
 };
 
+/** `--lang X` / `--lang=X` from the raw arguments (before the full parse, so help and argument errors use it too). */
+function langArg(argv: readonly string[]): string | undefined {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]!;
+    if (a === '--lang') return argv[i + 1];
+    if (a.startsWith('--lang=')) return a.slice('--lang='.length);
+  }
+  return undefined;
+}
+
 export async function main(argv: string[], io: Io = processIo): Promise<number> {
+  let lang = 'en';
   try {
+    lang = resolveCliLang(langArg(argv), io.env);
     const [cmd, ...rest] = argv;
     if (cmd === undefined || cmd === 'help' || cmd === '--help' || cmd === '-h') {
-      io.out(HELP);
+      io.out(helpText(lang));
       return 0;
     }
     const handler = COMMANDS[cmd];
-    if (!handler) throw new UsageError(`Неизвестная команда «${cmd}». kedit help — список команд`);
+    if (!handler) throw new UsageError({ en: `Unknown command «${cmd}». kedit help — list of commands`, ru: `Неизвестная команда «${cmd}». kedit help — список команд` });
     const { values, positionals } = parse(rest);
     if (values.help) {
-      io.out(HELP);
+      io.out(helpText(lang));
       return 0;
     }
-    return await handler(new Command(io, values, positionals));
+    return await handler(new Command(io, values, positionals, lang));
   } catch (e) {
     if (e instanceof UsageError || (e instanceof Error && 'code' in e && String(e.code).startsWith('ERR_PARSE_ARGS'))) {
-      io.err(`kedit: ${e.message}`);
+      io.err(`kedit: ${errorMessage(e, lang)}`);
       return 2;
     }
-    io.err(`kedit: ${e instanceof Error ? e.message : String(e)}`);
+    io.err(`kedit: ${errorMessage(e, lang)}`);
     return 1;
   }
 }

@@ -126,7 +126,8 @@ describe('перечисления', () => {
     expect(parseEnumValue(e, '3')).toBe(3);
     expect(parseEnumValue(e, 'nope')).toBeUndefined();
     expect(formatEnumValue(e, 5)).toBe('DR_ONCE_ONLY «один раз» (5)');
-    expect(formatEnumValue(e, 99)).toBe('99 (нет в DialogRepetitionEnum)');
+    expect(formatEnumValue(e, 99)).toBe('99 (not in DialogRepetitionEnum)');
+    expect(formatEnumValue(e, 99, 'ru')).toBe('99 (нет в DialogRepetitionEnum)');
   });
 
   it('условия и действия диалога текстом; tag по условию', () => {
@@ -165,7 +166,8 @@ describe('diff: фильтр и итог', () => {
     const a = file([rec(CHAR, 'X', 'x'), rec(CHAR, 'Y', 'y')]);
     const bFile = file([rec(CHAR, 'X', 'x2'), rec(CHAR, 'Z', 'z')]);
     const diffs = diffDataFiles(a, bFile);
-    expect(formatDiffSummary(diffs)).toBe('всего 3: новых 1, изменённых 1, удалённых 1');
+    expect(formatDiffSummary(diffs)).toBe('total 3: new 1, changed 1, deleted 1');
+    expect(formatDiffSummary(diffs, 'ru')).toBe('всего 3: новых 1, изменённых 1, удалённых 1');
     expect(parseDiffStatuses('new,deleted')).toEqual(['added', 'removed']);
     expect(filterDiffs(diffs, ['changed']).map((d) => d.stringId)).toEqual(['X']);
     expect(() => parseDiffStatuses('weird')).toThrow();

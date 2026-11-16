@@ -462,25 +462,26 @@ describe('schema as text: what comes from which extension', () => {
 
   it('a type and an enumeration mark only what another extension added', () => {
     expect(formatTypeSchema(schema.types.get('COUNTER')!)).toEqual([
-      '[COUNTER] — полей 2 [extension Counters]',
+      '[COUNTER] — fields 2 [extension Counters]',
       '  amount: int = 0 — how much',
       '  mood: enum Mood = CALM',
     ]);
     expect(formatTypeSchema(schema.types.get('ITEM')!)).toEqual([
-      '[ITEM] — полей 3',
+      '[ITEM] — fields 3',
       '  early: int = 2 [extension Early] — from preload',
       '  value: int = 1 — price',
       '  kind: enum Fruit = APPLE',
     ]);
     expect(formatTypeSchema(schema.types.get('DIALOGUE')!)[2]).toBe('  counter equals: ref → COUNTER (0) [extension Counters] — checks a counter');
     expect(formatEnum(schema, 'Fruit')).toEqual([
-      'Fruit — значений 4',
+      'Fruit — values 4',
       '  APPLE = 0',
       '  PEAR = 1',
       '  PLUM = 10 [extension Counters]',
       '  FIG = 11 [extension Counters]',
     ]);
-    expect(formatEnum(schema, 'Mood')).toEqual(['Mood — значений 2 [extension Counters]', '  CALM = 0', '  ANGRY = 1']);
+    expect(formatEnum(schema, 'Mood')).toEqual(['Mood — values 2 [extension Counters]', '  CALM = 0', '  ANGRY = 1']);
+    expect(formatTypeSchema(schema.types.get('ITEM')!, 'ru')[0]).toBe('[ITEM] — полей 3');
   });
 
   it('summarizeExtensions: what each extension adds, in load order', () => {

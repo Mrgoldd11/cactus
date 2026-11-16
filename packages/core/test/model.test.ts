@@ -225,7 +225,8 @@ describe('контекст: команды и история', () => {
     expect(ctx.get('X')).toBeUndefined();
     expect(ctx.delta('X')!.bools.get('REMOVED')).toBe(true);
     expect(ctx.delta('A')!.refs.get('vendors')).toEqual([removedRef('X')]);
-    expect(refLabel(ctx, 'X')).toBe('<удалена> Sword [X]');
+    expect(refLabel(ctx, 'X')).toBe('<deleted> Sword [X]');
+    expect(refLabel(ctx, 'X', 'ru')).toBe('<удалена> Sword [X]');
     expect(ctx.history().undo).toHaveLength(1);
     ctx.undo();
     expect(ctx.delta('A')).toBeUndefined();

@@ -14,7 +14,7 @@
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
-import { describeOrderChange, type LiveRequestBody } from '@kenshi-editor/core';
+import { describeOrderChange, errorMessage, uiText, type LiveRequestBody } from '@kenshi-editor/core';
 import {
   addBackup,
   clearAutosave,
@@ -249,17 +249,9 @@ async function copyModForEditing(e: IpcMainInvokeEvent, game: GameInstallInfo, p
   try {
     plan = planCopy(game, path);
   } catch (err) {
-    return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, cancelled: false, error: errorMessage(err, lg) };
   }
-  if (plan.error !== undefined) return { ok: false, cancelled: false, error: plan.error };
-  const enWarnings = [
-    ...(plan.shadowsOriginal ? ['The copy has the same name and hides the original: the game and the editor will use the file from mods/. Delete the copy folder to get the original back.'] : []),
-    ...(plan.origin.workshopId !== undefined ? ["The author may update the mod; the copy stays as it is. Do not upload the copy to the workshop without the author's permission."] : []),
-  ];
-  const zhWarnings = [
-    ...(plan.shadowsOriginal ? ['副本与原文件同名并会遮盖原文件：游戏和编辑器将使用 mods/ 中的文件。删除副本文件夹即可恢复原文件。'] : []),
-    ...(plan.origin.workshopId !== undefined ? ['作者可能会更新这个 Mod；副本保持不变。未经作者许可，请勿将副本上传到创意工坊。'] : []),
-  ];
+  if (plan.error !== undefined) return { ok: false, cancelled: false, error: plan.errorText ? uiText(plan.errorText, lg) : plan.error };
   const options = {
     type: 'warning' as const,
     buttons: pick(lg, { en: ['Copy', 'Cancel'], ru: ['Скопировать', 'Отмена'], zh: ['复制', '取消'] }),
@@ -267,7 +259,7 @@ async function copyModForEditing(e: IpcMainInvokeEvent, game: GameInstallInfo, p
     cancelId: 1,
     title: pick(lg, { en: 'Copy the mod for editing', ru: 'Копия мода для правки', zh: '复制 Mod 以便编辑' }),
     message: pick(lg, { en: 'Workshop mods are never changed: Steam overwrites them on update. Copy the mod into the game folder and edit the copy?', ru: 'Мод из мастерской не меняем: Steam перезапишет его при обновлении. Скопировать мод в папку игры и править копию?', zh: '创意工坊的 Mod 不会被修改：Steam 在更新时会覆盖它。要把 Mod 复制到游戏文件夹并编辑副本吗？' }),
-    detail: [`${pick(lg, { en: 'From', ru: 'Откуда', zh: '来源' })}: ${plan.source}`, `${pick(lg, { en: 'To', ru: 'Куда', zh: '目标' })}: ${plan.dest}`, '', ...pick(lg, { en: enWarnings, ru: plan.warnings, zh: zhWarnings })].join('\n'),
+    detail: [`${pick(lg, { en: 'From', ru: 'Откуда', zh: '来源' })}: ${plan.source}`, `${pick(lg, { en: 'To', ru: 'Куда', zh: '目标' })}: ${plan.dest}`, '', ...plan.warningTexts.map((w) => uiText(w, lg))].join('\n'),
   };
   const win = windowOf(e);
   const r = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
@@ -276,7 +268,7 @@ async function copyModForEditing(e: IpcMainInvokeEvent, game: GameInstallInfo, p
     return { ok: true, ...copyMod(game, path) };
   } catch (err) {
     log('error', 'copyModForEditing', path, err);
-    return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, cancelled: false, error: errorMessage(err, lg) };
   }
 }
 
@@ -284,9 +276,9 @@ async function copyModForEditing(e: IpcMainInvokeEvent, game: GameInstallInfo, p
 async function saveModOrder(e: IpcMainInvokeEvent, game: GameInstallInfo, names: string[], expected: string[]): Promise<ModOrderResult> {
   const known = [...knownGames, ...(currentGame ? [currentGame] : [])].some((g) => resolve(g.kenshi).toLowerCase() === resolve(game.kenshi).toLowerCase());
   if (!known) return { ok: false, cancelled: false, error: 'unknown game folder' };
-  const changes = describeOrderChange(expected, names);
-  if (changes.length === 0) return { ok: true, path: join(game.kenshi, 'data', 'mods.cfg'), changed: false };
   const lg = settings.lang;
+  const changes = describeOrderChange(expected, names, lg);
+  if (changes.length === 0) return { ok: true, path: join(game.kenshi, 'data', 'mods.cfg'), changed: false };
   const options = {
     type: 'warning' as const,
     buttons: pick(lg, { en: ['Write', 'Cancel'], ru: ['Записать', 'Отмена'], zh: ['写入', '取消'] }),
@@ -303,7 +295,7 @@ async function saveModOrder(e: IpcMainInvokeEvent, game: GameInstallInfo, names:
     return writeModOrder(game, names, expected);
   } catch (err) {
     log('error', 'writeModOrder', game.kenshi, err);
-    return { ok: false, cancelled: false, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, cancelled: false, error: errorMessage(err, lg) };
   }
 }
 

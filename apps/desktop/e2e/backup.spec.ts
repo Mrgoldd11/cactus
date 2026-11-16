@@ -245,7 +245,7 @@ test('сбой: правка → автосохранение → аварийн
     expect(filesIn(dirname(game.modPath)).filter((f) => f.includes('.tmp'))).toHaveLength(0);
     const cli = join(editorRoot, 'packages/cli/bin/kedit.js');
     const report = execFileSync(process.execPath, [cli, 'validate', '--mod', game.modPath], { cwd: editorRoot, encoding: 'utf8' });
-    expect(report).toContain('ошибок 0');
+    expect(report).toContain('errors 0');
 
     // Резервные копии: версия до сохранения (1.5) — восстановить как правку и выгрузить отдельным файлом.
     await page.getByTestId('backups-btn').click();

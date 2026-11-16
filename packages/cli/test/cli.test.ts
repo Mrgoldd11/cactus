@@ -79,7 +79,7 @@ describe('kedit: поиск и просмотр', () => {
   });
 
   it('where: цепочка обратных ссылок; без папок уровня — без координат', async () => {
-    const r = await run('where', 'Sword');
+    const r = await run('where', 'Sword', '--lang', 'en');
     expect(r.code).toBe(0);
     expect(r.out).toContain('ITEM «Sword» (Меч) [X]');
     // В фикстуре предмет прямо в `vendors` персонажа (в игре там VENDOR_LIST) — просто связь.
@@ -92,11 +92,11 @@ describe('kedit: поиск и просмотр', () => {
 
 describe('kedit talk', () => {
   it('без диалогов; клик из мода игрока (--mods из mods.cfg); JSON', async () => {
-    expect((await run('talk', 'Bandit')).out).toContain('no dialogues for this event');
+    expect((await run('talk', 'Bandit', '--lang', 'en')).out).toContain('no dialogues for this event');
     mkdirSync(join(fx.game, 'mods', 'Talk'), { recursive: true });
     writeDataFileSync(join(fx.game, 'mods', 'Talk', 'Talk.mod'), dataFile([rec(CHAR, 'A', 'Bandit', (r) => r.refs.set('dialogue', [{ target: 'D1', v0: 0, v1: 0, v2: 0 }]))]));
     writeFileSync(join(fx.game, 'data', 'mods.cfg'), 'Talk.mod\n');
-    const r = await run('talk', 'Bandit', '--mods');
+    const r = await run('talk', 'Bandit', '--mods', '--lang', 'en');
     expect(r.code).toBe(0);
     expect(r.out).toContain('▶ greet (D1) — the game picks it');
     expect(r.out).toContain('from: character (dialogue); layer Dialogue.mod');
@@ -105,7 +105,7 @@ describe('kedit talk', () => {
     const j = JSON.parse((await run('talk', 'A', '--mods', '--json')).out) as { winner: string; candidates: { verdict: string }[] };
     expect(j.winner).toBe('D1');
     // Событие 3: `dialogue` персонажа не участвует.
-    expect((await run('talk', 'A', '--mods', '--event', '3')).out).toContain('no dialogues for this event');
+    expect((await run('talk', 'A', '--mods', '--event', '3', '--lang', 'en')).out).toContain('no dialogues for this event');
   });
 });
 
@@ -458,5 +458,25 @@ describe('kedit merge', () => {
     expect(rej.code, rej.err).toBe(0);
     expect(rej.out).toContain('отклонено 1');
     expect(rej.out).not.toContain('Y «Shield»');
+  });
+});
+
+describe('kedit: output language', () => {
+  it('English by default, --lang and KEDIT_LANG pick the language, a bad value is an error', async () => {
+    fx.io.env = {};
+    const en = await run('validate', '--mod', fx.modPath);
+    expect(en.out).toMatch(/errors \d+, warnings \d+/);
+    fx.io.lines.length = 0;
+    expect(await main(['help'], fx.io)).toBe(0);
+    expect(fx.io.lines.join(' ')).toContain('Kenshi data: search, view');
+    const ru = await run('validate', '--mod', fx.modPath, '--lang', 'ru');
+    expect(ru.out).toMatch(/ошибок \d+, предупреждений \d+/);
+    fx.io.env = { KEDIT_LANG: 'ru' };
+    expect((await run('validate', '--mod', fx.modPath, '--lang=en')).out).toMatch(/errors \d+/);
+    const bad = await run('find', 'x', '--lang', 'xx');
+    expect(bad.code).toBe(2);
+    expect(bad.err).toMatch(/--lang/);
+    const unknown = await run('nope');
+    expect(unknown.err).toContain('Неизвестная команда');
   });
 });

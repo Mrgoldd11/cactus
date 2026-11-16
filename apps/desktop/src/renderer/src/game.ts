@@ -6,7 +6,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { gameErrorText, type GameState, type TracePage, type TraceRecord, type Vec3 } from '@kenshi-editor/core';
 import type { GameCommand, GameLinkStatus, GameReply, Lang } from '../../shared/api.ts';
-import { inLang, useLang } from './i18n.ts';
+import { useLang } from './i18n.ts';
 
 const en = {
   panel: 'Game',
@@ -141,9 +141,9 @@ export function useGameT(): GameStrings {
   return GAME_STRINGS[useLang()];
 }
 
-/** Plugin reply error as text: the core's wording where it has the language, otherwise the code. */
+/** Plugin reply error as text: the core's wording of the code in the UI language, then the plugin's message. */
 export function replyError(r: Extract<GameReply, { ok: false }>, lang: Lang): string {
-  return inLang({ en: `${r.code}${r.message ? `: ${r.message}` : ''}`, ru: gameErrorText(r.code) }, lang);
+  return `${gameErrorText(r.code, lang)}${r.message ? `: ${r.message}` : ''}`;
 }
 
 const OFF: GameLinkStatus = { connected: false, inGame: false };

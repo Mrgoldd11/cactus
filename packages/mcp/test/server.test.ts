@@ -53,7 +53,7 @@ describe('kenshi-mcp: чтение', () => {
     expect(open.text).toContain('records 2 (changed 1, new 1)');
     expect((await call('find', { text: 'разбой' })).text).toBe('A  CHARACTER  «Bandit» (Разбойник)  [changed]');
     const paged = await call('find', { type: 'ITEM', limit: 1 });
-    expect(paged.text).toContain('дальше offset=1');
+    expect(paged.text).toContain('next offset=1');
     expect((await call('find', { fields: ['weight<1'] })).text).toContain('1-My.mod  ITEM  «Magic hat»');
     const show = await call('show', { id: 'A', layers: true });
     expect(show.text).toContain('int money = 99');
@@ -79,7 +79,7 @@ describe('kenshi-mcp: чтение', () => {
     const diff = await call('diff');
     expect(diff.text).toContain('~ int money: 15 → 99');
     expect(diff.text).toContain('+ ITEM 1-My.mod «Magic hat»');
-    expect(diff.text).toContain('всего 2: новых 1, изменённых 1, удалённых 0');
+    expect(diff.text).toContain('total 2: new 1, changed 1, deleted 0');
     const changed = await call('diff', { status: ['changed'] });
     expect(changed.text).not.toContain('+ ITEM 1-My.mod');
     expect(changed.text).toContain('shown: changed');
@@ -117,7 +117,7 @@ describe('kenshi-mcp: чтение', () => {
     const opened = (await call('open_mod', { mod: 'My' })).text;
     expect(opened).toContain('schema extension My: types COUNTER=900; fields ITEM.charges');
     expect(opened).toContain('DLL plugins of FCS Extended, not run here: My_FCS.dll');
-    expect((await call('schema', { type: 'counter' })).text).toContain('[COUNTER] — полей 1 [extension My]');
+    expect((await call('schema', { type: 'counter' })).text).toContain('[COUNTER] — fields 1 [extension My]');
     expect((await call('schema', { type: 'counter' })).text).toContain('amount: int = 0 — how much');
     expect((await call('schema', { type: 'item' })).text).toContain('charges: int = 3 [extension My] — from the extension');
     // The type list starts with the extensions and marks their types and fields.
@@ -150,7 +150,7 @@ describe('kenshi-mcp: конфликты модов', () => {
     writeFileSync(join(fx.game, 'data', 'mods.cfg'), `Rich.mod${EOL}My.mod${EOL}`);
     expect((await call('touched', { id: 'Bandit' })).text).toContain('A Bandit — mods: 2');
     const all = await call('conflicts');
-    expect(all.text).toContain('money (ваниль 15): победит My.mod');
+    expect(all.text).toContain('money (vanilla 15): wins My.mod');
     expect((await call('conflicts', { mod_only: true })).isError).toBe(true);
     await call('open_mod', { mod: 'My' });
     await call('edit', { ops: [{ op: 'set', id: 'A', field: 'money', value: 500 }] });
@@ -175,7 +175,7 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect(edit.text).toContain('#1 кирка');
     expect(edit.text).toContain('+ ITEM 2-My.mod «Pick»');
     expect((await call('undo')).text).toBe('undone:\n  #1 кирка');
-    expect((await call('find', { text: 'pick' })).text).toBe('ничего не найдено');
+    expect((await call('find', { text: 'pick' })).text).toBe('nothing found');
     expect((await call('redo')).text).toBe('redone:\n  #1 кирка');
     const hist = await call('history');
     expect(hist.text).toContain('#1 кирка');
@@ -211,7 +211,7 @@ describe('kenshi-mcp: правка и сохранение', () => {
     expect(ok.text).toContain('X  «Sword»  name: Sword → Sabre');
     expect(ok.text).toContain('applied: #1');
     expect((await call('undo')).text).toContain('undone:');
-    expect((await call('find', { text: 'sabre' })).text).toBe('ничего не найдено');
+    expect((await call('find', { text: 'sabre' })).text).toBe('nothing found');
   });
 
   it('merge: предпросмотр, слияние одной правкой, undo, save пишет мод и файл решений', async () => {
@@ -224,7 +224,7 @@ describe('kenshi-mcp: правка и сохранение', () => {
     await call('open_mod', { mod: 'My' });
     const pre = await call('merge', { source: 'Other' });
     expect(pre.isError, pre.text).toBe(false);
-    expect(pre.text).toContain('изменённых 2, удалённых 0, конфликтов 1');
+    expect(pre.text).toContain('changed 2, deleted 0, conflicts 1');
     expect(pre.text).toContain('preview: nothing changed');
     expect((await call('history')).text).not.toContain('#1');
     // Без выбора слить нельзя; сам себя и неизвестный источник — понятная ошибка.
@@ -234,12 +234,12 @@ describe('kenshi-mcp: правка и сохранение', () => {
 
     const ok = await call('merge', { source: 'Other', apply: true, all: true, conflicts: 'source' });
     expect(ok.isError, ok.text).toBe(false);
-    expect(ok.text).toContain('слито 2');
+    expect(ok.text).toContain('merged 2');
     expect(ok.text).toContain('applied: #1');
     expect((await call('show', { id: 'A' })).text).toContain('int money = 50');
-    expect((await call('merge', { source: 'Other' })).text).toContain('уже слито 2');
+    expect((await call('merge', { source: 'Other' })).text).toContain('already merged 2');
     expect((await call('undo')).text).toContain('undone:');
-    expect((await call('merge', { source: 'Other' })).text).toContain('изменённых 2');
+    expect((await call('merge', { source: 'Other' })).text).toContain('changed 2');
     await call('merge', { source: 'Other', apply: true, ids: ['Y'] });
 
     const out = join(fx.game, 'merged', 'My2.mod');

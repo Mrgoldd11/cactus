@@ -216,7 +216,7 @@ export function placeInterior(
   target: string,
   position: Vec3,
   rotation: Vec4,
-  label = 'Новый объект в интерьере',
+  label = 'New object in an interior',
 ): InteriorPlaceResult {
   requireLoaded(edits);
   if (!interiorLayout(edits, layout)) throw new UiTextError({ en: `No layout ${layout}`, ru: `Нет раскладки ${layout}`, zh: `没有布局 ${layout}` });
@@ -267,7 +267,7 @@ export function placeInterior(
 }
 
 /** Сдвинуть / повернуть объект раскладки; сменил высоту — этаж и высота в состоянии следом. */
-export function moveInterior(edits: WorldEdits, types: RecordTypes, layout: string, key: string, position: Vec3, rotation: Vec4, label = 'Сдвиг объекта в интерьере'): void {
+export function moveInterior(edits: WorldEdits, types: RecordTypes, layout: string, key: string, position: Vec3, rotation: Vec4, label = 'Move object in an interior'): void {
   requireLoaded(edits);
   const cur = layoutObject(edits, types, layout, key);
   if (!cur) throw new UiTextError({ en: `No object ${key} in layout ${layout}`, ru: `Нет объекта ${key} в раскладке ${layout}`, zh: `布局 ${layout} 中没有对象 ${key}` });
@@ -286,7 +286,7 @@ export function moveInterior(edits: WorldEdits, types: RecordTypes, layout: stri
 }
 
 /** Убрать объект из раскладки. */
-export function removeInterior(edits: WorldEdits, layout: string, key: string, label = 'Удаление объекта из интерьера'): void {
+export function removeInterior(edits: WorldEdits, layout: string, key: string, label = 'Remove object from an interior'): void {
   requireLoaded(edits);
   edits.remove(INTERIORS, layout, key, label);
 }

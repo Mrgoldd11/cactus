@@ -23,6 +23,7 @@ import type { ConflictLayer } from '../model/conflicts.ts';
 import type { DataFile, GameRecord } from '../format/types.ts';
 import { readDataFile } from '../format/read.ts';
 import { installedModFiles, type GamePaths } from './paths.ts';
+import { UiTextError, type UiText } from '../ui-text.ts';
 
 export type ModSource = 'mods' | 'workshop';
 
@@ -187,7 +188,14 @@ export function writeModsCfg(paths: GamePaths, names: readonly string[], options
   // KEDIT_SKIP_GAME_CHECK=1 — только для тестов на временной копии папки игры.
   if (options.checkGame ?? process.env['KEDIT_SKIP_GAME_CHECK'] !== '1') {
     const running = runningGameProcesses();
-    if (running.length > 0) throw new Error(`Закройте игру и лаунчер (${running.join(', ')}): иначе они перезапишут mods.cfg`);
+    if (running.length > 0) {
+      const list = running.join(', ');
+      throw new UiTextError({
+        en: `Close the game and the launcher (${list}): otherwise they will overwrite mods.cfg`,
+        ru: `Закройте игру и лаунчер (${list}): иначе они перезапишут mods.cfg`,
+        zh: `请关闭游戏和启动器（${list}）：否则它们会覆盖 mods.cfg`,
+      });
+    }
   }
   const path = modsCfgPath(paths);
   const prev = existsSync(path) ? readFileSync(path, 'utf-8') : undefined;
@@ -235,8 +243,12 @@ export interface ModCopyPlan {
   enabled: boolean;
   /** Почему копировать нельзя (папка уже есть, плохое имя…). */
   error?: string;
+  /** The same reason in every interface language (`error` is its English text). */
+  errorText?: UiText;
   /** Предупреждения для пользователя. */
   warnings: string[];
+  /** The same warnings in every interface language (`warnings` are their English texts). */
+  warningTexts: UiText[];
 }
 
 const BAD_NAME = /[<>:"/\\|?*]/;
@@ -267,20 +279,43 @@ export function planModCopy(paths: GamePaths, source: string, options: { name?: 
   }
   const shadowsOriginal = `${name}.mod`.toLowerCase() === sourceFileName.toLowerCase();
   const enabled = readModsCfgText(paths).names.some((n) => n.toLowerCase() === sourceFileName.toLowerCase());
-  const plan: ModCopyPlan = { source: src, name, dest, originPath, origin, shadowsOriginal, enabled, warnings: [] };
-  if (name === '' || BAD_NAME.test(name) || hasControlChar(name) || name.endsWith('.') || name.endsWith(' ')) plan.error = `Плохое имя мода: «${name}»`;
-  else if (resolve(dest).toLowerCase() === src.toLowerCase()) plan.error = 'Это и есть файл в mods/ — копировать некуда; дайте копии другое имя';
-  else if (existsSync(dirname(dest))) plan.error = `Папка ${dirname(dest)} уже есть — выберите другое имя или удалите её сами`;
+  const plan: ModCopyPlan = { source: src, name, dest, originPath, origin, shadowsOriginal, enabled, warnings: [], warningTexts: [] };
+  const warn = (t: UiText): void => {
+    plan.warnings.push(t.en);
+    plan.warningTexts.push(t);
+  };
+  let why: UiText | undefined;
+  if (name === '' || BAD_NAME.test(name) || hasControlChar(name) || name.endsWith('.') || name.endsWith(' ')) why = { en: `Bad mod name: «${name}»`, ru: `Плохое имя мода: «${name}»`, zh: `Mod 名称无效：«${name}»` };
+  else if (resolve(dest).toLowerCase() === src.toLowerCase()) why = { en: 'This is the file in mods/ itself — nowhere to copy it; give the copy another name', ru: 'Это и есть файл в mods/ — копировать некуда; дайте копии другое имя', zh: '这就是 mods/ 中的文件本身——无处可复制；请给副本另起名称' };
+  else if (existsSync(dirname(dest))) why = { en: `Folder ${dirname(dest)} already exists — choose another name or delete it yourself`, ru: `Папка ${dirname(dest)} уже есть — выберите другое имя или удалите её сами`, zh: `文件夹 ${dirname(dest)} 已存在——请换个名称或自行删除它` };
+  if (why) {
+    plan.error = why.en;
+    plan.errorText = why;
+  }
   if (shadowsOriginal) {
-    plan.warnings.push(
+    warn(
       workshopId !== undefined
-        ? 'Копия с тем же именем закроет оригинал из мастерской: игра и редактор возьмут файл из mods/. Чтобы вернуть оригинал, удалите папку копии.'
-        : 'Копия с тем же именем закроет оригинал.',
+        ? {
+            en: 'The copy has the same name and hides the workshop original: the game and the editor will use the file from mods/. Delete the copy folder to get the original back.',
+            ru: 'Копия с тем же именем закроет оригинал из мастерской: игра и редактор возьмут файл из mods/. Чтобы вернуть оригинал, удалите папку копии.',
+            zh: '副本与原文件同名并会遮盖创意工坊的原文件：游戏和编辑器将使用 mods/ 中的文件。删除副本文件夹即可恢复原文件。',
+          }
+        : { en: 'The copy has the same name and hides the original.', ru: 'Копия с тем же именем закроет оригинал.', zh: '副本与原文件同名并会遮盖原文件。' },
     );
   } else if (enabled) {
-    plan.warnings.push(`Копия под другим именем: в mods.cfg включён оригинал «${sourceFileName}», копию надо включить отдельно (и выключить оригинал, если правки должны его заменить).`);
+    warn({
+      en: `The copy has another name: mods.cfg enables the original «${sourceFileName}»; enable the copy separately (and disable the original if the edits should replace it).`,
+      ru: `Копия под другим именем: в mods.cfg включён оригинал «${sourceFileName}», копию надо включить отдельно (и выключить оригинал, если правки должны его заменить).`,
+      zh: `副本使用了其他名称：mods.cfg 中启用的是原文件 «${sourceFileName}»，需要单独启用副本（如果修改应替换原文件，请禁用原文件）。`,
+    });
   }
-  if (workshopId !== undefined) plan.warnings.push('Автор мода может его обновить — копия останется прежней. Не выкладывайте копию в мастерскую без разрешения автора.');
+  if (workshopId !== undefined) {
+    warn({
+      en: "The author may update the mod; the copy stays as it is. Do not upload the copy to the workshop without the author's permission.",
+      ru: 'Автор мода может его обновить — копия останется прежней. Не выкладывайте копию в мастерскую без разрешения автора.',
+      zh: '作者可能会更新这个 Mod；副本保持不变。未经作者许可，请勿将副本上传到创意工坊。',
+    });
+  }
   return plan;
 }
 
@@ -290,9 +325,9 @@ export function planModCopy(paths: GamePaths, source: string, options: { name?: 
  */
 export function copyModForEditing(paths: GamePaths, source: string, options: { name?: string } = {}): ModCopyPlan {
   const plan = planModCopy(paths, source, options);
-  if (plan.error !== undefined) throw new Error(plan.error);
+  if (plan.error !== undefined) throw new UiTextError(plan.errorText ?? plan.error);
   const bytes = readFileSync(plan.source);
-  if (sha256(bytes) !== plan.origin.sha256) throw new Error(`${plan.source} изменился во время копирования`);
+  if (sha256(bytes) !== plan.origin.sha256) throw new UiTextError({ en: `${plan.source} changed while copying`, ru: `${plan.source} изменился во время копирования`, zh: `${plan.source} 在复制过程中发生了变化` });
   mkdirSync(dirname(plan.dest), { recursive: true });
   writeFileSync(plan.dest, bytes, { flag: 'wx' });
   writeFileSync(plan.originPath, `${JSON.stringify(plan.origin, null, 2)}\n`, { flag: 'wx' });

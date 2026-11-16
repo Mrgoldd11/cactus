@@ -720,7 +720,7 @@ test('ванильный диалог: новый ответ, связь пер�
       expect(recs.some((r) => r.stringId === '61859-Dialogue.mod')).toBe(false);
       const cli = join(editorRoot, 'packages/cli/bin/kedit.js');
       const report = execFileSync(process.execPath, [cli, 'validate', '--mod', out], { cwd: editorRoot, encoding: 'utf8' });
-      expect(report).toContain('ошибок 0');
+      expect(report).toContain('errors 0');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -861,7 +861,7 @@ test('граф диалога: меню ПКМ, текст прямо в узл�
       expect(recs.some((r) => r.stringId === '61860-Dialogue.mod')).toBe(false);
       const cli = join(editorRoot, 'packages/cli/bin/kedit.js');
       const report = execFileSync(process.execPath, [cli, 'validate', '--mod', out], { cwd: editorRoot, encoding: 'utf8' });
-      expect(report).toContain('ошибок 0');
+      expect(report).toContain('errors 0');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

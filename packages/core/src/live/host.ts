@@ -60,7 +60,7 @@ export class LiveHost {
 
   private open(): LiveSource {
     const s = this.source();
-    if (!s) throw new EditError('В редакторе не открыт мод');
+    if (!s) throw new EditError({ en: 'No mod is open in the editor', ru: 'В редакторе не открыт мод', zh: '编辑器中没有打开的 Mod' });
     return s;
   }
 
@@ -113,11 +113,11 @@ export class LiveHost {
 
   propose(title: string, ops: readonly EditOp[]): ProposeResult {
     const { ctx } = this.open();
-    if (ops.length === 0) throw new EditError('Пустой набор правок');
+    if (ops.length === 0) throw new EditError({ en: 'Empty set of edits', ru: 'Пустой набор правок', zh: '修改集为空' });
     const before = ctx.history().undo.at(-1)?.id;
     const res = applyOps(ctx, ops, `ИИ: ${title}`);
     const cs = ctx.history().undo.at(-1);
-    if (!cs || cs.id === before) throw new EditError('Правки ничего не изменили');
+    if (!cs || cs.id === before) throw new EditError({ en: 'The edits changed nothing', ru: 'Правки ничего не изменили', zh: '这些修改没有改变任何内容' });
     const diffs = changesetDiff(ctx, cs);
     const hosted: HostedChangeset = {
       id: cs.id,
@@ -152,7 +152,7 @@ export class LiveHost {
 
   private find(id: number): HostedChangeset {
     const c = this.list.find((x) => x.id === id);
-    if (!c) throw new EditError(`Нет набора изменений ${id}`);
+    if (!c) throw new EditError({ en: `No change set ${id}`, ru: `Нет набора изменений ${id}`, zh: `没有修改集 ${id}` });
     return c;
   }
 }

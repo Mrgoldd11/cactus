@@ -86,19 +86,33 @@ export function applyModsCfgChange(names: readonly string[], change: ModsCfgChan
   }
 }
 
+/** Words of the load order changes in one interface language. */
+interface OrderWords {
+  on: (place: number) => string;
+  moved: (was: number, now: number) => string;
+  off: string;
+}
+
+const ORDER_WORDS: Record<string, OrderWords> = {
+  en: { on: (p) => `enabled, place ${p}`, moved: (a, b) => `place ${a} → ${b}`, off: 'disabled' },
+  ru: { on: (p) => `включён, место ${p}`, moved: (a, b) => `место ${a} → ${b}`, off: 'выключен' },
+  zh: { on: (p) => `已启用，位置 ${p}`, moved: (a, b) => `位置 ${a} → ${b}`, off: '已禁用' },
+};
+
 /** Строки «было → стало» для показа: место каждого мода, у которого оно поменялось. */
-export function describeOrderChange(before: readonly string[], after: readonly string[]): string[] {
+export function describeOrderChange(before: readonly string[], after: readonly string[], lang = 'en'): string[] {
+  const w = ORDER_WORDS[lang] ?? ORDER_WORDS.en!;
   const out: string[] = [];
   const low = (a: readonly string[]): string[] => a.map((n) => n.toLowerCase());
   const b = low(before);
   const a = low(after);
   after.forEach((n, i) => {
     const was = b.indexOf(n.toLowerCase());
-    if (was < 0) out.push(`+ ${n}: включён, место ${i + 1}`);
-    else if (was !== i) out.push(`  ${n}: место ${was + 1} → ${i + 1}`);
+    if (was < 0) out.push(`+ ${n}: ${w.on(i + 1)}`);
+    else if (was !== i) out.push(`  ${n}: ${w.moved(was + 1, i + 1)}`);
   });
   before.forEach((n) => {
-    if (!a.includes(n.toLowerCase())) out.push(`- ${n}: выключен`);
+    if (!a.includes(n.toLowerCase())) out.push(`- ${n}: ${w.off}`);
   });
   return out;
 }

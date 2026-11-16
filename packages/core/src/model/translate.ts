@@ -175,20 +175,28 @@ export interface TranslationExtras {
   nonText: { id: string; what: string }[];
 }
 
+/** Words of the translation check per interface language. */
+const EXTRAS_WORDS: Record<string, { deletes: string; created: string; object: (key: string) => string }> = {
+  en: { deletes: 'deletes the record', created: 'new record', object: (k) => `object ${k}` },
+  ru: { deletes: 'удаляет запись', created: 'новая запись', object: (k) => `объект ${k}` },
+  zh: { deletes: '删除该记录', created: '新记录', object: (k) => `对象 ${k}` },
+};
+
 /** Проверка мода-перевода: всё ли, что он задаёт, — тексты оригиналов `sources`. */
-export function translationExtras(ctx: ModContext, sources: readonly string[]): TranslationExtras {
+export function translationExtras(ctx: ModContext, sources: readonly string[], lang = 'en'): TranslationExtras {
+  const w = EXTRAS_WORDS[lang] ?? EXTRAS_WORDS.en!;
   const known = new Set<string>();
   for (const s of sources) for (const e of layerTexts(ctx.layers, s)) known.add(`${e.id}\n${e.field}`);
   const out: TranslationExtras = { orphans: [], nonText: [] };
   for (const delta of ctx.modRecords()) {
     const id = delta.stringId;
     if (isRemovalMarker(delta)) {
-      out.nonText.push({ id, what: 'удаляет запись' });
+      out.nonText.push({ id, what: w.deletes });
       continue;
     }
     const lower = ctx.lower(id);
     if (!lower) {
-      out.nonText.push({ id, what: 'новая запись' });
+      out.nonText.push({ id, what: w.created });
       continue;
     }
     const name = modText(ctx, id, NAME_FIELD);
@@ -202,7 +210,7 @@ export function translationExtras(ctx: ModContext, sources: readonly string[]): 
     const other: string[] = [];
     for (const dict of SCALAR_DICTS) if (dict !== 'strings' && scalarMap(delta, dict).size > 0) other.push(...scalarMap(delta, dict).keys());
     for (const [cat, list] of delta.refs) if (list.length > 0) other.push(cat);
-    for (const k of delta.instances.keys()) other.push(`объект ${k}`);
+    for (const k of delta.instances.keys()) other.push(w.object(k));
     if (other.length > 0) out.nonText.push({ id, what: other.join(', ') });
   }
   return out;
@@ -466,10 +474,30 @@ export function ensureTranslationDependency(ctx: ModContext, source: string): bo
   return true;
 }
 
+/** Words of the translation import report per interface language. */
+const REPORT_WORDS: Record<string, { head: (applied: number, same: number, empty: number, stale: number, unknown: number) => string; stale: (what: string, was: string, now: string) => string; unknown: string }> = {
+  en: {
+    head: (a, s, e, st, u) => `applied ${a}, unchanged ${s}, empty ${e}, original changed ${st}, not in the original ${u}`,
+    stale: (x, a, b) => `original changed ${x}: was ${a} → now ${b}`,
+    unknown: 'not in the original:',
+  },
+  ru: {
+    head: (a, s, e, st, u) => `применено ${a}, без изменений ${s}, пустых ${e}, оригинал изменился ${st}, нет в оригинале ${u}`,
+    stale: (x, a, b) => `изменился оригинал ${x}: было ${a} → стало ${b}`,
+    unknown: 'нет в оригинале:',
+  },
+  zh: {
+    head: (a, s, e, st, u) => `已应用 ${a}，未更改 ${s}，空 ${e}，原文已更改 ${st}，原文中不存在 ${u}`,
+    stale: (x, a, b) => `原文已更改 ${x}：原为 ${a} → 现为 ${b}`,
+    unknown: '原文中不存在：',
+  },
+};
+
 /** Отчёт загрузки текстом. */
-export function formatApplyReport(r: ApplyTranslationReport): string[] {
-  const lines = [`применено ${r.applied}, без изменений ${r.unchanged}, пустых ${r.empty}, оригинал изменился ${r.stale.length}, нет в оригинале ${r.unknown.length}`];
-  for (const s of r.stale.slice(0, 20)) lines.push(`  изменился оригинал ${s.id} ${s.field}: было ${JSON.stringify(s.was)} → стало ${JSON.stringify(s.now)}`);
-  for (const u of r.unknown.slice(0, 20)) lines.push(`  нет в оригинале: ${u.id} ${u.field}`);
+export function formatApplyReport(r: ApplyTranslationReport, lang = 'en'): string[] {
+  const w = REPORT_WORDS[lang] ?? REPORT_WORDS.en!;
+  const lines = [w.head(r.applied, r.unchanged, r.empty, r.stale.length, r.unknown.length)];
+  for (const s of r.stale.slice(0, 20)) lines.push(`  ${w.stale(`${s.id} ${s.field}`, JSON.stringify(s.was), JSON.stringify(s.now))}`);
+  for (const u of r.unknown.slice(0, 20)) lines.push(`  ${w.unknown} ${u.id} ${u.field}`);
   return lines;
 }

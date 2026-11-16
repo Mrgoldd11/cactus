@@ -71,10 +71,13 @@ export function refValueLabels(typeName: string, category: string): readonly str
   return BUILTIN_REF_VALUE_LABELS[`${typeName}.${category}`];
 }
 
+/** "Not in" of an unknown enum value, per interface language. */
+const NOT_IN: Record<string, string> = { en: 'not in', ru: 'нет в', zh: '不在' };
+
 /** `DR_ONCE_ONLY «один раз» (5)`; неизвестное значение — `5 (нет в DialogRepetitionEnum)`. */
-export function formatEnumValue(def: EnumDef, value: number): string {
+export function formatEnumValue(def: EnumDef, value: number, lang = 'en'): string {
   const v = enumValue(def, value);
-  if (!v) return `${value} (нет в ${def.name})`;
+  if (!v) return `${value} (${NOT_IN[lang] ?? NOT_IN.en!} ${def.name})`;
   return `${v.name}${v.label !== undefined ? ` «${v.label}»` : ''} (${value})`;
 }
 

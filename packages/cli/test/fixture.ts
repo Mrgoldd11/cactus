@@ -103,7 +103,8 @@ export function makeFixture(): Fixture {
     out: (l: string) => lines.push(...l.split('\n')),
     err: (l: string) => errors.push(l),
     cwd: game,
-    env: {},
+    // The existing expectations are the Russian output; the English default is tested separately.
+    env: { KEDIT_LANG: 'ru' } as Record<string, string | undefined>,
   };
   return { game, modPath, io };
 }

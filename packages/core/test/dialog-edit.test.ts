@@ -115,9 +115,9 @@ describe('правка диалогов', () => {
     expect(linkProblem(ctx, 'P2', 'L')).toBeUndefined();
     linkLine(ctx, 'P2', 'L');
     expect(targets(ctx, 'P2')).toEqual(['L']);
-    expect(linkProblem(ctx, 'P2', 'L')).toBe('эта связь уже есть');
-    expect(linkProblem(ctx, 'P2', 'P2')).toMatch(/сама на себя/);
-    expect(linkProblem(ctx, 'P2', 'C')).toMatch(/только на реплику/);
+    expect(linkProblem(ctx, 'P2', 'L')?.ru).toBe('эта связь уже есть');
+    expect(linkProblem(ctx, 'P2', 'P2')?.en).toMatch(/cannot lead to itself/);
+    expect(linkProblem(ctx, 'P2', 'C')?.ru).toMatch(/только на реплику/);
     expect(() => { linkLine(ctx, 'C', 'L'); }).toThrow();
     expect(lineParents(ctx, 'L').sort()).toEqual(['D', 'P1', 'P2']);
     unlinkLine(ctx, 'P1', 'L');

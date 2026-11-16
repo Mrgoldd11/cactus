@@ -32,6 +32,52 @@ export function listTypes(schema: GameSchema): TypeSummary[] {
 }
 
 /** The mark of a schema extension in schema listings: ` [extension NAME]`. */
+/** Words of the schema texts in one interface language. */
+interface SchemaWords {
+  fromData: string;
+  inferred: string;
+  fields: string;
+  owned: string;
+  condition: (field: string, dependsOn: string, op: string, values: string) => string;
+  builtIn: (name: string, users: string) => string;
+  shared: string;
+  values: string;
+}
+
+const SCHEMA_WORDS: Record<string, SchemaWords> = {
+  en: {
+    fromData: 'from data',
+    inferred: ' (inferred from data)',
+    fields: 'fields',
+    owned: 'owned by records:',
+    condition: (f, d, op, v) => `condition: ${f} is visible if ${d} ${op} ${v}`,
+    builtIn: (n, u) => `${n}: built into the game, no values in fcs_enums.def; used by ${u}`,
+    shared: ' (shared)',
+    values: 'values',
+  },
+  ru: {
+    fromData: 'из данных',
+    inferred: ' (выведен из данных)',
+    fields: 'полей',
+    owned: 'принадлежат записи:',
+    condition: (f, d, op, v) => `условие: ${f} видно, если ${d} ${op} ${v}`,
+    builtIn: (n, u) => `${n}: встроено в игру, значений в fcs_enums.def нет; используют ${u}`,
+    shared: ' (общий)',
+    values: 'значений',
+  },
+  zh: {
+    fromData: '来自数据',
+    inferred: '（由数据推断）',
+    fields: '字段',
+    owned: '所属记录：',
+    condition: (f, d, op, v) => `条件：当 ${d} ${op} ${v} 时显示 ${f}`,
+    builtIn: (n, u) => `${n}：游戏内置，fcs_enums.def 中没有取值；使用者 ${u}`,
+    shared: '（共享）',
+    values: '取值',
+  },
+};
+const schemaWords = (lang: string): SchemaWords => SCHEMA_WORDS[lang] ?? SCHEMA_WORDS.en!;
+
 function extensionMark(name: string): string {
   return ` [extension ${name}]`;
 }
@@ -53,7 +99,7 @@ function formatDefault(f: FieldDef): string {
  * A field added by a schema extension is flagged `extension NAME`, unless that extension is
  * `typeExtension`, the one that introduced the whole type.
  */
-export function formatFieldDef(f: FieldDef, typeExtension?: string): string {
+export function formatFieldDef(f: FieldDef, typeExtension?: string, lang = 'en'): string {
   let kind: string = f.kind;
   if (f.kind === 'enum' && f.enumName) kind = `enum ${f.enumName}`;
   else if (f.kind === 'reference') kind = `ref → ${f.targetType ?? '?'}${f.refDefaults ? ` (${f.refDefaults.join(', ')})` : ''}`;
@@ -63,7 +109,7 @@ export function formatFieldDef(f: FieldDef, typeExtension?: string): string {
     f.looped && 'looped',
     f.multiline && 'multiline',
     f.bitset && 'bitset',
-    f.inferred && 'из данных',
+    f.inferred && schemaWords(lang).fromData,
     f.extension !== undefined && f.extension !== typeExtension && `extension ${f.extension}`,
   ].filter(Boolean);
   const desc = f.description ? ` — ${f.description.replace(/\s*\n\s*/g, ' ')}` : '';
@@ -71,9 +117,10 @@ export function formatFieldDef(f: FieldDef, typeExtension?: string): string {
 }
 
 /** Описание типа: поля по группам (категориям fcs.def), затем условия видимости. */
-export function formatTypeSchema(type: TypeSchema): string[] {
+export function formatTypeSchema(type: TypeSchema, lang = 'en'): string[] {
+  const w = schemaWords(lang);
   const origin = type.extension !== undefined ? extensionMark(type.extension) : '';
-  const out = [`[${type.name}]${type.inferred ? ' (выведен из данных)' : ''} — полей ${type.fields.size}${origin}`];
+  const out = [`[${type.name}]${type.inferred ? w.inferred : ''} — ${w.fields} ${type.fields.size}${origin}`];
   const groups = new Map<string, FieldDef[]>();
   for (const f of type.fields.values()) {
     const g = f.category ?? '';
@@ -83,21 +130,22 @@ export function formatTypeSchema(type: TypeSchema): string[] {
   }
   for (const [g, list] of groups) {
     if (g) out.push(`${g}:`);
-    for (const f of list) out.push(`  ${formatFieldDef(f, type.extension)}`);
+    for (const f of list) out.push(`  ${formatFieldDef(f, type.extension, lang)}`);
   }
-  if (type.owned.length) out.push(`принадлежат записи: ${type.owned.join(', ')}`);
-  for (const c of type.conditions) out.push(`условие: ${c.field} видно, если ${c.dependsOn} ${c.negate ? '≠' : '='} ${c.values.join(' | ')}`);
+  if (type.owned.length) out.push(`${w.owned} ${type.owned.join(', ')}`);
+  for (const c of type.conditions) out.push(w.condition(c.field, c.dependsOn, c.negate ? '≠' : '=', c.values.join(' | ')));
   return out;
 }
 
 /** Значения перечисления: `NAME = value — описание`. */
-export function formatEnum(schema: GameSchema, name: string): string[] | undefined {
+export function formatEnum(schema: GameSchema, name: string, lang = 'en'): string[] | undefined {
+  const w = schemaWords(lang);
   const e = schema.enums.get(name);
   if (!e) {
     const users = schema.externalEnums.get(name);
-    return users ? [`${name}: встроено в игру, значений в fcs_enums.def нет; используют ${users.join(', ')}`] : undefined;
+    return users ? [w.builtIn(name, users.join(', '))] : undefined;
   }
-  const out = [`${e.name}${e.shared ? ' (общий)' : ''} — значений ${e.values.length}${e.extension !== undefined ? extensionMark(e.extension) : ''}`];
+  const out = [`${e.name}${e.shared ? w.shared : ''} — ${w.values} ${e.values.length}${e.extension !== undefined ? extensionMark(e.extension) : ''}`];
   let group: string | undefined;
   for (const v of e.values) {
     if (v.group !== undefined && v.group !== group) {
