@@ -282,6 +282,7 @@ function SidLink({ sid, go, empty }: { sid: string | undefined; go: (sid: string
 
 function ObjectCard({ o, s, onFocus, onRemove, onHeight, edited }: { o: WorldObject; s: WorldStrings; onFocus: () => void; onRemove: (() => void) | undefined; onHeight: ((y: number) => void) | undefined; edited: boolean }): ReactNode {
   const { project, go, open } = useWorkbench();
+  const lang = useLang();
   const link = useGameLink();
   const b: BuildingPlacement | undefined = o.b;
   // Only buildings you can walk into: the record has interior parts or the instance names a layout.
@@ -289,7 +290,7 @@ function ObjectCard({ o, s, onFocus, onRemove, onHeight, edited }: { o: WorldObj
   const rows: [string, ReactNode][] = [
     [s.record, <SidLink sid={o.p.target} go={go} empty={s.empty} />],
     [s.name, b?.name ?? <span className="muted">{s.empty}</span>],
-    [s.where, <span className="mono" data-testid="world-card-pos">{formatPosition([o.pos.x, o.pos.y, o.pos.z], o.p.zone)}</span>],
+    [s.where, <span className="mono" data-testid="world-card-pos">{formatPosition([o.pos.x, o.pos.y, o.pos.z], o.p.zone, lang)}</span>],
     ...(onHeight ? [[s.height, <span title={s.heightTip}><NumberField testId="world-height" value={Math.round(o.p.position[1] * 10) / 10} onCommit={onHeight} /></span>] as [string, ReactNode]] : []),
     [s.town, <SidLink sid={b?.town} go={go} empty={s.empty} />],
     [s.faction, <SidLink sid={b?.faction} go={go} empty={s.empty} />],

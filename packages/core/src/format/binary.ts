@@ -1,14 +1,29 @@
 /** Low-level little-endian reading/writing. */
 
-export class FormatError extends Error {
+import { mapUi, type UiText, UiTextError } from '../ui-text.ts';
+
+const OFFSET: UiText = { en: 'offset', ru: 'смещение', zh: '偏移' };
+
+/** What is being read: a technical name (`int`, `vec3`) is the same in every language. */
+export type ReadWhat = string | UiText;
+
+function what(w: ReadWhat): UiText {
+  return typeof w === 'string' ? { en: w } : w;
+}
+
+/** Corrupt or unexpected file; the text ends with the byte offset in every language. */
+export class FormatError extends UiTextError {
   readonly offset: number;
 
-  constructor(message: string, offset: number) {
-    super(`${message} (смещение ${offset})`);
+  constructor(message: string | UiText, offset: number) {
+    super(mapUi([what(message), OFFSET], ([m, o]) => `${m} (${o} ${offset})`));
     this.name = 'FormatError';
     this.offset = offset;
   }
 }
+
+const STRING: UiText = { en: 'a string', ru: 'строки', zh: '字符串' };
+const BLOCK: UiText = { en: 'a block', ru: 'блока', zh: '数据块' };
 
 export class ByteReader {
   readonly bytes: Uint8Array;
@@ -30,9 +45,18 @@ export class ByteReader {
     return this.bytes.length - this.pos;
   }
 
-  private need(n: number, what: string): void {
+  private need(n: number, w: ReadWhat): void {
     if (this.pos + n > this.bytes.length) {
-      throw new FormatError(`Файл обрывается: нужно ${n} байт для ${what}, осталось ${this.remaining}`, this.pos);
+      const left = this.remaining;
+      const t = what(w);
+      throw new FormatError(
+        {
+          en: `File ends early: ${n} bytes needed for ${t.en}, ${left} left`,
+          ru: `Файл обрывается: нужно ${n} байт для ${t.ru ?? t.en}, осталось ${left}`,
+          zh: `文件提前结束：读取${t.zh ?? t.en}需要 ${n} 字节，只剩 ${left}`,
+        },
+        this.pos,
+      );
     }
   }
 
@@ -68,25 +92,33 @@ export class ByteReader {
   str(): Uint8Array {
     const start = this.pos;
     const n = this.i32();
-    if (n < 0) throw new FormatError(`Отрицательная длина строки ${n}`, start);
-    this.need(n, 'строки');
+    if (n < 0) throw new FormatError({ en: `Negative string length ${n}`, ru: `Отрицательная длина строки ${n}`, zh: `字符串长度为负：${n}` }, start);
+    this.need(n, STRING);
     const v = this.bytes.slice(this.pos, this.pos + n);
     this.pos += n;
     return v;
   }
 
   /** Element count: int32 >= 0 and no more than could fit into the rest of the file. */
-  count(minItemSize: number, what: string): number {
+  count(minItemSize: number, w: ReadWhat): number {
     const start = this.pos;
     const n = this.i32();
     if (n < 0 || n * minItemSize > this.remaining) {
-      throw new FormatError(`Неправдоподобное число элементов (${what}): ${n}`, start);
+      const t = what(w);
+      throw new FormatError(
+        {
+          en: `Implausible element count (${t.en}): ${n}`,
+          ru: `Неправдоподобное число элементов (${t.ru ?? t.en}): ${n}`,
+          zh: `元素数量不合理（${t.zh ?? t.en}）：${n}`,
+        },
+        start,
+      );
     }
     return n;
   }
 
   take(n: number): Uint8Array {
-    this.need(n, 'блока');
+    this.need(n, BLOCK);
     const v = this.bytes.slice(this.pos, this.pos + n);
     this.pos += n;
     return v;

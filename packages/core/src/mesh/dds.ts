@@ -6,6 +6,8 @@
  * A smaller level (mip) can be taken if present: `maxSize` is the largest side.
  */
 
+import { type UiText, UiTextError } from '../ui-text.ts';
+
 export interface DdsImage {
   width: number;
   height: number;
@@ -17,8 +19,8 @@ export interface DdsImage {
   level: number;
 }
 
-export class DdsFormatError extends Error {
-  constructor(message: string) {
+export class DdsFormatError extends UiTextError {
+  constructor(message: string | UiText) {
     super(message);
     this.name = 'DdsFormatError';
   }
@@ -41,9 +43,9 @@ interface Header {
 }
 
 function readHeader(bytes: Uint8Array): Header {
-  if (bytes.length < 128) throw new DdsFormatError('файл короче заголовка DDS');
+  if (bytes.length < 128) throw new DdsFormatError({ en: 'file is shorter than the DDS header', ru: 'файл короче заголовка DDS', zh: '文件比 DDS 文件头还短' });
   const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (v.getUint32(0, true) !== 0x20534444) throw new DdsFormatError('это не DDS');
+  if (v.getUint32(0, true) !== 0x20534444) throw new DdsFormatError({ en: 'this is not a DDS file', ru: 'это не DDS', zh: '这不是 DDS 文件' });
   const height = v.getUint32(12, true);
   const width = v.getUint32(16, true);
   const mipCount = Math.max(1, v.getUint32(28, true));
@@ -57,16 +59,16 @@ function readHeader(bytes: Uint8Array): Header {
       // 71 BC1, 74 BC2, 77 BC3 (UNORM; +1 — SRGB)
       const map: Record<number, string> = { 71: 'DXT1', 72: 'DXT1', 74: 'DXT3', 75: 'DXT3', 77: 'DXT5', 78: 'DXT5' };
       const f = map[dxgi];
-      if (!f) throw new DdsFormatError(`формат DXGI ${dxgi} не поддерживается`);
+      if (!f) throw new DdsFormatError({ en: `DXGI format ${dxgi} is not supported`, ru: `формат DXGI ${dxgi} не поддерживается`, zh: `不支持 DXGI 格式 ${dxgi}` });
       return { width, height, mipCount, format: f, blockBytes: f === 'DXT1' ? 8 : 16, compressed: true, dataStart };
     }
     if (four === 'DXT1') return { width, height, mipCount, format: four, blockBytes: 8, compressed: true, dataStart };
     if (four === 'DXT3' || four === 'DXT5') return { width, height, mipCount, format: four, blockBytes: 16, compressed: true, dataStart };
-    throw new DdsFormatError(`сжатие ${four} не поддерживается`);
+    throw new DdsFormatError({ en: `compression ${four} is not supported`, ru: `сжатие ${four} не поддерживается`, zh: `不支持压缩格式 ${four}` });
   }
   if (pfFlags & DDPF_RGB) {
     const bits = v.getUint32(88, true);
-    if (bits !== 32 && bits !== 24) throw new DdsFormatError(`несжатый DDS ${bits} бит не поддерживается`);
+    if (bits !== 32 && bits !== 24) throw new DdsFormatError({ en: `uncompressed ${bits}-bit DDS is not supported`, ru: `несжатый DDS ${bits} бит не поддерживается`, zh: `不支持 ${bits} 位未压缩 DDS` });
     const masks = {
       r: v.getUint32(92, true),
       g: v.getUint32(96, true),
@@ -76,7 +78,7 @@ function readHeader(bytes: Uint8Array): Header {
     };
     return { width, height, mipCount, format: bits === 32 ? 'RGBA32' : 'RGB24', blockBytes: bits / 8, compressed: false, masks, dataStart };
   }
-  throw new DdsFormatError('неизвестный формат пикселей DDS');
+  throw new DdsFormatError({ en: 'unknown DDS pixel format', ru: 'неизвестный формат пикселей DDS', zh: '未知的 DDS 像素格式' });
 }
 
 function levelSize(h: Header, w: number, hh: number): number {
@@ -104,7 +106,7 @@ export function decodeDds(bytes: Uint8Array, options: { maxSize?: number } = {})
     level++;
   }
   const size = levelSize(h, w, hh);
-  if (off + size > bytes.length) throw new DdsFormatError('файл DDS обрывается');
+  if (off + size > bytes.length) throw new DdsFormatError({ en: 'DDS file ends early', ru: 'файл DDS обрывается', zh: 'DDS 文件提前结束' });
   const data = bytes.subarray(off, off + size);
   const rgba = h.compressed ? decodeBlocks(data, w, hh, h.format) : decodeRaw(data, w, hh, h);
   return { width: w, height: hh, rgba, format: h.format, level };

@@ -53,12 +53,12 @@ export class StableIds {
 export function parseStableIds(text: string): StableIdData {
   const raw = JSON.parse(text) as { next?: unknown; ids?: unknown };
   if (typeof raw.next !== 'number' || typeof raw.ids !== 'object' || raw.ids === null) {
-    throw new Error('таблица id: нужен JSON { "next": число, "ids": { имя: номер } }');
+    throw new Error('id table: expected JSON { "next": number, "ids": { name: number } }');
   }
   const ids = raw.ids as Record<string, unknown>;
   for (const [k, v] of Object.entries(ids)) {
-    if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) throw new Error(`таблица id: у «${k}» не номер (${String(v)})`);
-    if (v >= raw.next) throw new Error(`таблица id: номер ${v} у «${k}» не меньше next=${raw.next}`);
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) throw new Error(`id table: “${k}” is not a number (${String(v)})`);
+    if (v >= raw.next) throw new Error(`id table: number ${v} of “${k}” is not less than next=${raw.next}`);
   }
   return { next: raw.next, ids: ids as Record<string, number> };
 }

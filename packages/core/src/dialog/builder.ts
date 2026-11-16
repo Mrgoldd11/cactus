@@ -100,19 +100,19 @@ export class DialogBuilder {
 
   private type(name: string): number {
     const t = itemTypeId(name);
-    if (t === undefined) throw new Error(`нет типа ${name}`);
+    if (t === undefined) throw new Error(`no type ${name}`);
     return t;
   }
 
   /** A record that must exist in the lower layers or the mod. */
   need(sid: string): string {
-    if (!this.ctx.get(sid)) throw new Error(`Нет записи ${sid}`);
+    if (!this.ctx.get(sid)) throw new Error(`No record ${sid}`);
     return sid;
   }
 
   /** New record with fields; the name is unique within the build. */
   create(typeName: string, name: string, f: CreateFields = {}): string {
-    if (this.used.has(name)) throw new Error(`Повтор имени записи: ${name}`);
+    if (this.used.has(name)) throw new Error(`Duplicate record name: ${name}`);
     this.used.add(name);
     const sid = this.ctx.createRecord(this.type(typeName), name, this.ids ? { stringId: this.ids.id(name) } : {});
     this.ctx.editRecord(sid, (d) => {

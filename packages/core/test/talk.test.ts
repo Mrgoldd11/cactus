@@ -232,7 +232,7 @@ describe('dialogue builder', () => {
     expect([cond.ints.get('condition name'), cond.ints.get('who'), h.refs.get('conditions')![0]!.v0]).toEqual([7, 1, 0]);
     expect(ctx.get(ctx.get(bye)!.refs.get('effects')![0]!.target)!.ints.get('action name')).toBe(1);
     expect(ctx.get(d)!.refs.get('my faction')?.map((r) => r.target)).toEqual(['F']);
-    expect(() => bld.line('пока', 0, [])).toThrow(/Повтор имени/);
+    expect(() => bld.line('пока', 0, [])).toThrow(/Duplicate record name/);
 
     bld.attachToCharacter('C', d);
     bld.attachToCharacter('C', d);

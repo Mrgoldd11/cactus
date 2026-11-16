@@ -180,7 +180,7 @@ describe('schema assembly', () => {
     expect(findField(t, 'priority7')).toBeUndefined();
     expect(s.types.get('ANIMAL_CHARACTER')!.translate).toHaveLength(1);
     const messages = s.warnings.map((w) => w.message);
-    expect(messages.some((m) => m.includes('kind: повтор поля'))).toBe(true);
+    expect(messages.some((m) => m.includes('kind: duplicate field'))).toBe(true);
     expect(messages.some((m) => m.includes('nofield'))).toBe(true);
     expect(s.externalEnums.size).toBe(0);
   });

@@ -74,7 +74,7 @@ export class ParsedFileCache {
       this.hits++;
       return hit;
     }
-    if (bytes === undefined || bytes.length === 0) throw new CacheMissError(`Нет в кэше: ${key}`);
+    if (bytes === undefined || bytes.length === 0) throw new CacheMissError(`Not in the cache: ${key}`);
     this.misses++;
     const file = readDataFile(bytes);
     this.put(key, file);
@@ -85,7 +85,7 @@ export class ParsedFileCache {
   async takeSliced(key: string, bytes: Uint8Array | undefined, pause: () => Promise<void>): Promise<DataFile> {
     const hit = this.get(key);
     if (hit) return hit;
-    if (bytes === undefined || bytes.length === 0) throw new CacheMissError(`Нет в кэше: ${key}`);
+    if (bytes === undefined || bytes.length === 0) throw new CacheMissError(`Not in the cache: ${key}`);
     const file = await readDataFileSliced(bytes, pause);
     // While parsing, someone else may have parsed the same file; take the one already stored.
     const again = this.get(key);

@@ -9,7 +9,7 @@
  * Nesting is the number of tabs. The filter is conditions separated by `;`: `field==value`,
  * `field=value` (the same) or `field!=value`.
  */
-import type { ParseWarning } from './fcs-def.ts';
+import { warnTexts, type ParseWarning } from './fcs-def.ts';
 
 export interface LayoutFilter {
   field: string;
@@ -59,7 +59,7 @@ export function parseFcsLayout(text: string): FcsLayout {
       const depth = /^\t*/.exec(raw)![0].length;
       const m = /^([^:]+):\s*([A-Z][A-Z0-9_]*)\s*(?:"([^"]*)")?\s*$/.exec(trimmed);
       if (!m) {
-        warnings.push({ line: lineNo, message: 'строка не разобрана', text: raw });
+        warnings.push({ line: lineNo, ...warnTexts('line not parsed', 'строка не разобрана', '无法解析的行'), text: raw });
         return;
       }
       const node: LayoutNode = {
@@ -70,7 +70,7 @@ export function parseFcsLayout(text: string): FcsLayout {
         line: lineNo,
       };
       if (depth > stack.length) {
-        warnings.push({ line: lineNo, message: 'слишком глубокий отступ', text: raw });
+        warnings.push({ line: lineNo, ...warnTexts('indent too deep', 'слишком глубокий отступ', '缩进过深'), text: raw });
       }
       stack.length = Math.min(depth, stack.length);
       const parent = stack.at(-1);

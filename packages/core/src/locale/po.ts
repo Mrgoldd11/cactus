@@ -131,7 +131,7 @@ export function parsePo(text: string): PoFile {
       if (line.startsWith('"')) {
         const m = /^"(.*)"$/.exec(line);
         if (!m || !target) {
-          warn('строка-продолжение не к месту');
+          warn('continuation line out of place');
           return;
         }
         target.set(unescapePoString(m[1]!));
@@ -140,7 +140,7 @@ export function parsePo(text: string): PoFile {
 
       const m = /^(msgctxt|msgid_plural|msgid|msgstr(?:\[(\d+)\])?)\s+"(.*)"$/.exec(line);
       if (!m) {
-        warn('строка не разобрана');
+        warn('line not parsed');
         return;
       }
       const keyword = m[1]!;

@@ -7,6 +7,8 @@ import { existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileS
 import { basename, dirname, join } from 'node:path';
 import { readDataFile } from '../format/read.ts';
 import { FileType } from '../format/types.ts';
+import { errorMessage } from '../ui-text.ts';
+
 import type { ModContext } from '../model/context.ts';
 import {
   MERGE_STORE_SUFFIX,
@@ -60,10 +62,20 @@ export function readMergeSource(path: string): MergeSource {
   try {
     file = readDataFile(readFileSync(path));
   } catch (e) {
-    throw new MergeError(`Не удалось прочитать мод «${basename(path)}»: ${e instanceof Error ? e.message : String(e)}`);
+    const name = basename(path);
+    throw new MergeError({
+      en: `Could not read the mod “${name}”: ${errorMessage(e, 'en')}`,
+      ru: `Не удалось прочитать мод «${name}»: ${errorMessage(e, 'ru')}`,
+      zh: `无法读取模组“${name}”：${errorMessage(e, 'zh')}`,
+    });
   }
   if (file.fileType !== FileType.Mod && file.fileType !== FileType.MergeMod) {
-    throw new MergeError(`«${basename(path)}» — не мод (.mod / .base): слияние берёт записи только из них.`);
+    const name = basename(path);
+    throw new MergeError({
+      en: `“${name}” is not a mod (.mod / .base): merge takes records only from those.`,
+      ru: `«${name}» — не мод (.mod / .base): слияние берёт записи только из них.`,
+      zh: `“${name}”不是模组（.mod / .base）：合并只从这类文件中读取记录。`,
+    });
   }
   return { name: basename(path), file };
 }

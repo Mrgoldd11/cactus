@@ -10,6 +10,8 @@
  * - placed objects (instances) are replaced by key.
  */
 import { bytesEqual } from '../text.ts';
+import { UiTextError } from '../ui-text.ts';
+
 import { emptyRecord, type GameRecord, type Instance, type Reference, type Vec3, type Vec4 } from '../format/types.ts';
 
 /** v0/v1/v2 value of a "deleted" reference. */
@@ -145,7 +147,7 @@ export function applyLayer(base: GameRecord | undefined, layer: GameRecord): Gam
   return rec;
 }
 
-export class LayerDiffError extends Error {
+export class LayerDiffError extends UiTextError {
   override name = 'LayerDiffError';
 }
 
@@ -163,7 +165,11 @@ export function diffRecord(lower: GameRecord, desired: GameRecord, previous?: Ga
     const lo = scalarMap(lower, dict);
     const want = scalarMap(desired, dict);
     for (const k of lo.keys()) {
-      if (!want.has(k)) throw new LayerDiffError(`Поле ${dict}:${k} записи ${desired.stringId} есть в нижних слоях, его нельзя убрать`);
+      if (!want.has(k)) throw new LayerDiffError({
+          en: `Field ${dict}:${k} of record ${desired.stringId} is in the lower layers and cannot be removed`,
+          ru: `Поле ${dict}:${k} записи ${desired.stringId} есть в нижних слоях, его нельзя убрать`,
+          zh: `记录 ${desired.stringId} 的字段 ${dict}:${k} 在下层中存在，无法删除`,
+        });
     }
     const keys = orderKeys(previous ? scalarMap(previous, dict).keys() : [], want.keys());
     const into = scalarMap(out, dict);
@@ -184,7 +190,11 @@ export function diffRecord(lower: GameRecord, desired: GameRecord, previous?: Ga
     changed = true;
   }
   for (const k of lower.instances.keys()) {
-    if (!desired.instances.has(k)) throw new LayerDiffError(`Объект ${k} записи ${desired.stringId} есть в нижних слоях, его нельзя убрать`);
+    if (!desired.instances.has(k)) throw new LayerDiffError({
+        en: `Object ${k} of record ${desired.stringId} is in the lower layers and cannot be removed`,
+        ru: `Объект ${k} записи ${desired.stringId} есть в нижних слоях, его нельзя убрать`,
+        zh: `记录 ${desired.stringId} 的对象 ${k} 在下层中存在，无法删除`,
+      });
   }
   for (const k of orderKeys(previous?.instances.keys() ?? [], desired.instances.keys())) {
     const v = desired.instances.get(k);

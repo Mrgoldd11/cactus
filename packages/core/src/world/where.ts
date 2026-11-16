@@ -776,7 +776,7 @@ export function formatWhere(res: WhereResult, options: FormatWhereOptions = {}):
       const via = p.path.length ? `  ${formatWherePath(p.path)}` : '';
       for (const pos of p.positions.slice(0, 4))
         lines.push(
-          `  ⌖ ${w.kinds[p.kind]} ${p.kind === 'building' ? `«${pos.label ?? p.name}»` : displayName(p)}  ${formatPosition(pos.position, pos.zone)}${pos.town ? `, ${displayName(pos.town)}` : ''}${via}`,
+          `  ⌖ ${w.kinds[p.kind]} ${p.kind === 'building' ? `«${pos.label ?? p.name}»` : displayName(p)}  ${formatPosition(pos.position, pos.zone, lang)}${pos.town ? `, ${displayName(pos.town)}` : ''}${via}`,
         );
     }
     if (located.length > maxPlaces) lines.push(`  ${w.morePlaces(located.length - maxPlaces)}`);
@@ -790,7 +790,7 @@ export function formatWhere(res: WhereResult, options: FormatWhereOptions = {}):
         const via = c.via!;
         const edge = lang === 'ru' ? via.ru : lang === 'en' ? via.en : (via.zh ?? via.en);
         lines.push(`${pad}← ${c.type} ${label(c)}  ${via.category} — ${edge}${c.repeat ? w.seeAbove : ''}`);
-        for (const t of c.towns ?? []) lines.push(`${pad}    ⌖ ${formatPosition(t.position, t.zones[0])}`);
+        for (const t of c.towns ?? []) lines.push(`${pad}    ⌖ ${formatPosition(t.position, t.zones[0], lang)}`);
         walk(c, depth + 1);
       }
       if (n.hidden) lines.push(`${'  '.repeat(depth + 1)}${w.moreHidden(n.hidden)}`);

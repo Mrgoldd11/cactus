@@ -1,3 +1,4 @@
+import { UiTextError } from '../ui-text.ts';
 import { encodeText } from '../text.ts';
 import { ByteWriter } from './binary.ts';
 import { FileType, type DataFile, type GameRecord, type ModHeader } from './types.ts';
@@ -31,7 +32,7 @@ class DataFileWriter {
     const { file, w } = this;
     w.i32(file.fileType);
     if (file.fileType === FileType.Mod || file.fileType === FileType.MergeMod) {
-      if (!file.header) throw new Error(`Для файла типа ${file.fileType} нужен заголовок`);
+      if (!file.header) throw new UiTextError({ en: `A file of type ${file.fileType} needs a header`, ru: `Для файла типа ${file.fileType} нужен заголовок`, zh: `类型 ${file.fileType} 的文件需要文件头` });
       this.header(file.header, file.fileType);
     }
     w.i32(file.lastId);
@@ -59,7 +60,7 @@ class DataFileWriter {
       const m = h.merge;
       w.u32(m.saveCount);
       w.u32(m.lastMerge);
-      if (m.mergeEntries.length > 255) throw new RangeError('Больше 255 записей слияния не помещается в формат');
+      if (m.mergeEntries.length > 255) throw new UiTextError({ en: 'The format cannot hold more than 255 merge entries', ru: 'Больше 255 записей слияния не помещается в формат', zh: '该格式最多只能容纳 255 条合并记录' });
       w.u8(m.mergeEntries.length);
       for (const e of m.mergeEntries) {
         this.id(e.key);
@@ -67,7 +68,7 @@ class DataFileWriter {
         w.u32(e.b);
       }
       if (m.deleteRequests) {
-        if (m.deleteRequests.length > 255) throw new RangeError('Больше 255 запросов удаления не помещается в формат');
+        if (m.deleteRequests.length > 255) throw new UiTextError({ en: 'The format cannot hold more than 255 delete requests', ru: 'Больше 255 запросов удаления не помещается в формат', zh: '该格式最多只能容纳 255 条删除请求' });
         w.u8(m.deleteRequests.length);
         for (const d of m.deleteRequests) {
           this.id(d.key);

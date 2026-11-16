@@ -97,7 +97,7 @@ export class GameBridge {
       s.on('close', () => {
         clearTimeout(timer);
         if (this.socket === s) this.socket = undefined;
-        this.failAll(new GameBridgeError('no_connection', 'связь прервана'));
+        this.failAll(new GameBridgeError('no_connection', 'connection lost'));
       });
     }).finally(() => {
       this.connecting = undefined;

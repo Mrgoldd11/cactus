@@ -18,6 +18,8 @@
  * `multiline`, `bitset`.
  */
 
+import type { UiText } from '../ui-text.ts';
+
 export type FieldKind =
   | 'bool'
   | 'int'
@@ -97,8 +99,21 @@ export interface FcsSection {
 
 export interface ParseWarning {
   line: number;
+  /** English text (MCP, logs). */
   message: string;
+  /** The text in every interface language (the window). */
+  texts: UiText;
   text: string;
+}
+
+/** Warning text in every interface language; `message` of the warning is its English one. */
+export function warnText(en: string, ru: string, zh: string): UiText {
+  return { en, ru, zh };
+}
+
+/** `message` and `texts` of a warning at once. */
+export function warnTexts(en: string, ru: string, zh: string): { message: string; texts: UiText } {
+  return { message: en, texts: warnText(en, ru, zh) };
 }
 
 export interface FcsDef {
@@ -126,7 +141,7 @@ function parseNumberList(s: string): number[] {
 }
 
 /** Parse a field value (everything after the colon). Returns undefined if the value is not recognized. */
-function parseFieldValue(raw: string, name: string, line: number): FieldDef | string {
+function parseFieldValue(raw: string, name: string, line: number): FieldDef | UiText {
   let rest = raw.trim();
   const def: FieldDef = { name, kind: 'null', line };
 
@@ -135,7 +150,7 @@ function parseFieldValue(raw: string, name: string, line: number): FieldDef | st
   let quoted: string | undefined;
   if (rest.startsWith('"')) {
     const end = rest.indexOf('"', 1);
-    if (end < 0) return 'незакрытая кавычка в значении';
+    if (end < 0) return warnText('unclosed quote in the value', 'незакрытая кавычка в значении', '值中的引号未闭合');
     quoted = rest.slice(1, end);
     token = '';
     rest = rest.slice(end + 1);
@@ -167,7 +182,7 @@ function parseFieldValue(raw: string, name: string, line: number): FieldDef | st
   if (rest.length > 0) {
     const first = rest.indexOf('"');
     const last = rest.lastIndexOf('"');
-    if (first !== 0 || last <= first) return `не разобран хвост значения: ${rest}`;
+    if (first !== 0 || last <= first) return warnText(`could not parse the end of the value: ${rest}`, `не разобран хвост значения: ${rest}`, `无法解析值的结尾：${rest}`);
     def.description = unescapeDescription(rest.slice(first + 1, last));
   }
 
@@ -212,10 +227,10 @@ function parseFieldValue(raw: string, name: string, line: number): FieldDef | st
       if (groups.length === 1) def.refDefaults = groups[0]!;
     }
   } else {
-    return `неизвестное значение «${token}»`;
+    return warnText(`unknown value “${token}”`, `неизвестное значение «${token}»`, `未知的值“${token}”`);
   }
   if (def.kind !== 'reference' && def.kind !== 'instance' && groups.length > 0) {
-    return 'скобки у поля, которое не является ссылкой';
+    return warnText('brackets on a field that is not a reference', 'скобки у поля, которое не является ссылкой', '非引用字段带有括号');
   }
   return def;
 }
@@ -233,8 +248,8 @@ export function parseFcsDef(text: string): FcsDef {
     const lineNo = index + 1;
     const line = rawLine.trimEnd();
     const trimmed = line.trim();
-    const warn = (message: string): void => {
-      warnings.push({ line: lineNo, message, text: line });
+    const warn = (texts: UiText): void => {
+      warnings.push({ line: lineNo, message: texts.en, texts, text: line });
     };
     if (trimmed === '' || trimmed.startsWith('//')) return;
 
@@ -250,7 +265,7 @@ export function parseFcsDef(text: string): FcsDef {
       return;
     }
     if (!current) {
-      warn('строка до первой секции');
+      warn(warnText('line before the first section', 'строка до первой секции', '第一个分节之前的行'));
       return;
     }
 
@@ -270,7 +285,7 @@ export function parseFcsDef(text: string): FcsDef {
 
     const colon = line.indexOf(':');
     if (colon < 0) {
-      warn('строка без двоеточия');
+      warn(warnText('line without a colon', 'строка без двоеточия', '没有冒号的行'));
       return;
     }
     const name = line.slice(0, colon).trim();
@@ -288,7 +303,7 @@ export function parseFcsDef(text: string): FcsDef {
     if (name === 'TRANSLATE') {
       const m = /^(\w+)(?:\s+if\s+(.+))?$/.exec(value);
       if (!m) {
-        warn('не разобрано правило TRANSLATE');
+        warn(warnText('could not parse the TRANSLATE rule', 'не разобрано правило TRANSLATE', '无法解析 TRANSLATE 规则'));
         return;
       }
       const rule: TranslateRule = { mode: m[1]!, line: lineNo };
@@ -298,7 +313,7 @@ export function parseFcsDef(text: string): FcsDef {
     }
 
     const parsed = parseFieldValue(value, name, lineNo);
-    if (typeof parsed === 'string') {
+    if ('en' in parsed) {
       warn(parsed);
       return;
     }

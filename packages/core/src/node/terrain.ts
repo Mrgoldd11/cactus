@@ -5,7 +5,13 @@
  */
 import { open, type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
+import { UiTextError } from '../ui-text.ts';
 import { HEIGHTMAP_SIZE, HEIGHTMAP_STEP, TILE_SAMPLES, WORLD_HALF, heightOfRaw, tileBounds } from '../world/terrain.ts';
+
+/** Error reading the game heightmap, in every interface language. */
+function heightmapError(en: string, ru: string, zh: string): UiTextError {
+  return new UiTextError({ en: `Heightmap: ${en}`, ru: `Карта высот: ${ru}`, zh: `高度图：${zh}` });
+}
 
 export function heightmapPath(kenshiDir: string): string {
   return join(kenshiDir, 'data', 'newland', 'land', 'fullmap.tif');
@@ -23,7 +29,7 @@ const TYPE_SIZE: Readonly<Record<number, number>> = { 1: 1, 2: 1, 3: 2, 4: 4, 5:
 /** TIFF header parsing: only what is needed, and only the variant the game ships. */
 export function parseHeightmapHeader(head: Uint8Array): HeightmapLayout {
   const v = new DataView(head.buffer, head.byteOffset, head.byteLength);
-  if (v.getUint16(0, true) !== 0x4949 || v.getUint16(2, true) !== 42) throw new Error('Карта высот: не TIFF (little-endian)');
+  if (v.getUint16(0, true) !== 0x4949 || v.getUint16(2, true) !== 42) throw heightmapError('not a TIFF (little-endian)', 'не TIFF (little-endian)', '不是 TIFF（little-endian）');
   const ifd = v.getUint32(4, true);
   const n = v.getUint16(ifd, true);
   const tags = new Map<number, { count: number; values: number[] }>();
@@ -46,21 +52,21 @@ export function parseHeightmapHeader(head: Uint8Array): HeightmapLayout {
   const one = (tag: number): number | undefined => tags.get(tag)?.values[0];
   const width = one(256);
   const height = one(257);
-  if (width === undefined || height === undefined) throw new Error('Карта высот: нет размеров');
-  if (one(258) !== 16) throw new Error('Карта высот: ожидалось 16 бит на точку');
-  if ((one(259) ?? 1) !== 1) throw new Error('Карта высот: сжатый TIFF не поддерживается');
-  if ((one(277) ?? 1) !== 1) throw new Error('Карта высот: ожидался один канал');
+  if (width === undefined || height === undefined) throw heightmapError('no dimensions', 'нет размеров', '没有尺寸');
+  if (one(258) !== 16) throw heightmapError('expected 16 bits per sample', 'ожидалось 16 бит на точку', '应为每点 16 位');
+  if ((one(259) ?? 1) !== 1) throw heightmapError('compressed TIFF is not supported', 'сжатый TIFF не поддерживается', '不支持压缩的 TIFF');
+  if ((one(277) ?? 1) !== 1) throw heightmapError('expected one channel', 'ожидался один канал', '应为单通道');
   const strips = tags.get(273);
   const rowsPerStrip = one(278) ?? height;
   const offset = strips?.values[0];
-  if (offset === undefined) throw new Error('Карта высот: нет смещения данных');
+  if (offset === undefined) throw heightmapError('no data offset', 'нет смещения данных', '没有数据偏移');
   // Several strips are allowed only if they are contiguous (then they form one solid block).
   if (strips && strips.count > 1) {
     const counts = tags.get(279)?.values ?? [];
-    if (strips.values.length !== strips.count || counts.length !== strips.count) throw new Error('Карта высот: полосы не прочитаны');
+    if (strips.values.length !== strips.count || counts.length !== strips.count) throw heightmapError('strips not read', 'полосы не прочитаны', '未能读取条带');
     for (let k = 1; k < strips.count; k++)
-      if (strips.values[k] !== strips.values[k - 1]! + counts[k - 1]!) throw new Error('Карта высот: полосы не подряд');
-  } else if (rowsPerStrip < height) throw new Error('Карта высот: неполная полоса');
+      if (strips.values[k] !== strips.values[k - 1]! + counts[k - 1]!) throw heightmapError('strips are not contiguous', 'полосы не подряд', '条带不连续');
+  } else if (rowsPerStrip < height) throw heightmapError('incomplete strip', 'неполная полоса', '条带不完整');
   return { width, height, offset };
 }
 
@@ -80,7 +86,11 @@ export class Heightmap {
       const { bytesRead } = await fh.read(head, 0, head.length, 0);
       const layout = parseHeightmapHeader(head.subarray(0, bytesRead));
       if (layout.width !== HEIGHTMAP_SIZE || layout.height !== HEIGHTMAP_SIZE)
-        throw new Error(`Карта высот ${layout.width}×${layout.height}, ожидалось ${HEIGHTMAP_SIZE}×${HEIGHTMAP_SIZE}`);
+        {
+        const got = `${layout.width}×${layout.height}`;
+        const want = `${HEIGHTMAP_SIZE}×${HEIGHTMAP_SIZE}`;
+        throw heightmapError(`size ${got}, expected ${want}`, `размер ${got}, ожидалось ${want}`, `尺寸 ${got}，应为 ${want}`);
+      }
       return new Heightmap(fh, layout);
     } catch (e) {
       await fh.close();

@@ -4,6 +4,8 @@
  * as the original bytes, and these functions convert them to text and back.
  */
 
+import { UiTextError } from './ui-text.ts';
+
 export type TextEncoding = 'utf-8' | 'cp1251' | 'latin1';
 
 const utf8Strict = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
@@ -77,6 +79,11 @@ export function detectEncoding(bytes: Uint8Array): 'utf-8' | 'cp1251' {
   return isValidUtf8(bytes) ? 'utf-8' : 'cp1251';
 }
 
+/** A character that the encoding cannot hold. */
+export class TextEncodeError extends UiTextError {
+  override name = 'TextEncodeError';
+}
+
 /** Text → bytes. For cp1251 and latin1 an unmappable character is an error (no silent data loss). */
 export function encodeText(text: string, encoding: TextEncoding = 'utf-8'): Uint8Array {
   if (encoding === 'utf-8') return utf8Encoder.encode(text);
@@ -86,7 +93,12 @@ export function encodeText(text: string, encoding: TextEncoding = 'utf-8'): Uint
     const code = text.charCodeAt(i);
     const byte = code < 0x80 ? code : table ? table.get(code) : code <= 0xff ? code : undefined;
     if (byte === undefined) {
-      throw new RangeError(`Символ U+${code.toString(16).toUpperCase().padStart(4, '0')} нельзя записать в ${encoding}`);
+      const u = `U+${code.toString(16).toUpperCase().padStart(4, '0')}`;
+      throw new TextEncodeError({
+        en: `Character ${u} cannot be written in ${encoding}`,
+        ru: `Символ ${u} нельзя записать в ${encoding}`,
+        zh: `字符 ${u} 无法以 ${encoding} 写入`,
+      });
     }
     out[i] = byte;
   }

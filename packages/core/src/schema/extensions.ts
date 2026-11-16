@@ -16,7 +16,8 @@
  * are parsed again only when a patch changes their text.
  */
 import { compileDotnetRegex, type DotnetRegex } from './dotnet-regex.ts';
-import { parseFcsDef, type FcsDef } from './fcs-def.ts';
+import type { UiText } from '../ui-text.ts';
+import { parseFcsDef, warnText, warnTexts, type FcsDef } from './fcs-def.ts';
 import { parseFcsEnums, type FcsEnums } from './fcs-enums.ts';
 import { parseFcsLayout, type FcsLayout } from './fcs-layout.ts';
 import {
@@ -227,27 +228,50 @@ export function applyExtensionLayers(base: SchemaBase, layers: readonly Extensio
   const patches = new Map<string, CompiledPatch[]>();
   for (const layer of layers) {
     for (const file of layer.patches ?? []) {
-      const warn = (line: number, message: string, text = ''): void => {
-        pre.push({ source: file.path, extension: layer.name, line, message, text });
+      const warn = (line: number, texts: UiText, text = ''): void => {
+        pre.push({ source: file.path, extension: layer.name, line, message: texts.en, texts, text });
       };
       if (!PATCH_TARGETS.some((t) => t === file.target)) {
         const near = PATCH_TARGETS.find((t) => t.toLowerCase() === file.target.toLowerCase());
         warn(
           0,
           near !== undefined
-            ? `patch target "${file.target}" differs from "${near}" in letter case: FCS Extended compares names exactly and never applies this patch`
-            : `patch target "${file.target}" is not a schema file; Cactus does not use this patch`,
+            ? warnText(
+                `patch target "${file.target}" differs from "${near}" in letter case: FCS Extended compares names exactly and never applies this patch`,
+                `цель патча "${file.target}" отличается от "${near}" регистром букв: FCS Extended сравнивает имена точно и этот патч не применит`,
+                `补丁目标 "${file.target}" 与 "${near}" 的大小写不同：FCS Extended 精确比较名称，永远不会应用此补丁`,
+              )
+            : warnText(
+                `patch target "${file.target}" is not a schema file; Cactus does not use this patch`,
+                `цель патча "${file.target}" — не файл схемы; Cactus этот патч не использует`,
+                `补丁目标 "${file.target}" 不是架构文件；Cactus 不使用此补丁`,
+              ),
         );
         continue;
       }
       const parsed = parsePatchFile(file.text);
       if (parsed.ignoredFrom !== undefined) {
-        warn(parsed.ignoredFrom, 'lines after the first empty line are never read (FCS Extended stops at an empty line)');
+        warn(
+          parsed.ignoredFrom,
+          warnText(
+            'lines after the first empty line are never read (FCS Extended stops at an empty line)',
+            'строки после первой пустой строки не читаются (FCS Extended останавливается на пустой строке)',
+            '第一个空行之后的行不会被读取（FCS Extended 在空行处停止）',
+          ),
+        );
       }
       for (const rule of parsed.rules) {
         const compiled = compileDotnetRegex(rule.pattern);
         if (!compiled.ok) {
-          warn(rule.line, `the regular expression cannot be used in Cactus (${compiled.reason}); this patch is skipped`, rule.pattern);
+          warn(
+            rule.line,
+            warnText(
+              `the regular expression cannot be used in Cactus (${compiled.reason}); this patch is skipped`,
+              `регулярное выражение нельзя использовать в Cactus (${compiled.reason}); патч пропущен`,
+              `该正则表达式无法在 Cactus 中使用（${compiled.reason}）；已跳过此补丁`,
+            ),
+            rule.pattern,
+          );
           continue;
         }
         const list = patches.get(file.target) ?? [];
@@ -298,7 +322,11 @@ export function applyExtensionLayers(base: SchemaBase, layers: readonly Extensio
         source: p.file.path,
         extension: p.extension,
         line: p.rule.line,
-        message: `the patch matched nothing in ${p.file.target}`,
+        ...warnTexts(
+          `the patch matched nothing in ${p.file.target}`,
+          `патч ничего не нашёл в ${p.file.target}`,
+          `补丁在 ${p.file.target} 中没有匹配到任何内容`,
+        ),
         text: p.rule.pattern,
       });
     }

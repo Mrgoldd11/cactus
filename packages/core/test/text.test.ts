@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bytesEqual, decodeIdentifier, decodeText, detectEncoding, encodeText, firstDifference, isAscii, isValidUtf8 } from '../src/index.ts';
+import { TextEncodeError, bytesEqual, decodeIdentifier, decodeText, detectEncoding, encodeText, firstDifference, isAscii, isValidUtf8 } from '../src/index.ts';
 
 const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
 
@@ -25,7 +25,7 @@ describe('encodings', () => {
   it('cp1251 there and back, error on a character outside the encoding', () => {
     const text = 'Ёжик №5 «кавычки» — тире';
     expect(decodeText(encodeText(text, 'cp1251'), 'cp1251')).toBe(text);
-    expect(() => encodeText('日本', 'cp1251')).toThrow(RangeError);
+    expect(() => encodeText('日本', 'cp1251')).toThrow(TextEncodeError);
   });
 
   it('non-UTF-8 identifiers are read as latin1', () => {

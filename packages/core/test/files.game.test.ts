@@ -76,7 +76,7 @@ describe.skipIf(!game)(`игра: ${paths.kenshi}`, () => {
       expect(schema!.types.size).toBeGreaterThan(70);
       expect(schema!.enums.size).toBeGreaterThan(30);
       expect(schema!.layout.length).toBeGreaterThan(10);
-      expect(schema!.warnings.map((w) => `${w.source}: ${w.message}`)).toEqual(['fcs_enums.def: значения без запятой: «CARAVAN. MILITARY»']);
+      expect(schema!.warnings.map((w) => `${w.source}: ${w.message}`)).toEqual(['fcs_enums.def: values without a comma: “CARAVAN. MILITARY”']);
     });
 
     it('fcs.def describes all vanilla types except known ones; with fields from the data — all', () => {

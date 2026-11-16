@@ -9,7 +9,7 @@
  * ```
  * Values are counted as in C: from 0 or from the last `=N`, then +1.
  */
-import { unescapeDescription, type ParseWarning } from './fcs-def.ts';
+import { unescapeDescription, warnTexts, type ParseWarning } from './fcs-def.ts';
 
 export interface EnumValue {
   name: string;
@@ -73,18 +73,18 @@ export function parseFcsEnums(text: string, options: ParseEnumsOptions = {}): Fc
       // Typo in the game file: "CARAVAN. MILITARY" — a period instead of a comma.
       const parts = item.split(/\s*\.\s+|\s+/).filter((p) => p.length > 0);
       if (parts.length > 1) {
-        warnings.push({ line: lineNo, message: `значения без запятой: «${item}»`, text: raw });
+        warnings.push({ line: lineNo, ...warnTexts(`values without a comma: “${item}”`, `значения без запятой: «${item}»`, `值之间缺少逗号：“${item}”`), text: raw });
       }
       for (const part of parts) {
         const m = /^([A-Za-z_]\w*)\.?\s*(?:=\s*(-?\w+))?$/.exec(part);
         if (!m) {
-          warnings.push({ line: lineNo, message: `не разобрано значение «${part}»`, text: raw });
+          warnings.push({ line: lineNo, ...warnTexts(`could not parse the value “${part}”`, `не разобрано значение «${part}»`, `无法解析值“${part}”`), text: raw });
           continue;
         }
         if (m[2] !== undefined) {
           const v = Number(m[2]);
           if (Number.isNaN(v)) {
-            warnings.push({ line: lineNo, message: `нечисловое значение «${m[2]}»`, text: raw });
+            warnings.push({ line: lineNo, ...warnTexts(`non-numeric value “${m[2]}”`, `нечисловое значение «${m[2]}»`, `非数字值“${m[2]}”`), text: raw });
           } else next = v;
         }
         const ev: EnumValue = { name: m[1]!, value: next++ };
@@ -114,7 +114,7 @@ export function parseFcsEnums(text: string, options: ParseEnumsOptions = {}): Fc
       if (m) {
         current = { name: m[2]!, shared: m[1] !== undefined, values: [], line: lineNo };
         if (enums.has(current.name) && options.allowRepeats !== true) {
-          warnings.push({ line: lineNo, message: `повтор enum ${current.name}`, text: raw });
+          warnings.push({ line: lineNo, ...warnTexts(`duplicate enum ${current.name}`, `повтор enum ${current.name}`, `重复的 enum ${current.name}`), text: raw });
         }
         enums.set(current.name, current);
         blocks.push(current);
@@ -124,7 +124,7 @@ export function parseFcsEnums(text: string, options: ParseEnumsOptions = {}): Fc
       } else if (current && line.startsWith('{')) {
         // "{" on the line after "enum Name"
       } else {
-        warnings.push({ line: lineNo, message: 'строка вне enum', text: raw });
+        warnings.push({ line: lineNo, ...warnTexts('line outside an enum', 'строка вне enum', 'enum 之外的行'), text: raw });
         continue;
       }
     }
@@ -145,9 +145,9 @@ export function parseFcsEnums(text: string, options: ParseEnumsOptions = {}): Fc
     if (close >= 0) {
       open = false;
       const after = line.slice(close + 1).trim();
-      if (after !== '' && after !== ';') warnings.push({ line: lineNo, message: `текст после }: ${after}`, text: raw });
+      if (after !== '' && after !== ';') warnings.push({ line: lineNo, ...warnTexts(`text after }: ${after}`, `текст после }: ${after}`, `} 之后有文本：${after}`), text: raw });
     }
   }
-  if (open) warnings.push({ line: lines.length, message: 'enum не закрыт', text: '' });
+  if (open) warnings.push({ line: lines.length, ...warnTexts('enum is not closed', 'enum не закрыт', 'enum 未闭合'), text: '' });
   return { enums, blocks, warnings };
 }

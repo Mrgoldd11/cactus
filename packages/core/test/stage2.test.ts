@@ -210,7 +210,7 @@ describe('permanent ids', () => {
     expect(ids.orphans()).toEqual(['old']);
     expect(ids.data.next).toBe(103);
     expect(parseStableIds('{"next":5,"ids":{"a":1}}')).toEqual({ next: 5, ids: { a: 1 } });
-    expect(() => parseStableIds('{"next":1,"ids":{"a":1}}')).toThrow(/не меньше next/);
+    expect(() => parseStableIds('{"next":1,"ids":{"a":1}}')).toThrow(/not less than next/);
     expect(() => parseStableIds('[]')).toThrow();
   });
 });

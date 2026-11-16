@@ -11,6 +11,7 @@
  * The module has no disk access; reading is in `node/world.ts`.
  */
 import { decodeText } from '../text.ts';
+import { uiText, type UiText } from '../ui-text.ts';
 import { itemTypeName } from '../format/item-types.ts';
 import type { DataFile, GameRecord, Vec3, Vec4 } from '../format/types.ts';
 import { applyLayer } from '../model/record-ops.ts';
@@ -295,8 +296,10 @@ export class WorldIndex {
   }
 }
 
-/** Coordinates for humans: `x z` (y is height), with the zone if known. */
-export function formatPosition(position: Vec3, zone?: ZoneCoord): string {
+const ZONE_WORD: UiText = { en: 'zone', ru: 'зона', zh: '区域' };
+
+/** Coordinates for humans: `x z` (y is height), with the zone if known, in an interface language. */
+export function formatPosition(position: Vec3, zone?: ZoneCoord, lang = 'en'): string {
   const r = (n: number): string => String(Math.round(n));
-  return `${r(position[0])} ${r(position[2])}${zone ? ` (зона ${zone.x}.${zone.y})` : ''}`;
+  return `${r(position[0])} ${r(position[2])}${zone ? ` (${uiText(ZONE_WORD, lang)} ${zone.x}.${zone.y})` : ''}`;
 }

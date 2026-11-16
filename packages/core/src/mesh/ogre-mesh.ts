@@ -13,6 +13,8 @@
  * The module has no disk access and no three.js: bytes in, arrays out.
  */
 
+import { type UiText, UiTextError } from '../ui-text.ts';
+
 const M_HEADER = 0x1000;
 const M_MESH = 0x3000;
 const M_SUBMESH = 0x4000;
@@ -68,8 +70,8 @@ export interface OgreMesh {
   bounds: { min: [number, number, number]; max: [number, number, number] };
 }
 
-export class MeshFormatError extends Error {
-  constructor(message: string) {
+export class MeshFormatError extends UiTextError {
+  constructor(message: string | UiText) {
     super(message);
     this.name = 'MeshFormatError';
   }
@@ -109,7 +111,7 @@ class Reader {
   }
 
   need(n: number): void {
-    if (n > this.left) throw new MeshFormatError(`файл обрывается (нужно ${n} байт на ${this.pos}, осталось ${this.left})`);
+    if (n > this.left) throw new MeshFormatError({ en: `file ends early (${n} bytes needed at ${this.pos}, ${this.left} left)`, ru: `файл обрывается (нужно ${n} байт на ${this.pos}, осталось ${this.left})`, zh: `文件提前结束（在 ${this.pos} 处需要 ${n} 字节，只剩 ${this.left}）` });
   }
 
   u8(): number {
@@ -145,7 +147,7 @@ class Reader {
   /** String up to `\n` (this is how Ogre writes strings). */
   line(): string {
     const end = this.bytes.indexOf(10, this.pos);
-    if (end < 0) throw new MeshFormatError(`строка без конца на ${this.pos}`);
+    if (end < 0) throw new MeshFormatError({ en: `unterminated string at ${this.pos}`, ru: `строка без конца на ${this.pos}`, zh: `${this.pos} 处的字符串没有结尾` });
     let s = '';
     for (let i = this.pos; i < end; i++) s += String.fromCharCode(this.bytes[i]!);
     this.pos = end + 1;
@@ -189,7 +191,7 @@ function readGeometry(r: Reader): MeshGeometry {
       const bind = r.u16();
       const size = r.u16();
       const data = r.chunk();
-      if (data.id !== M_GEOMETRY_VERTEX_BUFFER_DATA) throw new MeshFormatError(`ждали данные вершин, а блок 0x${data.id.toString(16)}`);
+      if (data.id !== M_GEOMETRY_VERTEX_BUFFER_DATA) throw new MeshFormatError({ en: `expected vertex data, got block 0x${data.id.toString(16)}`, ru: `ждали данные вершин, а блок 0x${data.id.toString(16)}`, zh: `应为顶点数据，实际为数据块 0x${data.id.toString(16)}` });
       buffers.set(bind, { size, data: r.slice(size * vertexCount) });
     } else break;
   }
@@ -232,7 +234,7 @@ function decodeVertices(vertexCount: number, elements: readonly Element[], buffe
       geo.colors = out;
     }
   }
-  if (!havePos && vertexCount > 0) throw new MeshFormatError('у геометрии нет позиций вершин float3');
+  if (!havePos && vertexCount > 0) throw new MeshFormatError({ en: 'the geometry has no float3 vertex positions', ru: 'у геометрии нет позиций вершин float3', zh: '几何体没有 float3 顶点位置' });
   return geo;
 }
 
@@ -255,11 +257,11 @@ function readSubmesh(r: Reader, shared: MeshGeometry | undefined): MeshSubmesh {
   }
   let geometry: MeshGeometry;
   if (useShared) {
-    if (!shared) throw new MeshFormatError(`подмодель «${material}» берёт общую геометрию, а её нет`);
+    if (!shared) throw new MeshFormatError({ en: `submesh “${material}” uses shared geometry, but there is none`, ru: `подмодель «${material}» берёт общую геометрию, а её нет`, zh: `子网格“${material}”使用共享几何体，但它不存在` });
     geometry = shared;
   } else {
     const c = r.chunk();
-    if (c.id !== M_GEOMETRY) throw new MeshFormatError(`у подмодели «${material}» нет геометрии (блок 0x${c.id.toString(16)})`);
+    if (c.id !== M_GEOMETRY) throw new MeshFormatError({ en: `submesh “${material}” has no geometry (block 0x${c.id.toString(16)})`, ru: `у подмодели «${material}» нет геометрии (блок 0x${c.id.toString(16)})`, zh: `子网格“${material}”没有几何体（数据块 0x${c.id.toString(16)}）` });
     geometry = readGeometry(r);
   }
   let operation = OP_TRIANGLE_LIST;
@@ -278,7 +280,7 @@ function readSubmesh(r: Reader, shared: MeshGeometry | undefined): MeshSubmesh {
     } else break;
   }
   for (const i of indices)
-    if (i >= geometry.vertexCount) throw new MeshFormatError(`индекс ${i} за пределами вершин (${geometry.vertexCount}) у «${material}»`);
+    if (i >= geometry.vertexCount) throw new MeshFormatError({ en: `index ${i} is out of the vertex range (${geometry.vertexCount}) in “${material}”`, ru: `индекс ${i} за пределами вершин (${geometry.vertexCount}) у «${material}»`, zh: `“${material}”中的索引 ${i} 超出顶点范围（${geometry.vertexCount}）` });
   return { material, operation, geometry, indices };
 }
 
@@ -286,12 +288,16 @@ function readSubmesh(r: Reader, shared: MeshGeometry | undefined): MeshSubmesh {
 export function parseOgreMesh(bytes: Uint8Array): OgreMesh {
   const r = new Reader(bytes);
   const head = r.u16();
-  if (head !== M_HEADER) throw new MeshFormatError(head === 0x0010 ? 'модель big-endian не поддерживается' : 'это не модель Ogre (.mesh)');
+  if (head !== M_HEADER) throw new MeshFormatError(
+      head === 0x0010
+        ? { en: 'big-endian models are not supported', ru: 'модель big-endian не поддерживается', zh: '不支持 big-endian 模型' }
+        : { en: 'this is not an Ogre model (.mesh)', ru: 'это не модель Ogre (.mesh)', zh: '这不是 Ogre 模型（.mesh）' },
+    );
   const version = r.line();
-  if (!version.startsWith('[MeshSerializer_v')) throw new MeshFormatError(`неизвестная версия «${version}»`);
+  if (!version.startsWith('[MeshSerializer_v')) throw new MeshFormatError({ en: `unknown version “${version}”`, ru: `неизвестная версия «${version}»`, zh: `未知版本“${version}”` });
   const mesh: OgreMesh = { version, submeshes: [], bounds: { min: [0, 0, 0], max: [0, 0, 0] } };
   const top = r.chunk();
-  if (top.id !== M_MESH) throw new MeshFormatError(`ждали блок модели, а 0x${top.id.toString(16)}`);
+  if (top.id !== M_MESH) throw new MeshFormatError({ en: `expected the mesh block, got 0x${top.id.toString(16)}`, ru: `ждали блок модели, а 0x${top.id.toString(16)}`, zh: `应为网格数据块，实际为 0x${top.id.toString(16)}` });
   r.bool(); // skeletallyAnimated
   let shared: MeshGeometry | undefined;
   for (;;) {

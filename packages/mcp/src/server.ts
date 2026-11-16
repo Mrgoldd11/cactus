@@ -374,7 +374,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
           lines.push('model:');
           for (const p of model.pieces) lines.push(`  ${p.mesh}${p.texture ? ` + ${p.texture}` : ''}${p.source !== id ? `  (part ${refLabel(ctx, p.source)})` : ''}`);
         }
-        for (const n of model.notes) lines.push(`  ${n}`);
+        for (const n of model.notes) lines.push(`  ${n.en}`);
         return lines;
       }),
   );

@@ -5,7 +5,7 @@
  * view. The model image can be saved as an icon (PNG with a transparent background).
  */
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
-import { modelOfRecord, type RecordModel } from '@kenshi-editor/core';
+import { modelOfRecord, uiText, type RecordModel } from '@kenshi-editor/core';
 import { errorText, langOf, useLang } from '../../i18n.ts';
 import type { Lang } from '../../../../shared/api.ts';
 import { shortcut } from '../../keys.ts';
@@ -102,7 +102,8 @@ const MODEL_TYPES = [
 type ViewState = 'empty' | 'none' | 'loading' | 'ready' | 'error';
 
 function ModelPanel({ def, params }: PanelProps): ReactNode {
-  const s = MODEL_STRINGS[useLang()];
+  const lang = useLang();
+  const s = MODEL_STRINGS[lang];
   const { project, go } = useWorkbench();
   const { sid, version } = useFollowed(def, params);
   const host = useRef<HTMLDivElement>(null);
@@ -307,7 +308,7 @@ function ModelPanel({ def, params }: PanelProps): ReactNode {
             </div>
           ))}
           {info?.model.notes.map((n) => (
-            <div key={n}>{n}</div>
+            <div key={n.en}>{uiText(n, lang)}</div>
           ))}
         </div>
       )}

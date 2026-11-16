@@ -2,7 +2,7 @@
  * Windows: mod dependencies, mod info, mod check, new record.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { validateMod, formatIssue, type ValidationIssue } from '@kenshi-editor/core';
+import { validateMod, formatIssue, uiText, type ValidationIssue } from '@kenshi-editor/core';
 import type { ModEntry } from '../../../shared/api.ts';
 import { useLang, useT, type Strings } from '../i18n.ts';
 import { tryEdit } from '../hooks.ts';
@@ -206,6 +206,7 @@ const fileName = (path: string): string => path.split(/[\\/]/).pop() ?? path;
  */
 function ExtensionNote({ project }: { project: Project }): ReactNode {
   const t = useT();
+  const lang = useLang();
   const list = useMemo(() => project.extensions, [project]);
   if (list.length === 0) return null;
   return (
@@ -224,7 +225,7 @@ function ExtensionNote({ project }: { project: Project }): ReactNode {
                   <ul className="issues">
                     {warnings.map((w, i) => (
                       <li key={i}>
-                        {fileName(w.source)}:{w.line}: {w.message}
+                        {fileName(w.source)}:{w.line}: {uiText(w.texts, lang)}
                       </li>
                     ))}
                   </ul>

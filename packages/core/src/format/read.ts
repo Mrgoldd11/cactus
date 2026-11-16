@@ -109,11 +109,11 @@ class DataFileReader {
     const r = this.r;
     const fileType = r.i32();
     if (fileType !== FileType.Data && fileType !== FileType.Mod && fileType !== FileType.MergeMod) {
-      if (!options.allowUnknownFileType) throw new FormatError(`Неизвестный тип файла ${fileType}`, 0);
+      if (!options.allowUnknownFileType) throw new FormatError({ en: `Unknown file type ${fileType}`, ru: `Неизвестный тип файла ${fileType}`, zh: `未知文件类型 ${fileType}` }, 0);
     }
     const header = fileType === FileType.Mod || fileType === FileType.MergeMod ? this.header(fileType) : undefined;
     const lastId = r.i32();
-    const count = r.count(60, 'записи');
+    const count = r.count(60, { en: 'records', ru: 'записи', zh: '记录' });
     return { fileType, header, lastId, records: new Array<GameRecord>(count) };
   }
 
@@ -133,7 +133,7 @@ class DataFileReader {
       const start = r.pos;
       const len = r.i32();
       end = r.pos + len;
-      if (len < 0 || end > r.length) throw new FormatError(`Неверная длина заголовка ${len}`, start);
+      if (len < 0 || end > r.length) throw new FormatError({ en: `Wrong header length ${len}`, ru: `Неверная длина заголовка ${len}`, zh: `文件头长度错误：${len}` }, start);
     }
     const header: ModHeader = {
       version: r.i32(),
@@ -143,7 +143,7 @@ class DataFileReader {
       references: r.str(),
     };
     if (end < 0) return header;
-    if (r.pos > end) throw new FormatError('Поля заголовка выходят за его длину', r.pos);
+    if (r.pos > end) throw new FormatError({ en: 'Header fields go past its length', ru: 'Поля заголовка выходят за его длину', zh: '文件头字段超出其长度' }, r.pos);
 
     const afterRefs = r.pos;
     if (r.pos < end) {
@@ -162,7 +162,7 @@ class DataFileReader {
   private mergeData(end: number): MergeData {
     const r = this.r;
     const guard = (): void => {
-      if (r.pos > end) throw new FormatError('Данные слияния выходят за заголовок', r.pos);
+      if (r.pos > end) throw new FormatError({ en: 'Merge data go past the header', ru: 'Данные слияния выходят за заголовок', zh: '合并数据超出文件头' }, r.pos);
     };
     const saveCount = r.u32();
     const lastMerge = r.u32();
@@ -194,7 +194,7 @@ class DataFileReader {
     for (let i = 0; i < n; i++) {
       const at = r.pos;
       const key = this.id();
-      if (map.has(key)) throw new FormatError(`Повтор ключа «${key}» (${what})`, at);
+      if (map.has(key)) throw new FormatError({ en: `Duplicate key “${key}” (${what})`, ru: `Повтор ключа «${key}» (${what})`, zh: `重复的键“${key}”（${what}）` }, at);
       map.set(key, read(key));
     }
     return map;
@@ -233,7 +233,7 @@ class DataFileReader {
     const strings = this.dict('string', 4, () => r.str());
     const files = this.dict('filename', 4, () => r.str());
     const refs = this.dict('ref category', 4, (): Reference[] => {
-      const n = r.count(16, 'ссылки');
+      const n = r.count(16, { en: 'references', ru: 'ссылки', zh: '引用' });
       const list: Reference[] = new Array<Reference>(n);
       for (let i = 0; i < n; i++) list[i] = { target: this.id(), v0: r.i32(), v1: r.i32(), v2: r.i32() };
       return list;
@@ -242,7 +242,7 @@ class DataFileReader {
       const target = this.id();
       const position: Vec3 = [float(`inst:${key}:0`), float(`inst:${key}:1`), float(`inst:${key}:2`)];
       const rotation: Vec4 = [float(`inst:${key}:3`), float(`inst:${key}:4`), float(`inst:${key}:5`), float(`inst:${key}:6`)];
-      const n = r.count(4, 'состояния экземпляра');
+      const n = r.count(4, { en: 'instance states', ru: 'состояния экземпляра', zh: '实例状态' });
       const states: Uint8Array[] = new Array<Uint8Array>(n);
       for (let i = 0; i < n; i++) states[i] = r.str();
       return { target, position, rotation, states };

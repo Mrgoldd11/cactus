@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FileType,
   FormatError,
+  errorMessage,
   bytesEqual,
   emptyRecord,
   encodeText,
@@ -151,6 +152,14 @@ describe('.mod/.base format', () => {
     const pattern = [2, 0, 0, 0, 0x61, 0x62];
     const at = dup.findIndex((_, i) => pattern.every((v, j) => dup[i + j] === v));
     dup[at + 5] = 0x61;
-    expect(() => readDataFile(dup)).toThrow(/повтор|Повтор/);
+    expect(() => readDataFile(dup)).toThrow(/Duplicate key/);
+    // The same error in Russian for the window.
+    let err: unknown;
+    try {
+      readDataFile(dup);
+    } catch (e) {
+      err = e;
+    }
+    expect(errorMessage(err, 'ru')).toMatch(/^Повтор ключа «aa» \(bool\) \(смещение \d+\)$/);
   });
 });

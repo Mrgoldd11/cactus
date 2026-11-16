@@ -122,7 +122,8 @@ describe('world: towns and buildings', () => {
     expect(zoneOfPath('zone.42.22.zone')).toEqual({ x: 42, y: 22 });
     expect(zoneOfPath('sub/zone.-3.7.zone')).toEqual({ x: -3, y: 7 });
     expect(zoneOfPath('leveldata.level')).toBeUndefined();
-    expect(formatPosition([48030.4, 5, -41953.6], { x: 42, y: 22 })).toBe('48030 -41954 (зона 42.22)');
+    expect(formatPosition([48030.4, 5, -41953.6], { x: 42, y: 22 })).toBe('48030 -41954 (zone 42.22)');
+    expect(formatPosition([1, 0, 2], { x: 3, y: 4 }, 'ru')).toBe('1 2 (зона 3.4)');
   });
 
   it('towns from the town list, with zones', () => {

@@ -18,6 +18,7 @@ import { decodeText } from '../text.ts';
 import { itemTypeName } from '../format/item-types.ts';
 import type { GameRecord, Reference, Vec3 } from '../format/types.ts';
 import type { ModContext } from '../model/context.ts';
+import type { UiText } from '../ui-text.ts';
 
 export interface ModelPiece {
   /** Path to the `.mesh` relative to the game folder (`data/items/weapons/mesh/katana05.mesh`). */
@@ -68,7 +69,7 @@ export interface RecordModel {
   type: string;
   pieces: ModelPiece[];
   /** Why something is missing: "part …: .phs is not shown" etc. */
-  notes: string[];
+  notes: UiText[];
 }
 
 /** `.\data\items\a.mesh` → `data/items/a.mesh`; empty → undefined. */
@@ -187,7 +188,7 @@ function partPieces(ctx: ModContext, sid: string, base: Material | undefined, ou
   seen.add(sid);
   const part = ctx.get(sid);
   if (!part) {
-    out.notes.push(`часть ${sid}: записи нет`);
+    out.notes.push({ en: `part ${sid}: no record`, ru: `часть ${sid}: записи нет`, zh: `部件 ${sid}：没有记录` });
     return;
   }
   const mesh = file(part, 'phs or mesh');
@@ -201,7 +202,10 @@ function partPieces(ctx: ModContext, sid: string, base: Material | undefined, ou
     if (!marker && (ox !== 0 || oy !== 0 || oz !== 0)) piece.offset = [ox, oy, oz];
     if (interior) piece.interior = true;
     out.pieces.push(withMaterial(piece, own ?? base));
-  } else if (mesh) out.notes.push(`часть ${ctx.name(sid) ?? sid}: ${mesh} — не .mesh, не показываем`);
+  } else if (mesh) {
+    const name = ctx.name(sid) ?? sid;
+    out.notes.push({ en: `part ${name}: ${mesh} is not a .mesh, not shown`, ru: `часть ${name}: ${mesh} — не .mesh, не показываем`, zh: `部件 ${name}：${mesh} 不是 .mesh，不显示` });
+  }
   // Parts can have their own nested parts.
   for (const r of chooseParts(refs(part, 'parts'))) partPieces(ctx, r.target, own ?? base, out, interior, seen);
 }
@@ -257,7 +261,7 @@ function foliagePieces(rec: GameRecord, sid: string, out: RecordModel, modeField
       }
     }
     out.pieces.push(piece);
-  } else if (mesh) out.notes.push(`${mesh} — не .mesh, не показываем`);
+  } else if (mesh) out.notes.push({ en: `${mesh} is not a .mesh, not shown`, ru: `${mesh} — не .mesh, не показываем`, zh: `${mesh} 不是 .mesh，不显示` });
   const leaves = file(rec, 'leaves mesh');
   if (isMesh(leaves)) {
     const piece: ModelPiece = { mesh: leaves, source: sid, field: 'leaves mesh' };
@@ -303,7 +307,7 @@ export function modelOfRecord(ctx: ModContext, sid: string, options: { interior?
   const type = rec ? itemTypeName(rec.type) : '';
   const out: RecordModel = { sid, type, pieces: [], notes: [] };
   if (!rec) {
-    out.notes.push('записи нет');
+    out.notes.push({ en: 'no record', ru: 'записи нет', zh: '没有记录' });
     return out;
   }
   if (type === 'BUILDING') {

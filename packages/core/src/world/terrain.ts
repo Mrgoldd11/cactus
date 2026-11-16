@@ -44,8 +44,8 @@ export interface TileBounds {
 /** Quadtree tile: level 0 is the whole world, level L has 2^L × 2^L tiles. */
 export function tileBounds(level: number, tx: number, ty: number): TileBounds {
   const n = 2 ** level;
-  if (!Number.isInteger(level) || level < 0 || level > TERRAIN_MAX_LEVEL) throw new Error(`Нет уровня рельефа ${level}`);
-  if (!Number.isInteger(tx) || !Number.isInteger(ty) || tx < 0 || ty < 0 || tx >= n || ty >= n) throw new Error(`Нет тайла ${level}/${tx}/${ty}`);
+  if (!Number.isInteger(level) || level < 0 || level > TERRAIN_MAX_LEVEL) throw new Error(`No terrain level ${level}`);
+  if (!Number.isInteger(tx) || !Number.isInteger(ty) || tx < 0 || ty < 0 || tx >= n || ty >= n) throw new Error(`No tile ${level}/${tx}/${ty}`);
   const px = (HEIGHTMAP_SIZE - 1) / n;
   const size = (2 * WORLD_HALF) / n;
   return { x: -WORLD_HALF + tx * size, z: -WORLD_HALF + ty * size, size, col: tx * px, row: ty * px, step: px / TILE_CELLS };
