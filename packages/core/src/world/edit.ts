@@ -1,19 +1,19 @@
 /**
- * Правки мира в моде: сдвиг, поворот, новые и удалённые экземпляры в файлах уровня
+ * World edits in a mod: move, rotate, new and removed instances in level files
  * (`zone.X.Y.zone`, `leveldata.level`, `interiors.level`).
  *
- * Файл уровня мода (тип 15, без шапки) — разница поверх нижних слоёв: только изменённые или новые
- * записи. Как это устроено в файлах игры и модов мастерской:
- *  - запись-владелец (`0-buildinglist`, тип INSTANCE_COLLECTION, имя «0», без полей) несёт только
- *    изменённые / новые экземпляры, флаги изменений 0;
- *  - экземпляр перезаписывается целиком (цель, позиция, кватернион, состояния);
- *  - убрать экземпляр — экземпляр с тем же ключом и пустой целью, позиция 0, поворот (1, 0, 0, 0);
- *  - состояния зданий (GAMESTATE_BUILDING) моды кладут полными копиями (3191 из 3191);
- *  - ключ нового экземпляра — `<n>-<имя мода>-INGAME`, n — `lastId` файла + 1.
+ * A mod level file (type 15, no header) is a diff on top of the lower layers: only changed or new
+ * records. How it works in game files and Workshop mods:
+ *  - the owner record (`0-buildinglist`, type INSTANCE_COLLECTION, name "0", no fields) carries only
+ *    changed / new instances, change flags 0;
+ *  - an instance is overwritten whole (target, position, quaternion, states);
+ *  - to remove an instance — an instance with the same key and an empty target, position 0, rotation (1, 0, 0, 0);
+ *  - mods put building states (GAMESTATE_BUILDING) as full copies (3191 of 3191);
+ *  - the key of a new instance is `<n>-<mod name>-INGAME`, n — the file's `lastId` + 1.
  *
- * Не тронутые записи мода пишутся теми же байтами: `writeDataFile` без потерь (162/162 файла
- * уровней модов мастерской), а записи, которых правка не касалась, остаются теми же объектами.
- * Модуль без доступа к диску.
+ * Untouched mod records are written as the same bytes: `writeDataFile` is lossless (162/162 level
+ * files of Workshop mods), and records the edit did not touch stay the same objects.
+ * The module has no disk access.
  */
 import { itemTypeId, itemTypeName } from '../format/item-types.ts';
 import { emptyRecord, FileType, type DataFile, type GameRecord, type Instance, type Vec3, type Vec4 } from '../format/types.ts';
@@ -23,7 +23,7 @@ import { zoneOfPoint } from './terrain.ts';
 import { zoneOfPath, type WorldFile } from './world.ts';
 import { UiTextError } from '../ui-text.ts';
 
-/** Экземпляр-«удаление»: так нижний слой теряет объект. */
+/** A "removal" instance: this is how a lower layer loses an object. */
 export function removedInstance(): Instance {
   return { target: '', position: [0, 0, 0], rotation: [1, 0, 0, 0], states: [] };
 }
@@ -36,7 +36,7 @@ export interface WorldStep {
 interface WorldRecordChange {
   path: string;
   sid: string;
-  /** Запись мода до шага (undefined — её не было). */
+  /** The mod record before the step (undefined — it did not exist). */
   before: GameRecord | undefined;
   after: GameRecord | undefined;
   lastIdBefore: number;
@@ -45,39 +45,39 @@ interface WorldRecordChange {
 
 interface ModLevelFile {
   path: string;
-  /** Исходный файл мода (undefined — файла ещё нет). */
+  /** The mod's original file (undefined — no file yet). */
   original: DataFile | undefined;
-  /** Записи мода в порядке файла; новые — в конце. */
+  /** Mod records in file order; new ones at the end. */
   records: Map<string, GameRecord>;
   lastId: number;
 }
 
 export interface MoveOptions {
-  /** Новая высота здания в мире (`world Y pos` его состояния), если у экземпляра есть состояние. */
+  /** New world height of the building (`world Y pos` of its state), if the instance has a state. */
   worldY?: number;
 }
 
 export interface PlaceOptions {
-  /** Ключ нового экземпляра (по умолчанию `<lastId+1>-<мод>-INGAME`). */
+  /** Key of the new instance (default `<lastId+1>-<mod>-INGAME`). */
   key?: string;
-  /** Тип записи-владельца, если её ещё нет (по умолчанию INSTANCE_COLLECTION). */
+  /** Owner record type, if it does not exist yet (default INSTANCE_COLLECTION). */
   holderType?: string;
   /**
-   * Записи состояний нового экземпляра (мебель, точки предметов в интерьерах). `newId` даёт
-   * свободный id `<n>-<мод>-INGAME` и двигает `lastId`; строковые id записей пишутся в
-   * состояния экземпляра по порядку.
+   * State records of a new instance (furniture, item points in interiors). `newId` gives
+   * a free id `<n>-<mod>-INGAME` and advances `lastId`; record string ids are written into the
+   * instance states in order.
    */
   states?: (key: string, newId: () => string) => GameRecord[];
 }
 
-/** Файлы уровня, которые читаются только по запросу (`addFiles`): интерьеры. */
+/** Level files read only on request (`addFiles`): interiors. */
 export const LAZY_LEVEL_FILES: readonly string[] = ['interiors.level'];
 
 function isLazy(path: string): boolean {
   return LAZY_LEVEL_FILES.includes(path.toLowerCase());
 }
 
-/** Что поменялось: записи файлов уровня (владельцы экземпляров и состояния). */
+/** What changed: level-file records (instance owners and states). */
 export interface WorldChange {
   path: string;
   sid: string;
@@ -88,8 +88,8 @@ type Listener = (changed: readonly WorldChange[]) => void;
 const SCALARS = ['bools', 'floats', 'ints', 'vec3s', 'vec4s', 'strings', 'files'] as const;
 
 /**
- * Объект файла зоны должен лежать в этой зоне: в файлах игры так у всех объектов, и игра грузит
- * объекты вместе с зоной. Перенести в другую зону — удалить и поставить заново.
+ * An object of a zone file must lie in that zone: all objects in game files do, and the game loads
+ * objects together with the zone. To move one to another zone — remove it and place it again.
  */
 export function checkZone(path: string, position: Vec3): void {
   const zone = zoneOfPath(path);
@@ -99,7 +99,7 @@ export function checkZone(path: string, position: Vec3): void {
     throw new UiTextError({ en: `Point ${Math.round(position[0])} ${Math.round(position[2])} is in zone ${z.x}.${z.y}, but the object is from zone ${zone.x}.${zone.y}. To move it to another zone, remove it and place it again`, ru: `Точка ${Math.round(position[0])} ${Math.round(position[2])} — в зоне ${z.x}.${z.y}, а объект из зоны ${zone.x}.${zone.y}. Перенести в другую зону: удалить и поставить заново`, zh: `点 ${Math.round(position[0])} ${Math.round(position[2])} 位于区域 ${z.x}.${z.y}，而对象属于区域 ${zone.x}.${zone.y}。要移到其他区域，请删除后重新放置` });
 }
 
-/** Мод `My Mod.mod` → `My Mod`. */
+/** Mod `My Mod.mod` → `My Mod`. */
 export function modBaseName(layer: string): string {
   return layer.replace(/\.(mod|base)$/i, '');
 }
@@ -107,19 +107,19 @@ export function modBaseName(layer: string): string {
 export class WorldEdits {
   readonly modLayer: string;
   readonly modBase: string;
-  /** Путь (нижний регистр) → файлы нижних слоёв по порядку. */
+  /** Path (lowercase) → lower-layer files in order. */
   private readonly lowerFiles = new Map<string, WorldFile[]>();
   private readonly lowerCache = new Map<string, Map<string, GameRecord>>();
   private readonly mod = new Map<string, ModLevelFile>();
   private readonly undoStack: WorldStep[] = [];
   private readonly redoStack: WorldStep[] = [];
   private pending: WorldStep | undefined;
-  /** Длина стека отмены на момент сохранения (-1 — сохранённое состояние уже не достичь). */
+  /** Undo stack length at save time (-1 — the saved state can no longer be reached). */
   private savedAt = 0;
   private readonly listeners = new Set<Listener>();
-  /** Пути, которые менялись с последнего сохранения (даже если правку отменили). */
+  /** Paths changed since the last save (even if the edit was undone). */
   private readonly touched = new Set<string>();
-  /** Ленивые файлы, которые ещё не прочитаны: править их нельзя (мод затёр бы свой файл). */
+  /** Lazy files not read yet: they cannot be edited (the mod would wipe its own file). */
   private readonly unread = new Set<string>(LAZY_LEVEL_FILES);
 
   constructor(files: readonly WorldFile[], modLayer: string) {
@@ -129,8 +129,8 @@ export class WorldEdits {
   }
 
   /**
-   * Дочитать ленивые файлы (`interiors.level` ванили, зависимостей и мода). `paths` — какие
-   * файлы теперь прочитаны полностью, даже если ни в одном слое их нет.
+   * Finish reading lazy files (`interiors.level` of vanilla, dependencies and the mod). `paths` — which
+   * files are now fully read, even if no layer has them.
    */
   addFiles(files: readonly WorldFile[], paths: readonly string[] = LAZY_LEVEL_FILES): void {
     for (const p of [...paths, ...files.map((f) => f.path)]) if (!this.unread.has(p.toLowerCase())) throw new UiTextError({ en: `File ${p} is already read`, ru: `Файл ${p} уже прочитан`, zh: `文件 ${p} 已读取` });
@@ -138,7 +138,7 @@ export class WorldEdits {
     for (const p of paths) this.unread.delete(p.toLowerCase());
   }
 
-  /** Файл прочитан (не ленивый или уже дочитан). */
+  /** The file is read (not lazy, or already finished reading). */
   isLoaded(path: string): boolean {
     return !this.unread.has(path.toLowerCase());
   }
@@ -177,7 +177,7 @@ export class WorldEdits {
     for (const fn of this.listeners) fn(out);
   }
 
-  /** Слитые записи нижних слоёв файла (без мода). */
+  /** Merged lower-layer records of the file (without the mod). */
   private lower(path: string): Map<string, GameRecord> {
     const k = path.toLowerCase();
     let out = this.lowerCache.get(k);
@@ -205,14 +205,14 @@ export class WorldEdits {
     return f;
   }
 
-  /** Запись с правками мода. */
+  /** Record with the mod's edits. */
   record(path: string, sid: string): GameRecord | undefined {
     const lo = this.lower(path).get(sid);
     const m = this.mod.get(path.toLowerCase())?.records.get(sid);
     return m ? applyLayer(lo, m) : lo;
   }
 
-  /** Экземпляр с правками мода (undefined — нет или удалён). */
+  /** Instance with the mod's edits (undefined — absent or removed). */
   instance(path: string, holder: string, key: string): Instance | undefined {
     const lo = this.lower(path).get(holder)?.instances.get(key);
     const m = this.mod.get(path.toLowerCase())?.records.get(holder)?.instances.get(key);
@@ -220,7 +220,7 @@ export class WorldEdits {
     return v && v.target !== '' ? v : undefined;
   }
 
-  /** Записи-владельцы экземпляров файла (с правками мода): `0-buildinglist` и т. п. */
+  /** Instance owner records of the file (with the mod's edits): `0-buildinglist` etc. */
   holders(path: string, type = 'INSTANCE_COLLECTION'): string[] {
     const ids = new Set<string>();
     for (const [sid, r] of this.lower(path)) if (itemTypeName(r.type) === type) ids.add(sid);
@@ -228,7 +228,7 @@ export class WorldEdits {
     return [...ids];
   }
 
-  /** Записать изменение записи мода (часть шага). */
+  /** Write a change of a mod record (part of a step). */
   private change(path: string, sid: string, edit: (rec: GameRecord) => void, create: () => GameRecord): void {
     const f = this.modFile(path);
     const before = f.records.get(sid);
@@ -264,7 +264,7 @@ export class WorldEdits {
     f.lastId = side === 'after' ? c.lastIdAfter : c.lastIdBefore;
   }
 
-  /** Несколько правок одним шагом отмены. */
+  /** Several edits as one undo step. */
   transaction<T>(label: string, fn: () => T): T {
     if (this.pending) {
       return fn();
@@ -286,7 +286,7 @@ export class WorldEdits {
   private holderRecord(path: string, holder: string, type: string): () => GameRecord {
     return () => {
       const lo = this.lower(path).get(holder);
-      // Раскладки интерьеров моды пишут с полями (`associated building`, `is exterior`).
+      // Mods write interior layouts with their fields (`associated building`, `is exterior`).
       if (lo && isLazy(path)) {
         const c = cloneRecord(lo);
         c.instances.clear();
@@ -302,7 +302,7 @@ export class WorldEdits {
       path,
       holder,
       (rec) => {
-        // Совпало с нижними слоями — правка мода больше не нужна.
+        // Matches the lower layers — the mod edit is no longer needed.
         if (lo && instanceEqual(lo, inst)) rec.instances.delete(key);
         else rec.instances.set(key, inst);
       },
@@ -311,14 +311,14 @@ export class WorldEdits {
     this.dropEmpty(path, holder);
   }
 
-  /** Убрать запись мода, если в ней не осталось правок и её не было в исходном файле. */
+  /** Remove a mod record if it has no edits left and was not in the original file. */
   private dropEmpty(path: string, sid: string): void {
     const f = this.modFile(path);
     const rec = f.records.get(sid);
     if (!rec || f.original?.records.some((r) => r.stringId === sid)) return;
     const lo = this.lower(path).get(sid);
     const empty = rec.instances.size === 0 && rec.refs.size === 0 && SCALARS.every((d) => rec[d].size === 0);
-    // Полная копия, совпавшая с нижними слоями (состояние здания вернули на место), тоже не нужна.
+    // A full copy that matches the lower layers (building state put back) is not needed either.
     const same = lo !== undefined && recordsEqual(applyLayer(lo, rec) ?? lo, lo) && rec.instances.size === 0;
     if (!empty && !same) return;
     const before = rec;
@@ -326,8 +326,8 @@ export class WorldEdits {
   }
 
   /**
-   * Сдвинуть / повернуть экземпляр. Позиция — как в файле (у зданий y — высота над землёй),
-   * `worldY` — высота в мире для состояния здания.
+   * Move / rotate an instance. Position as in the file (for buildings y is height above ground),
+   * `worldY` — world height for the building state.
    */
   move(path: string, holder: string, key: string, position: Vec3, rotation: Vec4, options: MoveOptions = {}, label = 'Move object'): void {
     const cur = this.instance(path, holder, key);
@@ -341,7 +341,7 @@ export class WorldEdits {
           const st = this.record(path, sid);
           if (!st || itemTypeName(st.type) !== 'GAMESTATE_BUILDING' || !st.floats.has('world Y pos')) continue;
           const wy = options.worldY;
-          // Моды кладут состояние полной копией — так и делаем.
+          // Mods put the state as a full copy — so do we.
           this.change(path, sid, (rec) => rec.floats.set('world Y pos', wy), () => cloneRecord(st));
           this.dropEmpty(path, sid);
         }
@@ -349,7 +349,7 @@ export class WorldEdits {
     });
   }
 
-  /** Поставить новый экземпляр записи `target`. Возвращает ключ. */
+  /** Place a new instance of record `target`. Returns the key. */
   place(path: string, holder: string, target: string, position: Vec3, rotation: Vec4, options: PlaceOptions = {}, label = 'New object'): string {
     const f = this.modFile(path);
     const taken = (k: string): boolean => this.lower(path).get(holder)?.instances.has(k) === true || f.records.get(holder)?.instances.has(k) === true;
@@ -374,7 +374,7 @@ export class WorldEdits {
         holder,
         (rec) => {
           rec.instances.set(k, { target, position: [...position], rotation: [...rotation], states: states.map((s) => encodeText(s.stringId)) });
-          // `lastId` растёт вместе с ключом и id состояний; отмена вернёт и его.
+          // `lastId` grows together with the key and state ids; undo restores it too.
           f.lastId = Math.max(f.lastId, n);
         },
         this.holderRecord(path, holder, options.holderType ?? 'INSTANCE_COLLECTION'),
@@ -387,7 +387,7 @@ export class WorldEdits {
     return k;
   }
 
-  /** Убрать экземпляр: свой новый — стираем, из нижних слоёв — пишем «удаление». */
+  /** Remove an instance: our own new one is erased, one from lower layers gets a "removal" written. */
   remove(path: string, holder: string, key: string, label = 'Remove object'): void {
     if (!this.instance(path, holder, key)) throw new UiTextError({ en: `No object ${key} in ${holder} (${path})`, ru: `Нет объекта ${key} в ${holder} (${path})`, zh: `${holder}（${path}）中没有对象 ${key}` });
     const lo = this.lower(path).get(holder)?.instances.get(key);
@@ -397,13 +397,13 @@ export class WorldEdits {
       else {
         this.change(path, holder, (rec) => rec.instances.delete(key), this.holderRecord(path, holder, 'INSTANCE_COLLECTION'));
         this.dropEmpty(path, holder);
-        // Состояния своего нового объекта больше никому не нужны.
+        // Nobody needs the states of our own new object any more.
         for (const s of cur.states) this.erase(path, decodeText(s));
       }
     });
   }
 
-  /** Стереть запись, которая есть только в моде. */
+  /** Erase a record that exists only in the mod. */
   private erase(path: string, sid: string): void {
     const f = this.modFile(path);
     const before = f.records.get(sid);
@@ -412,8 +412,8 @@ export class WorldEdits {
   }
 
   /**
-   * Поправить запись файла уровня (состояние объекта). Запись нижних слоёв мод кладёт полной
-   * копией, как моды мастерской; вернулась к исходной — правка уходит.
+   * Edit a level-file record (an object state). The mod puts a lower-layer record as a full
+   * copy, like Workshop mods; if it returns to the original, the edit goes away.
    */
   editState(path: string, sid: string, edit: (rec: GameRecord) => void, label = `Edit ${sid}`): void {
     const cur = this.record(path, sid);
@@ -432,7 +432,7 @@ export class WorldEdits {
     return this.redoStack.length > 0;
   }
 
-  /** Названия шагов: что отменит Ctrl+Z и что вернёт Ctrl+Y. */
+  /** Step titles: what Ctrl+Z will undo and what Ctrl+Y will redo. */
   undoLabel(): string | undefined {
     return this.undoStack[this.undoStack.length - 1]?.label;
   }
@@ -469,12 +469,12 @@ export class WorldEdits {
     return step;
   }
 
-  /** Есть несохранённые правки. */
+  /** There are unsaved edits. */
   isDirty(): boolean {
     return this.savedAt !== this.undoStack.length;
   }
 
-  /** Файлы, которые надо записать (менялись с последнего сохранения). */
+  /** Files that need writing (changed since the last save). */
   dirtyFiles(): string[] {
     return [...this.touched].map((k) => this.mod.get(k)?.path ?? k).filter((p) => this.differsFromOriginal(p));
   }
@@ -489,9 +489,9 @@ export class WorldEdits {
   }
 
   /**
-   * Файл уровня мода для записи: тип 15, без шапки, записи в исходном порядке (новые — в конце),
-   * хвост исходного файла (у нового — пустой). undefined — в файле не осталось записей и
-   * исходного файла не было.
+   * Mod level file for writing: type 15, no header, records in original order (new ones at the end),
+   * the tail of the original file (empty for a new one). undefined — no records left in the file and
+   * there was no original file.
    */
   buildFile(path: string): DataFile | undefined {
     const f = this.mod.get(path.toLowerCase());
@@ -510,7 +510,7 @@ export class WorldEdits {
     return out;
   }
 
-  /** После записи файлов на диск: текущие файлы мода становятся исходными. */
+  /** After the files are written to disk: the mod's current files become the originals. */
   markSaved(): void {
     for (const k of this.touched) {
       const f = this.mod.get(k);
@@ -525,8 +525,8 @@ export class WorldEdits {
   }
 
   /**
-   * Файлы мира с текущими правками мода — для нового `WorldIndex`. Интерьеры (`interiors.level`)
-   * — только с `interiors: true`.
+   * World files with the mod's current edits — for a new `WorldIndex`. Interiors (`interiors.level`)
+   * — only with `interiors: true`.
    */
   files(options: { interiors?: boolean } = {}): WorldFile[] {
     const keep = (path: string): boolean => options.interiors === true || !isLazy(path);
@@ -540,12 +540,12 @@ export class WorldEdits {
     return out;
   }
 
-  /** Все файлы уровня мода (исходные и созданные правками). */
+  /** All mod level files (original and created by edits). */
   modFiles(): string[] {
     return [...this.mod.values()].map((f) => f.path);
   }
 
-  /** Записи файла уровня мода (исходные и правки). */
+  /** Records of a mod level file (original and edits). */
   modRecords(path: string): readonly GameRecord[] {
     return [...(this.mod.get(path.toLowerCase())?.records.values() ?? [])];
   }

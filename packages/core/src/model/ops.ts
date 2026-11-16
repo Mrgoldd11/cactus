@@ -1,9 +1,9 @@
 /**
- * Правки в виде данных (JSON): список операций, которые выполняются одной транзакцией —
- * одна отмена на весь список. Так правят мод CLI (`build` с JSON-планом) и MCP.
+ * Edits as data (JSON): a list of operations run as one transaction —
+ * one undo for the whole list. This is how the CLI (`build` with a JSON plan) and MCP edit a mod.
  *
- * Новые записи можно называть псевдонимом (`as: "$guard"`) и ссылаться на них дальше
- * по тексту (`id: "$guard"`, `target: "$guard"`).
+ * New records can be given an alias (`as: "$guard"`) and referenced further on
+ * (`id: "$guard"`, `target: "$guard"`).
  */
 import { encodeText } from '../text.ts';
 import { mapUi, UiTextError } from '../ui-text.ts';
@@ -44,7 +44,7 @@ export type EditOp =
   | { op: 'removeRef'; id: string; category: string; target: string }
   | { op: 'setRefs'; id: string; category: string; refs: { target: string; values?: number[] }[] }
   | ({ op: 'info' } & Partial<Omit<ModInfo, 'fileName'>>)
-  // ── граф диалога (те же команды ядра, что у редактора) ──
+  // ── dialogue graph (the same core commands the editor uses) ──
   | { op: 'addLine'; parent: string; speaker?: EnumInput; text?: string; texts?: string[]; as?: string }
   | { op: 'insertLine'; parent: string; child: string; speaker?: EnumInput; text?: string; texts?: string[]; as?: string }
   | { op: 'link'; parent: string; child: string }
@@ -57,15 +57,15 @@ export type EditOp =
   | { op: 'addEffect'; id: string; action: EnumInput; values?: number[]; as?: string }
   | { op: 'removeAction'; id: string; category: 'conditions' | 'effects'; action: string };
 
-/** Значение перечисления: число или имя (`T_TARGET`, `DC_HAS_TAG`, «равно»). */
+/** Enum value: a number or a name (`T_TARGET`, `DC_HAS_TAG`, «равно»). */
 export type EnumInput = number | string;
 
 export interface ApplyOpsResult {
-  /** Псевдоним → строковый id созданной записи. */
+  /** Alias → string id of the created record. */
   aliases: Record<string, string>;
-  /** Id созданных записей по порядку. */
+  /** Ids of created records, in order. */
   created: string[];
-  /** Id всех затронутых записей. */
+  /** Ids of all affected records. */
   touched: string[];
 }
 
@@ -94,8 +94,8 @@ export function parseDictName(name: string): ScalarDict {
 }
 
 /**
- * В каком словаре лежит поле: явно заданный вид → где поле уже есть в записи → схема
- * (fcs.def) → по значению (true/false — bool, целое — int, дробное — float, строка — str).
+ * Which dictionary a field lives in: explicitly given kind → where the field already is in the record → schema
+ * (fcs.def) → by value (true/false — bool, integer — int, fractional — float, string — str).
  */
 export function fieldDict(ctx: ModContext, stringId: string, key: string, value?: JsonScalar, explicit?: string): ScalarDict {
   if (explicit) return parseDictName(explicit);
@@ -112,7 +112,7 @@ export function fieldDict(ctx: ModContext, stringId: string, key: string, value?
   throw new EditError({ en: `Unknown kind of field ${key} on ${stringId}: give dict`, ru: `Не знаю вид поля ${key} у ${stringId}: укажите dict`, zh: `不知道 ${stringId} 的字段 ${key} 的类型：请指定 dict` });
 }
 
-/** Имя значения enum-поля (`DR_ONCE_ONLY`, `ONCE_ONLY`, «один раз») → число; прочее как есть. */
+/** Name of an enum field value (`DR_ONCE_ONLY`, `ONCE_ONLY`, «один раз») → number; anything else as is. */
 function enumInput(ctx: ModContext, stringId: string, key: string, value: JsonScalar): JsonScalar {
   if (typeof value !== 'string' || /^-?\d+$/.test(value.trim())) return value;
   const rec = ctx.get(stringId) ?? ctx.lower(stringId);
@@ -123,7 +123,7 @@ function enumInput(ctx: ModContext, stringId: string, key: string, value: JsonSc
   return n;
 }
 
-/** Значение из JSON в значение словаря. */
+/** JSON value to dictionary value. */
 export function coerceValue<D extends ScalarDict>(dict: D, value: JsonScalar, key = ''): ScalarValueMap[D] {
   const bad = (): never => {
     throw new EditError({ en: `Value ${JSON.stringify(value)} does not fit ${dict}${key ? ` (${key})` : ''}`, ru: `Значение ${JSON.stringify(value)} не подходит для ${dict}${key ? ` (${key})` : ''}`, zh: `值 ${JSON.stringify(value)} 不适用于 ${dict}${key ? `（${key}）` : ''}` });
@@ -159,8 +159,8 @@ export function coerceValue<D extends ScalarDict>(dict: D, value: JsonScalar, ke
 }
 
 /**
- * Метка по умолчанию. Одна операция графа диалога получает ту же метку, что и правка в окне
- * редактора, — тогда история называет шаг понятно («Добавлен ответ игрока „…“»).
+ * Default label. A single dialogue-graph operation gets the same label as the edit in the editor
+ * window, so the history names the step clearly ("Added player reply '…'").
  */
 function defaultLabel(ops: readonly EditOp[]): string {
   const op = ops.length === 1 ? ops[0] : undefined;
@@ -188,7 +188,7 @@ function defaultLabel(ops: readonly EditOp[]): string {
   }
 }
 
-/** Выполнить операции одной транзакцией. При ошибке ничего не меняется. */
+/** Run the operations as one transaction. On error nothing changes. */
 export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = defaultLabel(ops)): ApplyOpsResult {
   const aliases: Record<string, string> = {};
   const created: string[] = [];
@@ -362,7 +362,7 @@ export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = defaul
     touched.add(id(op.id));
   }
 
-  /** Значение перечисления по имени или числу (имена — из fcs_enums.def). */
+  /** Enum value by name or number (names come from fcs_enums.def). */
   function enumArg(name: string, v: EnumInput): number {
     if (typeof v === 'number') return v;
     if (/^-?\d+$/.test(v.trim())) return Number(v);
@@ -372,14 +372,14 @@ export function applyOps(ctx: ModContext, ops: readonly EditOp[], label = defaul
     return n;
   }
 
-  /** Кто говорит: npc / player или TalkerEnum (T_ME, T_TARGET, …). */
+  /** Who speaks: npc / player or TalkerEnum (T_ME, T_TARGET, …). */
   function speakerOf(v: EnumInput): number {
     if (v === 'npc') return 0;
     if (v === 'player') return 1;
     return enumArg('TalkerEnum', v);
   }
 
-  /** Как в графе редактора: после реплики NPC — ответ игрока, иначе — реплика NPC. */
+  /** As in the editor graph: after an NPC line comes a player reply, otherwise an NPC line. */
   function nextSpeaker(parent: string): number {
     const rec = ctx.get(parent) ?? ctx.lower(parent);
     return rec && itemTypeName(rec.type) === 'DIALOGUE_LINE' && !CHOICE_SPEAKERS.has(rec.ints.get('speaker') ?? 0) ? 1 : 0;

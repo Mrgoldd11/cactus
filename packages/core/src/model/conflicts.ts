@@ -1,17 +1,17 @@
 /**
- * Конфликты модов: какие слои (моды) меняют одну и ту же запись и одно и то же поле
- * разными значениями. Побеждает поздний слой (ниже в `mods.cfg`), как в игре.
+ * Mod conflicts: which layers (mods) change the same record and the same field
+ * with different values. The later layer (lower in `mods.cfg`) wins, as in the game.
  *
- * «Поле» здесь — то, что накладывается по ключу (см. `record-ops.ts`):
- * - `record` — удаление записи (булево `REMOVED`);
- * - `name` — имя записи (берётся из последнего слоя);
- * - `scalar` — скалярное поле `dict:key`;
- * - `ref` — ссылка на цель в категории (значения или «удалить»);
- * - `instance` — размещённый объект по ключу.
+ * A "field" here is what is overlaid by key (see `record-ops.ts`):
+ * - `record`: record deletion (boolean `REMOVED`);
+ * - `name`: record name (taken from the last layer);
+ * - `scalar`: scalar field `dict:key`;
+ * - `ref`: reference to a target in a category (values or "delete");
+ * - `instance`: placed object by key.
  *
- * Два мода, добавляющие разные ссылки в одну категорию, не конфликтуют: обе ссылки
- * останутся. Конфликт — когда два слоя задают одно поле по-разному, и победит только один.
- * Если один мод удаляет запись, а другой её меняет, — конфликт уровня записи.
+ * Two mods adding different references to one category do not conflict: both references
+ * stay. A conflict is when two layers set one field differently and only one wins.
+ * If one mod deletes a record and another changes it, that is a record-level conflict.
  */
 import { decodeText } from '../text.ts';
 import type { GameRecord, Instance } from '../format/types.ts';
@@ -20,7 +20,7 @@ import { applyLayer, isRemovalMarker, isRemovedRef, SCALAR_DICTS, scalarMap, typ
 import { formatFloat, formatRefValues, formatScalar } from './present.ts';
 import type { ModContext } from './context.ts';
 
-/** Слой для поиска конфликтов: имя и записи (подходит `Layer`). */
+/** Layer for conflict search: name and records (`Layer` fits). */
 export interface ConflictLayer {
   name: string;
   file: { records: readonly GameRecord[] };
@@ -28,9 +28,9 @@ export interface ConflictLayer {
 
 export type ConflictFieldKind = 'record' | 'name' | 'scalar' | 'ref' | 'instance';
 
-/** Какое поле: ключ `id` уникален в пределах записи. */
+/** Which field: the `id` key is unique within a record. */
 export interface FieldRef {
-  /** `record`, `name`, `floats:cut damage multiplier`, `ref:<категория>:<цель>`, `inst:<ключ>`. */
+  /** `record`, `name`, `floats:cut damage multiplier`, `ref:<category>:<target>`, `inst:<key>`. */
   id: string;
   kind: ConflictFieldKind;
   dict?: ScalarDict;
@@ -39,27 +39,27 @@ export interface FieldRef {
   target?: string;
 }
 
-/** Поле, которое задаёт слой, и его значение текстом. */
+/** A field the layer sets, and its value as text. */
 export interface FieldTouch extends FieldRef {
   value: string;
 }
 
-/** Что делает с записью один слой. */
+/** What one layer does to the record. */
 export interface LayerTouch {
   layer: string;
-  /** Слой удаляет запись. */
+  /** The layer deletes the record. */
   removes: boolean;
-  /** Записи до этого слоя не было (слой её создаёт). */
+  /** The record did not exist before this layer (the layer creates it). */
   creates: boolean;
   fields: FieldTouch[];
 }
 
 export interface FieldConflict extends FieldRef {
-  /** Значение в базовых слоях (ванили); нет — поля в ванили нет. */
+  /** Value in the base layers (vanilla); absent: vanilla has no such field. */
   base?: string;
-  /** Значения слоёв, которые задают поле, по порядку загрузки. */
+  /** Values of the layers that set the field, in load order. */
   values: { layer: string; value: string }[];
-  /** Слой, чьё значение будет в игре (последний). */
+  /** The layer whose value ends up in the game (the last one). */
   winner: string;
 }
 
@@ -67,15 +67,15 @@ export interface RecordConflict {
   sid: string;
   type: number;
   name: string;
-  /** Небазовые слои, которые трогают запись, по порядку загрузки. */
+  /** Non-base layers that touch the record, in load order. */
   layers: string[];
   fields: FieldConflict[];
 }
 
 export interface ConflictOptions {
-  /** Базовый слой (ваниль): его значения не считаются «изменением». По умолчанию — `isVanillaLayer`. */
+  /** Base layer (vanilla): its values do not count as a "change". Default: `isVanillaLayer`. */
   isBase?: (name: string) => boolean;
-  /** Только конфликты, в которых участвует этот слой (имя без учёта регистра). */
+  /** Only conflicts this layer takes part in (name, case-insensitive). */
   only?: string;
 }
 
@@ -88,8 +88,8 @@ function formatInstance(i: Instance): string {
 }
 
 /**
- * Поля, которые слой `rec` задаёт поверх записи `below` (undefined — записи ниже нет).
- * Маркеры удаления ссылок для несуществующей записи ничего не значат и не считаются.
+ * Fields that layer `rec` sets over record `below` (undefined: there is no record below).
+ * Reference deletion markers for a non-existent record mean nothing and are not counted.
  */
 export function layerFields(rec: GameRecord, below: GameRecord | undefined): FieldTouch[] {
   if (isRemovalMarker(rec)) return [{ id: 'record', kind: 'record', value: REMOVE_TEXT }];
@@ -109,7 +109,7 @@ export function layerFields(rec: GameRecord, below: GameRecord | undefined): Fie
   return out;
 }
 
-/** Значение поля в записи текстом; undefined — поля нет. */
+/** Field value in the record as text; undefined: no field. */
 export function fieldValue(rec: GameRecord | undefined, f: FieldRef): string | undefined {
   if (!rec) return f.kind === 'record' ? 'нет записи' : undefined;
   switch (f.kind) {
@@ -146,7 +146,7 @@ interface Entry {
   rec: GameRecord;
 }
 
-/** Поиск по нескольким записям: индекс небазовых и базовых записей по sid. */
+/** Lookup across several records: index of non-base and base records by sid. */
 function indexLayers(layers: readonly ConflictLayer[], isBase: (name: string) => boolean, want?: ReadonlySet<string>): { base: Map<string, Entry[]>; mods: Map<string, Entry[]> } {
   const base = new Map<string, Entry[]>();
   const mods = new Map<string, Entry[]>();
@@ -168,7 +168,7 @@ function fold(entries: readonly Entry[] | undefined): GameRecord | undefined {
   return acc;
 }
 
-/** Что каждый небазовый слой делает с записью. `below` у каждого слоя — итог всех слоёв ниже. */
+/** What each non-base layer does to the record. Each layer's `below` is the result of all layers below. */
 function touchesOf(baseRec: GameRecord | undefined, mods: readonly Entry[]): LayerTouch[] {
   let acc = baseRec;
   return mods.map((e) => {
@@ -181,13 +181,13 @@ function touchesOf(baseRec: GameRecord | undefined, mods: readonly Entry[]): Lay
 
 export interface TouchReport {
   sid: string;
-  /** Запись в базовых слоях (ванили); нет — запись создают моды. */
+  /** Record in the base layers (vanilla); absent: the record is created by mods. */
   base?: GameRecord;
-  /** Небазовые слои, которые задают запись, по порядку загрузки. */
+  /** Non-base layers that set the record, in load order. */
   touches: LayerTouch[];
 }
 
-/** Кто (какие небазовые слои) трогает запись и что именно задаёт. */
+/** Who (which non-base layers) touches the record and what exactly they set. */
 export function touchedBy(layers: readonly ConflictLayer[], sid: string, options: Pick<ConflictOptions, 'isBase'> = {}): TouchReport {
   const isBase = options.isBase ?? isVanillaLayer;
   const { base, mods } = indexLayers(layers, isBase, new Set([sid]));
@@ -195,12 +195,12 @@ export function touchedBy(layers: readonly ConflictLayer[], sid: string, options
   return { sid, ...(baseRec ? { base: baseRec } : {}), touches: touchesOf(baseRec, mods.get(sid) ?? []) };
 }
 
-/** Конфликты одной записи по отчёту `touchedBy`; пусто — конфликтов нет. */
+/** Conflicts of one record from the `touchedBy` report; empty: no conflicts. */
 export function recordConflicts(report: TouchReport): FieldConflict[] {
   const { touches, base } = report;
   if (touches.length < 2) return [];
   const out: FieldConflict[] = [];
-  // Удаление против изменения.
+  // Deletion versus change.
   if (touches.some((t) => t.removes) && touches.some((t) => !t.removes)) {
     const values = touches.map((t) => ({ layer: t.layer, value: t.removes ? REMOVE_TEXT : CHANGE_TEXT }));
     out.push({ id: 'record', kind: 'record', base: fieldValue(base, { id: 'record', kind: 'record' })!, values, winner: values.at(-1)!.layer });
@@ -228,8 +228,8 @@ function headline(entries: readonly Entry[]): { type: number; name: string } {
 }
 
 /**
- * Все конфликты между небазовыми слоями. Порядок — по первому появлению записи в модах.
- * С `only` — только записи, которые трогает этот слой, и только поля, которые он задаёт.
+ * All conflicts between non-base layers. Order: by the first appearance of the record in mods.
+ * With `only`: only records this layer touches, and only fields it sets.
  */
 export function findConflicts(layers: readonly ConflictLayer[], options: ConflictOptions = {}): RecordConflict[] {
   const isBase = options.isBase ?? isVanillaLayer;
@@ -259,7 +259,7 @@ export function findConflicts(layers: readonly ConflictLayer[], options: Conflic
   return out;
 }
 
-/** Слои контекста для поиска конфликтов: нижние слои и сам мод (его записи как есть сейчас). */
+/** Context layers for conflict search: lower layers and the mod itself (its records as they are now). */
 export function contextLayers(ctx: ModContext): ConflictLayer[] {
   const records = ctx.modRecords();
   return records.length > 0 ? [...ctx.layers, { name: ctx.modName, file: { records } }] : [...ctx.layers];
@@ -284,7 +284,7 @@ const CONFLICT_WORDS: Record<string, ConflictWords> = {
 };
 const conflictWords = (lang: string): ConflictWords => CONFLICT_WORDS[lang] ?? CONFLICT_WORDS.en!;
 
-/** Подпись поля для людей: `cut damage multiplier`, `<категория> → <цель>`, `объект <ключ>`. */
+/** Human-readable field label: `cut damage multiplier`, `<category> → <target>`, `object <key>`. */
 export function fieldLabel(f: FieldRef, nameOf: (sid: string) => string = (s) => s, lang = 'en'): string {
   const w = conflictWords(lang);
   switch (f.kind) {
@@ -301,7 +301,7 @@ export function fieldLabel(f: FieldRef, nameOf: (sid: string) => string = (s) =>
   }
 }
 
-/** Конфликт записи текстом для CLI/MCP. */
+/** A record conflict as text for CLI/MCP. */
 export function formatConflict(c: RecordConflict, nameOf?: (sid: string) => string, lang = 'en'): string[] {
   const w = conflictWords(lang);
   const lines = [`${c.sid} «${c.name}» — ${w.mods(c.layers.length, c.layers.join(', '))}`];
@@ -312,7 +312,7 @@ export function formatConflict(c: RecordConflict, nameOf?: (sid: string) => stri
   return lines;
 }
 
-/** Отчёт `touchedBy` текстом для CLI/MCP. */
+/** The `touchedBy` report as text for CLI/MCP. */
 export function formatTouches(r: TouchReport, nameOf?: (sid: string) => string, lang = 'en'): string[] {
   const w = conflictWords(lang);
   const lines: string[] = [];

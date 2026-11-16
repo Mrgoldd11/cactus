@@ -1,18 +1,18 @@
 /**
- * Постоянные id новых записей по их уникальному имени: номер выдаётся один раз и больше не
- * меняется (на строковые id ссылаются сохранения игры). Таблица — JSON `{ next, ids }`, как
- * `ids.json` у Vanilla Talk; читать и писать её — дело вызывающего (CLI кладёт рядом со скриптом).
+ * Stable ids of new records by their unique name: a number is issued once and never
+ * changes (game saves reference string ids). The table is JSON `{ next, ids }`, like
+ * Vanilla Talk's `ids.json`; reading and writing it is the caller's job (the CLI keeps it next to the script).
  */
 export interface StableIdData {
-  /** Следующий свободный номер. */
+  /** Next free number. */
   next: number;
-  /** Имя записи → номер. */
+  /** Record name → number. */
   ids: Record<string, number>;
 }
 
 export class StableIds {
   readonly data: StableIdData;
-  /** Имена, которым номер выдан в этой сборке. */
+  /** Names that got a number in this build. */
   readonly added: string[] = [];
   private readonly used = new Set<string>();
 
@@ -23,7 +23,7 @@ export class StableIds {
     this.data = data ? { next: data.next, ids: { ...data.ids } } : { next: start, ids: {} };
   }
 
-  /** Строковый id `номер-Имя.mod` для записи с этим именем. */
+  /** String id `number-Name.mod` for a record with this name. */
   id(name: string): string {
     let n = this.data.ids[name];
     if (n === undefined) {
@@ -35,7 +35,7 @@ export class StableIds {
     return `${n}-${this.modName}`;
   }
 
-  /** Имена из таблицы, которые в этой сборке не запрашивались (номера не переиспользуются). */
+  /** Names from the table not requested in this build (numbers are not reused). */
   orphans(): string[] {
     return Object.keys(this.data.ids).filter((k) => !this.used.has(k));
   }
@@ -49,7 +49,7 @@ export class StableIds {
   }
 }
 
-/** Таблица из JSON с проверкой формы. */
+/** Table from JSON with a shape check. */
 export function parseStableIds(text: string): StableIdData {
   const raw = JSON.parse(text) as { next?: unknown; ids?: unknown };
   if (typeof raw.next !== 'number' || typeof raw.ids !== 'object' || raw.ids === null) {

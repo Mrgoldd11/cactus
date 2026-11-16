@@ -1,8 +1,8 @@
 /**
- * Понятные названия шагов истории (кружочки ↶ ↷, панель «История»): «Изменён текст реплики
- * „Бип победил…“», «Добавлен ответ игрока», «Удалена связь». Название строится по метке
- * транзакции и по тому, что правка на самом деле поменяла (разница записей до и после), сразу
- * на двух языках. Метки остаются прежними строками — API ядра не меняется.
+ * Clear names of history steps (the ↶ ↷ circles, the History panel): "Changed line text
+ * 'Beep won…'", "Added player reply", "Removed link". The name is built from the transaction
+ * label and from what the edit actually changed (record diff before and after), in both
+ * languages at once. Labels stay the same strings — the core API does not change.
  */
 import { decodeText } from '../text.ts';
 import { itemTypeName } from '../format/item-types.ts';
@@ -16,9 +16,9 @@ import { mapUi, uiText, type UiText } from '../ui-text.ts';
 export interface StepTitle {
   /** The title in the interface languages; non-English titles quote line texts in the data language. */
   text: UiText;
-  /** Правка пришла от ИИ (живая связь MCP). */
+  /** The edit came from AI (live MCP link). */
   ai: boolean;
-  /** Откат другой правки. */
+  /** Revert of another edit. */
   rollback: boolean;
 }
 
@@ -85,7 +85,7 @@ class Describer {
     return itemTypeName(this.rec(d).type) === LINE;
   }
 
-  /** Первый непустой текст реплики: как в данных и в переводе (если он есть). */
+  /** First non-empty line text: as in the data and in the translation (if there is one). */
   lineText(rec: GameRecord | undefined): Quoted {
     if (!rec) return { en: '', tr: '' };
     for (let i = 0; rec.strings.has(`text${i}`); i++) {
@@ -101,7 +101,7 @@ class Describer {
     return { en: quote(t.en), ru: quote(t.tr), zh: quote(t.tr) };
   }
 
-  /** Имя записи для названия: у реплики — её текст. */
+  /** Record name for the title: for a line, its text. */
   recordName(rec: GameRecord): Pair {
     if (itemTypeName(rec.type) === LINE) return this.quoted(this.lineText(rec));
     const en = decodeText(rec.name) || rec.stringId;
@@ -117,7 +117,7 @@ class Describer {
     return this.diffs.filter((d) => d.change === 'removed');
   }
 
-  /** Связи `lines`, добавленные (+1) или убранные (−1) у записей, которые остались. */
+  /** `lines` links added (+1) or removed (−1) on records that remain. */
   links(sign: 1 | -1): { from: string; to: string }[] {
     const out: { from: string; to: string }[] = [];
     for (const d of this.diffs) {
@@ -130,7 +130,7 @@ class Describer {
     return out;
   }
 
-  /** Новая реплика: ответ игрока или реплика NPC. */
+  /** New line: player reply or NPC line. */
   newLine(d: RecordDiff | undefined, verb: 'add' | 'insert' | 'copy' | 'paste'): Pair {
     const rec = d?.after;
     const t = this.lineText(rec);
@@ -161,7 +161,7 @@ class Describer {
       : { ru: `Удалено ${n} ${plural(n, 'связь', 'связи', 'связей')}`, en: `Removed ${n} links`, zh: `删除了 ${n} 个连接` };
   }
 
-  /** По одной лишь разнице, когда метка ничего не говорит. */
+  /** From the diff alone, when the label says nothing. */
   generic(): Pair | undefined {
     const added = this.added();
     const removed = this.removed();
@@ -212,7 +212,7 @@ class Describer {
     };
   }
 
-  /** Название по метке транзакции; undefined — метка не из команд ядра. */
+  /** Title from the transaction label; undefined — the label is not from core commands. */
   byLabel(label: string): Pair | undefined {
     const lineAdded = this.added().find((d) => this.isLine(d));
     switch (label) {
@@ -329,8 +329,8 @@ class Describer {
 }
 
 /**
- * Метка без смысла для человека (`правка 12-Мой.mod`, `имя …`, `12-Мой.mod: damage`, `3 правок`):
- * её заменяет описание по разнице.
+ * A label meaningless to a human (`правка 12-Мой.mod`, `имя …`, `12-Мой.mod: damage`, `3 правок`):
+ * it is replaced by a description from the diff.
  */
 function technical(label: string, cs: Changeset): boolean {
   if (/^(правка|имя) /.test(label) || /^\d+ правок$/.test(label)) return true;
@@ -341,8 +341,8 @@ const NO_TRANSLATION = {};
 const caches = new WeakMap<object, WeakMap<Changeset, StepTitle>>();
 
 /**
- * Понятное название шага истории на двух языках. Правка не меняется после записи в историю,
- * поэтому название считается один раз (кэш по самой правке и переводу).
+ * Clear history-step title in both languages. An edit does not change after it enters the history,
+ * so the title is computed once (cached by the edit itself and the translation).
  */
 export function describeChangeset(ctx: ModContext, cs: Changeset, options: StepTitleOptions = {}): StepTitle {
   const key = options.translation ?? NO_TRANSLATION;
@@ -361,7 +361,7 @@ function describeLabel(ctx: ModContext, cs: Changeset, label: string, options: S
     return { text: { ru: `ИИ: ${title}`, en: `AI: ${title}`, zh: `AI：${title}` }, ai: true, rollback: false };
   }
   if (label.startsWith(ROLLBACK_PREFIX)) {
-    // Разница отката обратна исходной правке, поэтому название — по метке исходной.
+    // A revert's diff is the inverse of the original edit, so the title comes from the original's label.
     const inner = describeLabel(ctx, { ...cs, ops: [] }, label.slice(ROLLBACK_PREFIX.length), options);
     return { text: mapUi([inner.text], ([t], lang) => `${uiText(ROLLBACK, lang)}${t!}`), ai: inner.ai, rollback: true };
   }
@@ -370,6 +370,6 @@ function describeLabel(ctx: ModContext, cs: Changeset, label: string, options: S
   const pair = d.byLabel(label) ?? (technical(label, cs) || label === '' ? d.generic() : undefined);
   if (pair) return { text: pair, ai: false, rollback: false };
   if (info && cs.ops.every((op) => op.kind === 'info')) return { text: { ru: 'Изменён заголовок мода', en: 'Changed mod header', zh: '修改了 Mod 头信息' }, ai: false, rollback: false };
-  // Своя метка (скрипт сборки, команда CLI) — показать как есть.
+  // A custom label (build script, CLI command) — show as is.
   return { text: same(label), ai: false, rollback: false };
 }

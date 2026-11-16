@@ -1,19 +1,19 @@
 /**
- * Проигрыватель разговора: шаг за шагом, как игра ведёт беседу с персонажем.
+ * Conversation player: step by step, the way the game runs a conversation with a character.
  *
- * - Начало: все диалоги персонажа на событие (`talkSources`) — игра выбирает один по своему правилу
- *   (`chooseOdds`), затем внутри него первую реплику по тому же правилу; пустые узлы (без текста)
- *   игра не говорит, а сразу выбирает среди их детей.
- * - После реплики NPC: если дальше ответы игрока (говорит собеседник — `CHOICE_SPEAKERS`), они
- *   показываются списком; ответ с невыполненными условиями скрыт. Иначе игра сама выбирает
- *   следующую реплику NPC. Смешанные ветки (ответы и реплики NPC вместе, в ванили 57 узлов) игрой
- *   не разобраны — проигрыватель показывает ответы и отдельный ход «NPC продолжает сам».
- * - «Как будто»: режим `met` (по умолчанию) считает условия и шансы выполненными, только
- *   запертые (locked) — запертыми; режим `none` пропускает лишь записи, которые проходят всегда.
- *   `assume` для отдельных записей перекрывает режим: выполнены (true) или нет (false). Раса
- *   собеседника из `target race` при выполненных условиях даёт игровые +2, как в игре.
- * - Если подходящих несколько с равными очками, игра выбирает случайно; проигрыватель берёт
- *   первую в порядке игры, пока пользователь не выберет другую (`prefer`).
+ * - Start: all of the character's dialogues for the event (`talkSources`); the game picks one by its rule
+ *   (`chooseOdds`), then the first line inside it by the same rule; the game does not say empty nodes
+ *   (without text) but picks among their children right away.
+ * - After an NPC line: if player answers follow (the target speaks, `CHOICE_SPEAKERS`), they
+ *   are shown as a list; an answer with unmet conditions is hidden. Otherwise the game itself picks
+ *   the next NPC line. Mixed branches (answers and NPC lines together, 57 nodes in vanilla) are not
+ *   decoded from the game; the player shows the answers and a separate move "NPC continues on its own".
+ * - "As if": mode `met` (default) treats conditions and chances as met, only
+ *   locked ones as locked; mode `none` lets through only records that always pass.
+ *   `assume` overrides the mode for single records: met (true) or not (false). The target's
+ *   race from `target race` with met conditions gives the game's +2, as in the game.
+ * - If several fit with equal scores, the game picks randomly; the player takes
+ *   the first one in game order until the user picks another (`prefer`).
  */
 import type { GameRecord } from '../format/types.ts';
 import { itemTypeName } from '../format/item-types.ts';
@@ -25,35 +25,35 @@ import { alwaysPasses, chooseOdds, chooseOrder, dialogueScore, isEmptyNode, type
 import { EVENT_TALK, squadIndex, talkSources, type SquadIndex, type TalkSource } from './talk.ts';
 import { UiTextError } from '../ui-text.ts';
 
-/** Почему вариант выбран или нет. */
+/** Why a variant is picked or not. */
 export type PlayWhy =
-  /** Выбран: подходит и очков больше всех. */
+  /** Picked: fits and has the highest score. */
   | 'chosen'
-  /** Выбран случайно среди равных (есть и другие с шансом). */
+  /** Picked randomly among equals (others have a chance too). */
   | 'chosen-random'
-  /** Мог выпасть случайно, но выпал другой. */
+  /** Could have come up randomly, but another one did. */
   | 'random'
-  /** Подходит, но у выбранного очков больше (или раньше в списке игры). */
+  /** Fits, but the picked one has a higher score (or is earlier in the game's list). */
   | 'outscored'
-  /** Не подходит: условия, шанс, locked или unique — не выполнены в этом раскладе. */
+  /** Does not fit: conditions, chance, locked or unique are not met in this setup. */
   | 'fails'
-  /** Пустой узел без продолжения: игре нечего сказать. */
+  /** Empty node without continuation: the game has nothing to say. */
   | 'empty'
-  /** Записи нет. */
+  /** The record does not exist. */
   | 'missing';
 
 export interface PlayOption {
   sid: string;
   why: PlayWhy;
-  /** Шанс, что игра выберет его в этом раскладе (0..1). */
+  /** Chance that the game picks it in this setup (0..1). */
   odds: number;
-  /** Очки записи, как их считает игра (без надбавки за расу). */
+  /** Record score as the game computes it (without the race bonus). */
   score: number;
-  /** Проходит ли проверки в этом раскладе. */
+  /** Does it pass the checks in this setup. */
   passes: boolean;
-  /** Проходит всегда — переключатель «как будто» ему не нужен. */
+  /** Always passes: it needs no "as if" toggle. */
   always: boolean;
-  /** Для диалогов начала: откуда взялся (персонаж, пакеты, отряд, фракция). */
+  /** For opening dialogues: where it came from (character, packages, squad, faction). */
   sources?: TalkSource[];
 }
 
@@ -64,48 +64,48 @@ export interface PlayLevel {
 
 export interface PlayAnswer {
   sid: string;
-  /** Показан игроку (условия выполнены в этом раскладе). */
+  /** Shown to the player (conditions met in this setup). */
   shown: boolean;
   always: boolean;
 }
 
 export interface PlayStep {
-  /** Откуда выбирали: '' — начало (диалоги события), иначе id предыдущей реплики. */
+  /** What the pick was made from: '' = start (event dialogues), otherwise the id of the previous line. */
   from: string;
-  /** Из чего игра выбирала реплику NPC (пусто, если здесь сразу ответы игрока). */
+  /** What the game picked the NPC line from (empty if player answers come right here). */
   options: PlayOption[];
-  /** Пустые узлы, через которые прошёл выбор (корень диалога и т. п.), с выбором внутри каждого. */
+  /** Empty nodes the pick went through (dialogue root etc.), with the pick inside each. */
   path: PlayLevel[];
-  /** Что прозвучало (реплика NPC или ответ, сказанный без выбора). */
+  /** What was said (an NPC line or an answer said without a choice). */
   said?: string;
-  /** Варианты ответа игрока после `said` (или после ответа на прошлом шаге). */
+  /** Player answer options after `said` (or after the answer of the previous step). */
   answers: PlayAnswer[];
-  /** Есть и реплики NPC вместе с ответами — ход «NPC продолжает сам» (`PLAY_NPC`). */
+  /** NPC lines are present along with answers: the move "NPC continues on its own" (`PLAY_NPC`). */
   npcToo: boolean;
-  /** Что выбрал игрок (id ответа или `PLAY_NPC`). */
+  /** What the player chose (answer id or `PLAY_NPC`). */
   answered?: string;
-  /** Разговор здесь кончился: дальше ничего нет / ничего не подошло. */
+  /** The conversation ended here: nothing follows / nothing fit. */
   end?: 'nothing-next' | 'nothing-fits';
 }
 
-/** Ход «NPC продолжает сам» в смешанной ветке. */
+/** The move "NPC continues on its own" in a mixed branch. */
 export const PLAY_NPC = '@npc';
 
-/** Расклад по умолчанию: `met` — условия выполнены (кроме locked), `none` — проходят только записи без условий. */
+/** Default setup: `met` = conditions met (except locked), `none` = only records without conditions pass. */
 export type PlayMode = 'met' | 'none';
 
 export interface PlayInput {
-  /** Событие (по клику — 1). */
+  /** Event (click = 1). */
   event?: number;
   mode?: PlayMode;
-  /** «Как будто»: id → считать условия выполненными (true) или нет (false). */
+  /** "As if": id → treat conditions as met (true) or not (false). */
   assume?: ReadonlyMap<string, boolean>;
-  /** Ответы игрока по порядку. */
+  /** Player answers in order. */
   answers?: readonly string[];
-  /** Выбор среди равных: id шага (`from`) → какой вариант взять. */
+  /** Pick among equals: step id (`from`) → which variant to take. */
   prefer?: ReadonlyMap<string, string>;
   squads?: SquadIndex;
-  /** Предел шагов (петли в диалогах). */
+  /** Step limit (loops in dialogues). */
   limit?: number;
 }
 
@@ -113,7 +113,7 @@ export interface PlayResult {
   character: string;
   event: number;
   steps: PlayStep[];
-  /** Ждёт ответа игрока на последнем шаге. */
+  /** Waits for a player answer at the last step. */
   waiting: boolean;
 }
 
@@ -121,7 +121,7 @@ const EPS = 1e-9;
 
 export const isChoiceRecord = (r: GameRecord | undefined): boolean => r !== undefined && CHOICE_SPEAKERS.has(r.ints.get('speaker') ?? 0);
 
-/** Расклад игры при «как будто»: что проходит проверки и надбавка +2 за расу собеседника. */
+/** Game setup under "as if": what passes the checks and the +2 bonus for the target's race. */
 export function playEnv(assume: ReadonlyMap<string, boolean> = new Map(), mode: PlayMode = 'met'): ChooseEnv {
   const passes = (sid: string, r: GameRecord): boolean => assume.get(sid) ?? (mode === 'met' ? !r.bools.get('locked') : alwaysPasses(r));
   return {
@@ -133,8 +133,8 @@ export function playEnv(assume: ReadonlyMap<string, boolean> = new Map(), mode: 
 const kidsOf = (ctx: ModContext, sid: string): string[] => (ctx.get(sid)?.refs.get('lines') ?? []).map((r) => r.target);
 
 /**
- * Выбор игры среди `ids` в раскладе `env`: варианты с причинами и выбранный (`prefer`, если у него
- * есть шанс, иначе самый вероятный; при равных — первый в порядке игры).
+ * The game's pick among `ids` in setup `env`: variants with reasons and the picked one (`prefer` if it
+ * has a chance, otherwise the most likely; among equals, the first in game order).
  */
 export function playPick(ctx: ModContext, ids: readonly string[], env: ChooseEnv, prefer?: string): { options: PlayOption[]; chosen?: string } {
   const uniq = [...new Set(ids)];
@@ -146,7 +146,7 @@ export function playPick(ctx: ModContext, ids: readonly string[], env: ChooseEnv
     if (!rec) return { sid, why: 'missing', odds: 0, score: 0, passes: false, always: false };
     const passes = env.passes(sid, rec);
     const kids = isEmptyNode(rec) ? kidsOf(ctx, sid) : [];
-    // Пустой узел подходит, но внутри ничего не проходит — игра его пропускает (а не «перебита»).
+    // The empty node fits, but nothing inside passes: the game skips it (rather than "overridden").
     const empty = isEmptyNode(rec) && (kids.length === 0 || (passes && (odds.get(sid) ?? 0) <= EPS && ![...chooseOdds(ctx, kids, env).odds.values()].some((q) => q > EPS)));
     return { sid, why: empty ? 'empty' : passes ? 'outscored' : 'fails', odds: odds.get(sid) ?? 0, score: dialogueScore(ctx, rec).total, passes, always: alwaysPasses(rec) };
   });
@@ -163,7 +163,7 @@ export function playPick(ctx: ModContext, ids: readonly string[], env: ChooseEnv
   return chosen !== undefined ? { options, chosen } : { options };
 }
 
-/** Спуститься от выбранного пустого узла к реплике, которую игра скажет. */
+/** Descend from the picked empty node to the line the game will say. */
 function descend(ctx: ModContext, sid: string, env: ChooseEnv, prefer: ReadonlyMap<string, string>, path: PlayLevel[]): string | undefined {
   const seen = new Set<string>();
   let cur: string | undefined = sid;
@@ -189,7 +189,7 @@ function answersAfter(ctx: ModContext, sid: string, env: ChooseEnv): { answers: 
   return { answers, npc };
 }
 
-/** Диалоги персонажа на событие (без повторов) с источниками. */
+/** The character's dialogues for the event (no duplicates) with sources. */
 export function playStartList(ctx: ModContext, character: string, event = EVENT_TALK, squads?: SquadIndex): Map<string, TalkSource[]> {
   const c = ctx.get(character);
   if (!c) throw new UiTextError({ en: `no record ${character}`, ru: `нет записи ${character}`, zh: `没有记录 ${character}` });
@@ -203,7 +203,7 @@ export function playStartList(ctx: ModContext, character: string, event = EVENT_
   return out;
 }
 
-/** Проиграть разговор с персонажем: по шагам, с ответами игрока `input.answers`. */
+/** Play a conversation with a character: step by step, with player answers `input.answers`. */
 export function playConversation(ctx: ModContext, character: string, input: PlayInput = {}): PlayResult {
   const event = input.event ?? EVENT_TALK;
   const env = playEnv(input.assume, input.mode);
@@ -261,7 +261,7 @@ export function playConversation(ctx: ModContext, character: string, input: Play
       pending = undefined;
       continue;
     }
-    // Ответ сказан; дальше — его продолжение.
+    // The answer is said; its continuation follows.
     const after = answersAfter(ctx, a, env);
     from = a;
     if (after.npc.length > 0 && after.answers.length === 0) {
@@ -389,8 +389,8 @@ const PLAY_WORDS: Readonly<Record<string, PlayWords>> = { en: playEn, ru: playRu
 const pctOf = (x: number): string => `${String(Math.round(x * 100))}%`;
 
 /**
- * Разговор из `playConversation` текстом (MCP, CLI): по шагам — из чего игра выбирала и почему,
- * что прозвучало, ответы игрока с id (их передают в `answers` следующего вызова).
+ * The conversation from `playConversation` as text (MCP, CLI): step by step, what the game picked from and why,
+ * what was said, player answers with ids (they are passed in `answers` of the next call).
  */
 export function formatPlay(ctx: ModContext, res: PlayResult, options: { translation?: TranslationIndex; mode?: PlayMode; lang?: string } = {}): string[] {
   const w = PLAY_WORDS[options.lang ?? 'en'] ?? playEn;

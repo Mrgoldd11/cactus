@@ -4,10 +4,10 @@ import { FileType, type DataFile, type GameRecord, type ModHeader } from './type
 
 export interface WriteOptions {
   /**
-   * Формат 17: что писать в первое число записи (`lead`).
-   * - `auto` (по умолчанию): пересчитать длину, если `lead` не 0. FCS пишет то длину, то 0
-   *   (в Dialogue.mod у всех записей 0), поэтому 0 оставляем как есть.
-   * - `always`: всегда пересчитать длину; `preserve`: писать `lead` как есть.
+   * Format 17: what to write into the first number of a record (`lead`).
+   * - `auto` (default): recompute the length if `lead` is not 0. FCS writes either the length or 0
+   *   (all records in Dialogue.mod have 0), so 0 is left as is.
+   * - `always`: always recompute the length; `preserve`: write `lead` as is.
    */
   recordLengths?: 'auto' | 'always' | 'preserve';
 }
@@ -155,7 +155,7 @@ class DataFileWriter {
   }
 }
 
-/** Собрать файл данных обратно в байты. */
+/** Assemble a data file back into bytes. */
 export function writeDataFile(file: DataFile, options: WriteOptions = {}): Uint8Array {
   return new DataFileWriter(file, options).write();
 }

@@ -1,6 +1,6 @@
 /**
- * Мост к игре (плагин Kenshi Bridge для RE_Kenshi): типы протокола v1 и формат ответов текстом.
- * Сам плагин — отдельный проект под GPLv3; здесь только описание того, что он присылает по сети.
+ * Bridge to the game (the Kenshi Bridge plugin for RE_Kenshi): protocol v1 types and text formatting of replies.
+ * The plugin itself is a separate GPLv3 project; this only describes what it sends over the network.
  */
 
 import type { Vec3 } from '../format/types.ts';
@@ -34,14 +34,14 @@ export interface GameDialogueState {
 export interface GameState {
   paused: boolean;
   speed: number;
-  /** Всего дней и всего часов с начала игры. */
+  /** Total days and total hours since the start of the game. */
   time: { days: number; hours: number };
   selected: GameSelected | null;
   selectedDialogue: GameDialogueState | null;
   selectedIsPlayer: boolean;
   camera: { center: Vec3 } | null;
   playerCharacters: number;
-  /** Включена ли трассировка диалога. */
+  /** Whether dialogue tracing is on. */
   trace: boolean;
   build: string;
 }
@@ -82,20 +82,20 @@ export interface TracePage {
   items: TraceRecord[];
 }
 
-/** Команды, которые меняют игру (нужно явное согласие пользователя). */
+/** Commands that change the game (explicit user consent required). */
 export type GameAction =
   | { cmd: 'teleport'; args: { pos: Vec3 } }
   | { cmd: 'camera'; args: { pos: Vec3 } }
   | { cmd: 'speed'; args: { value: number } }
   | { cmd: 'pause'; args: { on: boolean } };
 
-/** Город из команды `towns` плагина. */
+/** A town from the plugin's `towns` command. */
 export interface GameTown {
   stringId: string;
   name: string;
   type: number;
   typeName: string;
-  /** Радиус границы города (с множителем из запроса). */
+  /** Town border radius (with the multiplier from the request). */
   radius: number;
   pos: Vec3;
 }
@@ -217,7 +217,7 @@ const ERROR_TEXT: Record<GameErrorCode, UiText> = {
   timeout: { en: 'the game did not answer', ru: 'игра не ответила', zh: '游戏没有响应' },
 };
 
-/** Понятное описание кода ошибки моста. */
+/** Readable description of a bridge error code. */
 export function gameErrorText(code: string, lang = 'en'): string {
   const t = (ERROR_TEXT as Record<string, UiText | undefined>)[code];
   return t ? uiText(t, lang) : code;
@@ -226,7 +226,7 @@ export function gameErrorText(code: string, lang = 'en'): string {
 const fmt = (v: number): string => (Math.round(v * 10) / 10).toString();
 export const formatVec3 = (p: readonly number[]): string => p.map(fmt).join(', ');
 
-/** Состояние игры строками (для MCP и логов). */
+/** Game state as lines (for MCP and logs). */
 export function formatGameState(s: GameState): string[] {
   const out: string[] = [];
   const dayHours = ((s.time.hours % 24) + 24) % 24;
@@ -256,7 +256,7 @@ export function traceStatusText(c: TraceConditions): string {
 
 const who = (a: TraceActor | null): string => (a ? `${a.name}${a.player ? ' (player)' : ''}` : '—');
 
-/** Запись трассировки строками: событие, кто, выбор и соперники по порядку проверки. */
+/** Trace entry as lines: event, who, the pick and the rivals in check order. */
 export function formatTraceRecord(r: TraceRecord): string[] {
   const out: string[] = [];
   out.push(`#${r.seq} event ${r.event}${r.wordswap ? ' (word swap)' : ''}: ${who(r.speaker)} → ${who(r.target)}`);

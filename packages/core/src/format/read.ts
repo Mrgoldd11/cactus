@@ -17,8 +17,8 @@ import {
 
 export interface ReadOptions {
   /**
-   * Файлы без типа в начале (сейвы старого вида): тип 15 предполагается, если первое
-   * число не 15/16/17. По умолчанию неизвестный тип — ошибка.
+   * Files without a type at the start (old-style saves): type 15 is assumed if the first
+   * number is not 15/16/17. By default an unknown type is an error.
    */
   allowUnknownFileType?: boolean;
 }
@@ -31,7 +31,7 @@ class DataFileReader {
     this.r = new ByteReader(bytes);
   }
 
-  /** Ключи полей и id повторяются сотни тысяч раз: ASCII-строку берём из кэша по хешу байтов. */
+  /** Field keys and ids repeat hundreds of thousands of times: the ASCII string is taken from a cache by byte hash. */
   private readonly idCache = new Map<number, string>();
 
   private id(): string {
@@ -76,7 +76,7 @@ class DataFileReader {
     return text;
   }
 
-  /** Только тип файла и заголовок мода (без записей). */
+  /** Only the file type and the mod header (no records). */
   readHeader(): { fileType: number; header?: ModHeader; recordCount?: number } {
     const fileType = this.r.i32();
     if (fileType !== FileType.Mod && fileType !== FileType.MergeMod) return { fileType };
@@ -91,7 +91,7 @@ class DataFileReader {
     return this.finish(head);
   }
 
-  /** То же, что `read`, но с паузами `pause()` примерно каждые `sliceMs` мс. */
+  /** Same as `read`, but with `pause()` roughly every `sliceMs` ms. */
   async readSliced(options: ReadOptions, pause: () => Promise<void>, sliceMs: number): Promise<DataFile> {
     const head = this.start(options);
     let t = performance.now();
@@ -151,7 +151,7 @@ class DataFileReader {
         header.merge = this.mergeData(end);
       } catch (e) {
         if (!(e instanceof FormatError)) throw e;
-        // Незнакомое содержимое — сохраняем как есть.
+        // Unknown content: keep it as is.
         r.pos = afterRefs;
       }
     }
@@ -270,21 +270,21 @@ class DataFileReader {
   }
 }
 
-/** Разобрать файл данных (.base/.mod/.save…) из байтов. */
+/** Parse a data file (.base/.mod/.save…) from bytes. */
 export function readDataFile(bytes: Uint8Array, options: ReadOptions = {}): DataFile {
   return new DataFileReader(bytes).read(options);
 }
 
 /**
- * Разобрать файл кусками, отдавая управление (`pause`, например `setTimeout 0`) примерно
- * каждые `sliceMs` мс — чтобы окно не замирало на больших файлах. Результат тот же, что
- * у `readDataFile`.
+ * Parse a file in slices, yielding control (`pause`, e.g. `setTimeout 0`) roughly
+ * every `sliceMs` ms, so the window does not freeze on large files. The result is the same as
+ * from `readDataFile`.
  */
 export function readDataFileSliced(bytes: Uint8Array, pause: () => Promise<void>, sliceMs = 12, options: ReadOptions = {}): Promise<DataFile> {
   return new DataFileReader(bytes).readSliced(options, pause, sliceMs);
 }
 
-/** Тип файла, заголовок мода и число записей — без чтения записей (для списка модов). */
+/** File type, mod header and record count, without reading the records (for the mod list). */
 export function readModHeader(bytes: Uint8Array): { fileType: number; header?: ModHeader; recordCount?: number } {
   return new DataFileReader(bytes).readHeader();
 }

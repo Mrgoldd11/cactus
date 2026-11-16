@@ -1,15 +1,15 @@
 /**
- * Установленные моды: `Kenshi/mods/<имя>/`, мастерская `workshop/content/233860/<id>/` и
- * порядок загрузки `data/mods.cfg`. Список строится без чтения модов целиком: только имена
- * файлов и `mods.cfg`; заголовок (автор, зависимости, число записей) — `readModSummary`,
- * по первым килобайтам файла.
+ * Installed mods: `Kenshi/mods/<name>/`, Workshop `workshop/content/233860/<id>/` and
+ * load order `data/mods.cfg`. The list is built without reading whole mods: only file
+ * names and `mods.cfg`; the header (author, dependencies, record count) is `readModSummary`,
+ * from the first kilobytes of the file.
  *
- * `mods.cfg` пишет только `writeModsCfg`: конец строки как был (CRLF по умолчанию), копия
- * рядом перед записью. `__mods.list` (его ведёт лаунчер) не трогается.
+ * Only `writeModsCfg` writes `mods.cfg`: line endings as they were (CRLF by default), a copy
+ * next to it before writing. `__mods.list` (the launcher maintains it) is not touched.
  *
- * Чужой мод (из мастерской) правят только в копии: `copyModForEditing` кладёт его байт в байт
- * в `mods/<имя>/<имя>.mod` и рядом `<имя>.kedit-origin.json` — откуда копия (путь, номер
- * мастерской, дата, SHA-256 оригинала). Оригинал не меняется никогда.
+ * A foreign mod (from the Workshop) is edited only as a copy: `copyModForEditing` puts it byte for byte
+ * into `mods/<name>/<name>.mod` and next to it `<name>.kedit-origin.json` — where the copy came from (path,
+ * Workshop number, date, SHA-256 of the original). The original is never changed.
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -28,27 +28,27 @@ import { UiTextError, type UiText } from '../ui-text.ts';
 export type ModSource = 'mods' | 'workshop';
 
 export interface InstalledMod {
-  /** Имя файла: `Мой мод.mod`. */
+  /** File name: `My mod.mod`. */
   fileName: string;
-  /** Имя без `.mod`. */
+  /** Name without `.mod`. */
   name: string;
   path: string;
   source: ModSource;
-  /** Номер предмета мастерской (имя папки), для `source: 'workshop'`. */
+  /** Workshop item number (folder name), for `source: 'workshop'`. */
   workshopId?: string;
-  /** Есть в `mods.cfg`. */
+  /** Listed in `mods.cfg`. */
   enabled: boolean;
-  /** Место в `mods.cfg` (0 — первый, грузится раньше всех). */
+  /** Position in `mods.cfg` (0 — first, loads before all). */
   loadIndex?: number;
-  /** Такой же файл есть в другом месте и игра возьмёт его (`mods/` важнее мастерской). */
+  /** The same file exists elsewhere and the game will take that one (`mods/` wins over the Workshop). */
   shadowedBy?: string;
 }
 
 export interface InstalledMods {
   mods: InstalledMod[];
-  /** Строки `mods.cfg`, для которых файла нет. */
+  /** `mods.cfg` lines that have no file. */
   missing: { fileName: string; loadIndex: number }[];
-  /** Порядок `mods.cfg` как есть. */
+  /** `mods.cfg` order as is. */
   order: string[];
 }
 
@@ -61,13 +61,13 @@ export function readModsCfgText(paths: GamePaths): ModsCfgText {
   return existsSync(p) ? parseModsCfg(readFileSync(p, 'utf-8')) : { names: [], eol: '\r\n' };
 }
 
-/** Номер предмета мастерской по пути мода: `<workshop>/<id>/X.mod` → id. */
+/** Workshop item number from a mod path: `<workshop>/<id>/X.mod` → id. */
 export function workshopIdOf(paths: GamePaths, path: string): string | undefined {
   const dir = dirname(resolve(path));
   return resolve(dirname(dir)).toLowerCase() === resolve(paths.workshop).toLowerCase() ? basename(dir) : undefined;
 }
 
-/** Все моды из `mods/` и мастерской, с порядком `mods.cfg`. Файлы модов не читаются. */
+/** All mods from `mods/` and the Workshop, with `mods.cfg` order. Mod files are not read. */
 export function listInstalledMods(paths: GamePaths): InstalledMods {
   const order = readModsCfgText(paths).names;
   const rank = new Map<string, number>();
@@ -75,7 +75,7 @@ export function listInstalledMods(paths: GamePaths): InstalledMods {
     if (!rank.has(n.toLowerCase())) rank.set(n.toLowerCase(), i);
   });
   const files = installedModFiles(paths);
-  // Какой файл с этим именем возьмёт игра/редактор: первый найденный (`mods/` раньше мастерской).
+  // Which file with this name the game/editor takes: the first found (`mods/` before the Workshop).
   const winner = new Map<string, string>();
   for (const f of files) {
     const k = basename(f.path).toLowerCase();
@@ -108,7 +108,7 @@ export interface ModSummary {
   error?: string;
 }
 
-/** Первые `n` байт файла. */
+/** First `n` bytes of a file. */
 function readHead(path: string, n: number): Uint8Array {
   const fd = openSync(path, 'r');
   try {
@@ -120,7 +120,7 @@ function readHead(path: string, n: number): Uint8Array {
   }
 }
 
-/** Заголовок мода по первым килобайтам (если описание длинное — по всему файлу). */
+/** Mod header from the first kilobytes (if the description is long — from the whole file). */
 export function readModSummary(path: string): ModSummary {
   const st = statSync(path);
   const out: ModSummary = { size: st.size, mtimeMs: st.mtimeMs };
@@ -147,10 +147,10 @@ export function readModSummary(path: string): ModSummary {
   return out;
 }
 
-/** Имена процессов игры: пока они работают, `mods.cfg` переписывать нельзя (лаунчер перезапишет). */
+/** Game process names: while they run, `mods.cfg` must not be rewritten (the launcher would overwrite it). */
 export const GAME_PROCESSES = ['kenshi_x64.exe', 'kenshi.exe'];
 
-/** Запущенные процессы игры (Windows, `tasklist`); на других системах — пусто. */
+/** Running game processes (Windows, `tasklist`); empty on other systems. */
 export function runningGameProcesses(): string[] {
   if (process.platform !== 'win32') return [];
   let text: string;
@@ -174,18 +174,18 @@ function stamp(d: Date): string {
 
 export interface WriteModsCfgResult {
   path: string;
-  /** Копия прежнего файла; нет — файла не было. */
+  /** Copy of the previous file; none — there was no file. */
   backup?: string;
   changed: boolean;
 }
 
 /**
- * Записать порядок загрузки. Конец строки — как в прежнем файле (нет файла — CRLF).
- * Перед записью — копия `mods.cfg.bak-ГГГГММДДччммсс`. Если игра запущена — ошибка
- * (проверку можно выключить для тестов: `checkGame: false` или `KEDIT_SKIP_GAME_CHECK=1`).
+ * Write the load order. Line endings as in the previous file (no file — CRLF).
+ * Before writing — a copy `mods.cfg.bak-YYYYMMDDhhmmss`. If the game is running — error
+ * (the check can be disabled for tests: `checkGame: false` or `KEDIT_SKIP_GAME_CHECK=1`).
  */
 export function writeModsCfg(paths: GamePaths, names: readonly string[], options: { checkGame?: boolean; now?: Date } = {}): WriteModsCfgResult {
-  // KEDIT_SKIP_GAME_CHECK=1 — только для тестов на временной копии папки игры.
+  // KEDIT_SKIP_GAME_CHECK=1 — only for tests on a temporary copy of the game folder.
   if (options.checkGame ?? process.env['KEDIT_SKIP_GAME_CHECK'] !== '1') {
     const running = runningGameProcesses();
     if (running.length > 0) {
@@ -211,19 +211,19 @@ export function writeModsCfg(paths: GamePaths, names: readonly string[], options
   return { path, ...(backup !== undefined ? { backup } : {}), changed: true };
 }
 
-/** Откуда взята копия мода: файл `<имя>.kedit-origin.json` рядом с копией. */
+/** Where a mod copy came from: the `<name>.kedit-origin.json` file next to the copy. */
 export interface ModOrigin {
-  /** Путь оригинала на момент копирования. */
+  /** Path of the original at copy time. */
   source: string;
-  /** Имя файла оригинала. */
+  /** File name of the original. */
   sourceFileName: string;
-  /** Номер предмета мастерской, если оригинал оттуда. */
+  /** Workshop item number, if the original came from there. */
   workshopId?: string;
   author?: string;
-  /** Когда скопирован (ISO). */
+  /** When copied (ISO). */
   copiedAt: string;
   size: number;
-  /** SHA-256 оригинала — понять, обновился ли он с тех пор. */
+  /** SHA-256 of the original — to tell whether it has been updated since. */
   sha256: string;
 }
 
@@ -231,21 +231,21 @@ export const ORIGIN_SUFFIX = '.kedit-origin.json';
 
 export interface ModCopyPlan {
   source: string;
-  /** Имя копии без `.mod`. */
+  /** Copy name without `.mod`. */
   name: string;
-  /** `mods/<имя>/<имя>.mod`. */
+  /** `mods/<name>/<name>.mod`. */
   dest: string;
   originPath: string;
   origin: ModOrigin;
-  /** Копия с тем же именем закроет оригинал: игра возьмёт файл из `mods/`. */
+  /** A copy with the same name will shadow the original: the game takes the file from `mods/`. */
   shadowsOriginal: boolean;
-  /** Оригинал в `mods.cfg` — копия с тем же именем встанет на его место. */
+  /** The original is in `mods.cfg` — a copy with the same name takes its place. */
   enabled: boolean;
-  /** Почему копировать нельзя (папка уже есть, плохое имя…). */
+  /** Why copying is impossible (the folder already exists, bad name…). */
   error?: string;
   /** The same reason in every interface language (`error` is its English text). */
   errorText?: UiText;
-  /** Предупреждения для пользователя. */
+  /** Warnings for the user. */
   warnings: string[];
   /** The same warnings in every interface language (`warnings` are their English texts). */
   warningTexts: UiText[];
@@ -261,7 +261,7 @@ function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-/** Что сделает `copyModForEditing` (ничего не пишет). `name` — имя копии, по умолчанию как у оригинала. */
+/** What `copyModForEditing` would do (writes nothing). `name` — copy name, defaults to the original's. */
 export function planModCopy(paths: GamePaths, source: string, options: { name?: string } = {}): ModCopyPlan {
   const src = resolve(source);
   const sourceFileName = basename(src);
@@ -275,7 +275,7 @@ export function planModCopy(paths: GamePaths, source: string, options: { name?: 
     const author = readModHeader(bytes).header?.author;
     if (author && author.length > 0) origin.author = decodeText(author);
   } catch {
-    // Заголовок не прочитался — копируем всё равно, байт в байт.
+    // The header could not be read — copy anyway, byte for byte.
   }
   const shadowsOriginal = `${name}.mod`.toLowerCase() === sourceFileName.toLowerCase();
   const enabled = readModsCfgText(paths).names.some((n) => n.toLowerCase() === sourceFileName.toLowerCase());
@@ -320,8 +320,8 @@ export function planModCopy(paths: GamePaths, source: string, options: { name?: 
 }
 
 /**
- * Скопировать мод для правки: байт в байт в `mods/<имя>/<имя>.mod` плюс файл происхождения.
- * Оригинал только читается. Если папка копии уже есть — ошибка (ничего не перезаписываем).
+ * Copy a mod for editing: byte for byte into `mods/<name>/<name>.mod` plus the origin file.
+ * The original is only read. If the copy folder already exists — error (we overwrite nothing).
  */
 export function copyModForEditing(paths: GamePaths, source: string, options: { name?: string } = {}): ModCopyPlan {
   const plan = planModCopy(paths, source, options);
@@ -334,7 +334,7 @@ export function copyModForEditing(paths: GamePaths, source: string, options: { n
   return plan;
 }
 
-/** Файл происхождения копии рядом с модом (`<имя>.kedit-origin.json`), если есть. */
+/** Origin file of the copy next to the mod (`<name>.kedit-origin.json`), if any. */
 export function readModOrigin(modPath: string): ModOrigin | undefined {
   const p = join(dirname(modPath), `${basename(modPath).replace(/\.mod$/i, '')}${ORIGIN_SUFFIX}`);
   if (!existsSync(p)) return undefined;
@@ -346,7 +346,7 @@ export function readModOrigin(modPath: string): ModOrigin | undefined {
   }
 }
 
-/** Изменился ли оригинал копии с момента копирования: `undefined` — оригинала больше нет. */
+/** Whether the copy's original changed since copying: `undefined` — the original is gone. */
 export function originChanged(origin: ModOrigin): boolean | undefined {
   if (!existsSync(origin.source)) return undefined;
   return sha256(readFileSync(origin.source)) !== origin.sha256;
@@ -354,25 +354,25 @@ export function originChanged(origin: ModOrigin): boolean | undefined {
 
 export interface ModLayers {
   layers: ConflictLayer[];
-  /** Моды, которые не удалось прочитать: имя и ошибка. */
+  /** Mods that could not be read: name and error. */
   broken: { name: string; error: string }[];
 }
 
 export interface ModLayersOptions {
-  /** Ещё и выключенные моды (после включённых, по имени). */
+  /** Also disabled mods (after enabled ones, by name). */
   all?: boolean;
   /**
-   * Свой мод: встаёт на своё место в `mods.cfg` (вместо установленного файла с тем же именем)
-   * или, если его там нет, последним. `records` — записи как есть сейчас (несохранённые правки).
+   * Own mod: takes its place in `mods.cfg` (instead of the installed file with the same name)
+   * or, if it is not there, goes last. `records` — records as they are now (unsaved edits).
    */
   extra?: { name: string; path?: string; records?: readonly GameRecord[] };
-  /** Чтение файла мода (можно с кэшем); по умолчанию — разбор файла с диска. */
+  /** Reading a mod file (optionally cached); defaults to parsing the file from disk. */
   read?: (path: string) => DataFile;
 }
 
 /**
- * Слои для поиска конфликтов: `vanilla`, затем моды. Без `all` — включённые по порядку
- * `mods.cfg`. Моды из `mods/` важнее таких же из мастерской (как в игре).
+ * Layers for conflict search: `vanilla`, then mods. Without `all` — enabled mods in `mods.cfg`
+ * order. Mods from `mods/` win over the same mods from the Workshop (as in the game).
  */
 export function loadModLayers(paths: GamePaths, vanilla: readonly ConflictLayer[], options: ModLayersOptions = {}): ModLayers {
   const read = options.read ?? ((p: string) => readDataFile(readFileSync(p)));

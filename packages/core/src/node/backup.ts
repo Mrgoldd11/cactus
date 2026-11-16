@@ -1,23 +1,23 @@
 /**
- * Безопасное сохранение мода, автосохранение и резервные копии (как «safe save», `.bak` и
- * «A more recent backup exists» в официальном FCS) — без Electron, чтобы проверять тестами.
+ * Safe mod save, autosave and backups (like "safe save", `.bak` and
+ * "A more recent backup exists" in the official FCS) — without Electron, so tests can cover it.
  *
- * Правила:
- * - Сохранение мода: байты → временный файл рядом → проверка (читается ядром и совпадает с
- *   записанным) → копия прежней версии в папку резервных копий → замена. Сбой на любом шаге
- *   оставляет существующий мод как был, временный файл удаляется.
- * - Резервные копии и автосохранения лежат ТОЛЬКО в папке данных приложения
- *   (`<данные>/backups/<ключ>/`, `<данные>/autosave/<ключ>.mod`): не в папке мода (её целиком
- *   загружают в мастерскую) и не в папке игры. Путь записи строится здесь из ключа, а не
- *   принимается снаружи; папка в игре или мастерской — отказ (`forbidden`).
- * - Ключ мода — имя файла + хеш полного пути (новый мод без пути — хеш имени).
+ * Rules:
+ * - Saving a mod: bytes → temp file next to it → check (the core reads it and it matches what was
+ *   written) → copy of the previous version into the backup folder → replace. A failure at any step
+ *   leaves the existing mod as it was; the temp file is deleted.
+ * - Backups and autosaves live ONLY in the app data folder
+ *   (`<data>/backups/<key>/`, `<data>/autosave/<key>.mod`): not in the mod folder (it is uploaded
+ *   to the Workshop as a whole) and not in the game folder. The write path is built here from the key,
+ *   not taken from outside; a folder inside the game or Workshop is refused (`forbidden`).
+ * - Mod key — file name + hash of the full path (a new mod without a path — hash of the name).
  */
 import { createHash } from 'node:crypto';
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { readDataFile } from '../format/read.ts';
 
-/** Какой мод: файл на диске (`path`) или новый, ещё не сохранённый (`modName`). */
+/** Which mod: a file on disk (`path`) or a new, not yet saved one (`modName`). */
 export interface ModRef {
   path?: string | undefined;
   modName: string;
@@ -26,10 +26,10 @@ export interface ModRef {
 export type BackupKind = 'backup' | 'autosave' | 'restore-point';
 
 export interface BackupEntry {
-  /** Имя файла в папке копий; у автосохранения — `autosave`. */
+  /** File name in the backup folder; for the autosave — `autosave`. */
   id: string;
   kind: BackupKind;
-  /** Когда создана копия (мс с 1970): для `backup` — когда её заменили новой версией. */
+  /** When the copy was made (ms since 1970): for `backup` — when it was replaced by a newer version. */
   time: number;
   size: number;
 }
@@ -47,7 +47,7 @@ function normalizePath(p: string): string {
   return process.platform === 'win32' ? full.toLowerCase() : full;
 }
 
-/** Имя мода без `.mod`/`.base`, безопасное для имени файла. */
+/** Mod name without `.mod`/`.base`, safe for a file name. */
 function safeName(modName: string): string {
   const base = basename(modName).replace(/\.(mod|base)$/i, '');
   // eslint-disable-next-line no-control-regex
@@ -55,7 +55,7 @@ function safeName(modName: string): string {
   return (clean || 'mod').slice(0, 40).toLowerCase();
 }
 
-/** Ключ мода: `<имя>-<8 знаков хеша пути>`. Один и тот же мод — всегда один ключ. */
+/** Mod key: `<name>-<8 chars of path hash>`. The same mod always has the same key. */
 export function modKey(ref: ModRef): string {
   const seed = ref.path !== undefined && ref.path !== '' ? `file:${normalizePath(ref.path)}` : `new:${ref.modName.toLowerCase()}`;
   const hash = createHash('sha1').update(seed).digest('hex').slice(0, 8);
@@ -66,18 +66,18 @@ export const autosaveFile = (dataDir: string, ref: ModRef): string => join(autos
 const autosaveMetaFile = (dataDir: string, ref: ModRef): string => join(autosaveDir(dataDir), `${modKey(ref)}.json`);
 export const backupDir = (dataDir: string, ref: ModRef): string => join(backupsRoot(dataDir), modKey(ref));
 
-/** Путь `p` лежит внутри `root` (или равен ему). */
+/** Path `p` is inside `root` (or equals it). */
 export function isInside(p: string, root: string): boolean {
   const rel = relative(normalizePath(root), normalizePath(p));
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
 
-/** Папка данных приложения не должна быть внутри папок игры и мастерской. */
+/** The app data folder must not be inside the game and Workshop folders. */
 function assertDataDirAllowed(dataDir: string, forbidden: readonly string[]): void {
   for (const f of forbidden) if (f && isInside(dataDir, f)) throw new Error(`refusing to write backups inside ${f}`);
 }
 
-/** Операции с файлами; подмена нужна только тестам (имитация сбоя записи). */
+/** File operations; overriding is only for tests (simulating a write failure). */
 export interface FileOps {
   writeFile: (path: string, bytes: Uint8Array) => void;
   rename: (from: string, to: string) => void;
@@ -108,7 +108,7 @@ function renameWithRetry(ops: FileOps, from: string, to: string): void {
       return;
     } catch (e) {
       const code = (e as NodeJS.ErrnoException).code;
-      // Windows: антивирус или индексатор на миг держит файл — повторить.
+      // Windows: an antivirus or indexer holds the file for a moment — retry.
       if (attempt >= 3 || (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES')) throw e;
       sleepSync(60 * (attempt + 1));
     }
@@ -125,8 +125,8 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 /**
- * Записать файл так, чтобы старый не пострадал: временный файл рядом → проверка → замена.
- * `check` получает байты, прочитанные обратно с диска; бросает — запись отменяется.
+ * Write a file so the old one is not harmed: temp file next to it → check → replace.
+ * `check` gets the bytes read back from disk; if it throws, the write is cancelled.
  */
 export function writeFileAtomic(path: string, bytes: Uint8Array, options: { check?: (written: Uint8Array) => void; ops?: FileOps } = {}): void {
   const ops = options.ops ?? REAL_OPS;
@@ -142,19 +142,19 @@ export function writeFileAtomic(path: string, bytes: Uint8Array, options: { chec
     try {
       rmSync(tmp, { force: true });
     } catch {
-      // временный файл не удалился — он не мешает: имя содержит .tmp-
+      // the temp file was not deleted — harmless: its name contains .tmp-
     }
     throw e;
   }
 }
 
-/** Файл читается ядром как данные Kenshi (иначе это не мод). */
+/** The core reads the file as Kenshi data (otherwise it is not a mod). */
 export function assertReadable(bytes: Uint8Array): void {
   readDataFile(bytes);
 }
 
 // ---------------------------------------------------------------------------------------------
-// Резервные копии
+// Backups
 
 const BACKUP_NAME = /^(\d{1,16})(?:-\d+)?\.(backup|autosave|restore-point)\.mod$/;
 
@@ -167,7 +167,7 @@ function listBackupFiles(dir: string): BackupEntry[] {
     try {
       out.push({ id: name, kind: m[2] as BackupKind, time: Number(m[1]), size: statSync(join(dir, name)).size });
     } catch {
-      // файл исчез между чтением папки и stat
+      // the file vanished between reading the folder and stat
     }
   }
   return out.sort((a, b) => b.time - a.time || b.id.localeCompare(a.id));
@@ -177,7 +177,7 @@ function normalizeKeep(keep: number): number {
   return Number.isFinite(keep) ? Math.max(0, Math.min(MAX_BACKUP_COUNT, Math.floor(keep))) : DEFAULT_BACKUP_COUNT;
 }
 
-/** Оставить `keep` самых новых копий, остальные удалить. */
+/** Keep the `keep` newest copies, delete the rest. */
 export function rotateBackups(dataDir: string, ref: ModRef, keep: number): string[] {
   const dir = backupDir(dataDir, ref);
   const removed: string[] = [];
@@ -186,7 +186,7 @@ export function rotateBackups(dataDir: string, ref: ModRef, keep: number): strin
       unlinkSync(join(dir, e.id));
       removed.push(e.id);
     } catch {
-      // не удалилась — останется до следующей ротации
+      // not deleted — it stays until the next rotation
     }
   }
   return removed;
@@ -198,7 +198,7 @@ function backupName(dir: string, kind: BackupKind, now: number): string {
   return name;
 }
 
-/** Положить копию `bytes` в папку копий мода и провести ротацию. null — копия такая же, как последняя. */
+/** Put a copy of `bytes` into the mod's backup folder and rotate. null — the copy equals the last one. */
 export function addBackup(dataDir: string, ref: ModRef, bytes: Uint8Array, kind: BackupKind, keep: number, now = Date.now()): BackupEntry | null {
   if (normalizeKeep(keep) === 0) return null;
   const dir = backupDir(dataDir, ref);
@@ -214,7 +214,7 @@ export function addBackup(dataDir: string, ref: ModRef, bytes: Uint8Array, kind:
 
 export interface SafeSaveOptions {
   dataDir: string;
-  /** Сколько прежних версий хранить (0 — не хранить). */
+  /** How many previous versions to keep (0 — keep none). */
   keep: number;
   now?: number;
   ops?: FileOps;
@@ -222,15 +222,15 @@ export interface SafeSaveOptions {
 
 export interface SafeSaveResult {
   path: string;
-  /** Копия прежней версии, если она была. */
+  /** Copy of the previous version, if there was one. */
   backup?: BackupEntry;
-  /** Копию прежней версии сделать не удалось (мод при этом сохранён). */
+  /** Copying the previous version failed (the mod is still saved). */
   backupError?: string;
 }
 
 /**
- * Сохранить мод: временный файл рядом, проверка, копия прежней версии, замена. Если что-то
- * сломалось до замены — мод на диске не тронут.
+ * Save a mod: temp file next to it, check, copy of the previous version, replace. If something
+ * breaks before the replace, the mod on disk is untouched.
  */
 export function safeSaveMod(path: string, bytes: Uint8Array, options: SafeSaveOptions): SafeSaveResult {
   assertReadable(bytes);
@@ -248,7 +248,7 @@ export function safeSaveMod(path: string, bytes: Uint8Array, options: SafeSaveOp
       }
     };
   }
-  // Копия прежней версии — после успешной записи и проверки временного файла, но до замены.
+  // Copy of the previous version — after the temp file is written and checked, but before the replace.
   const tmpCheck = (written: Uint8Array): void => {
     assertReadable(written);
     backupBeforeReplace?.();
@@ -258,7 +258,7 @@ export function safeSaveMod(path: string, bytes: Uint8Array, options: SafeSaveOp
 }
 
 // ---------------------------------------------------------------------------------------------
-// Автосохранение
+// Autosave
 
 export interface AutosaveMeta {
   path: string | null;
@@ -273,8 +273,8 @@ export interface AutosaveInfo {
 }
 
 /**
- * Записать автосохранение мода. Пишет только в `<данные>/autosave/<ключ>.mod`; мод, папка игры
- * и мастерская не затрагиваются (папка данных внутри `forbidden` — отказ).
+ * Write the mod's autosave. Writes only to `<data>/autosave/<key>.mod`; the mod, the game folder
+ * and the Workshop are not touched (data folder inside `forbidden` — refused).
  */
 export function writeAutosave(dataDir: string, ref: ModRef, bytes: Uint8Array, options: { forbidden?: readonly string[]; now?: number; ops?: FileOps } = {}): AutosaveInfo {
   assertDataDirAllowed(dataDir, options.forbidden ?? []);
@@ -302,7 +302,7 @@ export function readAutosave(dataDir: string, ref: ModRef): Uint8Array | undefin
   return existsSync(file) ? readBytes(file) : undefined;
 }
 
-/** Удалить автосохранение мода (после сохранения или отказа от правок). */
+/** Delete the mod's autosave (after saving or discarding edits). */
 export function clearAutosave(dataDir: string, ref: ModRef): boolean {
   let removed = false;
   for (const f of [autosaveFile(dataDir, ref), autosaveMetaFile(dataDir, ref)]) {
@@ -315,16 +315,16 @@ export function clearAutosave(dataDir: string, ref: ModRef): boolean {
 }
 
 export interface Recovery extends AutosaveInfo {
-  /** Файл мода на диске есть. */
+  /** The mod file exists on disk. */
   modExists: boolean;
-  /** Время изменения и размер файла мода (если он есть). */
+  /** Modification time and size of the mod file (if it exists). */
   modTime?: number;
   modSize?: number;
 }
 
 /**
- * Автосохранение, которое стоит предложить восстановить: оно новее файла мода (или файла мода
- * нет) и отличается от него. Копию, оставшуюся от давно сохранённого мода, не предлагаем.
+ * An autosave worth offering to restore: it is newer than the mod file (or there is no mod
+ * file) and differs from it. A copy left over from a long-saved mod is not offered.
  */
 export function findRecovery(dataDir: string, ref: ModRef): Recovery | undefined {
   const info = autosaveInfo(dataDir, ref);
@@ -338,7 +338,7 @@ export function findRecovery(dataDir: string, ref: ModRef): Recovery | undefined
   return { ...info, modExists: true, modTime: Math.round(st.mtimeMs), modSize: st.size };
 }
 
-/** «Открыть мод как есть»: автосохранение не теряется, а уходит в список резервных копий. */
+/** "Open the mod as is": the autosave is not lost but moves into the backup list. */
 export function keepAutosaveAsBackup(dataDir: string, ref: ModRef, keep: number): BackupEntry | null {
   const bytes = readAutosave(dataDir, ref);
   if (!bytes) return null;
@@ -349,9 +349,9 @@ export function keepAutosaveAsBackup(dataDir: string, ref: ModRef, keep: number)
 }
 
 // ---------------------------------------------------------------------------------------------
-// Список и чтение копий
+// Listing and reading copies
 
-/** Автосохранение (если есть) и копии мода, самые новые сверху. */
+/** The autosave (if any) and the mod's copies, newest first. */
 export function listBackups(dataDir: string, ref: ModRef): BackupEntry[] {
   const out: BackupEntry[] = [];
   const auto = autosaveInfo(dataDir, ref);
@@ -360,7 +360,7 @@ export function listBackups(dataDir: string, ref: ModRef): BackupEntry[] {
   return out.sort((a, b) => b.time - a.time);
 }
 
-/** Байты копии по `id` из `listBackups`; чужие имена (с путями) отвергаются. */
+/** Bytes of a copy by `id` from `listBackups`; foreign names (with paths) are rejected. */
 export function readBackup(dataDir: string, ref: ModRef, id: string): Uint8Array | undefined {
   if (id === AUTOSAVE_ID) return readAutosave(dataDir, ref);
   if (!BACKUP_NAME.test(id)) throw new Error(`bad backup id: ${id}`);

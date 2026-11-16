@@ -1,16 +1,16 @@
 /**
- * Перечисления, встроенные в FCS (C#), а не описанные в `fcs_enums.def`: условия и действия
- * диалогов, говорящий, сравнение, повтор, события пакетов, черты характера.
- * Источник — исходники FCS (`knowledge/_external/fcs_enums/*.cs`); номер значения — позиция в
- * enum'е C#. Номера сверены с ванильными данными: событие 1 — разговор, 16 — атака, условие 17 —
- * IN_MY_BUILDING, повтор 5 — один раз (`knowledge/KENSHI_INTERNALS.md`).
+ * Enums built into FCS (C#) rather than described in `fcs_enums.def`: dialogue conditions
+ * and effects, speaker, comparison, repetition, package events, personality traits.
+ * Source — the FCS sources (`knowledge/_external/fcs_enums/*.cs`); a value's number is its position in
+ * the C# enum. Numbers checked against vanilla data: event 1 — talk, 16 — attack, condition 17 —
+ * IN_MY_BUILDING, repetition 5 — once only (`knowledge/KENSHI_INTERNALS.md`).
  *
- * `enum shared X` в `fcs_enums.def` (сейчас только EventTriggerEnum) — это такой же enum C#:
- * файл задаёт описания и порядок показа, а номера берутся по имени отсюда. В файле игры значения
- * идут в другом порядке, и счёт «как в C» дал бы неверные номера.
+ * `enum shared X` in `fcs_enums.def` (currently only EventTriggerEnum) is the same C# enum:
+ * the file gives descriptions and display order, while numbers are taken by name from here. In the game file the values
+ * come in a different order, and counting "as in C" would give wrong numbers.
  */
 
-/** Имена значений по номеру. */
+/** Value names by number. */
 export const BUILTIN_ENUMS: Readonly<Record<string, readonly string[]>> = {
   DialogConditionEnum: ['DC_NONE','DC_RELATIONS','DC_PLAYERMONEY','DC_REPUTATION','DC_CARRYING_BOUNTY_ALIVE','DC_CARRYING_BOUNTY_DEAD','DC_FACTION_VARIABLE','DC_IMPRISONED_BY_TARGET','DC_IMPRISONED_BY_OTHER','DC_IS_A_TRADER','DC_FACTION_RANK','DC_BUILDING_IS_CLOSED_AND_SECURED','DC_PLAYER_TECH_LEVEL','DC_NUM_DIALOG_EVENT_REPEATS','DC_IS_IMPRISONED','DC_IMPRISONMENT_IS_DEATHROW','DC_TARGET_IN_TALKING_RANGE','DC_IN_MY_BUILDING','DC_TARGET_LAST_SEEN_X_HOURS_AGO','DC_IS_LEADER','DC_MET_TARGET_BEFORE','DC_WEAKER_THAN_ME','DC_STRONGER_THAN_ME','DC_HAS_TAG','DC_IS_ALLY','DC_IS_ENEMY','DC_PERSONALITY_TAG','DC_BROKEN_LEG','DC_BROKEN_ARM','DC_DAMAGED_HEAD','DC_NEARLY_KO','DC_IN_A_NON_PLAYER_TOWN','DC_IS_RUNNING','DC_COPS_AROUND','NULL_NULL_____DC_TARGET_SQUAD_SIZE','DC_SQUAD_SIZE','DC_IS_PLAYER','DC_NUM_BACKPACKS','DC_SQUAD_ONLY_ANIMALS','DC_IS_OUTNUMBERED','DC_BOUNTY_AMOUNT_PERCEIVED','DC_IS_KO','DC_IS_NEARLY_KO','DC_SQUAD_IS_DOWN','DC_IS_DEAD','DC_IS_FEMALE','DC_CARRYING_SOMEONE_TO_ENSLAVE','DC_BOUNTY_AMOUNT_ACTUAL','DC_IM_UNARMED','DC_TOWN_HAS_FORTIFICATIONS_WALLS','DC_TARGET_IS_MY_MISSION_TARGET','DC_MY_MISSION_IS_FRIENDLY','DC_I_LOVE_THIS_GUY','DC_I_HATE_THIS_GUY','DC_I_SHOULD_SCREW_THIS_GUY_OVER','DC_I_SHOULD_HELP_THIS_GUY','DC_IN_COMBAT','DC_WITHIN_TOWN_WALLS','DC_TOWN_WALLS_LOCKED_UP','DC_IS_SLAVE','DC_HAS_A_BASE_NEARBY','DC_TARGET_IS_SLAVE_OF_MY_FACTION','DC_IS_ESCAPED_SLAVE','DC_IS_IN_LOCKED_CAGE','DC_WEARING_LOCKED_SHACKLES','DC_IS_SAME_RACE_AS_ME','DC_CAN_AFFORD_BOUNTY','DC_IS_SNEAKING','DC_IS_INDOORS','DC_HAS_ILLEGAL_ITEM','DC_USING_MY_TRAINING_EQUIPMENT','DC_STARVING','DC_MIXED_GENDER_GROUP','DC_TOWN_LEVEL_CURRENT_LOCATION','DC_PLAYERS_BEST_TOWN_LEVEL','DC_IN_A_PLAYER_TOWN','DC_TARGET_CHARACTER_EXISTS','DC_IS_RECRUITABLE','DC_HAS_AI_CONTRACT','DC_HAS_ROBOT_LIMBS','DC_END'],
   TalkerEnum: ['T_ME','T_TARGET','T_TARGET_IF_PLAYER','T_INTERJECTOR1','T_INTERJECTOR2','T_INTERJECTOR3','T_WHOLE_SQUAD','T_TARGET_WITH_RACE'],
@@ -23,7 +23,7 @@ export const BUILTIN_ENUMS: Readonly<Record<string, readonly string[]>> = {
   CharacterPerceptionTags_LongTerm: ['LT_NONE','LT_MY_INTRUDER','LT_MY_LIFESAVER','LT_FREED_ME','LT_STOLE_FROM_ME','LT_MY_CAPTOR','LT_FRIENDLY_AQUAINTANCE','LT_DEFEATED_MY_SQUAD_ONCE','LT_SQUAD_LOST_TO_ME_ONCE','LT_KILLED_MY_FRIEND','LT_I_SCREWED_THIS_GUY','LT_MAX'],
 };
 
-/** Короткие подписи по-русски (для CLI и редактора); у остальных значений подписи нет. */
+/** Short Russian labels (for the CLI and the editor); other values have no label. */
 export const BUILTIN_ENUM_LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   TalkerEnum: {
     T_ME: 'я',
@@ -50,7 +50,7 @@ export const BUILTIN_ENUM_LABELS: Readonly<Record<string, Readonly<Record<string
     EV_ANNOUNCEMENT: 'объявление',
     EV_I_SEE_NEUTRAL_SQUAD: 'вижу нейтральный отряд',
     EV_I_SEE_RAGDOLL: 'вижу лежащего',
-    // Имена стёрты в исходниках FCS; смысл — по ванильным диалогам.
+    // The names are erased in the FCS sources; meaning is taken from vanilla dialogues.
     EV_______: 'вижу враждебный отряд',
     EV_I_________: 'упал товарищ',
     EV_I_DEFEATED_SQUAD: 'победил отряд',
@@ -147,7 +147,7 @@ export const BUILTIN_ENUM_LABELS_I18N: Readonly<Record<string, Readonly<Record<s
   },
 };
 
-/** Поля типов, которых нет в fcs.def (FCS показывает их своими окнами): поле → enum. */
+/** Type fields absent from fcs.def (FCS shows them in its own windows): field → enum. */
 export const BUILTIN_FIELD_ENUMS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   DIALOG_ACTION: {
     'condition name': 'DialogConditionEnum',
@@ -158,20 +158,20 @@ export const BUILTIN_FIELD_ENUMS: Readonly<Record<string, Readonly<Record<string
 };
 
 /**
- * `DIALOG_ACTION.tag` зависит от условия: черта характера для DC_PERSONALITY_TAG, долгая
- * память о собеседнике для DC_HAS_TAG (сверено с данными: tag 1..14 / 2..9, v0 ссылки — 0/1).
+ * `DIALOG_ACTION.tag` depends on the condition: personality trait for DC_PERSONALITY_TAG, long-term
+ * memory about the target for DC_HAS_TAG (checked against data: tag 1..14 / 2..9, reference v0 — 0/1).
  */
 export const CONDITION_TAG_ENUMS: Readonly<Record<string, string>> = {
   DC_PERSONALITY_TAG: 'PersonalityTags',
   DC_HAS_TAG: 'CharacterPerceptionTags_LongTerm',
 };
 
-/** Значения ссылок, которые означают enum: `ТИП.категория` → enum по номеру значения (v0..v2). */
+/** Reference values that mean an enum: `TYPE.category` → enum by value number (v0..v2). */
 export const BUILTIN_REF_VALUE_ENUMS: Readonly<Record<string, readonly (string | undefined)[]>> = {
   'DIALOGUE_PACKAGE.dialogs': ['EventTriggerEnum'],
 };
 
-/** Подписи значений ссылок там, где они не enum (CLI и редактор). */
+/** Labels of reference values where they are not enums (CLI and editor). */
 export const BUILTIN_REF_VALUE_LABELS: Readonly<Record<string, readonly string[]>> = {
   'DIALOGUE.conditions': ['значение'],
   'DIALOGUE_LINE.conditions': ['значение'],

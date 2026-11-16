@@ -1,18 +1,18 @@
 /**
- * Какая 3D-модель у записи и чем её красить. В Kenshi текстуру задаёт не `.material` модели,
- * а записи игры:
- *  - оружие (WEAPON): модель — поле `bare sword` (клинок без ножен) или `mesh`; текстура — у
- *    «модели оружия» (MATERIAL_SPECS_WEAPON) производителя (WEAPON_MANUFACTURER), который
- *    перечисляет это оружие в `weapon types`;
- *  - броня и одежда (ARMOUR): `mesh`, текстура — `material` → MATERIAL_SPECS_CLOTHING;
- *  - здание (BUILDING): части `parts` (BUILDING_PART) — у каждой `phs or mesh`, сдвиг
- *    `offset X/Y/Z` и `material` → MATERIAL_SPEC; без материала у части — материал здания, без
- *    него — материал города (берём самый частый у городов). Из каждой группы частей (v0 > 0)
- *    игра берёт одну — берём самую вероятную;
- *  - часть здания (BUILDING_PART) — она сама;
- *  - прочие записи — первое файловое поле с `.mesh`.
+ * Which 3D model a record has and what to paint it with. In Kenshi the texture is set not by the model's `.material`,
+ * but by game records:
+ *  - weapon (WEAPON): the model is the `bare sword` field (blade without scabbard) or `mesh`; the texture is on
+ *    the "weapon model" (MATERIAL_SPECS_WEAPON) of the manufacturer (WEAPON_MANUFACTURER) that
+ *    lists this weapon in `weapon types`;
+ *  - armour and clothing (ARMOUR): `mesh`, texture is `material` → MATERIAL_SPECS_CLOTHING;
+ *  - building (BUILDING): parts `parts` (BUILDING_PART), each has `phs or mesh`, offset
+ *    `offset X/Y/Z` and `material` → MATERIAL_SPEC; a part without material uses the building's material, without
+ *    that the town material (we take the most common one among towns). From each part group (v0 > 0)
+ *    the game takes one; we take the most likely;
+ *  - building part (BUILDING_PART): itself;
+ *  - other records: the first file field with `.mesh`.
  *
- * Пути — как в записи (`.\data\items\...`); `gamePath` приводит их к виду `data/items/...`.
+ * Paths are as in the record (`.\data\items\...`); `gamePath` turns them into `data/items/...`.
  */
 import { decodeText } from '../text.ts';
 import { itemTypeName } from '../format/item-types.ts';
@@ -20,32 +20,32 @@ import type { GameRecord, Reference, Vec3 } from '../format/types.ts';
 import type { ModContext } from '../model/context.ts';
 
 export interface ModelPiece {
-  /** Путь к `.mesh` относительно папки игры (`data/items/weapons/mesh/katana05.mesh`). */
+  /** Path to the `.mesh` relative to the game folder (`data/items/weapons/mesh/katana05.mesh`). */
   mesh: string;
-  /** Диффузная текстура, если известна. */
+  /** Diffuse texture, if known. */
   texture?: string;
   normalMap?: string;
-  /** Повтор текстуры (MATERIAL_SPEC `tile X/Y`). */
+  /** Texture tiling (MATERIAL_SPEC `tile X/Y`). */
   tile?: [number, number];
   offset?: Vec3;
-  /** Запись, давшая модель (часть здания или сама запись). */
+  /** Record that gave the model (a building part or the record itself). */
   source: string;
-  /** Запись материала, давшая текстуру. */
+  /** Material record that gave the texture. */
   material?: string;
-  /** Поле записи с моделью (`mesh`, `bare sword`, `phs or mesh`). */
+  /** Record field with the model (`mesh`, `bare sword`, `phs or mesh`). */
   field: string;
-  /** Внутренняя часть здания (`interior`), не наружная. */
+  /** Interior part of the building (`interior`), not exterior. */
   interior?: boolean;
-  /** Порог прозрачности 0..255 (листва, растения): пиксели с альфой `alphaMap` ниже — не рисуются. */
+  /** Alpha threshold 0..255 (foliage, plants): pixels with `alphaMap` alpha below it are not drawn. */
   alphaTest?: number;
   /**
-   * Текстура, чья альфа — маска прозрачности. В Kenshi это карта нормалей, не диффузная
-   * текстура: шейдер игры режет по `normalTex.a` (`objects.hlsl`), альфа диффузной — блеск.
+   * Texture whose alpha is the transparency mask. In Kenshi this is the normal map, not the diffuse
+   * texture: the game shader cuts by `normalTex.a` (`objects.hlsl`); the diffuse alpha is gloss.
    */
   alphaMap?: string;
   /**
-   * Тип материала TERRAIN: своей текстуры нет, на модель ложится текстура земли биома
-   * (камни, скалы).
+   * TERRAIN material type: no own texture, the biome ground texture is laid on the model
+   * (stones, rocks).
    */
   terrain?: boolean;
   /**
@@ -67,11 +67,11 @@ export interface RecordModel {
   sid: string;
   type: string;
   pieces: ModelPiece[];
-  /** Почему чего-то нет: «часть …: .phs не показываем» и т. п. */
+  /** Why something is missing: "part …: .phs is not shown" etc. */
   notes: string[];
 }
 
-/** `.\data\items\a.mesh` → `data/items/a.mesh`; пустое → undefined. */
+/** `.\data\items\a.mesh` → `data/items/a.mesh`; empty → undefined. */
 export function gamePath(p: string | undefined): string | undefined {
   if (!p) return undefined;
   let s = p.trim().replace(/\\/g, '/');
@@ -126,7 +126,7 @@ function withMaterial(piece: ModelPiece, mat: Material | undefined): ModelPiece 
 
 const townMaterialCache = new WeakMap<ModContext, string | null>();
 
-/** Самый частый материал городов (TOWN.material) — им игра красит здания без своего материала. */
+/** The most common town material (TOWN.material); the game paints buildings without their own material with it. */
 function commonTownMaterial(ctx: ModContext): string | undefined {
   const hit = townMaterialCache.get(ctx);
   if (hit !== undefined) return hit ?? undefined;
@@ -144,13 +144,13 @@ function commonTownMaterial(ctx: ModContext): string | undefined {
   return best;
 }
 
-/** Производитель, у которого это оружие в `weapon types`, и его первая «модель оружия». */
+/** The manufacturer that has this weapon in `weapon types`, and its first "weapon model". */
 function weaponMaterial(ctx: ModContext, sid: string): Material | undefined {
   for (const e of ctx.referencesTo(sid)) {
     if (e.category !== 'weapon types') continue;
     const maker = ctx.get(e.source);
     const models = maker ? [...refs(maker, 'weapon models')] : [];
-    // Самая ходовая модель: по шансу (v1), при равенстве — первая.
+    // The most common model: by chance (v1), on a tie the first one.
     models.sort((a, b) => b.v1 - a.v1);
     for (const m of models) {
       const mat = materialOf(ctx, m.target);
@@ -160,7 +160,7 @@ function weaponMaterial(ctx: ModContext, sid: string): Material | undefined {
   return undefined;
 }
 
-/** Выбор частей здания как в игре, но без случайности: группа 0 — все, из других — по одной. */
+/** Pick building parts as the game does, but without randomness: group 0 = all, from others one each. */
 function chooseParts(list: readonly Reference[]): Reference[] {
   const out: Reference[] = [];
   const groups = new Map<number, Reference>();
@@ -202,7 +202,7 @@ function partPieces(ctx: ModContext, sid: string, base: Material | undefined, ou
     if (interior) piece.interior = true;
     out.pieces.push(withMaterial(piece, own ?? base));
   } else if (mesh) out.notes.push(`часть ${ctx.name(sid) ?? sid}: ${mesh} — не .mesh, не показываем`);
-  // У частей бывают свои вложенные части.
+  // Parts can have their own nested parts.
   for (const r of chooseParts(refs(part, 'parts'))) partPieces(ctx, r.target, own ?? base, out, interior, seen);
 }
 
@@ -213,7 +213,7 @@ const MESH_FIELDS: Record<string, readonly string[]> = {
   ITEM: ['mesh', 'ground mesh'],
 };
 
-/** MapFeatureMode (fcs.def): TERRAIN — текстура земли биома (если своей нет), FOLIAGE — вырезы по альфе. */
+/** MapFeatureMode (fcs.def): TERRAIN = biome ground texture (if no own), FOLIAGE = alpha cut-outs. */
 const MODE_TRIPLANAR = 1;
 const MODE_TERRAIN = 2;
 const MODE_DUAL_TEXTURE = 3;
@@ -221,9 +221,9 @@ const MODE_FOLIAGE = 4;
 const MODE_DUAL_TRIPLANAR = 5;
 
 /**
- * FOLIAGE_MESH: модель с текстурой из самой записи и, у деревьев, листва отдельной моделью.
- * Маска вырезов — альфа карты нормалей (у листвы — `leaves normal`, без неё — `normal map`);
- * без карты нормалей игра берёт плоскую (`flat.dds`, альфа 1) — вырезов нет.
+ * FOLIAGE_MESH: a model with the texture from the record itself and, for trees, foliage as a separate model.
+ * The cut-out mask is the normal map alpha (for foliage `leaves normal`, without it `normal map`);
+ * without a normal map the game takes a flat one (`flat.dds`, alpha 1), so there are no cut-outs.
  */
 function foliagePieces(rec: GameRecord, sid: string, out: RecordModel, modeField = 'material type'): void {
   const mesh = file(rec, 'mesh');
@@ -232,7 +232,7 @@ function foliagePieces(rec: GameRecord, sid: string, out: RecordModel, modeField
   if (mesh !== undefined && /\.mesh$/i.test(mesh)) {
     const piece: ModelPiece = { mesh, source: sid, field: 'mesh' };
     const tex = file(rec, 'texture map');
-    // TERRAIN без своей текстуры — цвет земли; со своей — как обычная модель (иначе камни плоские)
+    // TERRAIN without its own texture: ground colour; with its own: like a normal model (otherwise stones look flat)
     if (mode === MODE_TERRAIN && !tex) piece.terrain = true;
     else {
       if (tex) piece.texture = tex;
@@ -274,8 +274,8 @@ function foliagePieces(rec: GameRecord, sid: string, out: RecordModel, modeField
 }
 
 /**
- * Модель записи. `interior: true` — для здания внутренние части вместо наружных.
- * Пустой `pieces` — у записи нет модели (или она в `.phs`).
+ * Record model. `interior: true`: for a building, interior parts instead of exterior ones.
+ * Empty `pieces`: the record has no model (or it is in a `.phs`).
  */
 /**
  * The FOLIAGE_MESH rock a foliage-spawned building (`is foliage`: iron, copper) sits on: the
@@ -340,7 +340,7 @@ export function modelOfRecord(ctx: ModContext, sid: string, options: { interior?
   return out;
 }
 
-/** Есть ли у записи модель (для меню и кнопок, без разбора файлов). */
+/** Does the record have a model (for menus and buttons, without parsing files). */
 export function hasModel(ctx: ModContext, sid: string): boolean {
   const rec = ctx.get(sid);
   if (!rec) return false;

@@ -1,15 +1,15 @@
 /**
- * Конструктор диалогов для скриптов сборки (`kedit build`): реплики, диалоги, условия и действия
- * без ручной возни с DIALOG_ACTION и ссылками. Обобщение сборки мода Vanilla Talk.
+ * Dialogue builder for build scripts (`kedit build`): lines, dialogues, conditions and effects
+ * without fiddling with DIALOG_ACTION and references by hand. Generalises the Vanilla Talk mod build.
  *
  *   const b = new DialogBuilder(ctx, env.stableIds());
- *   const hi = b.line('Мой привет', SPEAKER.ME, ['Hello.'], { score: 10 });
- *   const dlg = b.dialogue('Мой разговор', [hi], [{ cond: 7, who: 1, v: 0 }], { score: -100 });
- *   b.attachToCharacter('1234-gamedata.base', dlg);          // клик (событие 1)
- *   b.attachToPackages(['1234-gamedata.base'], dlg, 3);      // событие пакета
+ *   const hi = b.line('My greeting', SPEAKER.ME, ['Hello.'], { score: 10 });
+ *   const dlg = b.dialogue('My talk', [hi], [{ cond: 7, who: 1, v: 0 }], { score: -100 });
+ *   b.attachToCharacter('1234-gamedata.base', dlg);          // click (event 1)
+ *   b.attachToPackages(['1234-gamedata.base'], dlg, 3);      // package event
  *
- * Ванильные записи меняются только дописыванием ссылок (`dialogue`, `dialogs`). Имена новых записей
- * должны быть уникальны: с таблицей постоянных id (`StableIds`) по имени выдаётся номер.
+ * Vanilla records are changed only by appending references (`dialogue`, `dialogs`). Names of new
+ * records must be unique: with the stable id table (`StableIds`) the number is issued by name.
  */
 import { encodeText } from '../text.ts';
 import { itemTypeId } from '../format/item-types.ts';
@@ -18,39 +18,39 @@ import type { ModContext } from '../model/context.ts';
 import type { StableIds } from '../model/stable-ids.ts';
 import { characterFactions, squadIndex, type SquadIndex } from './talk.ts';
 
-/** Кто говорит (TalkerEnum). */
+/** Who speaks (TalkerEnum). */
 export const SPEAKER = { ME: 0, TARGET: 1, TARGET_IF_PLAYER: 2 } as const;
 
-/** Условие реплики или диалога. */
+/** Condition of a line or dialogue. */
 export type DialogWhen =
-  /** DIALOG_ACTION-условие: `condition name`, who (0 — говорящий, 1 — собеседник), значение, сравнение 0 = 1 < 2 >, tag. */
+  /** DIALOG_ACTION condition: `condition name`, who (0 = speaker, 1 = target), value, comparison 0 = 1 < 2 >, tag. */
   | { cond: number; who: number; v: number; cmp?: number; tag?: number }
-  /** Состояние мира (1 — истинно, 0 — ложно). */
+  /** World state (1 = true, 0 = false). */
   | { ws: string; v: number }
-  /** Говорящий сейчас в городе этой фракции. */
+  /** The speaker is currently in a town of this faction. */
   | { inTown: string }
-  /** У собеседника есть кто-то из этих рас (ИЛИ). */
+  /** The target has someone of these races (OR). */
   | { targetRace: readonly string[] }
-  /** Ни одной из этих рас (И). */
+  /** None of these races (AND). */
   | { noTargetRace: readonly string[] }
-  /** Говорящий в одной из этих фракций. */
+  /** The speaker is in one of these factions. */
   | { myFaction: readonly string[] }
-  /** Говорящий — один из этих персонажей. */
+  /** The speaker is one of these characters. */
   | { isChar: readonly string[] };
 
 export interface LineOptions {
   when?: readonly DialogWhen[];
   children?: readonly string[];
-  /** Действие реплики (DialogActionEnum): торговля 1, атака 6, ... */
+  /** Line effect (DialogActionEnum): trade 1, attack 6, ... */
   action?: number;
   score?: number;
-  /** `chance temporary`, % (по умолчанию 100). */
+  /** `chance temporary`, % (default 100). */
   chance?: number;
 }
 
 export interface DialogueOptions {
   score?: number;
-  /** `repetition limit` (0 — без ограничения). */
+  /** `repetition limit` (0 = unlimited). */
   rep?: number;
   oneAtATime?: boolean;
   forEnemies?: boolean;
@@ -69,7 +69,7 @@ export interface CreateFields {
 
 const ref = (target: string, v0 = 0, v1 = 0, v2 = 0): Reference => ({ target, v0, v1, v2 });
 
-/** Куда цеплять события персонажа: свой пакет → пакеты отрядов → пакет фракции по умолчанию. */
+/** Where to attach character events: own package → squad packages → default faction package. */
 export function attachPackages(ctx: ModContext, c: GameRecord, sq: SquadIndex): { via: 'own' | 'squad' | 'faction'; pkgs: string[] } {
   const own = (c.refs.get('dialogue package') ?? []).map((r) => r.target);
   if (own.length) return { via: 'own', pkgs: own };
@@ -90,7 +90,7 @@ export class DialogBuilder {
   private readonly ids: StableIds | undefined;
   private readonly used = new Set<string>();
   private sq: SquadIndex | undefined;
-  /** Персонажи, у которых не нашлось пакета для события. */
+  /** Characters for which no package was found for the event. */
   readonly noPackage = new Set<string>();
 
   constructor(ctx: ModContext, ids?: StableIds) {
@@ -104,13 +104,13 @@ export class DialogBuilder {
     return t;
   }
 
-  /** Запись, которая должна быть в нижних слоях или моде. */
+  /** A record that must exist in the lower layers or the mod. */
   need(sid: string): string {
     if (!this.ctx.get(sid)) throw new Error(`Нет записи ${sid}`);
     return sid;
   }
 
-  /** Новая запись с полями; имя уникально в пределах сборки. */
+  /** New record with fields; the name is unique within the build. */
   create(typeName: string, name: string, f: CreateFields = {}): string {
     if (this.used.has(name)) throw new Error(`Повтор имени записи: ${name}`);
     this.used.add(name);
@@ -125,7 +125,7 @@ export class DialogBuilder {
     return sid;
   }
 
-  /** Условия → категории ссылок; DIALOG_ACTION-условия создаются с именами `<владелец> ?N`. */
+  /** Conditions → reference categories; DIALOG_ACTION conditions are created with names `<owner> ?N`. */
   whenRefs(owner: string, when: readonly DialogWhen[] = []): Record<string, Reference[]> {
     const out: Record<string, Reference[]> = {};
     const push = (c: string, r: Reference): void => {
@@ -148,7 +148,7 @@ export class DialogBuilder {
     return out;
   }
 
-  /** Реплика: тексты — `text0`, `text1`, ... (случайные формулировки). */
+  /** Line: texts are `text0`, `text1`, ... (random wordings). */
   line(name: string, speaker: number, texts: readonly string[], o: LineOptions = {}): string {
     const refs = this.whenRefs(name, o.when);
     if (o.children?.length) refs['lines'] = o.children.map((c) => ref(c));
@@ -161,7 +161,7 @@ export class DialogBuilder {
     });
   }
 
-  /** Диалог с корневыми репликами и условиями. */
+  /** Dialogue with root lines and conditions. */
   dialogue(name: string, roots: readonly string[], when: readonly DialogWhen[] = [], o: DialogueOptions = {}): string {
     const refs = this.whenRefs(name, when);
     refs['lines'] = roots.map((r) => ref(r));
@@ -174,7 +174,7 @@ export class DialogBuilder {
     });
   }
 
-  /** Дописать дочерние реплики (например, петлю меню после создания всех тем). */
+  /** Append child lines (e.g. the menu loop after all topics are created). */
   addChildren(parent: string, children: readonly string[]): void {
     this.ctx.editRecord(this.need(parent), (d) => {
       const list = d.refs.get('lines') ?? [];
@@ -183,7 +183,7 @@ export class DialogBuilder {
     });
   }
 
-  /** Диалог по клику (событие 1) — в `CHARACTER.dialogue`. */
+  /** Click dialogue (event 1), into `CHARACTER.dialogue`. */
   attachToCharacter(character: string, dialog: string): void {
     this.ctx.editRecord(this.need(character), (d) => {
       const list = d.refs.get('dialogue') ?? [];
@@ -193,8 +193,8 @@ export class DialogBuilder {
   }
 
   /**
-   * Диалог события — в пакеты, которые слушают эти персонажи (свой пакет: первого хватает, пакеты
-   * персонажа складываются; отряды и фракция — все). Возвращает пакеты, куда дописано.
+   * Event dialogue, into the packages these characters listen to (own package: the first one is enough,
+   * the character's packages add up; squads and faction: all of them). Returns the packages appended to.
    */
   attachToPackages(characters: readonly string[], dialog: string, event: number): string[] {
     this.sq ??= squadIndex(this.ctx);

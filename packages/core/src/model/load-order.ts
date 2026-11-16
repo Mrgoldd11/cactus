@@ -1,13 +1,13 @@
 import { UiTextError } from '../ui-text.ts';
 /**
- * Порядок загрузки модов (`data/mods.cfg`) без файловой системы: разбор, перестановка,
- * включение и выключение. Строка ниже — слой позже — её значения побеждают.
+ * Mod load order (`data/mods.cfg`) without a file system: parsing, reordering,
+ * enabling and disabling. A lower line is a later layer; its values win.
  *
- * Текст пишется обратно с тем же концом строки, что был (по умолчанию CRLF, как у лаунчера).
+ * The text is written back with the same line ending it had (CRLF by default, like the launcher).
  */
 
 export interface ModsCfgText {
-  /** Имена файлов модов по порядку (пустые строки убраны). */
+  /** Mod file names in order (empty lines removed). */
   names: string[];
   eol: '\r\n' | '\n';
 }
@@ -25,19 +25,19 @@ export function formatModsCfg(cfg: ModsCfgText): string {
   return cfg.names.length === 0 ? '' : cfg.names.join(cfg.eol) + cfg.eol;
 }
 
-/** Куда поставить мод: в начало (раньше всех, проигрывает), в конец (побеждает), после или перед другим. */
+/** Where to put a mod: at the start (before all, loses), at the end (wins), after or before another one. */
 export type ModPlace = { top: true } | { bottom: true } | { after: string } | { before: string } | { index: number };
 
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
-/** Номер мода в списке без учёта регистра; -1 — нет. */
+/** Index of the mod in the list, case-insensitive; -1 if absent. */
 export function modIndex(names: readonly string[], name: string): number {
   return names.findIndex((n) => same(n, name));
 }
 
 /**
- * Поставить мод на место. Если мода в списке нет — он добавляется (то есть включается).
- * Ссылка `after`/`before` на мод, которого нет в списке, — ошибка.
+ * Put a mod in place. If the mod is not in the list, it is added (i.e. enabled).
+ * An `after`/`before` reference to a mod not in the list is an error.
  */
 export function placeMod(names: readonly string[], name: string, place: ModPlace): string[] {
   const i = modIndex(names, name);
@@ -56,24 +56,24 @@ export function placeMod(names: readonly string[], name: string, place: ModPlace
   return [...rest.slice(0, at), entry, ...rest.slice(at)];
 }
 
-/** Убрать мод из списка (выключить). */
+/** Remove a mod from the list (disable it). */
 export function removeMod(names: readonly string[], name: string): string[] {
   return names.filter((n) => !same(n, name));
 }
 
-/** Включить (в конец, если места не задано) или выключить мод. */
+/** Enable (at the end if no place is given) or disable a mod. */
 export function setModEnabled(names: readonly string[], name: string, enabled: boolean, place: ModPlace = { bottom: true }): string[] {
   if (!enabled) return removeMod(names, name);
   return modIndex(names, name) >= 0 ? [...names] : placeMod(names, name, place);
 }
 
-/** Изменение порядка загрузки: переставить, включить (поставить в список), выключить. */
+/** Load order change: move, enable (put into the list), disable. */
 export type ModsCfgChange =
   | { op: 'move'; name: string; place: ModPlace }
   | { op: 'enable'; name: string; place?: ModPlace }
   | { op: 'disable'; name: string };
 
-/** Новый список после изменения. Переставить можно только мод из списка. */
+/** The new list after the change. Only a mod from the list can be moved. */
 export function applyModsCfgChange(names: readonly string[], change: ModsCfgChange): string[] {
   switch (change.op) {
     case 'move':
@@ -99,7 +99,7 @@ const ORDER_WORDS: Record<string, OrderWords> = {
   zh: { on: (p) => `已启用，位置 ${p}`, moved: (a, b) => `位置 ${a} → ${b}`, off: '已禁用' },
 };
 
-/** Строки «было → стало» для показа: место каждого мода, у которого оно поменялось. */
+/** "Was → now" lines for display: the position of each mod whose position changed. */
 export function describeOrderChange(before: readonly string[], after: readonly string[], lang = 'en'): string[] {
   const w = ORDER_WORDS[lang] ?? ORDER_WORDS.en!;
   const out: string[] = [];

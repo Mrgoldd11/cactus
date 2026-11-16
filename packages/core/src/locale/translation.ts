@@ -1,19 +1,19 @@
 /**
- * Перевод текстов записей из `locale/<язык>/<язык>.translation` — файл того же формата, что
- * `.mod`: запись на каждую переведённую запись игры, строки `textN` (перевод) и
- * `_original_textN` (английский текст, с которого переводили). Так игра переводит реплики
- * диалогов: в `gamedata.po` их нет.
+ * Translation of record texts from `locale/<language>/<language>.translation`, a file in the same format as
+ * `.mod`: one record per translated game record, strings `textN` (translation) and
+ * `_original_textN` (the English text it was translated from). This is how the game translates dialogue
+ * lines: they are not in `gamedata.po`.
  */
 import { decodeText } from '../text.ts';
 import type { DataFile } from '../format/types.ts';
 
 export interface TextTranslation {
   text: string;
-  /** Английский текст, с которого переведено (`_original_<поле>`). */
+  /** English text it was translated from (`_original_<field>`). */
   original?: string;
 }
 
-/** Строковый id записи → поле → перевод. */
+/** Record string id → field → translation. */
 export type TranslationIndex = Map<string, Map<string, TextTranslation>>;
 
 const ORIGINAL = '_original_';
@@ -35,8 +35,8 @@ export function indexTranslation(file: DataFile): TranslationIndex {
 }
 
 /**
- * Перевод поля, если он есть и сделан с того же английского текста (`current`). Если текст
- * в данных изменён модом, старый перевод к нему не подходит — undefined.
+ * Field translation, if there is one made from the same English text (`current`). If the text
+ * in the data was changed by a mod, the old translation does not fit it: undefined.
  */
 export function translatedText(index: TranslationIndex | undefined, stringId: string, field: string, current: string): string | undefined {
   const tr = index?.get(stringId)?.get(field);

@@ -1,29 +1,29 @@
 /**
- * Слияние модов (как «Merge» в FCS): перенос изменений из другого мода в редактируемый.
+ * Mod merging (like "Merge" in FCS): carrying changes from another mod into the edited one.
  *
- * Источник — файл мода (или .base) целиком. Для каждой его записи считается, что она
- * изменила бы в вашем моде: запись источника — это слой, который накладывается поверх ваших
- * итоговых данных (`applyLayer`), разница с текущим состоянием и есть «изменение»:
- *  - `new` — записи нет ни в вашем моде, ни в его зависимостях;
- *  - `changed` — запись есть, у неё отличаются поля (список полей «было → станет»);
- *  - `deleted` — источник удаляет запись, которая у вас есть.
+ * The source is a whole mod (or .base) file. For each of its records we compute what it
+ * would change in your mod: the source record is a layer overlaid on top of your
+ * resulting data (`applyLayer`), and the difference with the current state is the "change":
+ *  - `new`: the record is neither in your mod nor in its dependencies;
+ *  - `changed`: the record exists and its fields differ (list of fields "was → will be");
+ *  - `deleted`: the source deletes a record you have.
  *
- * Применяются выбранные изменения одной правкой (`ctx.transaction`: одна отмена, одно название
- * шага); в мод пишется только разница с нижними слоями — через `ModContext.putRecord`.
+ * The selected changes are applied as one edit (`ctx.transaction`: one undo, one step
+ * title); only the difference with the lower layers is written into the mod, via `ModContext.putRecord`.
  *
- * Решения хранятся отдельно от .mod, в файле-спутнике (`MergeStore`, см. `node/merge-store.ts`):
- *  - «отклонить» — запись больше не показывается при следующих слияниях этого мода;
- *  - «слито» — отпечаток записи источника на момент слияния: если запись источника с тех пор
- *    не менялась, её правки у вас не считаются расхождением;
- *  - журнал: с каким модом и когда слито.
- * «Принять» и «игнор» (по умолчанию) — решения одного сеанса, они передаются в `applyMerge`.
+ * Decisions are stored separately from the .mod, in a sidecar file (`MergeStore`, see `node/merge-store.ts`):
+ *  - "reject": the record is no longer shown in later merges of this mod;
+ *  - "merged": a fingerprint of the source record at merge time: if the source record has not
+ *    changed since, your edits to it do not count as a divergence;
+ *  - log: with which mod and when it was merged.
+ * "Accept" and "ignore" (default) are decisions of one session; they are passed to `applyMerge`.
  *
- * Конфликт — поле, которое менял и ваш мод (относительно нижних слоёв), и источник: оба значения
- * видны, выбирается `source` или `mine`; не выбранное считается `mine` (ваши данные не теряются).
+ * A conflict is a field changed both by your mod (relative to the lower layers) and by the source: both values
+ * are visible, `source` or `mine` is chosen; an unchosen one counts as `mine` (your data is not lost).
  *
- * Данные уровня (`leveldata/*.zone`, `leveldata.level`, `interiors.level`) редактор не умеет
- * ни читать для записи, ни писать: слияние их только обнаруживает и честно отказывается
- * (`MERGE_LEVEL_DATA_NOTE`), файлы не трогаются.
+ * The editor can neither read level data (`leveldata/*.zone`, `leveldata.level`, `interiors.level`)
+ * for writing nor write it: merging only detects it and honestly refuses
+ * (`MERGE_LEVEL_DATA_NOTE`); the files are not touched.
  */
 import { bytesEqual, decodeText } from '../text.ts';
 import { splitModList } from '../format/helpers.ts';
@@ -34,7 +34,7 @@ import { formatFieldChange, formatFieldValue, formatRefValues, refLabel } from '
 import { applyLayer, cloneRecord, isRemovalMarker, isRemovedRef, refValuesEqual, SCALAR_DICTS, scalarEqual, scalarMap } from './record-ops.ts';
 import { UiTextError } from '../ui-text.ts';
 
-/** Ошибка слияния с понятным сообщением (нельзя слить этот мод, плохой файл-спутник…). */
+/** Merge error with a readable message (this mod cannot be merged, bad sidecar file…). */
 export class MergeError extends UiTextError {
   override name = 'MergeError';
 }
@@ -42,28 +42,28 @@ export class MergeError extends UiTextError {
 export type MergeKind = 'new' | 'changed' | 'deleted';
 export const MERGE_KINDS: readonly MergeKind[] = ['new', 'changed', 'deleted'];
 
-/** Почему изменение — конфликт. */
+/** Why the change is a conflict. */
 export type MergeConflictReason =
-  /** Поле менял и ваш мод, и источник, значения разные. */
+  /** Both your mod and the source changed the field, the values differ. */
   | 'both'
-  /** У вас запись удалена, источник её меняет. */
+  /** You deleted the record, the source changes it. */
   | 'mine-deleted'
-  /** Источник удаляет запись, которую вы меняли. */
+  /** The source deletes a record you changed. */
   | 'source-deleted';
 
 export type MergeChoice = 'source' | 'mine';
 
-/** Мод-источник: имя файла (`Чужой мод.mod`) и прочитанный файл. */
+/** Source mod: file name (`Other mod.mod`) and the read file. */
 export interface MergeSource {
   name: string;
   file: DataFile;
 }
 
-/** Данные уровня рядом с источником (определяет `node/merge-store.ts`). */
+/** Level data next to the source (determined by `node/merge-store.ts`). */
 export interface LevelDataInfo {
-  /** Папка `leveldata` источника. */
+  /** The source's `leveldata` folder. */
   dir: string;
-  /** Файлы: `leveldata.level`, `interiors.level`, `zone.25.50.zone`… */
+  /** Files: `leveldata.level`, `interiors.level`, `zone.25.50.zone`… */
   files: string[];
 }
 
@@ -187,37 +187,37 @@ export function mergeLevelDataNote(lang = 'en'): string {
   return mergeWords(lang).levelNote;
 }
 
-// ---------------------------------------------------------------- файл-спутник
+// ---------------------------------------------------------------- sidecar file
 
-/** Что помнит активный мод об одном источнике. */
+/** What the active mod remembers about one source. */
 export interface MergeSourceState {
-  /** Имя файла источника как оно было при последнем слиянии. */
+  /** Source file name as it was at the last merge. */
   name: string;
-  /** Отпечаток записи источника на момент, когда её приняли: `sid → отпечаток`. */
+  /** Fingerprint of the source record at the moment it was accepted: `sid → fingerprint`. */
   baseline: Record<string, string>;
-  /** Отклонённые записи: `sid → отпечаток записи источника на момент отклонения`. */
+  /** Rejected records: `sid → fingerprint of the source record at the moment of rejection`. */
   rejected: Record<string, string>;
 }
 
 export interface MergeLogEntry {
-  /** Имя файла источника. */
+  /** Source file name. */
   source: string;
-  /** ISO-время слияния. */
+  /** ISO time of the merge. */
   at: string;
   accepted: number;
   created: number;
   changed: number;
   deleted: number;
-  /** Конфликтов решено в пользу источника / оставлено вашим. */
+  /** Conflicts resolved in favour of the source / kept as yours. */
   tookSource: number;
   keptMine: number;
-  /** Отпечаток файла источника (для подписи в журнале, не для логики). */
+  /** Fingerprint of the source file (for the log label, not for logic). */
   sourceRecords: number;
 }
 
 export interface MergeStore {
   version: 1;
-  /** Ключ — имя файла источника в нижнем регистре. */
+  /** Key: source file name in lower case. */
   sources: Record<string, MergeSourceState>;
   log: MergeLogEntry[];
 }
@@ -233,7 +233,7 @@ function isRecordOfStrings(v: unknown): v is Record<string, string> {
   return typeof v === 'object' && v !== null && !Array.isArray(v) && Object.values(v).every((x) => typeof x === 'string');
 }
 
-/** Разбор файла-спутника; битый файл — `MergeError` (молча терять отклонённые записи нельзя). */
+/** Parse the sidecar file; a broken file gives `MergeError` (rejected records must not be lost silently). */
 export function parseMergeStore(text: string): MergeStore {
   let raw: unknown;
   try {
@@ -272,7 +272,7 @@ function cloneStore(store: MergeStore): MergeStore {
 const sourceKey = (name: string): string => name.toLowerCase();
 
 interface PendingMerge {
-  /** Правка в истории: пока она действует, слияние считается состоявшимся. undefined — менять было нечего. */
+  /** Edit in the history: while it is active, the merge counts as done. undefined: there was nothing to change. */
   changesetId: number | undefined;
   source: string;
   baseline: Record<string, string>;
@@ -280,9 +280,9 @@ interface PendingMerge {
 }
 
 /**
- * Решения слияния активного мода. «Отклонить» запоминается сразу (его не отменяет undo);
- * «слито» — только вместе с правкой: отменили слияние (undo) — оно не считается состоявшимся;
- * сохранили мод — `commit` переносит действующие слияния в постоянные.
+ * Merge decisions of the active mod. "Reject" is remembered at once (undo does not cancel it);
+ * "merged" only together with the edit: if the merge was undone (undo), it does not count as done;
+ * when the mod is saved, `commit` turns active merges into permanent ones.
  */
 export class MergeLedger {
   private committed: MergeStore;
@@ -297,7 +297,7 @@ export class MergeLedger {
     return this.pending.filter((p) => p.changesetId === undefined || ctx.findChangeset(p.changesetId) !== undefined);
   }
 
-  /** Решения с учётом несохранённых, но действующих слияний. */
+  /** Decisions including unsaved but active merges. */
   store(ctx: ModContext): MergeStore {
     const out = cloneStore(this.committed);
     for (const p of this.livePending(ctx)) foldPending(out, p);
@@ -305,8 +305,8 @@ export class MergeLedger {
   }
 
   /**
-   * Перенос в новый контекст (смена зависимостей: история правок теряется): действующие
-   * слияния становятся обычными решениями, а «есть что записать» сохраняется.
+   * Transfer into a new context (dependencies changed: the edit history is lost): active
+   * merges become ordinary decisions, and "something to write" is preserved.
    */
   carry(ctx: ModContext): MergeLedger {
     const next = new MergeLedger(this.store(ctx));
@@ -314,19 +314,19 @@ export class MergeLedger {
     return next;
   }
 
-  /** Состояние одного источника (пустое, если слияний ещё не было). */
+  /** State of one source (empty if there were no merges yet). */
   state(ctx: ModContext, source: string): MergeSourceState {
     return this.store(ctx).sources[sourceKey(source)] ?? { name: source, baseline: {}, rejected: {} };
   }
 
-  /** Отклонить записи источника: `sid → отпечаток записи`. */
+  /** Reject source records: `sid → record fingerprint`. */
   reject(source: string, rejects: Readonly<Record<string, string>>): void {
     const st = this.ensure(source);
     Object.assign(st.rejected, rejects);
     this.touched = true;
   }
 
-  /** Вернуть отклонённые записи в список. */
+  /** Return rejected records to the list. */
   unreject(source: string, sids: readonly string[]): void {
     const st = this.committed.sources[sourceKey(source)];
     if (!st) return;
@@ -335,7 +335,7 @@ export class MergeLedger {
     this.touched = true;
   }
 
-  /** Запомнить слияние вместе с его правкой в истории. */
+  /** Remember a merge together with its edit in the history. */
   addPending(p: PendingMerge): void {
     this.pending.push(p);
   }
@@ -345,12 +345,12 @@ export class MergeLedger {
     return (this.committed.sources[k] ??= { name: source, baseline: {}, rejected: {} });
   }
 
-  /** Есть что записать в файл-спутник. */
+  /** There is something to write into the sidecar file. */
   hasChanges(ctx: ModContext): boolean {
     return this.touched || this.livePending(ctx).length > 0;
   }
 
-  /** Принять действующие слияния как постоянные и вернуть то, что надо записать в файл-спутник. */
+  /** Accept active merges as permanent and return what has to be written into the sidecar file. */
   commit(ctx: ModContext): MergeStore {
     for (const p of this.livePending(ctx)) foldPending(this.committed, p);
     this.pending = [];
@@ -370,9 +370,9 @@ function foldPending(store: MergeStore, p: PendingMerge): void {
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
 }
 
-// ---------------------------------------------------------------- отпечатки
+// ---------------------------------------------------------------- fingerprints
 
-/** 53-битный строковый хэш (cyrb53): хватает, чтобы заметить, что запись источника изменилась. */
+/** 53-bit string hash (cyrb53): enough to notice that a source record has changed. */
 function hashText(s: string): string {
   let h1 = 0xdeadbeef;
   let h2 = 0x41c6ce57;
@@ -392,7 +392,7 @@ function bytesKey(b: Uint8Array): string {
   return s;
 }
 
-/** Отпечаток содержимого записи (без служебных lead/id/флагов): порядок ключей не важен. */
+/** Fingerprint of the record content (without service lead/id/flags): key order does not matter. */
 export function recordFingerprint(rec: GameRecord): string {
   const parts: string[] = [`t${rec.type}`, `n${bytesKey(rec.name)}`];
   for (const dict of SCALAR_DICTS) {
@@ -413,21 +413,21 @@ export function recordFingerprint(rec: GameRecord): string {
   return hashText(parts.join('\u0002'));
 }
 
-// ---------------------------------------------------------------- список изменений
+// ---------------------------------------------------------------- change list
 
 export interface MergeFieldView {
-  /** Устойчивый ключ поля для выбора при конфликте: `name`, `ints:damage`, `ref:items:123-X.mod`. */
+  /** Stable field key for choosing on a conflict: `name`, `ints:damage`, `ref:items:123-X.mod`. */
   key: string;
   kind: FieldChange['kind'];
-  /** Короткая подпись: `damage`, `items → Катана [id]`. */
+  /** Short label: `damage`, `items → Katana [id]`. */
   label: string;
-  /** Значение у вас сейчас (нет — поля у вас нет). */
+  /** Your current value (absent: you have no such field). */
   before?: string;
-  /** Значение из источника (нет — источник поле убирает). */
+  /** Value from the source (absent: the source removes the field). */
   after?: string;
-  /** Строка целиком, как в `diff` (`~ int damage: 10 → 20`). */
+  /** The whole line, as in `diff` (`~ int damage: 10 → 20`). */
   text: string;
-  /** Поле менял и ваш мод, и источник. */
+  /** Both your mod and the source changed the field. */
   conflict: boolean;
 }
 
@@ -436,25 +436,25 @@ export interface MergeChange {
   kind: MergeKind;
   type: number;
   typeName: string;
-  /** Имя записи (в версии источника; у удаляемой — у вас). */
+  /** Record name (in the source version; for a deleted one, yours). */
   name: string;
-  /** Русское название из gamedata.po, если есть. */
+  /** Russian name from gamedata.po, if any. */
   localizedName?: string;
-  /** Для `changed`: поля «было → станет». У `new` и `deleted` пусто. */
+  /** For `changed`: fields "was → will be". Empty for `new` and `deleted`. */
   fields: MergeFieldView[];
   conflict?: MergeConflictReason;
   conflictCount: number;
-  /** Другие записи списка (new / changed), на которые ссылается версия источника. */
+  /** Other records of the list (new / changed) that the source version references. */
   links: string[];
-  /** Ссылки версии источника на записи, которых нет ни у вас, ни в списке изменений. */
+  /** References of the source version to records that are neither yours nor in the change list. */
   dangling: string[];
-  /** Запись отклонена (есть только в режиме «показать пропущенные»). */
+  /** The record is rejected (present only in "show skipped" mode). */
   rejected: boolean;
-  /** После отклонения запись источника изменилась. */
+  /** The source record changed after rejection. */
   rejectedStale?: boolean;
-  /** Почему запись нельзя принять. */
+  /** Why the record cannot be accepted. */
   blocked?: string;
-  /** Отпечаток записи источника. */
+  /** Fingerprint of the source record. */
   fingerprint: string;
 }
 
@@ -463,11 +463,11 @@ export interface MergeCounts {
   changed: number;
   deleted: number;
   conflicts: number;
-  /** Скрыто как отклонённое. */
+  /** Hidden as rejected. */
   rejected: number;
-  /** Записей источника, совпадающих с вашими. */
+  /** Source records identical to yours. */
   identical: number;
-  /** Не менялись в источнике с прошлого слияния. */
+  /** Not changed in the source since the last merge. */
   alreadyMerged: number;
   blocked: number;
 }
@@ -477,15 +477,15 @@ export interface MergePlan {
   changes: MergeChange[];
   counts: MergeCounts;
   warnings: string[];
-  /** Зависимости источника, которых нет среди зависимостей вашего мода. */
+  /** Source dependencies that are not among your mod's dependencies. */
   missingDependencies: string[];
   levelData?: LevelDataInfo;
 }
 
 export interface MergePlanOptions {
-  /** Показать и отклонённые записи (с пометкой `rejected`). */
+  /** Also show rejected records (marked `rejected`). */
   showRejected?: boolean;
-  /** Данные уровня источника (определяет вызывающий: у ядра нет файловой системы). */
+  /** Source level data (determined by the caller: the core has no file system). */
   levelData?: LevelDataInfo;
   /** Interface language of the texts in the plan and the result (English by default). */
   lang?: string;
@@ -494,8 +494,8 @@ export interface MergePlanOptions {
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
 /**
- * Можно ли сливать этот мод. Бросает `MergeError`, если источник — тот же мод, зависимость
- * активного мода или ваниль: их записи уже входят в ваши слои.
+ * Can this mod be merged. Throws `MergeError` if the source is the same mod, a dependency
+ * of the active mod or vanilla: their records are already part of your layers.
  */
 export function checkMergeSource(ctx: ModContext, sourceName: string): void {
   if (same(sourceName, ctx.modName)) throw new MergeError({ en: `Cannot merge mod “${sourceName}” into itself.`, ru: `Нельзя слить мод «${sourceName}» сам в себя.`, zh: `不能将 Mod “${sourceName}” 合并到它自身。` });
@@ -516,7 +516,7 @@ export function checkMergeSource(ctx: ModContext, sourceName: string): void {
   }
 }
 
-/** Устойчивый ключ поля для выбора при конфликте. */
+/** Stable field key for choosing on a conflict. */
 export function mergeFieldKey(f: FieldChange): string {
   switch (f.kind) {
     case 'name':
@@ -536,9 +536,9 @@ export function mergeFieldKey(f: FieldChange): string {
   }
 }
 
-/** Менял ли ваш мод это поле относительно нижних слоёв. */
+/** Did your mod change this field relative to the lower layers. */
 function mineTouched(f: FieldChange, mine: GameRecord, lower: GameRecord | undefined): boolean {
-  if (!lower) return true; // запись создана вашим модом — всё поле «ваше»
+  if (!lower) return true; // the record was created by your mod — the whole field is "yours"
   switch (f.kind) {
     case 'name':
       return !bytesEqual(mine.name, lower.name);
@@ -614,7 +614,7 @@ interface Computed {
   internals: Map<string, Internal>;
 }
 
-/** Состояние записи изменения по `changeFlags` источника: `true` — запись источника лишь меняет чужую (из зависимости). */
+/** Change record state by the source's `changeFlags`: `true` = the source record only changes someone else's (from a dependency). */
 function flaggedAsChange(file: DataFile, rec: GameRecord): boolean {
   if (file.fileType === FileType.MergeMod) {
     const st = rec.changeFlags & 15;
@@ -675,7 +675,7 @@ function compute(ctx: ModContext, source: MergeSource, state: MergeSourceState, 
       if (mine && !isRemovalMarker(mine)) conflict = 'source-deleted';
     } else {
       if (!base && lower) {
-        // У вас запись нижних слоёв удалена, источник её правит.
+        // You deleted the lower-layer record, the source edits it.
         kind = 'changed';
         mineDeleted = true;
         conflict = 'mine-deleted';
@@ -728,7 +728,7 @@ function compute(ctx: ModContext, source: MergeSource, state: MergeSourceState, 
     internals.set(sid, { current, desired, diff: fields, mineDeleted });
   }
 
-  // Связи между изменениями: на какие записи списка ссылается версия источника.
+  // Links between changes: which records of the list the source version references.
   const inPlan = new Set(changes.filter((c) => c.kind !== 'deleted').map((c) => c.sid));
   for (const c of changes) {
     const desired = internals.get(c.sid)!.desired;
@@ -756,14 +756,14 @@ function compute(ctx: ModContext, source: MergeSource, state: MergeSourceState, 
   return { plan, internals };
 }
 
-/** Что даст слияние: список изменений источника относительно вашего мода. Ничего не меняет. */
+/** What merging gives: the list of source changes relative to your mod. Changes nothing. */
 export function planMerge(ctx: ModContext, source: MergeSource, ledger: MergeLedger, options: MergePlanOptions = {}): MergePlan {
   return compute(ctx, source, ledger.state(ctx, source.name), options).plan;
 }
 
-// ---------------------------------------------------------------- выбор
+// ---------------------------------------------------------------- selection
 
-/** Запись и все, на кого она (через версию источника) ссылается среди изменений: целый диалог с репликами. */
+/** The record and everything it references (via the source version) among the changes: a whole dialogue with its lines. */
 export function mergeClosure(plan: MergePlan, sids: Iterable<string>): string[] {
   const bySid = new Map(plan.changes.map((c) => [c.sid, c]));
   const out = new Set<string>();
@@ -779,8 +779,8 @@ export function mergeClosure(plan: MergePlan, sids: Iterable<string>): string[] 
 }
 
 /**
- * «Исправить ссылки»: к принятым добавить новые записи, на которые есть ссылки из принятых
- * (и дальше по цепочке новых). Возвращает добавленные id.
+ * "Fix references": add to the accepted ones the new records referenced from the accepted ones
+ * (and further down the chain of new ones). Returns the added ids.
  */
 export function mergeFixReferences(plan: MergePlan, accepted: Iterable<string>): string[] {
   const bySid = new Map(plan.changes.map((c) => [c.sid, c]));
@@ -801,20 +801,20 @@ export function mergeFixReferences(plan: MergePlan, accepted: Iterable<string>):
   return plan.changes.filter((c) => added.includes(c.sid)).map((c) => c.sid);
 }
 
-// ---------------------------------------------------------------- применение
+// ---------------------------------------------------------------- applying
 
 export interface MergeSelection {
-  /** Принятые записи (id). Остальные — «игнор». */
+  /** Accepted records (ids). The rest are "ignore". */
   accept: readonly string[];
-  /** Выбор по полям конфликтов: `sid → ключ поля → source | mine`. */
+  /** Choice per conflict field: `sid → field key → source | mine`. */
   resolutions?: Readonly<Record<string, Readonly<Record<string, MergeChoice>>>>;
-  /** Как решать конфликты без выбора (по умолчанию `mine`: ваши данные не теряются). */
+  /** How to resolve conflicts without a choice (default `mine`: your data is not lost). */
   conflicts?: MergeChoice;
-  /** Вместе с каждой принятой записью принять все, на кого она ссылается. */
+  /** With each accepted record, accept everything it references. */
   recursive?: boolean;
-  /** Принять и новые записи, на которые есть принятые ссылки. */
+  /** Also accept new records that accepted references point to. */
   fixReferences?: boolean;
-  /** Пользователь просил слить и данные уровня (слияние их не умеет, см. `MERGE_LEVEL_DATA_NOTE`). */
+  /** The user asked to merge level data too (merging cannot do that, see `MERGE_LEVEL_DATA_NOTE`). */
   levelData?: boolean;
 }
 
@@ -824,25 +824,25 @@ export interface MergeSkip {
 }
 
 export interface MergeResult {
-  /** Правка в истории (undefined — менять оказалось нечего). */
+  /** Edit in the history (undefined: it turned out there was nothing to change). */
   changesetId: number | undefined;
   label: string;
   accepted: string[];
   created: number;
   changed: number;
   deleted: number;
-  /** Поля конфликтов, взятые из источника / оставленные вашими. */
+  /** Conflict fields taken from the source / kept as yours. */
   tookSource: number;
   keptMine: number;
-  /** Принятые целиком ради «исправить ссылки» или рекурсивного выбора. */
+  /** Accepted whole for "fix references" or recursive selection. */
   addedByClosure: string[];
   skipped: MergeSkip[];
-  /** Ссылки принятых записей на записи, которых нет нигде. */
+  /** References of accepted records to records that exist nowhere. */
   dangling: string[];
   notes: string[];
 }
 
-/** Вернуть полю значение «как у вас» (`before` изменения). */
+/** Return a field to "as yours" (`before` of the change). */
 function keepMine(desired: GameRecord, f: FieldChange): void {
   switch (f.kind) {
     case 'name':
@@ -884,15 +884,15 @@ function keepMine(desired: GameRecord, f: FieldChange): void {
   }
 }
 
-/** Заголовок шага истории: разбирается `step-title.ts`. */
+/** Title of the history step: parsed by `step-title.ts`. */
 export function mergeLabel(sourceName: string, count: number): string {
   return `слияние: ${sourceName} (${count} записей)`;
 }
 
 /**
- * Применить выбранные изменения одной правкой. Список пересчитывается по текущему состоянию мода,
- * поэтому результат всегда соответствует тому, что видно сейчас. Принятое запоминается в `ledger`
- * вместе с правкой (отмена правки отменяет и «слито»).
+ * Apply the selected changes as one edit. The list is recomputed from the mod's current state,
+ * so the result always matches what is visible now. What was accepted is remembered in `ledger`
+ * together with the edit (undoing the edit also undoes "merged").
  */
 export function applyMerge(ctx: ModContext, source: MergeSource, ledger: MergeLedger, selection: MergeSelection, options: MergePlanOptions = {}): MergeResult {
   const { plan, internals } = compute(ctx, source, ledger.state(ctx, source.name), options);
@@ -984,7 +984,7 @@ export function applyMerge(ctx: ModContext, source: MergeSource, ledger: MergeLe
       ctx.putRecord(c.sid, desired);
     }
   });
-  // Ссылки принятых записей на то, чего в моде нет (ни среди принятых, ни среди своих).
+  // References of accepted records to things the mod lacks (neither among accepted nor its own).
   for (const c of ordered) for (const t of [...c.links, ...c.dangling]) if (!ctx.has(t)) dangling.add(t);
   const after = ctx.history().undo.at(-1)?.id;
   result.changesetId = after !== undefined && after !== before ? after : undefined;
@@ -1010,7 +1010,7 @@ export function applyMerge(ctx: ModContext, source: MergeSource, ledger: MergeLe
   return result;
 }
 
-/** Отклонить записи: больше не показываются при слиянии этого мода (кнопка «Показать пропущенные» вернёт их). */
+/** Reject records: they no longer show when merging this mod (the "Show skipped" button brings them back). */
 export function rejectMerge(ctx: ModContext, source: MergeSource, ledger: MergeLedger, sids: readonly string[], options: MergePlanOptions = {}): string[] {
   const { plan } = compute(ctx, source, ledger.state(ctx, source.name), options);
   const rejects: Record<string, string> = {};
@@ -1022,16 +1022,16 @@ export function rejectMerge(ctx: ModContext, source: MergeSource, ledger: MergeL
   return Object.keys(rejects);
 }
 
-/** Вернуть отклонённые записи в список. */
+/** Return rejected records to the list. */
 export function unrejectMerge(ledger: MergeLedger, source: MergeSource | string, sids: readonly string[]): void {
   ledger.unreject(typeof source === 'string' ? source : source.name, sids);
 }
 
-// ---------------------------------------------------------------- отчёт
+// ---------------------------------------------------------------- report
 
 const KIND_MARK: Record<MergeKind, string> = { new: '+', changed: '~', deleted: '−' };
 
-/** Список изменений текстом (CLI, MCP): одна строка на запись, под ней поля. */
+/** List of changes as text (CLI, MCP): one line per record, its fields below it. */
 export function formatMergePlan(plan: MergePlan, limit = Infinity, lang = 'en'): string[] {
   const w = mergeWords(lang);
   const c = plan.counts;
@@ -1058,7 +1058,7 @@ export function formatMergePlan(plan: MergePlan, limit = Infinity, lang = 'en'):
   return lines;
 }
 
-/** Итог применения текстом. */
+/** Apply result as text. */
 export function formatMergeResult(r: MergeResult, lang = 'en'): string[] {
   const w = mergeWords(lang);
   const lines = [
@@ -1073,20 +1073,20 @@ export function formatMergeResult(r: MergeResult, lang = 'en'): string[] {
   return lines;
 }
 
-// ---------------------------------------------------------------- выбор для CLI / MCP
+// ---------------------------------------------------------------- selection for CLI / MCP
 
 export interface MergeFilter {
-  /** Конкретные id записей. */
+  /** Specific record ids. */
   ids?: readonly string[];
-  /** Типы: имя (`WEAPON`) или номер. */
+  /** Types: name (`WEAPON`) or number. */
   types?: readonly string[];
-  /** Вид изменения. */
+  /** Kind of change. */
   kinds?: readonly MergeKind[];
-  /** Все записи списка (конфликты решаются отдельно: по умолчанию остаются ваши значения). */
+  /** All records of the list (conflicts are resolved separately: by default your values stay). */
   all?: boolean;
 }
 
-/** Какие записи списка выбраны фильтром (по id / типу / виду / «все»). Пустой фильтр — ничего. */
+/** Which list records the filter selects (by id / type / kind / "all"). Empty filter selects nothing. */
 export function selectMergeChanges(plan: MergePlan, f: MergeFilter): string[] {
   const ids = new Set(f.ids ?? []);
   const types = new Set((f.types ?? []).map((t) => t.trim().toUpperCase()));

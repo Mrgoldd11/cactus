@@ -1,27 +1,27 @@
 /**
- * Как игра выбирает диалог и реплику: по коду Kenshi 1.0.65 (Steam). Разобрано по exe:
- * `DialogLineData` (конструктор, `getScore`, `checkConditions`), `DialogChoiceList::add`,
+ * How the game picks a dialogue and a line: from the Kenshi 1.0.65 (Steam) code. Decoded from the exe:
+ * `DialogLineData` (constructor, `getScore`, `checkConditions`), `DialogChoiceList::add`,
  * `Dialogue::_chooseDialog`.
  *
- * 1. Очки записи считаются один раз, при загрузке: `score bonus` плюс надбавки за условия и
- *    поля ({@link dialogueScore}). Во время игры `getScore` добавляет ещё +2, если раса
- *    собеседника есть в `target race`.
- * 2. Список (диалоги события или реплики под узлом) отсортирован по убыванию ключа
- *    `очки + max(0, лучшие очки прямых реплик)`; при равных ключах порядок добавления.
- * 3. Игра идёт по списку один раз. Реплика с текстом, у которой очков меньше лучшего, обрывает
- *    проход. Запись, не прошедшая проверки (условия, шанс, нет говорящего), пропускается.
- *    Пустой узел (диалог, реплика без текста, узел вмешательства) выбирает реплику среди своих
- *    детей тем же способом; его итог — его очки плюс очки выбранной реплики.
- * 4. Запись попадает в розыгрыш, если её очки (итог) не меньше лучшего на этот момент; лучшее
- *    становится равным им. Попавшие раньше не выбывают.
- * 5. Из розыгрыша — случайно и поровну. Очки не дают «больше шансов».
+ * 1. A record's score is computed once, at load: `score bonus` plus bonuses for conditions and
+ *    fields ({@link dialogueScore}). During play `getScore` adds another +2 if the target's
+ *    race is in `target race`.
+ * 2. The list (event dialogues or lines under a node) is sorted by descending key
+ *    `score + max(0, best score of direct lines)`; with equal keys, in insertion order.
+ * 3. The game goes through the list once. A line with text whose score is below the best one stops
+ *    the pass. A record that failed the checks (conditions, chance, no speaker) is skipped.
+ *    An empty node (dialogue, line without text, interjection node) picks a line among its
+ *    children the same way; its result is its score plus the score of the picked line.
+ * 4. A record enters the draw if its score (result) is not below the best so far; the best
+ *    becomes equal to it. Those that entered earlier do not drop out.
+ * 5. From the draw: randomly with equal odds. Score gives no "better chance".
  */
 import type { GameRecord } from '../format/types.ts';
 import { itemTypeName } from '../format/item-types.ts';
 import type { ModContext } from './context.ts';
 import { uiText, type UiText } from '../ui-text.ts';
 
-/** Ссылки реплики/диалога, которые работают как условия (кроме `conditions`). */
+/** References of a line/dialogue that work as conditions (besides `conditions`). */
 export const DIALOGUE_CONDITION_CATEGORIES = [
   'conditions',
   'target race',
@@ -39,17 +39,17 @@ export const DIALOGUE_CONDITION_CATEGORIES = [
   'target carrying character',
 ] as const;
 
-/** Есть ли у реплики или диалога хоть одно условие (ссылки-условия, `target is type`, ограничение повтора). */
+/** Does the line or dialogue have at least one condition (condition references, `target is type`, repeat limit). */
 export function hasConditions(rec: GameRecord): boolean {
   if ((rec.ints.get('target is type') ?? 0) !== 0 || (rec.ints.get('repetition limit') ?? 0) !== 0) return true;
   return DIALOGUE_CONDITION_CATEGORIES.some((c) => (rec.refs.get(c)?.length ?? 0) > 0);
 }
 
-/** DialogConditionEnum.DC_HAS_TAG — за такое условие игра даёт ещё +1. */
+/** DialogConditionEnum.DC_HAS_TAG: for such a condition the game gives another +1. */
 const DC_HAS_TAG = 23;
-/** Начальное «лучшее» в `_chooseDialog`: записи с очками ниже не выбираются никогда. */
+/** Initial "best" in `_chooseDialog`: records with a lower score are never picked. */
 export const CHOOSE_MIN_SCORE = -999;
-/** Говорящие, которые в разговоре по клику есть всегда: я, собеседник, собеседник-игрок. */
+/** Speakers that are always present in a click conversation: me, target, target-player. */
 const SURE_SPEAKERS: ReadonlySet<number> = new Set([0, 1, 2]);
 
 export type ScorePartKey =
@@ -75,7 +75,7 @@ export type ScorePartKey =
 export interface ScorePart {
   key: ScorePartKey;
   value: number;
-  /** Сколько раз (условий, состояний мира). */
+  /** How many times (conditions, world states). */
   count?: number;
 }
 
@@ -108,7 +108,7 @@ export const SCORE_PART_LABELS: Readonly<Record<ScorePartKey, UiText>> = {
 
 const count = (rec: GameRecord, cat: string): number => rec.refs.get(cat)?.length ?? 0;
 
-/** Очки записи DIALOGUE / DIALOGUE_LINE так, как их считает игра при загрузке, с разбивкой. */
+/** Score of a DIALOGUE / DIALOGUE_LINE record as the game computes it at load, with a breakdown. */
 export function dialogueScore(ctx: ModContext, rec: GameRecord): DialogueScore {
   const parts: ScorePart[] = [];
   const add = (key: ScorePartKey, value: number, n?: number): void => {
@@ -138,14 +138,14 @@ export function dialogueScore(ctx: ModContext, rec: GameRecord): DialogueScore {
   return { total: parts.reduce((s, p) => s + p.value, 0), parts };
 }
 
-/** Разбивка очков текстом: «score bonus 5, условия ×2 +2, …». */
+/** Score breakdown as text: "score bonus 5, conditions ×2 +2, …". */
 export function formatScoreParts(parts: readonly ScorePart[], lang = 'en'): string {
   return parts.map((p) => (p.key === 'bonus' ? `score bonus ${String(p.value)}` : `${uiText(SCORE_PART_LABELS[p.key], lang)}${p.count !== undefined ? ` ×${String(p.count)}` : ''} ${p.value > 0 ? '+' : ''}${String(p.value)}`)).join(', ');
 }
 
 /**
- * Запись проходит проверки игры при любом раскладе: без условий, без шанса ниже 99%, не
- * заблокирована, не `unique`, не узел вмешательства, говорит я или собеседник.
+ * The record passes the game checks in any setup: no conditions, no chance below 99%, not
+ * locked, not `unique`, not an interjection node, the speaker is me or the target.
  */
 export function alwaysPasses(rec: GameRecord): boolean {
   if (hasConditions(rec) || rec.bools.get('locked') || rec.bools.get('unique') || rec.bools.get('interjection')) return false;
@@ -153,7 +153,7 @@ export function alwaysPasses(rec: GameRecord): boolean {
   return SURE_SPEAKERS.has(rec.ints.get('speaker') ?? 0);
 }
 
-/** Пустой узел: игра не говорит его, а выбирает реплику среди его детей. */
+/** Empty node: the game does not say it but picks a line among its children. */
 export function isEmptyNode(rec: GameRecord): boolean {
   if (itemTypeName(rec.type) === 'DIALOGUE' || rec.bools.get('interjection')) return true;
   for (const [k, v] of rec.strings) if (/^text\d+$/.test(k) && v.length > 0) return false;
@@ -161,22 +161,22 @@ export function isEmptyNode(rec: GameRecord): boolean {
 }
 
 export interface ChooseEnv {
-  /** Пройдёт ли запись проверки игры в этом раскладе. */
+  /** Will the record pass the game checks in this setup. */
   passes(sid: string, rec: GameRecord): boolean;
-  /** Надбавка во время игры (+2, если раса собеседника есть в `target race`). */
+  /** Bonus during play (+2 if the target's race is in `target race`). */
   bonus?(sid: string, rec: GameRecord): number;
 }
 
 export interface ChooseResult {
-  /** Вероятность, что выбор пришёл через этот элемент списка (0..1). */
+  /** Probability that the pick came through this list element (0..1). */
   odds: Map<string, number>;
-  /** Вероятность, что не выбрано ничего. */
+  /** Probability that nothing is picked. */
   none: number;
 }
 
 interface Outcome {
   top: string;
-  /** Очки выбранной реплики (её собственные) — их родитель прибавляет к своим. */
+  /** Score of the picked line (its own); the parent adds it to its own. */
   leaf: number;
   p: number;
 }
@@ -186,7 +186,7 @@ interface Dist {
   none: number;
 }
 
-/** Порядок списка, как у игры: по убыванию `очки + max(0, лучшие очки детей)`, при равных — как добавлены. */
+/** List order as in the game: descending `score + max(0, best score of children)`, on ties as added. */
 export function chooseOrder(ctx: ModContext, list: readonly string[], scoreOf: (rec: GameRecord) => number = (r) => dialogueScore(ctx, r).total): string[] {
   const keyed = list.flatMap((sid, i) => {
     const rec = ctx.get(sid);
@@ -201,12 +201,12 @@ export function chooseOrder(ctx: ModContext, list: readonly string[], scoreOf: (
   return keyed.sort((a, b) => b.key - a.key || a.i - b.i).map((k) => k.sid);
 }
 
-/** Предел ветвлений: дальше берётся только самый вероятный исход пустого узла. */
+/** Branching limit: beyond it only the most likely outcome of an empty node is taken. */
 const MAX_STEPS = 20000;
 
 /**
- * Шансы выбора по правилу игры для списка `list` (диалоги события или реплики под узлом)
- * при раскладе `env`: какие записи проходят проверки. Повторяющиеся id считаются одним.
+ * Pick odds by the game rule for list `list` (event dialogues or lines under a node)
+ * in setup `env`: which records pass the checks. Repeated ids count as one.
  */
 export function chooseOdds(ctx: ModContext, list: readonly string[], env: ChooseEnv): ChooseResult {
   const scores = new Map<GameRecord, number>();
@@ -287,7 +287,7 @@ export function chooseOdds(ctx: ModContext, list: readonly string[], env: Choose
   return { odds, none: d.none };
 }
 
-/** Записи под узлом (по `lines`), рекурсивно, с самим узлом. */
+/** Records under the node (via `lines`), recursively, including the node itself. */
 export function dialogueTreeIds(ctx: ModContext, root: string): Set<string> {
   const seen = new Set<string>();
   const walk = (sid: string): void => {

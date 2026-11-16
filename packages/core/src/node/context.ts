@@ -1,6 +1,6 @@
 /**
- * Загрузка контекста редактирования с диска: ваниль по порядку, зависимости мода (из `mods/`
- * игры и мастерской, в порядке `data/mods.cfg`), затем сам мод. Сохранение мода в файл.
+ * Loading the editing context from disk: vanilla in order, the mod's dependencies (from the game's `mods/`
+ * and the Workshop, in `data/mods.cfg` order), then the mod itself. Saving the mod to a file.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -18,21 +18,21 @@ import { resolveDataLocale } from './locales.ts';
 
 export interface LoadContextOptions {
   paths: GamePaths;
-  /** Путь к редактируемому .mod. Если файла нет — создаётся новый мод с этим именем. */
+  /** Path to the edited .mod. If the file does not exist, a new mod with this name is created. */
   modPath?: string;
-  /** Имя нового мода, если `modPath` не задан (по умолчанию `new.mod`). */
+  /** Name of the new mod if `modPath` is not set (default `new.mod`). */
   modName?: string;
   /**
-   * Зависимости (имена .mod), которые грузить как нижние слои. По умолчанию — зависимости и
-   * references из заголовка мода. Ванильные имена пропускаются: ваниль грузится всегда.
+   * Dependencies (.mod names) to load as lower layers. Defaults to the dependencies and
+   * references from the mod header. Vanilla names are skipped: vanilla is always loaded.
    */
   dependencies?: readonly string[];
   /**
-   * Другие моды для контекста (имена .mod): грузятся слоями на своих местах по `mods.cfg`,
-   * но в заголовок мода не пишутся. Так видно, как мод ляжет поверх других модов.
+   * Other mods for the context (.mod names): loaded as layers at their places per `mods.cfg`,
+   * but not written to the mod header. This shows how the mod sits on top of other mods.
    */
   context?: readonly string[];
-  /** Загрузить схему FCS (по умолчанию да, если fcs.def есть) или взять уже прочитанную. */
+  /** Load the FCS schema (yes by default, if fcs.def exists) or take an already read one. */
   schema?: boolean | GameSchema;
   /**
    * Schema extensions (FCS Extended files in mod folders) to add to the schema read from disk.
@@ -47,17 +47,17 @@ export interface LoadContextOptions {
   po?: boolean | PoFile;
   /** Data language: a locale code or `none`; default — the language of the game's `settings.cfg`. */
   dataLocale?: string;
-  /** Уже прочитанные ванильные слои (чтобы не читать их заново). */
+  /** Already read vanilla layers (so they are not read again). */
   vanilla?: readonly Layer[];
 }
 
 export interface LoadedContext {
   ctx: ModContext;
-  /** Зависимости, которых нет ни в `mods/`, ни в мастерской. */
+  /** Dependencies found neither in `mods/` nor in the Workshop. */
   missingDependencies: string[];
-  /** Пути загруженных зависимостей по порядку. */
+  /** Paths of loaded dependencies, in order. */
   dependencyPaths: string[];
-  /** Моды контекста, которые нашлись (не зависимости). */
+  /** Context mods that were found (not dependencies). */
   context: string[];
   /** Schema extensions found for the mod, in load order; their def files are in `ctx.schema`. */
   extensions: FoundExtension[];
@@ -67,7 +67,7 @@ export function loadVanillaLayers(paths: GamePaths): Layer[] {
   return vanillaFilePaths(paths).map((p, i) => ({ name: VANILLA_FILES[i]!, file: readDataFile(readFileSync(p)) }));
 }
 
-/** Порядок загрузки модов игрока из `data/mods.cfg` (имена файлов .mod). */
+/** Load order of the player's mods from `data/mods.cfg` (.mod file names). */
 export function readModsCfg(paths: GamePaths): string[] {
   const p = join(paths.kenshi, 'data', 'mods.cfg');
   if (!existsSync(p)) return [];
@@ -77,7 +77,7 @@ export function readModsCfg(paths: GamePaths): string[] {
     .filter((s) => s.length > 0);
 }
 
-/** Найти .mod по имени файла: сначала `mods/`, затем мастерская. */
+/** Find a .mod by file name: `mods/` first, then the Workshop. */
 export function findInstalledMod(paths: GamePaths, fileName: string): string | undefined {
   const lower = fileName.toLowerCase();
   return installedModFiles(paths).find((m) => basename(m.path).toLowerCase() === lower)?.path;
@@ -85,23 +85,23 @@ export function findInstalledMod(paths: GamePaths, fileName: string): string | u
 
 export interface ModLoadPlan {
   modName: string;
-  /** Существующий файл мода (если есть). */
+  /** Existing mod file (if any). */
   modPath?: string;
   mod?: DataFile;
-  /** Зависимости, которые нашлись, в порядке загрузки (`mods.cfg`). */
+  /** Dependencies that were found, in load order (`mods.cfg`). */
   dependencies: { name: string; path: string }[];
-  /** Зависимости, которых нет ни в `mods/`, ни в мастерской. */
+  /** Dependencies found neither in `mods/` nor in the Workshop. */
   missingDependencies: string[];
   /**
-   * Моды контекста (`options.context`), которые нашлись и не входят в зависимости: стоят
-   * среди `dependencies` на своих местах по `mods.cfg`, в заголовок мода не попадают.
+   * Context mods (`options.context`) that were found and are not dependencies: they sit
+   * among `dependencies` at their places per `mods.cfg` and do not go into the mod header.
    */
   context: string[];
 }
 
 /**
- * Что грузить: файл мода (если есть), его зависимости по порядку `mods.cfg`, отсутствующие.
- * Ванильные имена и сам мод из зависимостей убираются.
+ * What to load: the mod file (if any), its dependencies in `mods.cfg` order, the missing ones.
+ * Vanilla names and the mod itself are removed from the dependencies.
  */
 export function planModLoad(
   paths: GamePaths,
@@ -188,7 +188,7 @@ export function loadModContext(options: LoadContextOptions): LoadedContext {
   return { ctx, missingDependencies: plan.missingDependencies, dependencyPaths, context: plan.context, extensions };
 }
 
-/** Записать мод (только изменения) в файл и считать контекст сохранённым. */
+/** Write the mod (changes only) to a file and mark the context as saved. */
 export function saveModContext(ctx: ModContext, path: string): DataFile {
   const file = ctx.buildModFile();
   mkdirSync(dirname(path), { recursive: true });
@@ -198,8 +198,8 @@ export function saveModContext(ctx: ModContext, path: string): DataFile {
 }
 
 /**
- * Путь к моду по тому, что ввёл пользователь: существующий файл (относительно `cwd`) или имя
- * установленного мода (`Мой мод.mod`, можно без `.mod`).
+ * Mod path from what the user typed: an existing file (relative to `cwd`) or the name of an
+ * installed mod (`My mod.mod`, `.mod` may be omitted).
  */
 export function resolveModPath(paths: GamePaths, spec: string, cwd = '.'): string | undefined {
   const asPath = resolve(cwd, spec);
@@ -212,14 +212,14 @@ function isInside(root: string, path: string): boolean {
   return r === '' || (!r.startsWith('..') && !isAbsolute(r));
 }
 
-/** Лежит ли путь в папке игры или мастерской (туда без явного разрешения не пишем). */
+/** Whether the path is in the game or Workshop folder (we don't write there without explicit permission). */
 export function isInGameFolders(paths: GamePaths, path: string): boolean {
   return isInside(paths.kenshi, path) || isInside(paths.workshop, path);
 }
 
 /**
- * Лежит ли путь в мастерской Steam. Туда не пишем никогда, даже с разрешением: это чужие
- * файлы, Steam перезапишет их при обновлении. Править — копию (`copyModForEditing`).
+ * Whether the path is in the Steam Workshop. We never write there, even with permission: these are
+ * someone else's files and Steam overwrites them on update. Edit a copy instead (`copyModForEditing`).
  */
 export function isInWorkshop(paths: GamePaths, path: string): boolean {
   return isInside(paths.workshop, path);

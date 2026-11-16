@@ -1,6 +1,6 @@
 /**
- * Имена значений перечислений: поля-enum (из fcs.def и встроенные в FCS), `DIALOG_ACTION.tag`,
- * значения ссылок (событие в `DIALOGUE_PACKAGE.dialogs`). Общая основа для CLI, MCP и редактора.
+ * Names of enum values: enum fields (from fcs.def and built into FCS), `DIALOG_ACTION.tag`,
+ * reference values (the event in `DIALOGUE_PACKAGE.dialogs`). Common base for CLI, MCP and the editor.
  */
 import { itemTypeName } from '../format/item-types.ts';
 import type { GameRecord, Reference } from '../format/types.ts';
@@ -21,7 +21,7 @@ import type { ModContext } from './context.ts';
 
 let builtinDefs: Map<string, EnumDef> | undefined;
 
-/** Встроенные перечисления, когда схемы игры нет (тесты, контекст без fcs.def). */
+/** Built-in enums when there is no game schema (tests, context without fcs.def). */
 function builtinEnumDefs(): Map<string, EnumDef> {
   if (!builtinDefs) {
     builtinDefs = new Map();
@@ -34,7 +34,7 @@ function builtinEnumDefs(): Map<string, EnumDef> {
   return builtinDefs;
 }
 
-/** Enum по имени: из схемы, иначе встроенный. */
+/** Enum by name: from the schema, otherwise built-in. */
 export function getEnum(schema: GameSchema | undefined, name: string): EnumDef | undefined {
   return schema?.enums.get(name) ?? builtinEnumDefs().get(name);
 }
@@ -44,8 +44,8 @@ export function enumValue(def: EnumDef, value: number): EnumValue | undefined {
 }
 
 /**
- * Enum поля записи. `rec` нужен для полей, чей enum зависит от других полей
- * (`DIALOG_ACTION.tag` — по `condition name`).
+ * Enum of a record field. `rec` is needed for fields whose enum depends on other fields
+ * (`DIALOG_ACTION.tag` depends on `condition name`).
  */
 export function fieldEnum(schema: GameSchema | undefined, typeName: string, key: string, rec?: GameRecord): EnumDef | undefined {
   if (typeName === 'DIALOG_ACTION' && key === 'tag' && rec) {
@@ -62,13 +62,13 @@ export function fieldEnum(schema: GameSchema | undefined, typeName: string, key:
   return builtin !== undefined ? getEnum(schema, builtin) : undefined;
 }
 
-/** Enum значения ссылки `slot` (0..2) в категории `category` записи типа `typeName`. */
+/** Enum of reference value `slot` (0..2) in category `category` of a record of type `typeName`. */
 export function refValueEnum(schema: GameSchema | undefined, typeName: string, category: string, slot: number): EnumDef | undefined {
   const name = BUILTIN_REF_VALUE_ENUMS[`${typeName}.${category}`]?.[slot];
   return name !== undefined ? getEnum(schema, name) : undefined;
 }
 
-/** Подписи значений ссылки v0..v2 (`событие`, `значение`), если известны. */
+/** Labels of reference values v0..v2 (`event`, `value`), if known. */
 export function refValueLabels(typeName: string, category: string): readonly string[] | undefined {
   return BUILTIN_REF_VALUE_LABELS[`${typeName}.${category}`];
 }
@@ -83,7 +83,7 @@ export function enumLabel(def: EnumDef, v: EnumValue, lang = 'en'): string | und
   return BUILTIN_ENUM_LABELS_I18N[lang]?.[def.name]?.[v.name] ?? BUILTIN_ENUM_LABELS_I18N.en![def.name]?.[v.name] ?? v.label;
 }
 
-/** `DR_ONCE_ONLY «один раз» (5)`; неизвестное значение — `5 (нет в DialogRepetitionEnum)`. */
+/** `DR_ONCE_ONLY "once only" (5)`; an unknown value gives `5 (not in DialogRepetitionEnum)`. */
 export function formatEnumValue(def: EnumDef, value: number, lang = 'en'): string {
   const v = enumValue(def, value);
   if (!v) return `${value} (${NOT_IN[lang] ?? NOT_IN.en!} ${def.name})`;
@@ -91,15 +91,15 @@ export function formatEnumValue(def: EnumDef, value: number, lang = 'en'): strin
   return `${v.name}${label !== undefined ? ` ${quote(label, lang)}` : ''} (${value})`;
 }
 
-/** Короткая подпись значения: русская подпись, иначе имя, иначе число. */
+/** Short value label: the Russian label, otherwise the name, otherwise the number. */
 export function shortEnumLabel(def: EnumDef, value: number, lang = 'en'): string {
   const v = enumValue(def, value);
   return v ? (enumLabel(def, v, lang) ?? v.name) : String(value);
 }
 
 /**
- * Значение enum из ввода: число, имя (`DR_ONCE_ONLY`), имя без префикса (`ONCE_ONLY`) или
- * русская подпись. `undefined` — не найдено.
+ * Enum value from input: a number, a name (`DR_ONCE_ONLY`), a name without prefix (`ONCE_ONLY`) or
+ * the Russian label. `undefined` if not found.
  */
 export function parseEnumValue(def: EnumDef, input: string | number): number | undefined {
   if (typeof input === 'number') return Number.isInteger(input) ? input : undefined;
@@ -120,9 +120,9 @@ const ACTION_WORDS: Record<string, { action: string; condition: string }> = {
 };
 
 /**
- * Условие или действие диалога одной строкой: `собеседник: DC_RELATIONS < 20`,
- * `DC_PERSONALITY_TAG PT_SMART = 1`, `DA_TRADE`. `ref` — ссылка на DIALOG_ACTION из
- * `conditions` (сравниваемое значение — v0 ссылки) или `effects`.
+ * A dialogue condition or effect as one line: `target: DC_RELATIONS < 20`,
+ * `DC_PERSONALITY_TAG PT_SMART = 1`, `DA_TRADE`. `ref` is the reference to DIALOG_ACTION from
+ * `conditions` (the compared value is v0 of the reference) or `effects`.
  */
 export function describeDialogAction(ctx: ModContext, ref: Reference, category: string, lang = 'en'): string | undefined {
   const w = ACTION_WORDS[lang] ?? ACTION_WORDS.en!;
@@ -155,7 +155,7 @@ export function describeDialogAction(ctx: ModContext, ref: Reference, category: 
   return parts.join(' ');
 }
 
-/** Подпись значений ссылки для показа: `событие EV_LAUNCH_ATTACK «начинаю атаку» (16)`. */
+/** Label of reference values for display: `event EV_LAUNCH_ATTACK "launching an attack" (16)`. */
 export function describeRefValues(schema: GameSchema | undefined, typeName: string, category: string, ref: Reference, lang = 'en'): string | undefined {
   const def = refValueEnum(schema, typeName, category, 0);
   if (!def) return undefined;

@@ -1,6 +1,6 @@
 /**
- * Клиент моста к игре: TCP 127.0.0.1, по строке JSON на сообщение (протокол v1 плагина Kenshi Bridge).
- * Связь открывается при первом запросе и восстанавливается сама после обрыва.
+ * Game bridge client: TCP 127.0.0.1, one JSON line per message (protocol v1 of the Kenshi Bridge plugin).
+ * The connection opens on the first request and reconnects by itself after a drop.
  */
 import { createConnection, type Socket } from 'node:net';
 import {
@@ -28,11 +28,11 @@ export class GameBridgeError extends Error {
 
 export interface GameBridgeOptions {
   host?: string;
-  /** По умолчанию — переменная KENSHI_BRIDGE_PORT или 47801. */
+  /** Defaults to the KENSHI_BRIDGE_PORT variable or 47801. */
   port?: number;
-  /** Ожидание ответа, мс (по умолчанию 5000). */
+  /** Response timeout, ms (default 5000). */
   timeoutMs?: number;
-  /** Ожидание подключения, мс (по умолчанию 1500). */
+  /** Connect timeout, ms (default 1500). */
   connectTimeoutMs?: number;
 }
 
@@ -140,7 +140,7 @@ export class GameBridge {
     this.pending.clear();
   }
 
-  /** Отправить команду и дождаться ответа. Ошибка — GameBridgeError с кодом протокола. */
+  /** Send a command and wait for the reply. Error — GameBridgeError with the protocol code. */
   async request<T = unknown>(cmd: string, args: object = {}): Promise<T> {
     const s = await this.open();
     const id = this.nextId++;
@@ -162,12 +162,12 @@ export class GameBridge {
     return this.request<GameState>('state');
   }
 
-  /** Команда, меняющая игру (телепорт, камера, скорость, пауза). */
+  /** A command that changes the game (teleport, camera, speed, pause). */
   action(a: GameAction): Promise<Record<string, unknown>> {
     return this.request(a.cmd, a.args);
   }
 
-  /** Города мира с центром и радиусом границы (только чтение). */
+  /** World towns with center and border radius (read only). */
   towns(args: { near?: Vec3; range?: number; mult?: number } = {}): Promise<{ towns: GameTown[]; count: number }> {
     return this.request('towns', args);
   }

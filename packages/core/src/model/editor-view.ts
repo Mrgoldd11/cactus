@@ -1,7 +1,7 @@
 /**
- * Данные для редактора записей (как в FCS): дерево категорий из `fcs_layout.def` с фильтрами,
- * строки полей записи по схеме (значение, значение нижних слоёв, enum, видимость по
- * условиям) и группы ссылок с подписями значений и состоянием относительно нижних слоёв.
+ * Data for the record editor (as in FCS): category tree from `fcs_layout.def` with filters,
+ * record field rows by schema (value, lower-layer value, enum, visibility by
+ * conditions) and reference groups with value labels and state relative to the lower layers.
  */
 import { decodeText, encodeText } from '../text.ts';
 import { itemTypeName } from '../format/item-types.ts';
@@ -14,25 +14,25 @@ import type { ModContext, RecordStatus } from './context.ts';
 import { fieldEnum, getEnum, parseEnumValue, refValueEnum, refValueLabels } from './enums.ts';
 import { isRemovedRef, refValuesEqual, SCALAR_DICTS, scalarEqual, scalarMap, type ScalarDict, type ScalarValue } from './record-ops.ts';
 
-// ---------------------------------------------------------------- дерево категорий
+// ---------------------------------------------------------------- category tree
 
 export interface CategoryNode {
-  /** Путь в дереве (`Items/Weapons`), уникален. */
+  /** Path in the tree (`Items/Weapons`), unique. */
   id: string;
   label: string;
-  /** Тип записей; у узла «Все записи» нет. */
+  /** Record type; the "All records" node has none. */
   type?: string;
   filters: LayoutFilter[];
   children: CategoryNode[];
 }
 
-/** Тип `NULL_ITEM` в fcs_layout.def — «Everything», все записи. */
+/** Type `NULL_ITEM` in fcs_layout.def: "Everything", all records. */
 const EVERYTHING_TYPE = 'NULL_ITEM';
 export const OTHER_TYPES_ID = '__other__';
 
 /**
- * Дерево категорий: узлы fcs_layout.def, затем «прочие типы» — типы из `presentTypes`, которых
- * в дереве нет. «Everything» становится узлом без типа (все записи).
+ * Category tree: fcs_layout.def nodes, then "other types": types from `presentTypes` that
+ * are not in the tree. "Everything" becomes a node without a type (all records).
  */
 export function buildCategoryTree(schema: GameSchema | undefined, presentTypes: Iterable<string>): CategoryNode[] {
   const used = new Set<string>();
@@ -57,7 +57,7 @@ export function buildCategoryTree(schema: GameSchema | undefined, presentTypes: 
   return roots;
 }
 
-/** Значение поля записи для фильтра: из записи, иначе значение по умолчанию из схемы. */
+/** Record field value for a filter: from the record, otherwise the schema default. */
 function filterFieldValue(schema: GameSchema | undefined, type: TypeSchema | undefined, rec: GameRecord, key: string): { value: ScalarValue; dict: ScalarDict } | undefined {
   for (const dict of SCALAR_DICTS) {
     const v = scalarMap(rec, dict).get(key);
@@ -76,9 +76,9 @@ function filterFieldValue(schema: GameSchema | undefined, type: TypeSchema | und
 }
 
 /**
- * Номера значений встроенных в игру enum'ов, которых нет ни в fcs_enums.def, ни в
- * builtin-enums.ts, но которые нужны фильтрам fcs_layout.def. Установлены по данным:
- * у всех книг ванили (140 записей) `item function` = 13.
+ * Value numbers of enums built into the game that are neither in fcs_enums.def nor in
+ * builtin-enums.ts but are needed by fcs_layout.def filters. Established from the data:
+ * all vanilla books (140 records) have `item function` = 13.
  */
 const LAYOUT_ENUM_VALUES: Record<string, Record<string, number>> = { ItemFunction: { ITEM_BOOK: 13 } };
 
@@ -91,7 +91,7 @@ function layoutEnumValue(schema: GameSchema | undefined, type: TypeSchema | unde
   return /^-?\d+$/.test(value) ? Number(value) : undefined;
 }
 
-/** Подходит ли запись под фильтры узла (`building category==DOORS`, `is node=true`). */
+/** Does the record match the node filters (`building category==DOORS`, `is node=true`). */
 export function matchesLayoutFilters(schema: GameSchema | undefined, rec: GameRecord, filters: readonly LayoutFilter[]): boolean {
   if (filters.length === 0) return true;
   const typeName = itemTypeName(rec.type, schema?.itemTypes);
@@ -110,19 +110,19 @@ export function matchesLayoutFilters(schema: GameSchema | undefined, rec: GameRe
   });
 }
 
-/** Подходит ли запись под узел дерева. */
+/** Does the record match the tree node. */
 export function matchesCategory(schema: GameSchema | undefined, rec: GameRecord, node: CategoryNode): boolean {
   if (node.id === OTHER_TYPES_ID) return false;
   if (node.type === undefined) return true;
   return itemTypeName(rec.type, schema?.itemTypes) === node.type && matchesLayoutFilters(schema, rec, node.filters);
 }
 
-// ---------------------------------------------------------------- поля
+// ---------------------------------------------------------------- fields
 
 /**
- * Состояние поля относительно нижних слоёв:
- * `default` — в записи поля нет (показано значение по умолчанию), `base` — как в нижних слоях,
- * `changed` — мод меняет значение, `added` — поля нет в нижних слоях, `removed` — мод убрал поле.
+ * Field state relative to the lower layers:
+ * `default`: the record has no such field (the default value is shown), `base`: as in the lower layers,
+ * `changed`: the mod changes the value, `added`: the field is not in the lower layers, `removed`: the mod removed the field.
  */
 export type FieldState = 'default' | 'base' | 'changed' | 'added' | 'removed';
 
@@ -132,11 +132,11 @@ export interface FieldRow {
   def?: FieldDef;
   category: string;
   value?: ScalarValue;
-  /** Значение в нижних слоях (ваниль и зависимости). */
+  /** Value in the lower layers (vanilla and dependencies). */
   lower?: ScalarValue;
   state: FieldState;
   enum?: EnumDef;
-  /** Поле скрыто условием fcs.def (`condition "x" if "y" is ...`). */
+  /** The field is hidden by an fcs.def condition (`condition "x" if "y" is ...`). */
   hidden: boolean;
 }
 
@@ -144,7 +144,7 @@ function scalarOf(rec: GameRecord | undefined, dict: ScalarDict, key: string): S
   return rec ? scalarMap(rec, dict).get(key) : undefined;
 }
 
-/** Значение условия fcs.def (`MapFeatureMode.FOLIAGE`, `False`, `3`) против значения поля. */
+/** fcs.def condition value (`MapFeatureMode.FOLIAGE`, `False`, `3`) against the field value. */
 function conditionValueMatches(schema: GameSchema | undefined, row: FieldRow | undefined, text: string): boolean {
   const v = row?.value ?? (row?.def?.default !== undefined ? defaultValue(schema, row.def) : undefined);
   if (v === undefined) return false;
@@ -157,7 +157,7 @@ function conditionValueMatches(schema: GameSchema | undefined, row: FieldRow | u
   return false;
 }
 
-/** Значение по умолчанию поля в виде значения словаря (enum — номером). */
+/** Field default value as a dictionary value (enum as number). */
 export function defaultValue(schema: GameSchema | undefined, def: FieldDef): ScalarValue | undefined {
   if (def.default === undefined) return undefined;
   if (def.kind === 'enum') {
@@ -170,8 +170,8 @@ export function defaultValue(schema: GameSchema | undefined, def: FieldDef): Sca
 }
 
 /**
- * Строки полей записи: сначала поля схемы (по группам fcs.def), затем поля из данных, которых
- * в схеме нет (повторяющиеся `text3` идут за своим описанием). Ссылки и объекты — отдельно.
+ * Record field rows: first the schema fields (by fcs.def groups), then fields from the data that
+ * are not in the schema (repeated `text3` follow their description). References and objects are separate.
  */
 export function fieldRows(ctx: ModContext, stringId: string): FieldRow[] {
   const rec = ctx.get(stringId) ?? ctx.lower(stringId);
@@ -231,15 +231,15 @@ export function fieldRows(ctx: ModContext, stringId: string): FieldRow[] {
   return rows;
 }
 
-// ---------------------------------------------------------------- ссылки
+// ---------------------------------------------------------------- references
 
-/** `base` — как в нижних слоях, `added`/`changed` — мод добавил ссылку или поменял значения, `removed` — мод убрал. */
+/** `base`: as in the lower layers, `added`/`changed`: the mod added the reference or changed values, `removed`: the mod removed it. */
 export type RefState = 'base' | 'added' | 'changed' | 'removed';
 
 export interface RefRow {
   ref: Reference;
   state: RefState;
-  /** Значения в нижних слоях, если мод их поменял. */
+  /** Values in the lower layers, if the mod changed them. */
   lower?: Reference;
   targetName?: string;
   targetType?: string;
@@ -249,16 +249,16 @@ export interface RefRow {
 export interface RefGroup {
   category: string;
   def?: FieldDef;
-  /** Тип целей по схеме. */
+  /** Target type by schema. */
   targetType?: string;
-  /** Подписи v0..v2 (длина — сколько значений используется). */
+  /** Labels of v0..v2 (the length is how many values are used). */
   valueLabels: string[];
-  /** Enum значений v0..v2 (если известен). */
+  /** Enum of values v0..v2 (if known). */
   valueEnums: (EnumDef | undefined)[];
   rows: RefRow[];
 }
 
-/** Группы ссылок записи: категории схемы (в т. ч. пустые), затем категории из данных. */
+/** Reference groups of the record: schema categories (including empty ones), then categories from the data. */
 export function refGroups(ctx: ModContext, stringId: string): RefGroup[] {
   const rec = ctx.get(stringId) ?? ctx.lower(stringId);
   if (!rec) return [];

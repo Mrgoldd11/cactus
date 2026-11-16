@@ -1,7 +1,7 @@
 /**
- * Карта высот мира с диска: `data/newland/land/fullmap.tif` (TIFF, 16 бит, без сжатия, 537 МБ).
- * Файл целиком не читается: тайл квадродерева — это 129 строк, из каждой берётся нужный
- * отрезок, так что любой тайл — 129 коротких чтений (уровень 0, весь мир — 4 МБ).
+ * World heightmap from disk: `data/newland/land/fullmap.tif` (TIFF, 16 bit, uncompressed, 537 MB).
+ * The file is never read whole: a quadtree tile is 129 rows, and from each the needed
+ * segment is taken, so any tile is 129 short reads (level 0, the whole world — 4 MB).
  */
 import { open, type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -14,13 +14,13 @@ export function heightmapPath(kenshiDir: string): string {
 export interface HeightmapLayout {
   width: number;
   height: number;
-  /** Где в файле начинаются пиксели (строки подряд, слева направо). */
+  /** Where the pixels start in the file (rows in sequence, left to right). */
   offset: number;
 }
 
 const TYPE_SIZE: Readonly<Record<number, number>> = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 16: 8 };
 
-/** Разбор заголовка TIFF: только то, что нужно, и только тот вид, что лежит в игре. */
+/** TIFF header parsing: only what is needed, and only the variant the game ships. */
 export function parseHeightmapHeader(head: Uint8Array): HeightmapLayout {
   const v = new DataView(head.buffer, head.byteOffset, head.byteLength);
   if (v.getUint16(0, true) !== 0x4949 || v.getUint16(2, true) !== 42) throw new Error('Карта высот: не TIFF (little-endian)');
@@ -54,7 +54,7 @@ export function parseHeightmapHeader(head: Uint8Array): HeightmapLayout {
   const rowsPerStrip = one(278) ?? height;
   const offset = strips?.values[0];
   if (offset === undefined) throw new Error('Карта высот: нет смещения данных');
-  // Несколько полос допустимы, только если они идут подряд (тогда это один сплошной блок).
+  // Several strips are allowed only if they are contiguous (then they form one solid block).
   if (strips && strips.count > 1) {
     const counts = tags.get(279)?.values ?? [];
     if (strips.values.length !== strips.count || counts.length !== strips.count) throw new Error('Карта высот: полосы не прочитаны');
@@ -88,7 +88,7 @@ export class Heightmap {
     }
   }
 
-  /** Значения карты высот тайла: TILE_SAMPLES × TILE_SAMPLES, строка за строкой (по z). */
+  /** Heightmap values of a tile: TILE_SAMPLES × TILE_SAMPLES, row by row (along z). */
   async readTile(level: number, tx: number, ty: number): Promise<Uint16Array> {
     const b = tileBounds(level, tx, ty);
     const out = new Uint16Array(TILE_SAMPLES * TILE_SAMPLES);
@@ -105,7 +105,7 @@ export class Heightmap {
     return out;
   }
 
-  /** Высоты в точках мира (ближайший пиксель); для привязки к рельефу. */
+  /** Heights at world points (nearest pixel); for snapping to the terrain. */
   async heightsAt(points: readonly { x: number; z: number }[]): Promise<number[]> {
     const W = this.layout.width;
     return Promise.all(

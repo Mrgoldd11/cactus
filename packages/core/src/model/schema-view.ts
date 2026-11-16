@@ -1,6 +1,6 @@
 /**
- * Схема игры текстом — для CLI (`kedit schema`) и ресурсов MCP: список типов, поля типа
- * с видом, значением по умолчанию и описанием из fcs.def, значения перечислений.
+ * Game schema as text — for the CLI (`kedit schema`) and MCP resources: list of types, fields of a type
+ * with kind, default value and description from fcs.def, enum values.
  */
 import type { FieldDef } from '../schema/fcs-def.ts';
 import { itemTypeId } from '../format/item-types.ts';
@@ -17,7 +17,7 @@ export interface TypeSummary {
   extensionFields: number;
 }
 
-/** Типы записей по алфавиту. */
+/** Record types in alphabetical order. */
 export function listTypes(schema: GameSchema): TypeSummary[] {
   return [...schema.types.values()]
     .map((t) => ({
@@ -95,7 +95,7 @@ function formatDefault(f: FieldDef): string {
 }
 
 /**
- * Поле одной строкой: `name: kind [детали] = default — описание`.
+ * A field on one line: `name: kind [details] = default — description`.
  * A field added by a schema extension is flagged `extension NAME`, unless that extension is
  * `typeExtension`, the one that introduced the whole type.
  */
@@ -116,7 +116,7 @@ export function formatFieldDef(f: FieldDef, typeExtension?: string, lang = 'en')
   return `${f.name}: ${kind}${formatDefault(f)}${flags.length ? ` [${flags.join(', ')}]` : ''}${desc}`;
 }
 
-/** Описание типа: поля по группам (категориям fcs.def), затем условия видимости. */
+/** Type description: fields by group (fcs.def categories), then visibility conditions. */
 export function formatTypeSchema(type: TypeSchema, lang = 'en'): string[] {
   const w = schemaWords(lang);
   const origin = type.extension !== undefined ? extensionMark(type.extension) : '';
@@ -137,7 +137,7 @@ export function formatTypeSchema(type: TypeSchema, lang = 'en'): string[] {
   return out;
 }
 
-/** Значения перечисления: `NAME = value — описание`. */
+/** Enum values: `NAME = value — description`. */
 export function formatEnum(schema: GameSchema, name: string, lang = 'en'): string[] | undefined {
   const w = schemaWords(lang);
   const e = schema.enums.get(name);
@@ -158,7 +158,7 @@ export function formatEnum(schema: GameSchema, name: string, lang = 'en'): strin
   return out;
 }
 
-/** Поиск типа без учёта регистра. */
+/** Case-insensitive type lookup. */
 export function findTypeSchema(schema: GameSchema, name: string): TypeSchema | undefined {
   return schema.types.get(name) ?? [...schema.types.values()].find((t) => t.name.toLowerCase() === name.toLowerCase());
 }

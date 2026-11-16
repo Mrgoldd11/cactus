@@ -1,12 +1,12 @@
 /**
- * Контекст редактирования мода: нижние слои (ваниль по порядку, затем зависимости) и сам
- * редактируемый мод. Даёт итоговое значение каждой записи, её статус (как в FCS), индекс
- * ссылок и команды правки с отменой/повтором. Мод хранит только изменения относительно нижних
- * слоёв; при сохранении пишутся только они.
+ * Mod editing context: lower layers (vanilla in order, then dependencies) and the mod being
+ * edited itself. Gives the resulting value of each record, its status (as in FCS), the reference
+ * index and edit commands with undo/redo. The mod stores only changes relative to the lower
+ * layers; only those are written on save.
  *
- * Изменения мода — неизменяемые снимки записей: команда не правит запись мода на месте, а
- * вычисляет новую. Поэтому отмена — это просто возврат прежнего снимка, а «запись изменена
- * с последнего сохранения» — это «снимок не тот же объект, что был сохранён».
+ * Mod changes are immutable record snapshots: a command does not edit the mod record in place but
+ * computes a new one. So undo is simply returning the previous snapshot, and "record changed
+ * since the last save" means "the snapshot is not the same object that was saved".
  */
 import { decodeText, encodeText } from '../text.ts';
 import { UiTextError } from '../ui-text.ts';
@@ -28,50 +28,50 @@ import {
   type ScalarValueMap,
 } from './record-ops.ts';
 
-/** Слой данных: файл и его имя (`gamedata.base`, `rebirth.mod`, ...). */
+/** Data layer: file and its name (`gamedata.base`, `rebirth.mod`, ...). */
 export interface Layer {
   name: string;
   file: DataFile;
 }
 
 /**
- * Статус записи с точки зрения редактируемого мода:
- * - `base` — запись нижних слоёв, мод её не трогает;
- * - `new` — запись создана модом;
- * - `changed` — мод меняет запись нижних слоёв;
- * - `deleted` — мод удаляет запись нижних слоёв.
+ * Record status from the point of view of the edited mod:
+ * - `base`: a lower-layer record the mod does not touch;
+ * - `new`: the record is created by the mod;
+ * - `changed`: the mod changes a lower-layer record;
+ * - `deleted`: the mod deletes a lower-layer record.
  */
 export type RecordStatus = 'base' | 'new' | 'changed' | 'deleted';
 
 export interface RecordOrigin {
   status: RecordStatus;
-  /** Слой, где запись появилась впервые (имя мода для новых). */
+  /** Layer where the record first appeared (the mod name for new ones). */
   origin: string;
-  /** Все слои, которые задают эту запись, по порядку (последним может быть мод). */
+  /** All layers that set this record, in order (the mod can be last). */
   layers: string[];
-  /** Запись удалена в нижних слоях (и, возможно, создана заново модом). */
+  /** The record is deleted in lower layers (and possibly re-created by the mod). */
   deletedBelow?: string;
 }
 
-/** Сведения из заголовка мода в текстовом виде. */
+/** Mod header info in text form. */
 export interface ModInfo {
-  /** Имя файла мода (`Мой мод.mod`): из него строятся строковые id новых записей. */
+  /** Mod file name (`My mod.mod`): string ids of new records are built from it. */
   fileName: string;
-  /** Формат файла: 16 или 17. */
+  /** File format: 16 or 17. */
   fileType: number;
   version: number;
   author: string;
   description: string;
   dependencies: string[];
   references: string[];
-  /** Последний выданный числовой id: новая запись получит `lastId + 1`. */
+  /** Last issued numeric id: a new record gets `lastId + 1`. */
   lastId: number;
 }
 
 export interface ReferenceEntry {
-  /** Запись, в которой ссылка. */
+  /** The record that holds the reference. */
   source: string;
-  /** Категория ссылки или `instance:<ключ>` для размещённого объекта. */
+  /** Reference category or `instance:<key>` for a placed object. */
   category: string;
   target: string;
   ref?: Reference;
@@ -94,11 +94,11 @@ export interface Changeset {
 }
 
 export interface ModContextOptions {
-  /** Нижние слои по порядку загрузки. */
+  /** Lower layers in load order. */
   layers: readonly Layer[];
-  /** Редактируемый мод: прочитанный файл или undefined для нового мода. */
+  /** The edited mod: the read file, or undefined for a new mod. */
   mod?: DataFile;
-  /** Имя файла мода (`Мой мод.mod`). */
+  /** Mod file name (`My mod.mod`). */
   modName: string;
   schema?: GameSchema;
   /** `gamedata.po` of the data language: translated record names (shown and searched). */
@@ -112,7 +112,7 @@ export interface ChangeEvent {
   info: boolean;
 }
 
-/** Ошибка команды правки (неизвестная запись, занятый id и т. п.). */
+/** Edit command error (unknown record, id already taken, etc.). */
 export class EditError extends UiTextError {
   override name = 'EditError';
 }
@@ -138,7 +138,7 @@ function sameInfo(a: ModInfo, b: ModInfo): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-/** Текст → байты; если текст не изменился, остаются исходные байты (и кодировка). */
+/** Text → bytes; if the text has not changed, the original bytes (and encoding) stay. */
 function keepBytes(text: string, original: Uint8Array | undefined): Uint8Array {
   return original && decodeText(original) === text ? original : encodeText(text);
 }
@@ -150,14 +150,14 @@ export class ModContext {
   /** Locale of the loaded translation (`ru_RU`); undefined — names only in the original. */
   dataLocale: string | undefined;
 
-  /** sid → записи нижних слоёв (номер слоя, запись) по порядку. */
+  /** sid → lower-layer records (layer number, record) in order. */
   private readonly lowerEntries = new Map<string, { layer: number; rec: GameRecord }[]>();
   private readonly lowerCache = new Map<string, GameRecord | null>();
   private readonly resolvedCache = new Map<string, GameRecord | null>();
 
   private readonly deltas = new Map<string, GameRecord>();
   private order: string[] = [];
-  /** Записи мода в том виде, в каком они в файле (прочитаны или сохранены). */
+  /** Mod records as they are in the file (read or saved). */
   private originals = new Map<string, GameRecord>();
   private originalFile: DataFile | undefined;
   private originalInfo: ModInfo;
@@ -198,7 +198,7 @@ export class ModContext {
     this.modInfo = { ...this.originalInfo, dependencies: [...this.originalInfo.dependencies], references: [...this.originalInfo.references] };
   }
 
-  // ---------------------------------------------------------------- чтение
+  // ---------------------------------------------------------------- reading
 
   get modName(): string {
     return this.modInfo.fileName;
@@ -208,7 +208,7 @@ export class ModContext {
     return this.modInfo;
   }
 
-  /** Запись в нижних слоях (итог наложения), undefined — нет или удалена. */
+  /** Record in the lower layers (result of overlaying); undefined if absent or deleted. */
   lower(stringId: string): GameRecord | undefined {
     let rec = this.lowerCache.get(stringId);
     if (rec === undefined) {
@@ -220,7 +220,7 @@ export class ModContext {
     return rec ?? undefined;
   }
 
-  /** Итоговая запись с учётом мода, undefined — нет или удалена. Возвращённую запись нельзя изменять. */
+  /** Resulting record including the mod; undefined if absent or deleted. The returned record must not be modified. */
   get(stringId: string): GameRecord | undefined {
     let rec = this.resolvedCache.get(stringId);
     if (rec === undefined) {
@@ -233,10 +233,10 @@ export class ModContext {
   }
 
   /**
-   * Тип и имя записи без сборки всей записи — для индексов на десятки тысяч строк. Та же
-   * запись, что `get ?? lower ?? delta`: итоговая, для удалённой модом — нижних слоёв, иначе
-   * запись мода. У нижних слоёв тип и имя берутся из последнего слоя (так их накладывает
-   * `applyLayer`); маркер удаления последним — записи нет.
+   * Record type and name without assembling the whole record, for indexes of tens of thousands of rows. The same
+   * record as `get ?? lower ?? delta`: the resulting one; for one deleted by the mod, the lower layers'; otherwise
+   * the mod record. For lower layers the type and name are taken from the last layer (this is how
+   * `applyLayer` overlays them); a deletion marker last means there is no record.
    */
   headline(stringId: string): Pick<GameRecord, 'type' | 'name'> | undefined {
     if (!this.deltas.has(stringId)) {
@@ -250,12 +250,12 @@ export class ModContext {
     return this.get(stringId) !== undefined;
   }
 
-  /** Запись мода (изменения) как она будет записана в файл. */
+  /** Mod record (changes) as it will be written to the file. */
   delta(stringId: string): GameRecord | undefined {
     return this.deltas.get(stringId);
   }
 
-  /** Записи мода в порядке файла. */
+  /** Mod records in file order. */
   modRecords(): GameRecord[] {
     return this.order.map((s) => this.deltas.get(s)!);
   }
@@ -284,13 +284,13 @@ export class ModContext {
     return out;
   }
 
-  /** Все строковые id (в том числе удалённые) в порядке первого появления по слоям. */
+  /** All string ids (including deleted ones) in order of first appearance across layers. */
   *allStringIds(): Generator<string> {
     yield* this.lowerEntries.keys();
     for (const s of this.order) if (!this.lowerEntries.has(s)) yield s;
   }
 
-  /** Все существующие итоговые записи. */
+  /** All existing resulting records. */
   *records(): Generator<GameRecord> {
     for (const s of this.allStringIds()) {
       const r = this.get(s);
@@ -298,7 +298,7 @@ export class ModContext {
     }
   }
 
-  /** Имя записи (текстом); для отсутствующей — undefined. */
+  /** Record name (as text); undefined for a missing one. */
   name(stringId: string): string | undefined {
     const r = this.get(stringId) ?? this.lower(stringId);
     return r ? decodeText(r.name) : undefined;
@@ -320,7 +320,7 @@ export class ModContext {
     this.dataLocale = po ? dataLocale : undefined;
   }
 
-  /** Есть ли у мода несохранённые изменения. */
+  /** Does the mod have unsaved changes. */
   get dirty(): boolean {
     if (!sameInfo(this.modInfo, this.originalInfo)) return true;
     if (this.order.length !== this.originals.size) return true;
@@ -331,9 +331,9 @@ export class ModContext {
     return this.deltas.get(stringId) !== this.originals.get(stringId);
   }
 
-  // ---------------------------------------------------------------- ссылки
+  // ---------------------------------------------------------------- references
 
-  /** Ссылки из записи (итоговые), включая размещённые объекты. */
+  /** References from the record (resulting), including placed objects. */
   referencesFrom(stringId: string): ReferenceEntry[] {
     const rec = this.get(stringId);
     if (!rec) return [];
@@ -343,7 +343,7 @@ export class ModContext {
     return out;
   }
 
-  /** Обратные ссылки: какие записи ссылаются на `stringId`. Индекс строится при первом вызове. */
+  /** Back references: which records reference `stringId`. The index is built on the first call. */
   referencesTo(stringId: string): ReferenceEntry[] {
     const sources = this.index().get(stringId);
     if (!sources) return [];
@@ -377,11 +377,11 @@ export class ModContext {
     for (const t of recordTargets(rec)) this.backIndex.get(t)?.delete(source);
   }
 
-  // ---------------------------------------------------------------- история
+  // ---------------------------------------------------------------- history
 
   /**
-   * Выполнить несколько команд как одну правку (одна отмена). Если `fn` бросает исключение,
-   * все её изменения откатываются. Вложенные транзакции входят во внешнюю.
+   * Run several commands as one edit (one undo). If `fn` throws,
+   * all its changes are rolled back. Nested transactions become part of the outer one.
    */
   transaction<T>(label: string, fn: () => T): T {
     if (this.depth === 0) this.open = { id: this.nextChangesetId++, label, ops: [] };
@@ -413,7 +413,7 @@ export class ModContext {
     return this.redoStack.length > 0;
   }
 
-  /** Отменить последнюю правку; возвращает её или undefined. */
+  /** Undo the last edit; returns it or undefined. */
   undo(): Changeset | undefined {
     if (this.depth > 0) throw new EditError({ en: 'Cannot undo inside a transaction', ru: 'Нельзя отменять внутри транзакции', zh: '不能在事务内撤销' });
     const cs = this.undoStack.pop();
@@ -444,8 +444,8 @@ export class ModContext {
   }
 
   /**
-   * Отменить правки до `id` включительно (меню «кружочка назад», панель «История»). Если такой
-   * действующей правки нет — EditError, ничего не меняется. Возвращает отменённые (новые первыми).
+   * Undo edits up to and including `id` (the "back arrow" menu, the "History" panel). If there is no such
+   * active edit: EditError, nothing changes. Returns the undone ones (newest first).
    */
   undoTo(id: number): Changeset[] {
     if (this.depth > 0) throw new EditError({ en: 'Cannot undo inside a transaction', ru: 'Нельзя отменять внутри транзакции', zh: '不能在事务内撤销' });
@@ -458,7 +458,7 @@ export class ModContext {
     }
   }
 
-  /** Повторить отменённые правки до `id` включительно. Возвращает повторённые по порядку. */
+  /** Redo undone edits up to and including `id`. Returns the redone ones in order. */
   redoTo(id: number): Changeset[] {
     if (this.depth > 0) throw new EditError({ en: 'Cannot redo inside a transaction', ru: 'Нельзя повторять внутри транзакции', zh: '不能在事务内重做' });
     if (!this.redoStack.some((c) => c.id === id)) throw new EditError({ en: `Edit ${id} is not among the undone edits`, ru: `Правки ${id} нет среди отменённых`, zh: `编辑 ${id} 不在已撤销的编辑中` });
@@ -471,8 +471,8 @@ export class ModContext {
   }
 
   /**
-   * Перейти к состоянию сразу после правки `id` (отменённой или действующей); `0` — к состоянию
-   * до всех правок истории. Возвращает, сколько правок отменено и повторено.
+   * Go to the state right after edit `id` (undone or active); `0` goes to the state
+   * before all history edits. Returns how many edits were undone and redone.
    */
   goToStep(id: number): { undone: number; redone: number } {
     if (id === 0) {
@@ -487,21 +487,21 @@ export class ModContext {
     return { undone: 0, redone: this.redoTo(id).length };
   }
 
-  /** Правка из истории отмены по id (только те, что сейчас действуют). */
+  /** Edit from the undo history by id (only those currently active). */
   findChangeset(id: number): Changeset | undefined {
     return this.undoStack.find((c) => c.id === id);
   }
 
   /**
-   * Откатить одну правку из истории, не трогая более поздние: новой правкой («откат: …»),
-   * которую тоже можно отменить. Если затронутые записи (или заголовок) меняли позже —
-   * EditError, ничего не меняется. Правку, уже отменённую через undo, откатывать нечего.
+   * Roll back one edit from the history without touching later ones: with a new edit ("rollback: …")
+   * that can be undone too. If the affected records (or the header) were changed later:
+   * EditError, nothing changes. An edit already undone via undo has nothing to roll back.
    */
   rollbackChangeset(id: number): Changeset {
     if (this.depth > 0) throw new EditError({ en: 'Cannot roll back inside a transaction', ru: 'Нельзя откатывать внутри транзакции', zh: '不能在事务内回滚' });
     const cs = this.findChangeset(id);
     if (!cs) throw new EditError(this.redoStack.some((c) => c.id === id) ? { en: `Edit ${id} is already undone`, ru: `Правка ${id} уже отменена`, zh: `编辑 ${id} 已被撤销` } : { en: `Edit ${id} is not in the history`, ru: `Правки ${id} нет в истории`, zh: `历史中没有编辑 ${id}` });
-    // Состояние после правки: последняя операция по каждой записи.
+    // State after the edit: the last operation for each record.
     const last = new Map<string, Slot | undefined>();
     let info: ModInfo | undefined;
     for (const op of cs.ops) {
@@ -523,12 +523,12 @@ export class ModContext {
     return done;
   }
 
-  /** Правки, которые можно отменить (последняя — в конце), и которые можно повторить. */
+  /** Edits that can be undone (the last one at the end), and ones that can be redone. */
   history(): { undo: readonly Changeset[]; redo: readonly Changeset[] } {
     return { undo: [...this.undoStack], redo: [...this.redoStack].reverse() };
   }
 
-  /** Подписка на изменения; возвращает функцию отписки. */
+  /** Subscribe to changes; returns an unsubscribe function. */
   subscribe(fn: (e: ChangeEvent) => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
@@ -568,7 +568,7 @@ export class ModContext {
     }
   }
 
-  /** Записать новый снимок записи мода (undefined — убрать запись из мода) и занести в историю. */
+  /** Write a new snapshot of a mod record (undefined removes the record from the mod) and add it to the history. */
   private setDelta(stringId: string, delta: GameRecord | undefined, index?: number): void {
     const prev = this.deltas.get(stringId);
     if (prev === delta) return;
@@ -601,7 +601,7 @@ export class ModContext {
     this.open!.ops.push(op);
   }
 
-  // ---------------------------------------------------------------- команды
+  // ---------------------------------------------------------------- commands
 
   private require(stringId: string): GameRecord {
     const rec = this.get(stringId);
@@ -609,7 +609,7 @@ export class ModContext {
     return rec;
   }
 
-  /** Строковый id для новой записи: `<lastId+1>-<имя мода>`; lastId увеличивается. */
+  /** String id for a new record: `<lastId+1>-<mod name>`; lastId is incremented. */
   allocateStringId(): string {
     let id = this.modInfo.lastId;
     let sid: string;
@@ -625,7 +625,7 @@ export class ModContext {
     if (this.has(stringId) || this.deltas.has(stringId)) throw new EditError({ en: `Record ${stringId} already exists`, ru: `Запись ${stringId} уже есть`, zh: `记录 ${stringId} 已存在` });
   }
 
-  /** Поставить итоговое значение записи: в мод попадёт разница с нижними слоями. */
+  /** Set the resulting value of a record: the difference with the lower layers goes into the mod. */
   private putResolved(stringId: string, desired: GameRecord): void {
     const lower = this.lower(stringId);
     const prev = this.deltas.get(stringId);
@@ -650,8 +650,8 @@ export class ModContext {
   }
 
   /**
-   * Изменить запись произвольно: `mutate` получает копию итоговой записи. В мод попадёт
-   * разница с нижними слоями. Остальные команды построены на этой.
+   * Change a record arbitrarily: `mutate` gets a copy of the resulting record. The difference with
+   * the lower layers goes into the mod. The other commands are built on this one.
    */
   editRecord(stringId: string, mutate: (draft: GameRecord) => void, label = `правка ${stringId}`): void {
     const draft = cloneRecord(this.require(stringId));
@@ -663,9 +663,9 @@ export class ModContext {
   }
 
   /**
-   * Поставить итоговое значение записи целиком (слияние модов): в мод попадёт разница с нижними
-   * слоями. Записи может не быть — тогда она создаётся. Служебные поля (`lead`, `id`, флаги)
-   * берутся от прежней записи мода, а у новой — обнуляются: их выставит сохранение.
+   * Set the whole resulting value of a record (mod merging): the difference with the lower
+   * layers goes into the mod. The record may not exist; then it is created. Service fields (`lead`, `id`, flags)
+   * are taken from the previous mod record, and for a new one they are zeroed: saving will set them.
    */
   putRecord(stringId: string, desired: GameRecord, label = `правка ${stringId}`): void {
     const draft = cloneRecord(desired);
@@ -680,7 +680,7 @@ export class ModContext {
     });
   }
 
-  /** Создать запись. Без `stringId` id выдаётся автоматически. Возвращает id. */
+  /** Create a record. Without `stringId` the id is issued automatically. Returns the id. */
   createRecord(type: number, name: string, options: { stringId?: string } = {}): string {
     return this.transaction(`создать «${name}»`, () => {
       const sid = options.stringId ?? this.allocateStringId();
@@ -690,7 +690,7 @@ export class ModContext {
     });
   }
 
-  /** Копия записи (все итоговые поля и ссылки) под новым id. */
+  /** Copy of a record (all resulting fields and references) under a new id. */
   duplicateRecord(stringId: string, options: { stringId?: string; name?: string } = {}): string {
     const src = this.require(stringId);
     return this.transaction(`копия ${stringId}`, () => {
@@ -705,8 +705,8 @@ export class ModContext {
   }
 
   /**
-   * Удалить запись. Новая запись мода просто убирается, запись нижних слоёв помечается
-   * удалённой. `removeReferences` — заодно убрать ссылки на неё из других записей.
+   * Delete a record. A new mod record is simply removed; a lower-layer record is marked
+   * deleted. `removeReferences`: also remove references to it from other records.
    */
   deleteRecord(stringId: string, options: { removeReferences?: boolean } = {}): void {
     this.require(stringId);
@@ -734,12 +734,12 @@ export class ModContext {
     });
   }
 
-  /** Убрать из мода все изменения записи (для новой записи — удалить её). */
+  /** Remove all changes of a record from the mod (for a new record, delete it). */
   revertRecord(stringId: string): void {
     this.setDelta(stringId, undefined);
   }
 
-  /** Вернуть удалённую модом запись нижних слоёв. */
+  /** Restore a lower-layer record deleted by the mod. */
   restoreRecord(stringId: string): void {
     const prev = this.deltas.get(stringId);
     if (prev && isRemovalMarker(prev)) this.setDelta(stringId, undefined);
@@ -757,7 +757,7 @@ export class ModContext {
     }, `${stringId}: ${key}`);
   }
 
-  /** Вернуть полю значение нижних слоёв (у новой записи — убрать поле). */
+  /** Return a field to its lower-layer value (for a new record, remove the field). */
   resetField(stringId: string, dict: ScalarDict, key: string): void {
     const lower = this.lower(stringId);
     this.editRecord(stringId, (d) => {
@@ -767,14 +767,14 @@ export class ModContext {
     }, `${stringId}: сброс ${key}`);
   }
 
-  /** Заменить ссылки категории целиком. */
+  /** Replace the references of a category entirely. */
   setReferences(stringId: string, category: string, refs: readonly Reference[]): void {
     this.editRecord(stringId, (d) => {
       d.refs.set(category, refs.map((r) => ({ ...r })));
     }, `${stringId}: ${category}`);
   }
 
-  /** Добавить ссылку (или поменять значения существующей ссылки на ту же цель). */
+  /** Add a reference (or change the values of an existing reference to the same target). */
   addReference(stringId: string, category: string, target: string, values: readonly number[] = this.refDefaults(stringId, category)): void {
     this.editRecord(stringId, (d) => {
       const list = d.refs.get(category) ?? [];
@@ -803,7 +803,7 @@ export class ModContext {
     }, `${stringId}: объект ${key}`);
   }
 
-  /** Убрать размещённый объект (только добавленный модом: у нижних слоёв нет маркера удаления). */
+  /** Remove a placed object (only one added by the mod: lower layers have no deletion marker). */
   removeInstance(stringId: string, key: string): void {
     this.editRecord(stringId, (d) => {
       d.instances.delete(key);
@@ -823,7 +823,7 @@ export class ModContext {
     return itemTypeId(name, this.schema?.itemTypes);
   }
 
-  /** Значения новой ссылки по умолчанию из схемы (или 0, 0, 0). */
+  /** Default values of a new reference from the schema (or 0, 0, 0). */
   refDefaults(stringId: string, category: string): number[] {
     const rec = this.get(stringId);
     const type = rec && this.schema?.types.get(this.typeName(rec.type));
@@ -832,8 +832,8 @@ export class ModContext {
   }
 
   /**
-   * Переименовать строковые id новых записей мода (одновременно: можно менять местами).
-   * Ссылки во всех записях мода переписываются. Позиции записей в файле сохраняются.
+   * Rename string ids of new mod records (simultaneously: they can be swapped).
+   * References in all mod records are rewritten. Record positions in the file are preserved.
    */
   changeStringIds(mapping: ReadonlyMap<string, string>): void {
     for (const [from, to] of mapping) {
@@ -864,26 +864,26 @@ export class ModContext {
     });
   }
 
-  /** Изменить сведения заголовка мода. */
+  /** Change the mod header info. */
   setModInfo(patch: Partial<Omit<ModInfo, 'fileName'>>): void {
     this.transaction('заголовок мода', () => {
       this.setInfo({ ...this.modInfo, ...patch });
     });
   }
 
-  // ---------------------------------------------------------------- сохранение
+  // ---------------------------------------------------------------- saving
 
   /**
-   * Собрать файл мода: только записи мода (изменения). Нетронутые с последнего сохранения
-   * записи и заголовок пишутся как были (байт в байт). У изменённых флаги пересчитываются:
-   * формат 16 — 0x80000002 новая / 0x80000001 изменена (прежний статус изменения сохраняется);
-   * формат 17 — номер сохранения в старших битах и 0/1/3 в младших.
+   * Assemble the mod file: only mod records (changes). Records and the header untouched since the last save
+   * are written as they were (byte for byte). Changed ones get their flags recomputed:
+   * format 16: 0x80000002 new / 0x80000001 changed (the previous change status is preserved);
+   * format 17: save number in the high bits and 0/1/3 in the low bits.
    */
   buildModFile(): DataFile {
     return this.build().file;
   }
 
-  /** Собрать файл и считать его сохранённым: дальше `dirty` = false, отмена по-прежнему работает. */
+  /** Assemble the file and consider it saved: `dirty` = false afterwards, undo still works. */
   markSaved(): DataFile {
     const { file, dirtyRecords } = this.build();
     for (const [sid, flags] of dirtyRecords) {
@@ -958,7 +958,7 @@ export class ModContext {
   }
 }
 
-/** Цели ссылок и объектов записи. */
+/** Targets of the record's references and objects. */
 function recordTargets(rec: GameRecord): Set<string> {
   const out = new Set<string>();
   for (const list of rec.refs.values()) for (const r of list) out.add(r.target);
@@ -966,7 +966,7 @@ function recordTargets(rec: GameRecord): Set<string> {
   return out;
 }
 
-/** Копия записи с переписанными id (своим и целями ссылок); та же запись, если менять нечего. */
+/** Copy of the record with rewritten ids (its own and reference targets); the same record if nothing to change. */
 function remapRecord(rec: GameRecord, remap: (s: string) => string): GameRecord {
   let touched = remap(rec.stringId) !== rec.stringId;
   for (const list of rec.refs.values()) if (list.some((r) => remap(r.target) !== r.target)) touched = true;

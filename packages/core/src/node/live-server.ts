@@ -1,7 +1,7 @@
 /**
- * Сервер живой связи редактора: WebSocket (RFC 6455, только текстовые кадры) на 127.0.0.1,
- * без внешних зависимостей. Первое сообщение клиента — `hello` с токеном из файла
- * обнаружения; запросы из браузеров (есть заголовок Origin) отклоняются.
+ * Editor live-link server: WebSocket (RFC 6455, text frames only) on 127.0.0.1,
+ * no external dependencies. The client's first message is `hello` with the token from the
+ * discovery file; requests from browsers (an Origin header is present) are rejected.
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -13,10 +13,10 @@ import type { Duplex } from 'node:stream';
 import { LIVE_PROTOCOL, type LiveDiscovery, type LiveRequest, type LiveRequestBody, type LiveResponse } from '../live/protocol.ts';
 
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
-/** Предел одного сообщения клиента. */
+/** Limit for one client message. */
 const MAX_MESSAGE = 16 * 1024 * 1024;
 
-/** Файл обнаружения: `KEDIT_LIVE_FILE` или `<temp>/kenshi-mod-editor/live.json`. */
+/** Discovery file: `KEDIT_LIVE_FILE` or `<temp>/kenshi-mod-editor/live.json`. */
 export function liveDiscoveryPath(env: NodeJS.ProcessEnv = process.env): string {
   return env.KEDIT_LIVE_FILE ?? join(tmpdir(), 'kenshi-mod-editor', 'live.json');
 }
@@ -30,7 +30,7 @@ function processAlive(pid: number): boolean {
   }
 }
 
-/** Прочитать файл обнаружения; undefined — нет файла или редактор уже закрыт. */
+/** Read the discovery file; undefined — no file or the editor is already closed. */
 export function readLiveDiscovery(path = liveDiscoveryPath()): LiveDiscovery | undefined {
   if (!existsSync(path)) return undefined;
   try {
@@ -50,11 +50,11 @@ export interface LiveClientInfo {
 }
 
 export interface LiveServerOptions {
-  /** Выполнить запрос (кроме `hello`); ошибка — исключение. */
+  /** Run a request (except `hello`); an error is thrown. */
   handle: (req: LiveRequestBody) => unknown;
-  /** Подключённые клиенты изменились. */
+  /** Connected clients changed. */
   onClients?: (clients: LiveClientInfo[]) => void;
-  /** Куда записать файл обнаружения; false — не писать. */
+  /** Where to write the discovery file; false — do not write. */
   discoveryPath?: string | false;
   token?: string;
   port?: number;
@@ -146,7 +146,7 @@ export async function startLiveServer(options: LiveServerOptions): Promise<LiveS
     clients,
     close: async () => {
       for (const c of conns) c.close(1001, 'editor closed');
-      // Файл убираем, только если он ещё наш (могло открыться второе окно редактора).
+      // Remove the file only if it is still ours (a second editor window may have opened).
       if (discoveryPath !== undefined && readLiveDiscovery(discoveryPath)?.token === token) rmSync(discoveryPath, { force: true });
       await new Promise<void>((res) => {
         http.close(() => { res(); });
@@ -161,7 +161,7 @@ function sameToken(a: unknown, b: string): boolean {
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
-/** Одно соединение: разбор кадров клиента (всегда с маской), ответы без маски. */
+/** One connection: parse client frames (always masked), replies unmasked. */
 class Connection {
   info: LiveClientInfo | undefined;
   private readonly socket: Duplex;

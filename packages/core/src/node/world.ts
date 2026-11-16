@@ -1,11 +1,11 @@
 /**
- * Чтение мира с диска: папки `leveldata` ванили и модов → `WorldIndex`.
+ * Reading the world from disk: `leveldata` folders of vanilla and mods → `WorldIndex`.
  *
- * Ваниль: `data/newland/leveldata` (базовый слой, только файлы верхнего уровня), затем
- * подпапки `Newwworld`, `Dialogue`, `rebirth` — по порядку `VANILLA_FILES`. Мод: папка
- * `leveldata` рядом с его .mod. Читаются `leveldata.level` и `*.zone`; огромный
- * `interiors.level` (интерьеры, мегабайты на слой) по умолчанию пропускается.
- * Старая `data/leveldata` игрой не используется и не читается.
+ * Vanilla: `data/newland/leveldata` (base layer, top-level files only), then the
+ * subfolders `Newwworld`, `Dialogue`, `rebirth` — in `VANILLA_FILES` order. A mod: the
+ * `leveldata` folder next to its .mod. `leveldata.level` and `*.zone` are read; the huge
+ * `interiors.level` (interiors, megabytes per layer) is skipped by default.
+ * The old `data/leveldata` is not used by the game and is not read.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -20,23 +20,23 @@ export interface WorldDir {
 }
 
 export interface ReadWorldOptions {
-  /** Читать и `interiors.level` (долго, много памяти). По умолчанию нет. */
+  /** Also read `interiors.level` (slow, lots of memory). No by default. */
   interiors?: boolean;
 }
 
 export interface WorldReadResult {
   files: WorldFile[];
-  /** Файлы, которые не удалось прочитать (старые форматы и т. п.). */
+  /** Files that could not be read (old formats etc.). */
   errors: { path: string; message: string }[];
 }
 
-/** Папки уровня ванили по слоям. */
+/** Vanilla level folders per layer. */
 export function vanillaWorldDirs(paths: GamePaths): WorldDir[] {
   const root = join(paths.kenshi, 'data', 'newland', 'leveldata');
   return VANILLA_FILES.map((f, i) => ({ layer: f, dir: i === 0 ? root : join(root, f.replace(/\.(base|mod)$/i, '')) }));
 }
 
-/** Папка уровня мода (`leveldata` рядом с .mod), если есть. */
+/** The mod's level folder (`leveldata` next to the .mod), if any. */
 export function modWorldDir(modFile: string): WorldDir | undefined {
   const dir = join(dirname(modFile), 'leveldata');
   return existsSync(dir) ? { layer: basename(modFile), dir } : undefined;
@@ -51,13 +51,13 @@ function isWorldFile(name: string, interiors: boolean): boolean {
 
 export interface WorldFileEntry {
   layer: string;
-  /** Имя файла в папке `leveldata`. */
+  /** File name in the `leveldata` folder. */
   path: string;
-  /** Полный путь на диске. */
+  /** Full path on disk. */
   full: string;
 }
 
-/** Файлы уровня по слоям в порядке наложения (без чтения содержимого). */
+/** Level files per layer in overlay order (contents not read). */
 export function listWorldFiles(dirs: readonly WorldDir[], options: ReadWorldOptions = {}): WorldFileEntry[] {
   const out: WorldFileEntry[] = [];
   for (const { layer, dir } of dirs) {
@@ -71,7 +71,7 @@ export function listWorldFiles(dirs: readonly WorldDir[], options: ReadWorldOpti
   return out;
 }
 
-/** Папки уровня ванили и модов (зависимости по порядку, затем сам мод). */
+/** Level folders of vanilla and mods (dependencies in order, then the mod itself). */
 export function worldDirs(paths: GamePaths, modFiles: readonly string[] = []): WorldDir[] {
   const dirs = [...vanillaWorldDirs(paths)];
   for (const m of modFiles) {
@@ -95,7 +95,7 @@ export function readWorldFiles(dirs: readonly WorldDir[], options: ReadWorldOpti
 }
 
 export interface LoadWorldOptions extends ReadWorldOptions {
-  /** Файлы .mod (зависимости по порядку, затем сам мод), чьи папки `leveldata` наложить на ваниль. */
+  /** .mod files (dependencies in order, then the mod itself) whose `leveldata` folders overlay vanilla. */
   modFiles?: readonly string[];
 }
 
@@ -105,7 +105,7 @@ export interface LoadedWorld {
   errors: { path: string; message: string }[];
 }
 
-/** Мир ванили и модов. Если папок уровня нет — пустой мир. */
+/** World of vanilla and mods. If there are no level folders — an empty world. */
 export function loadWorld(paths: GamePaths, options: LoadWorldOptions = {}): LoadedWorld {
   const dirs = worldDirs(paths, options.modFiles);
   const { files, errors } = readWorldFiles(dirs, options);

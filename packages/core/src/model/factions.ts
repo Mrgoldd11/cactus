@@ -1,13 +1,13 @@
 /**
- * Отношения фракций (этап 5, «матрица отношений»). Где лежат в данных (сверено на ванили):
- * - `FACTION.relations` → FACTION, значение v0 — отношение от −100 до +100 (строка — кто
- *   относится, столбец — к кому). Отношение направленное: у второй фракции своя запись;
- * - не указано — `default relation` строки (int, по умолчанию 0);
- * - `enemy classification` строки (int, по умолчанию −10) — «не выше этого — враг, нападать
- *   сразу»;
- * - `coexistence` → FACTION — «стараемся уживаться» (могут драться, но реже нападают).
+ * Faction relations (stage 5, "relations matrix"). Where they are in the data (checked on vanilla):
+ * - `FACTION.relations` → FACTION, value v0 is the relation from −100 to +100 (row = who
+ *   relates, column = to whom). The relation is directed: the second faction has its own entry;
+ * - not set: the row's `default relation` (int, default 0);
+ * - the row's `enemy classification` (int, default −10): "this or lower is an enemy, attack
+ *   at once";
+ * - `coexistence` → FACTION: "we try to get along" (they may fight but attack less often).
  *
- * Порог «союзник» в данных не задан: берём ≥ 50 (условно, только для цвета).
+ * The "ally" threshold is not set in the data: we take ≥ 50 (arbitrary, only for colour).
  */
 import { decodeText } from '../text.ts';
 import { itemTypeId, itemTypeName } from '../format/item-types.ts';
@@ -21,7 +21,7 @@ import { isRemovalMarker, isRemovedRef } from './record-ops.ts';
 export const FACTION_TYPE = 'FACTION';
 export const RELATIONS = 'relations';
 export const COEXISTENCE = 'coexistence';
-/** Условный порог «союзник» (в данных игры его нет). */
+/** Arbitrary "ally" threshold (the game data has none). */
 export const ALLY_THRESHOLD = 50;
 const DEFAULT_ENEMY = -10;
 
@@ -34,35 +34,35 @@ export interface FactionInfo {
   localized?: string;
   defaultRelation: number;
   enemyClassification: number;
-  /** Число явно заданных отношений (без маркеров «убрать»). */
+  /** Number of explicitly set relations (without "remove" markers). */
   listed: number;
 }
 
-/** Что один мод (слой) делает с отношением: ставит значение или убирает строку. */
+/** What one mod (layer) does to a relation: sets a value or removes the row. */
 export interface RelationTouch {
   layer: string;
-  /** undefined — мод убирает отношение из списка (значит, снова «по умолчанию»). */
+  /** undefined: the mod removes the relation from the list (so it is "default" again). */
   value?: number;
 }
 
 export interface RelationCell {
   value: number;
-  /** Задано в списке `relations` (а не взято из `default relation`). */
+  /** Set in the `relations` list (rather than taken from `default relation`). */
   explicit: boolean;
   kind: RelationKind;
   coexist: boolean;
-  /** Небазовые слои, которые трогают это отношение, по порядку загрузки (сам мод — последний). */
+  /** Non-base layers that touch this relation, in load order (the mod itself last). */
   touches: RelationTouch[];
 }
 
 export interface FactionMatrix {
   factions: FactionInfo[];
   cell(from: string, to: string): RelationCell;
-  /** Отношение B → A, если оно отличается от A → B (иначе undefined). */
+  /** Relation B → A, if it differs from A → B (otherwise undefined). */
   asymmetry(from: string, to: string): number | undefined;
-  /** Слои, которые трогают отношения фракции (для фильтра «что поменял мод»). */
+  /** Layers that touch the faction's relations (for the "what the mod changed" filter). */
   layersOf(sid: string): string[];
-  /** Все небазовые слои, которые что-то меняют в отношениях. */
+  /** All non-base layers that change something in relations. */
   layers: string[];
 }
 
@@ -90,9 +90,9 @@ function info(ctx: ModContext, rec: GameRecord): FactionInfo {
 }
 
 /**
- * Матрица отношений всех фракций контекста (ваниль, зависимости, моды контекста, сам мод).
- * Считается по итоговым записям; «кто поменял» — по слоям, без чтения диска.
- * `ids` — готовый список id фракций (индекс редактора), чтобы не перебирать все записи.
+ * Relations matrix of all factions of the context (vanilla, dependencies, context mods, the mod itself).
+ * Computed from the resulting records; "who changed it" by layers, without reading the disk.
+ * `ids`: prebuilt list of faction ids (editor index), so not all records are scanned.
  */
 export function factionMatrix(ctx: ModContext, options: { ids?: Iterable<string> } = {}): FactionMatrix {
   const type = itemTypeId(FACTION_TYPE)!;
@@ -110,12 +110,12 @@ export function factionMatrix(ctx: ModContext, options: { ids?: Iterable<string>
   }
   const byId = new Map(factions.map((f) => [f.sid, f]));
 
-  // Кто трогает: небазовые слои с записями FACTION.
+  // Who touches it: non-base layers with FACTION records.
   const touches = new Map<string, RelationTouch[]>();
   const rowLayers = new Map<string, Set<string>>();
   const allLayers: string[] = [];
-  // Бегущее значение отношения по слоям: мод, который ставит то же, что уже было до него
-  // (например, вернули исходное значение), ничего не меняет — его не показываем как «тронул».
+  // Running value of the relation across layers: a mod that sets the same value as before it
+  // (e.g. restored the original value) changes nothing; it is not shown as "touched".
   const running = new Map<string, number | undefined>();
   const defaultOf = (sid: string): number => byId.get(sid)?.defaultRelation ?? 0;
   for (const layer of contextLayers(ctx)) {
@@ -179,11 +179,11 @@ function requireFaction(ctx: ModContext, sid: string): void {
 }
 
 export interface SetRelationOptions {
-  /** Поставить то же значение и в обратную сторону (B → A). */
+  /** Set the same value in the opposite direction too (B → A). */
   both?: boolean;
 }
 
-/** Метка шага: `отношение «A» → «B»: 20` (или `… ⇄ …` для обеих сторон, `сброс` — по умолчанию). */
+/** Step label (Russian, a step-title key), e.g. relation "A" → "B": 20 (or `… ⇄ …` for both sides, "reset" for default). */
 export function relationLabel(ctx: ModContext, from: string, to: string, value: number | undefined, both = false): string {
   return `отношение «${factionName(ctx, from)}» ${both ? '⇄' : '→'} «${factionName(ctx, to)}»: ${value === undefined ? 'сброс' : value}`;
 }
@@ -203,8 +203,8 @@ function putRelation(ctx: ModContext, from: string, to: string, value: number | 
 }
 
 /**
- * Изменить отношение фракции `from` к `to` (−100…100) одной правкой. `undefined` — убрать
- * из списка (тогда действует `default relation`). `both` — и обратное отношение в той же правке.
+ * Change the relation of faction `from` to `to` (−100…100) with one edit. `undefined` removes it
+ * from the list (then `default relation` applies). `both`: the opposite relation too, in the same edit.
  */
 export function setFactionRelation(ctx: ModContext, from: string, to: string, value: number | undefined, options: SetRelationOptions = {}): void {
   requireFaction(ctx, from);

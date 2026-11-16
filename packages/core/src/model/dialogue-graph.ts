@@ -1,10 +1,10 @@
 /**
- * Граф диалога для показа: узлы — записи (пакет, диалог, реплики) по одному разу, рёбра —
- * ссылки `dialogs` / `lines`, в том числе обратные (петли меню). Тексты реплик — с русским
- * переводом игры (`ru_RU.translation`), если он передан. Проверки: нет записи, диалог без
- * реплик, реплика NPC, которую никогда не выберут (соседняя реплика подходит всегда, стоит в
- * списке игры раньше и очков у неё больше), ответвление обрезано лимитом. Очки — как у игры
- * (`score bonus` с надбавками, см. `dialogue-score.ts`).
+ * Dialogue graph for display: nodes are records (package, dialogue, lines), each once, edges are
+ * `dialogs` / `lines` references, including back ones (menu loops). Line texts come with the game's
+ * Russian translation (`ru_RU.translation`) if passed. Checks: missing record, dialogue without
+ * lines, an NPC line that is never picked (a sibling line always fits, stands earlier in the
+ * game's list and has a higher score), a branch cut off by the limit. Scores are as in the game
+ * (`score bonus` with bonuses, see `dialogue-score.ts`).
  */
 import { decodeText } from '../text.ts';
 import type { UiText } from '../ui-text.ts';
@@ -16,8 +16,8 @@ import { alwaysPasses, chooseOrder, DIALOGUE_CONDITION_CATEGORIES, dialogueScore
 import { formatEnumValue, getEnum, refValueEnum, shortEnumLabel } from './enums.ts';
 
 /**
- * Говорящие T_TARGET и T_TARGET_IF_PLAYER: в разговоре по клику — игрок; его реплики —
- * варианты выбора, а не случайный выбор игры.
+ * Speakers T_TARGET and T_TARGET_IF_PLAYER: in a click conversation this is the player; their lines are
+ * choice options, not a random pick of the game.
  */
 export const CHOICE_SPEAKERS: ReadonlySet<number> = new Set([1, 2]);
 export interface DialogueGraphText {
@@ -30,7 +30,7 @@ export type DialogueIssueKind = 'missing' | 'no-lines' | 'shadowed' | 'truncated
 export interface DialogueIssue {
   kind: DialogueIssueKind;
   node: string;
-  /** Для `shadowed` — реплика, которая всегда побеждает. */
+  /** For `shadowed`: the line that always wins. */
   by?: string;
   /** English text. */
   text: string;
@@ -45,21 +45,21 @@ export interface DialogueGraphNode {
   localized?: string;
   texts: DialogueGraphText[];
   speaker?: number;
-  /** Подпись говорящего: «я», «собеседник», ... */
+  /** Speaker label: "me", "target", ... */
   speakerLabel?: string;
-  /** Реплика T_TARGET (вариант выбора игрока). */
+  /** A T_TARGET line (a player choice option). */
   choice: boolean;
-  /** Очки, как их считает игра (`score bonus` с надбавками). */
+  /** Score as the game computes it (`score bonus` with bonuses). */
   score?: number;
-  /** Из чего сложились очки. */
+  /** What the score is made of. */
   scoreParts?: ScorePart[];
   /** `chance temporary`, %. */
   chance?: number;
   conditions: string[];
   effects: string[];
-  /** Прочие условия-ссылки (`target race: Шек`, ...). */
+  /** Other condition references (`target race: Shek`, ...). */
   filters: string[];
-  /** Событие пакета, если узел — диалог пакета. */
+  /** Package event, if the node is a package dialogue. */
   event?: number;
   eventLabel?: string;
   depth: number;
@@ -74,9 +74,9 @@ export interface DialogueGraphEdge {
   source: string;
   target: string;
   category: 'dialogs' | 'lines';
-  /** Порядок ссылки у источника (0, 1, ...). */
+  /** Reference order at the source (0, 1, ...). */
   order: number;
-  /** Ведёт к уже показанной выше записи (петля или общий узел). */
+  /** Leads to a record already shown above (a loop or a shared node). */
   back: boolean;
 }
 
@@ -107,10 +107,10 @@ function shortName(ctx: ModContext, sid: string, translation?: TranslationIndex)
 }
 
 /**
- * Реплики NPC под одним узлом, которых игра не выберет никогда: в списке игры раньше неё стоит
- * соседняя реплика с текстом, которая подходит всегда (без условий, шанса, блокировки), и очков у
- * неё больше. Игра идёт по списку сверху и на реплике с меньшими очками останавливается.
- * Реплики игрока (T_TARGET, T_TARGET_IF_PLAYER) — варианты выбора, их не сравниваем.
+ * NPC lines under one node that the game never picks: earlier in the game's list there is
+ * a sibling line with text that always fits (no conditions, chance, lock), and it has a
+ * higher score. The game goes down the list from the top and stops at a line with a lower score.
+ * Player lines (T_TARGET, T_TARGET_IF_PLAYER) are choice options and are not compared.
  */
 export function shadowedLines(ctx: ModContext, parent: string): { line: string; by: string }[] {
   const rec = ctx.get(parent);

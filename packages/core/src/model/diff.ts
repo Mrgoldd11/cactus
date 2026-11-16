@@ -1,7 +1,7 @@
 /**
- * Смысловая разница двух состояний записи (или двух файлов): какие поля, ссылки и объекты
- * добавлены, изменены или убраны. Порядок ключей не важен; порядок ссылок в категории не
- * считается изменением, если набор ссылок и их значения те же.
+ * Semantic difference of two record states (or two files): which fields, references and objects
+ * are added, changed or removed. Key order does not matter; the order of references in a category does
+ * not count as a change if the set of references and their values are the same.
  */
 import { bytesEqual } from '../text.ts';
 import { emptyRecord, type DataFile, type GameRecord, type Instance, type Reference } from '../format/types.ts';
@@ -19,14 +19,14 @@ export type FieldChange =
 
 export interface RecordDiff {
   stringId: string;
-  /** added — записи не было; removed — запись исчезла; changed — поменялось содержимое. */
+  /** added: the record did not exist; removed: the record is gone; changed: the content changed. */
   change: 'added' | 'removed' | 'changed';
   before?: GameRecord;
   after?: GameRecord;
   fields: FieldChange[];
 }
 
-/** Разница двух состояний записи; undefined, если они одинаковы. */
+/** Difference of two record states; undefined if they are equal. */
 export function diffRecordStates(before: GameRecord | undefined, after: GameRecord | undefined): RecordDiff | undefined {
   if (!before && !after) return undefined;
   const stringId = (after ?? before)!.stringId;
@@ -82,7 +82,7 @@ export function diffRecordStates(before: GameRecord | undefined, after: GameReco
   return out;
 }
 
-/** Ссылки категории по цели; повторы одной цели отмечаются отдельно как изменение порядка/набора. */
+/** Category references by target; repeats of one target are marked separately as an order/set change. */
 function firstByTarget(list: readonly Reference[]): Map<string, Reference> {
   const m = new Map<string, Reference>();
   const counts = new Map<string, number>();
@@ -95,9 +95,9 @@ function firstByTarget(list: readonly Reference[]): Map<string, Reference> {
 }
 
 /**
- * Смысловая разница двух файлов (по записям с одинаковым строковым id), включая флаги изменения. Сравниваются записи как
- * они лежат в файлах (изменения мода, а не итог наложения). Порядок — как во втором файле, затем
- * исчезнувшие записи из первого.
+ * Semantic difference of two files (by records with the same string id), including change flags. Records are compared as
+ * they are in the files (mod changes, not the overlay result). Order: as in the second file, then
+ * records from the first one that disappeared.
  */
 export function diffDataFiles(a: DataFile, b: DataFile): RecordDiff[] {
   const am = new Map(a.records.map((r) => [r.stringId, r]));
@@ -127,7 +127,7 @@ const DIFF_CHANGE_ALIASES: Record<string, DiffChange> = {
   deleted: 'removed',
 };
 
-/** `added,changed` (или new/deleted, как статусы записей) → список изменений. */
+/** `added,changed` (or new/deleted, like record statuses) → list of changes. */
 export function parseDiffStatuses(text: string): DiffChange[] {
   return text
     .split(',')
@@ -159,7 +159,7 @@ const DIFF_SUMMARY: Record<string, (total: number, added: number, changed: numbe
   zh: (t, a, c, r) => `共 ${t}：新增 ${a}，修改 ${c}，删除 ${r}`,
 };
 
-/** `всего 2950: новых 2628, изменённых 322, удалённых 0`. */
+/** `total 2950: new 2628, changed 322, deleted 0`. */
 export function formatDiffSummary(diffs: readonly RecordDiff[], lang = 'en'): string {
   const n = countDiffs(diffs);
   const f = DIFF_SUMMARY[lang] ?? DIFF_SUMMARY.en!;

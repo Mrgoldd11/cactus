@@ -1,18 +1,18 @@
 /**
- * Кэш разобранных файлов данных в памяти (ваниль, зависимости, файлы уровня).
+ * In-memory cache of parsed data files (vanilla, dependencies, level files).
  *
- * Ключ — версия формата кэша, путь, размер и время изменения файла (`fileCacheKey`). Тот,
- * кто читает файлы (main-процесс, `node/file-cache.ts`), сравнивает ключ с известными
- * окну и не пересылает байты, если файл не менялся; окно берёт разобранный файл отсюда.
- * Изменился файл (размер или время) — новый ключ, старая запись того же пути выбрасывается.
+ * The key is the cache format version, path, size and modification time of the file (`fileCacheKey`). Whoever
+ * reads the files (the main process, `node/file-cache.ts`) compares the key with the ones known to
+ * the window and does not send the bytes if the file has not changed; the window takes the parsed file from here.
+ * If the file changed (size or time), there is a new key, and the old entry for the same path is dropped.
  *
- * Разобранный `DataFile` общий для всех открытых подряд проектов: ядро слои не меняет
- * (правки идут в записи мода). В мод кэш не попадает — это только память окна.
+ * A parsed `DataFile` is shared by all projects opened in a row: the core does not change layers
+ * (edits go into mod records). The cache never goes into the mod; it is only window memory.
  */
 import { readDataFile, readDataFileSliced } from './read.ts';
 import type { DataFile } from './types.ts';
 
-/** Версия формата ключа и разбора. Поменять, если меняется то, как разбирается файл. */
+/** Version of the key and parse format. Bump it if the way a file is parsed changes. */
 export const PARSED_CACHE_VERSION = 1;
 
 export interface FileStamp {
@@ -25,7 +25,7 @@ export function fileCacheKey(s: FileStamp): string {
   return `v${PARSED_CACHE_VERSION}|${s.size}|${Math.round(s.mtimeMs)}|${s.path}`;
 }
 
-/** Путь из ключа (для вытеснения прежней версии того же файла). */
+/** Path from the key (to evict the previous version of the same file). */
 function pathOfKey(key: string): string {
   const parts = key.split('|');
   return parts.slice(3).join('|').toLowerCase();
@@ -36,7 +36,7 @@ export class CacheMissError extends Error {
 }
 
 export class ParsedFileCache {
-  /** Ключ → файл; порядок Map — порядок последнего использования (LRU). */
+  /** Key → file; Map order is last-use order (LRU). */
   private readonly entries = new Map<string, DataFile>();
   private readonly limit: number;
   hits = 0;
@@ -46,7 +46,7 @@ export class ParsedFileCache {
     this.limit = limit;
   }
 
-  /** Ключи разобранных файлов — их окно сообщает main, чтобы не получать байты повторно. */
+  /** Keys of parsed files; the window reports them to main so it does not receive the bytes again. */
   keys(): string[] {
     return [...this.entries.keys()];
   }
@@ -65,8 +65,8 @@ export class ParsedFileCache {
   }
 
   /**
-   * Файл по ключу: из кэша, если он там есть, иначе разобрать `bytes` и запомнить.
-   * Нет в кэше и нет байтов — `CacheMissError` (окно попросит файл ещё раз).
+   * File by key: from the cache if it is there, otherwise parse `bytes` and remember it.
+   * Not in the cache and no bytes: `CacheMissError` (the window will ask for the file again).
    */
   take(key: string, bytes: Uint8Array | undefined): DataFile {
     const hit = this.get(key);
@@ -81,13 +81,13 @@ export class ParsedFileCache {
     return file;
   }
 
-  /** Как `take`, но разбор кусками с паузами (`readDataFileSliced`) — для фоновой подготовки. */
+  /** Like `take`, but parses in slices with pauses (`readDataFileSliced`), for background preparation. */
   async takeSliced(key: string, bytes: Uint8Array | undefined, pause: () => Promise<void>): Promise<DataFile> {
     const hit = this.get(key);
     if (hit) return hit;
     if (bytes === undefined || bytes.length === 0) throw new CacheMissError(`Нет в кэше: ${key}`);
     const file = await readDataFileSliced(bytes, pause);
-    // Пока шёл разбор, тот же файл мог разобрать кто-то ещё — берём уже лежащий.
+    // While parsing, someone else may have parsed the same file; take the one already stored.
     const again = this.get(key);
     if (again) return again;
     this.misses++;

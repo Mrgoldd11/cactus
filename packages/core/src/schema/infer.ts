@@ -1,8 +1,8 @@
 /**
- * Дополнение схемы по данным. fcs.def описывает не всё: часть типов (DIALOG_ACTION, ROAD,
- * CAMERA, …) FCS показывает своими окнами, а часть полей в данных просто не описана.
- * Здесь такие типы и поля выводятся из того, в каком словаре записи лежат значения;
- * у них стоит `inferred: true` и `line: 0`.
+ * Extending the schema from data. fcs.def does not describe everything: some types (DIALOG_ACTION, ROAD,
+ * CAMERA, …) FCS shows in its own windows, and some fields in the data are simply undescribed.
+ * Here such types and fields are inferred from which record dictionary holds the values;
+ * they get `inferred: true` and `line: 0`.
  */
 import { itemTypeName } from '../format/item-types.ts';
 import type { DataFile } from '../format/types.ts';
@@ -33,14 +33,14 @@ function mostCommon(m: Map<string, number>): string | undefined {
 }
 
 /**
- * Вернуть копию схемы, в которую добавлены типы и поля, встреченные в данных, но не
- * описанные в fcs.def. Если одно имя встречается в разных словарях, берётся самый частый.
+ * Return a copy of the schema with the types and fields found in the data but not
+ * described in fcs.def added. If one name occurs in different dictionaries, the most frequent wins.
  */
 export function withInferredFields(schema: GameSchema, files: readonly DataFile[]): GameSchema {
   const typeById = new Map<string, string>();
   for (const f of files) for (const r of f.records) typeById.set(r.stringId, itemTypeName(r.type, schema.itemTypes));
 
-  // Тип → имя поля → вид → кандидат.
+  // Type → field name → kind → candidate.
   const found = new Map<string, Map<string, Map<FieldKind, Candidate>>>();
   const add = (type: string, name: string, kind: FieldKind, target?: string): void => {
     let byName = found.get(type);
@@ -53,7 +53,7 @@ export function withInferredFields(schema: GameSchema, files: readonly DataFile[
     if (target !== undefined) c.targets.set(target, (c.targets.get(target) ?? 0) + 1);
   };
 
-  // Ответы «описано ли поле» и «есть ли поле для объекта» — по типу один раз (55 тыс. записей).
+  // The answers "is the field described" and "is there a field for the object" — once per type (55k records).
   const knownByType = new Map<string, Map<string, boolean>>();
   const instByType = new Map<string, Map<string, boolean>>();
   for (const file of files) {

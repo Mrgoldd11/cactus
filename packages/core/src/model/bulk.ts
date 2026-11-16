@@ -1,8 +1,8 @@
 /**
- * Массовые правки (этап 5): записи одного типа по условиям полей → одна операция над полем
- * (задать, умножить, прибавить, заменить текст, в том числе по regex). Сначала предпросмотр
- * «было → станет», потом применение одной правкой (одна отмена на всю пачку). Правки
- * выражены обычными операциями `set`/`rename` — их же отправляет MCP в окно редактора.
+ * Bulk edits (stage 5): records of one type matching field conditions → one operation on a field
+ * (set, multiply, add, replace text, including by regex). First a "was → will be"
+ * preview, then applying as one edit (one undo for the whole batch). The edits are
+ * expressed as ordinary `set`/`rename` operations; MCP sends the same ones to the editor window.
  */
 import { decodeText } from '../text.ts';
 import { errorMessage, type UiText } from '../ui-text.ts';
@@ -16,39 +16,39 @@ import { applyOps, coerceValue, type EditOp } from './ops.ts';
 import { scalarEqual, scalarMap, type ScalarDict, type ScalarValue } from './record-ops.ts';
 import { matchesFilter, type FieldFilter } from './search.ts';
 
-/** set/mul/add/replace — поле записи; refAdd/refRemove — ссылки в списке (категории) записи. */
+/** set/mul/add/replace: a record field; refAdd/refRemove: references in a list (category) of the record. */
 export type BulkKind = 'set' | 'mul' | 'add' | 'replace' | 'refAdd' | 'refRemove';
 export const BULK_KINDS: readonly BulkKind[] = ['set', 'mul', 'add', 'replace', 'refAdd', 'refRemove'];
 export const BULK_REF_KINDS: readonly BulkKind[] = ['refAdd', 'refRemove'];
 
-/** Имя записи как поле для замены текста. */
+/** Record name as a field for text replacement. */
 export const BULK_NAME_FIELD = 'name';
 
 export interface BulkQuery {
-  /** Тип записей: имя (`WEAPON`) или номер. */
+  /** Record type: name (`WEAPON`) or number. */
   type: string | number;
-  /** Все условия должны выполняться (как `--field` у find). */
+  /** All conditions must hold (like `--field` of find). */
   fields?: readonly FieldFilter[];
-  /** Подстрока имени (англ. или рус.) или id. */
+  /** Substring of the name (English or Russian) or id. */
   text?: string;
-  /** Только записи, которые уже есть в моде. */
+  /** Only records that are already in the mod. */
   modOnly?: boolean;
-  /** Готовый список id (индекс редактора), иначе перебираются все записи. */
+  /** Prebuilt id list (editor index); otherwise all records are scanned. */
   ids?: Iterable<string>;
 }
 
 export interface BulkOperation {
   kind: BulkKind;
-  /** Ключ поля; для `replace` можно `name` — имя записи. */
+  /** Field key; for `replace` it can be `name`, the record name. */
   field: string;
-  /** set — новое значение (enum — имя или число); mul/add — число; replace — на что заменить. */
+  /** set: new value (enum by name or number); mul/add: a number; replace: what to replace with. */
   value: string;
-  /** replace: что искать (подстрока или regex). */
+  /** replace: what to search for (substring or regex). */
   find?: string;
   regex?: boolean;
-  /** replace: с учётом регистра (по умолчанию без). */
+  /** replace: case-sensitive (case-insensitive by default). */
   caseSensitive?: boolean;
-  /** refAdd: значения ссылки v0..v2 (не заданы — у новой ссылки по умолчанию из схемы, у старой не меняются). */
+  /** refAdd: reference values v0..v2 (if unset: for a new reference the schema default, for an existing one unchanged). */
   values?: number[];
 }
 
@@ -67,19 +67,19 @@ export interface BulkSkip {
 }
 
 export interface BulkPreview {
-  /** Сколько записей подошло под условия. */
+  /** How many records matched the conditions. */
   matched: number;
-  /** Что изменится (записи, где значение станет другим). */
+  /** What will change (records where the value becomes different). */
   changes: BulkChange[];
-  /** Подошли, но править нельзя (нет поля, не тот вид). */
+  /** Matched but cannot be edited (no field, wrong kind). */
   skipped: BulkSkip[];
-  /** Операции для применения (`applyOps` или набор изменений в окне редактора). */
+  /** Operations to apply (`applyOps` or a change set in the editor window). */
   ops: EditOp[];
-  /** Подпись шага в истории. */
+  /** Step label in the history. */
   label: string;
 }
 
-/** Записи типа по условиям, без удалённых модом; порядок — как в слоях. */
+/** Records of the type matching the conditions, without ones deleted by the mod; order as in the layers. */
 export function bulkSelect(ctx: ModContext, query: BulkQuery): GameRecord[] {
   const type = typeof query.type === 'number' ? query.type : /^\d+$/.test(query.type) ? Number(query.type) : ctx.typeId(query.type.toUpperCase());
   if (type === undefined) throw new EditError({ en: `Unknown record type “${String(query.type)}”`, ru: `Неизвестный тип записи «${String(query.type)}»`, zh: `未知的记录类型 “${String(query.type)}”` });
@@ -101,7 +101,7 @@ export function bulkSelect(ctx: ModContext, query: BulkQuery): GameRecord[] {
   return out;
 }
 
-/** Регулярное выражение для замены (всегда глобальное). */
+/** Regular expression for replacement (always global). */
 function pattern(op: BulkOperation): RegExp {
   const find = op.find ?? '';
   if (find === '') throw new EditError({ en: 'Text replace: give the text to find', ru: 'Замена текста: укажите, что искать', zh: '替换文本：请指定要查找的内容' });
@@ -119,7 +119,7 @@ function number(text: string, what: UiText): number {
   return n;
 }
 
-/** Поле записи: словарь и значение; нет в записи — по схеме (значение по умолчанию). */
+/** Record field: dictionary and value; if absent in the record, from the schema (default value). */
 function fieldOf(ctx: ModContext, rec: GameRecord, key: string): { dict: ScalarDict; value: ScalarValue | undefined } | undefined {
   for (const dict of ['bools', 'ints', 'floats', 'strings', 'files'] as const) {
     const v = scalarMap(rec, dict).get(key);
@@ -187,15 +187,15 @@ const bulkWords = (lang: string): BulkWords => BULK_WORDS[lang] ?? BULK_WORDS.en
 
 const KIND_RU: Record<BulkKind, string> = { set: '=', mul: '×', add: '+', replace: 'замена', refAdd: '+ ссылка', refRemove: '− ссылка' };
 
-/** Подпись шага: `массово: WEAPON.value × 1.5 (12 записей)`. */
+/** Step label (Russian, a step-title key), e.g. "bulk: WEAPON.value × 1.5 (12 records)". */
 export function bulkLabel(typeName: string, op: BulkOperation, count: number): string {
   const what = op.kind === 'replace' ? `«${op.find ?? ''}» → «${op.value}»` : `${KIND_RU[op.kind]} ${op.value}`;
   return `массово: ${typeName}.${op.field} ${what} (${count} записей)`;
 }
 
 /**
- * Предпросмотр: что изменится у подходящих записей. Ничего не меняет. Ошибки ввода (не число,
- * неверный regex, неизвестный тип) — исключение `EditError`.
+ * Preview: what will change in the matching records. Changes nothing. Input errors (not a number,
+ * invalid regex, unknown type) throw `EditError`.
  */
 export function previewBulk(ctx: ModContext, query: BulkQuery, op: BulkOperation, lang = 'en'): BulkPreview {
   const w = bulkWords(lang);
@@ -234,7 +234,7 @@ export function previewBulk(ctx: ModContext, query: BulkQuery, op: BulkOperation
     let next: ScalarValue;
     try {
       if (op.kind === 'set') {
-        // Как set в applyOps: enum по имени, bool из true/false, число из текста.
+        // Like set in applyOps: enum by name, bool from true/false, number from text.
         next = applyProbe(ctx, rec, dict, key, op.value);
       } else if (op.kind === 'replace') {
         if (dict !== 'strings' && dict !== 'files') {
@@ -267,12 +267,12 @@ export function previewBulk(ctx: ModContext, query: BulkQuery, op: BulkOperation
   return { matched: recs.length, changes, skipped, ops, label: bulkLabel(typeName, op, changes.length) };
 }
 
-/** Ссылка текстом: `Имя цели (v0, v1, v2)`. */
+/** Reference as text: `Target name (v0, v1, v2)`. */
 function refText(ctx: ModContext, ref: { target: string; v0: number; v1: number; v2: number }): string {
   return `${ctx.localizedName(ref.target) ?? ctx.name(ref.target) ?? ref.target} (${ref.v0}, ${ref.v1}, ${ref.v2})`;
 }
 
-/** Цель ссылки по id или имени (англ./рус.); неоднозначность и отсутствие — понятная ошибка. */
+/** Reference target by id or name (English/Russian); ambiguity and absence give a readable error. */
 function refTarget(ctx: ModContext, spec: string): string {
   const text = spec.trim();
   if (text === '') throw new EditError({ en: 'Give the record to reference (id or name)', ru: 'Укажите, на какую запись ссылка (id или имя)', zh: '请指定引用的记录（ID 或名称）' });
@@ -283,7 +283,7 @@ function refTarget(ctx: ModContext, spec: string): string {
   throw new EditError({ en: `«${text}» matches several records (${hit.candidates.length}): ${list}${hit.candidates.length > 5 ? '…' : ''}. Be more precise or give the id`, ru: `«${text}» подходит нескольким записям (${hit.candidates.length}): ${list}${hit.candidates.length > 5 ? '…' : ''}. Укажите точнее или id`, zh: `«${text}» 匹配多条记录（${hit.candidates.length}）：${list}${hit.candidates.length > 5 ? '…' : ''}。请更精确或使用 ID` });
 }
 
-/** Добавить ссылку (или обновить её значения) / убрать ссылку во всех подходящих записях. */
+/** Add a reference (or update its values) / remove a reference in all matching records. */
 function previewRefs(ctx: ModContext, recs: GameRecord[], typeName: string, op: BulkOperation, category: string, lang: string): BulkPreview {
   const target = refTarget(ctx, op.value);
   const wanted = op.values;
@@ -316,14 +316,14 @@ function previewRefs(ctx: ModContext, recs: GameRecord[], typeName: string, op: 
   return { matched: recs.length, changes, skipped, ops, label: bulkLabel(typeName, { ...op, value: ctx.localizedName(target) ?? ctx.name(target) ?? target }, changes.length) };
 }
 
-/** Оставить в предпросмотре только записи `keep` (галочки в таблице): правки, операции и подпись шага. */
+/** Keep only the `keep` records in the preview (table checkboxes): edits, operations and step label. */
 export function restrictBulk(p: BulkPreview, keep: (sid: string) => boolean): BulkPreview {
   const changes = p.changes.filter((c) => keep(c.sid));
   const ops = p.ops.filter((o) => !('id' in o) || typeof o.id !== 'string' || keep(o.id));
   return { ...p, changes, ops, label: p.label.replace(/\(\d+ записей\)$/, `(${changes.length} записей)`) };
 }
 
-/** Текущее значение поля записи текстом (как в «было»); у имени — имя; нет поля — undefined. */
+/** Current field value of the record as text (as in "was"); for the name, the name; no field: undefined. */
 export function bulkFieldValue(ctx: ModContext, rec: GameRecord, key: string): string | undefined {
   if (key === BULK_NAME_FIELD) return decodeText(rec.name);
   const f = fieldOf(ctx, rec, key);
@@ -331,7 +331,7 @@ export function bulkFieldValue(ctx: ModContext, rec: GameRecord, key: string): s
   return compareText(ctx, ctx.typeName(rec.type), rec, f.dict, key, f.value);
 }
 
-/** Значение для `set` из текста: как в applyOps (enum по имени, bool, число). */
+/** Value for `set` from text: as in applyOps (enum by name, bool, number). */
 function applyProbe(ctx: ModContext, rec: GameRecord, dict: ScalarDict, key: string, text: string): ScalarValue {
   const trimmed = text.trim();
   if (dict === 'ints' && !/^-?\d+$/.test(trimmed)) {
@@ -350,7 +350,7 @@ function jsonOf(dict: ScalarDict, v: ScalarValue): string | number | boolean {
   return v as number;
 }
 
-/** Строки предпросмотра (CLI и MCP): `id  «имя»  поле: было → станет`, пропуски, итог. */
+/** Preview lines (CLI and MCP): `id  «name»  field: was → will be`, skips, total. */
 export function formatBulkPreview(p: BulkPreview, limit: number, lang = 'en'): string[] {
   const w = bulkWords(lang);
   const lines = p.changes.slice(0, limit).map((c) => `${c.sid}  «${c.name}»  ${c.field}: ${c.before === '' ? '—' : c.before} → ${c.after === '' ? '—' : c.after}`);
@@ -361,7 +361,7 @@ export function formatBulkPreview(p: BulkPreview, limit: number, lang = 'en'): s
   return lines;
 }
 
-/** Применить предпросмотр одной правкой (одна отмена). Возвращает число изменённых записей. */
+/** Apply the preview as one edit (one undo). Returns the number of changed records. */
 export function applyBulk(ctx: ModContext, preview: BulkPreview): number {
   if (preview.ops.length === 0) return 0;
   applyOps(ctx, preview.ops, preview.label);

@@ -1,7 +1,7 @@
 /**
- * Сверка схемы (fcs.def) с реальными данными: какие типы и поля есть в файлах, но не
- * описаны в схеме, какие описаны, но не встречаются, и где вид поля не совпадает со
- * словарём, в котором лежит значение.
+ * Checking the schema (fcs.def) against real data: which types and fields are in the files but not
+ * described in the schema, which are described but never occur, and where a field's kind does not match the
+ * dictionary its value lives in.
  */
 import { itemTypeName } from '../format/item-types.ts';
 import type { DataFile } from '../format/types.ts';
@@ -9,16 +9,16 @@ import { DICT_FOR_KIND, findField, type GameSchema, type RecordDict } from './ga
 import type { FieldKind } from './fcs-def.ts';
 
 export interface CoverageInput {
-  /** Имя файла для примеров в отчёте. */
+  /** File name for examples in the report. */
   label: string;
   file: DataFile;
 }
 
 interface Occurrence {
-  /** Сколько записей содержат ключ. */
+  /** How many records contain the key. */
   records: number;
   files: Set<string>;
-  /** Первый пример: `файл: stringId`. */
+  /** First example: `file: stringId`. */
   example: string;
 }
 
@@ -32,7 +32,7 @@ export interface CoverageTypeStat {
 export interface MissingField {
   type: string;
   dict: RecordDict;
-  /** Ключ из данных; для экземпляров — `→ТИП_ЦЕЛИ`. */
+  /** Key from the data; for instances — `→TARGET_TYPE`. */
   key: string;
   records: number;
   files: number;
@@ -57,24 +57,24 @@ export interface CoverageReport {
   files: number;
   records: number;
   types: CoverageTypeStat[];
-  /** Типы из данных, для которых нет ни одной секции в fcs.def. */
+  /** Types from the data with no section at all in fcs.def. */
   typesWithoutSchema: string[];
-  /** Типы из fcs.def, записей которых нет в данных. */
+  /** Types from fcs.def with no records in the data. */
   schemaTypesWithoutData: string[];
-  /** Ключи из данных, которых нет в fcs.def (для типов, у которых схема есть). */
+  /** Keys from the data absent from fcs.def (for types that have a schema). */
   missingInSchema: MissingField[];
-  /** Ключ найден в схеме, но значение лежит не в том словаре. */
+  /** The key is in the schema, but the value lives in the wrong dictionary. */
   kindMismatches: KindMismatch[];
-  /** Поля fcs.def, которые ни разу не встретились в данных (только для типов, которые в данных есть). */
+  /** fcs.def fields that never occur in the data (only for types present in the data). */
   unusedFields: { type: string; field: string; kind: FieldKind; line: number }[];
-  /** Ссылки, цель которых — запись другого типа, чем указано в fcs.def. */
+  /** References whose target is a record of a different type than fcs.def says. */
   refTargetMismatches: RefTargetMismatch[];
 }
 
 const VALUE_DICTS = ['bools', 'floats', 'ints', 'vec3s', 'vec4s', 'strings', 'files'] as const;
 
 export function analyzeCoverage(schema: GameSchema, inputs: readonly CoverageInput[]): CoverageReport {
-  // Типы всех записей по строковому id — чтобы проверять цели ссылок и экземпляров.
+  // Types of all records by string id — to check reference and instance targets.
   const typeById = new Map<string, string>();
   for (const { file } of inputs) for (const r of file.records) typeById.set(r.stringId, itemTypeName(r.type, schema.itemTypes));
 
@@ -139,7 +139,7 @@ export function analyzeCoverage(schema: GameSchema, inputs: readonly CoverageInp
         }
       }
 
-      // Экземпляры хранятся по своему id; поле fcs.def определяется по типу цели.
+      // Instances are stored by their own id; the fcs.def field is determined by the target type.
       const seen = new Set<string>();
       for (const inst of rec.instances.values()) {
         const target = typeById.get(inst.target) ?? '?';

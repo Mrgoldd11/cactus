@@ -1,19 +1,19 @@
 /**
- * Модель файла данных Kenshi (.base, .mod; тот же формат записей в .save/.level/.zone).
+ * Model of a Kenshi data file (.base, .mod; the same record format is used in .save/.level/.zone).
  *
- * Принцип: прочитать и записать = те же байты. Поэтому строковые значения — исходные
- * байты (`Uint8Array`), порядок всех словарей сохраняется (Map хранит порядок вставки),
- * а редкие «нестандартные» значения (NaN с особыми битами, булевы не 0/1, идентификаторы
- * не в UTF-8) запоминаются в `RecordQuirks`/`DataFile.latin1Ids`.
+ * Principle: read and write = the same bytes. So string values are the original
+ * bytes (`Uint8Array`), the order of all dictionaries is preserved (Map keeps insertion order),
+ * and rare "non-standard" values (NaN with special bits, booleans other than 0/1, identifiers
+ * not in UTF-8) are remembered in `RecordQuirks`/`DataFile.latin1Ids`.
  */
 
-/** Тип файла — первое int32. */
+/** File type: the first int32. */
 export const FileType = {
-  /** Сейвы, .platoon, .zone и т. п.: без заголовка мода. */
+  /** Saves, .platoon, .zone etc.: no mod header. */
   Data: 15,
-  /** .mod/.base старого формата. */
+  /** Old-format .mod/.base. */
   Mod: 16,
-  /** .mod с длиной заголовка и данными слияния (FCS после 1.0.x). */
+  /** .mod with header length and merge data (FCS after 1.0.x). */
   MergeMod: 17,
 } as const;
 
@@ -32,12 +32,12 @@ export interface DeleteRequest {
   value: Uint8Array;
 }
 
-/** Данные, которые FCS пишет в заголовок формата 17 после списка ссылок. */
+/** Data that FCS writes into the format 17 header after the reference list. */
 export interface MergeData {
   saveCount: number;
   lastMerge: number;
   mergeEntries: MergeEntry[];
-  /** undefined — блока удалений в файле не было (это не то же самое, что пустой список). */
+  /** undefined: the file had no deletion block (this is not the same as an empty list). */
   deleteRequests?: DeleteRequest[];
 }
 
@@ -45,18 +45,18 @@ export interface ModHeader {
   version: number;
   author: Uint8Array;
   description: Uint8Array;
-  /** Зависимости через запятую, как в файле. См. `splitModList`. */
+  /** Comma-separated dependencies, as in the file. See `splitModList`. */
   dependencies: Uint8Array;
-  /** Ссылки (references) через запятую. */
+  /** Comma-separated references. */
   references: Uint8Array;
-  /** Только формат 17. */
+  /** Format 17 only. */
   merge?: MergeData;
-  /** Только формат 17: байты заголовка, которые идут после разобранных полей (обычно пусто). */
+  /** Format 17 only: header bytes that come after the parsed fields (usually empty). */
   extra?: Uint8Array;
 }
 
 export interface Reference {
-  /** Строковый id записи, на которую ссылаемся. */
+  /** String id of the referenced record. */
   target: string;
   v0: number;
   v1: number;
@@ -64,35 +64,35 @@ export interface Reference {
 }
 
 export interface Instance {
-  /** Строковый id размещаемой записи. */
+  /** String id of the placed record. */
   target: string;
   position: Vec3;
-  /** Кватернион в порядке файла (w, x, y, z). */
+  /** Quaternion in file order (w, x, y, z). */
   rotation: Vec4;
   states: Uint8Array[];
 }
 
-/** Отклонения от «канонической» записи значений, нужные только для записи байт в байт. */
+/** Deviations from the "canonical" encoding of values, needed only for byte-for-byte writing. */
 export interface RecordQuirks {
-  /** Путь значения → исходные биты NaN. Путь: `float:<ключ>`, `vec3:<ключ>:<i>`, `inst:<ключ>:<i>`. */
+  /** Value path → original NaN bits. Path: `float:<key>`, `vec3:<key>:<i>`, `inst:<key>:<i>`. */
   nanBits?: Map<string, number>;
-  /** Ключ булева поля → исходный байт, если он не 0 и не 1. */
+  /** Boolean field key → original byte, if it is neither 0 nor 1. */
   boolBytes?: Map<string, number>;
 }
 
 export interface GameRecord {
   /**
-   * Первое int32 записи. В формате 17 — длина записи в байтах (включая само число) или 0;
-   * ненулевая длина при записи пересчитывается. В остальных форматах — как в файле (обычно 0).
+   * The first int32 of a record. In format 17 it is the record length in bytes (including the number itself) or 0;
+   * a non-zero length is recomputed on write. In other formats it is as in the file (usually 0).
    */
   lead: number;
-  /** Тип записи, номер (см. `itemTypeName`). */
+  /** Record type, a number (see `itemTypeName`). */
   type: number;
   id: number;
   name: Uint8Array;
-  /** Строковый id, например `2604-gamedata.base`. */
+  /** String id, e.g. `2604-gamedata.base`. */
   stringId: string;
-  /** Флаги изменения как в файле (uint32): новая/изменённая/переименованная и счётчик сохранений. */
+  /** Change flags as in the file (uint32): new/changed/renamed and the save counter. */
   changeFlags: number;
   bools: Map<string, boolean>;
   floats: Map<string, number>;
@@ -101,7 +101,7 @@ export interface GameRecord {
   vec4s: Map<string, Vec4>;
   strings: Map<string, Uint8Array>;
   files: Map<string, Uint8Array>;
-  /** Категория → ссылки. Внутри категории порядок и повторы сохраняются. */
+  /** Category → references. Order and duplicates within a category are preserved. */
   refs: Map<string, Reference[]>;
   instances: Map<string, Instance>;
   quirks?: RecordQuirks;
@@ -109,14 +109,14 @@ export interface GameRecord {
 
 export interface DataFile {
   fileType: number;
-  /** Есть у форматов 16 и 17. */
+  /** Present in formats 16 and 17. */
   header?: ModHeader;
-  /** Последний выданный числовой id (FCS берёт следующий для новых записей). */
+  /** Last issued numeric id (FCS takes the next one for new records). */
   lastId: number;
   records: GameRecord[];
-  /** Байты после последней записи (у .zone там список id; у .mod обычно пусто). */
+  /** Bytes after the last record (.zone has an id list there; .mod is usually empty). */
   tail: Uint8Array;
-  /** Идентификаторы, которые в файле записаны не в UTF-8 (прочитаны как latin1). */
+  /** Identifiers written in the file not in UTF-8 (read as latin1). */
   latin1Ids?: Set<string>;
 }
 

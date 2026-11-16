@@ -1,20 +1,20 @@
 /**
- * Операции над записями как над слоями: наложить изменения мода на запись нижних слоёв
- * и, наоборот, получить изменения мода как разницу «итог минус нижние слои».
+ * Operations on records as layers: overlay mod changes onto the lower-layer record
+ * and, conversely, get mod changes as the diff "result minus lower layers".
  *
- * Правила наложения (как в игре и FCS):
- * - запись с булевым `REMOVED = true` удаляет запись;
- * - имя берётся из последнего слоя, скалярные поля заменяются по ключу (новые ключи — в конец);
- * - ссылка со значениями `2147483647 ×3` удаляет ссылку на ту же цель в категории;
- * - ссылка на цель, которая уже есть в категории, заменяет её значения на месте, иначе добавляется в конец;
- * - размещённые объекты (instances) заменяются по ключу.
+ * Overlay rules (as in the game and FCS):
+ * - a record with boolean `REMOVED = true` deletes the record;
+ * - the name comes from the last layer, scalar fields are replaced by key (new keys go at the end);
+ * - a reference with values `2147483647 ×3` deletes the reference to the same target in the category;
+ * - a reference to a target already in the category replaces its values in place, otherwise it is appended;
+ * - placed objects (instances) are replaced by key.
  */
 import { bytesEqual } from '../text.ts';
 import { emptyRecord, type GameRecord, type Instance, type Reference, type Vec3, type Vec4 } from '../format/types.ts';
 
-/** Значение v0/v1/v2 «удалённой» ссылки. */
+/** v0/v1/v2 value of a "deleted" reference. */
 export const REMOVED_REF_VALUE = 2147483647;
-/** Булево поле — признак удалённой записи. */
+/** Boolean field marking a deleted record. */
 export const REMOVED_FIELD = 'REMOVED';
 
 export type ScalarDict = 'bools' | 'floats' | 'ints' | 'vec3s' | 'vec4s' | 'strings' | 'files';
@@ -43,7 +43,7 @@ export function isRemovalMarker(rec: GameRecord): boolean {
   return rec.bools.get(REMOVED_FIELD) === true;
 }
 
-/** Запись-маркер «удалить запись нижних слоёв». */
+/** Marker record "delete the lower-layer record". */
 export function removalMarker(lower: GameRecord): GameRecord {
   const rec = emptyRecord(lower.type, lower.stringId, lower.name);
   rec.bools.set(REMOVED_FIELD, true);
@@ -54,7 +54,7 @@ function cloneInstance(i: Instance): Instance {
   return { target: i.target, position: [...i.position], rotation: [...i.rotation], states: [...i.states] };
 }
 
-/** Глубокая копия записи (байтовые значения не копируются: по соглашению их не изменяют). */
+/** Deep copy of a record (byte values are not copied: by convention they are never mutated). */
 export function cloneRecord(rec: GameRecord): GameRecord {
   const out: GameRecord = {
     lead: rec.lead,
@@ -102,7 +102,7 @@ export function scalarMap(rec: GameRecord, dict: ScalarDict): Map<string, Scalar
   return rec[dict];
 }
 
-/** Наложить ссылки слоя на категорию (изменяет `list`). */
+/** Overlay a layer's references onto a category (mutates `list`). */
 export function applyRefs(list: Reference[], layer: readonly Reference[]): void {
   for (const ref of layer) {
     const i = list.findIndex((r) => r.target === ref.target);
@@ -114,13 +114,13 @@ export function applyRefs(list: Reference[], layer: readonly Reference[]): void 
 }
 
 /**
- * Наложить слой на запись. `base` undefined — записи ещё нет (или она удалена ниже).
- * Возвращает undefined, если слой удаляет запись. `base` не изменяется.
+ * Overlay a layer onto a record. `base` undefined — the record does not exist yet (or was deleted below).
+ * Returns undefined if the layer deletes the record. `base` is not mutated.
  */
 export function applyLayer(base: GameRecord | undefined, layer: GameRecord): GameRecord | undefined {
   if (isRemovalMarker(layer)) return undefined;
   if (!base) {
-    // Слой создаёт запись; маркеры удаления ссылок в нём ничего не значат.
+    // The layer creates the record; reference-deletion markers in it mean nothing.
     const rec = cloneRecord(layer);
     for (const [cat, list] of rec.refs) rec.refs.set(cat, list.filter((r) => !isRemovedRef(r)));
     return rec;
@@ -150,11 +150,11 @@ export class LayerDiffError extends Error {
 }
 
 /**
- * Изменения, которые надо записать в мод, чтобы поверх `lower` получилось `desired`.
- * `previous` — прежняя запись мода: порядок её ключей и категорий сохраняется, а не изменившиеся
- * категории берутся из неё как есть. Убрать скалярное поле или размещённый объект нижних слоёв
- * нельзя (в формате нет такого маркера) — это ошибка.
- * Возвращает undefined, если `desired` совпадает с `lower`.
+ * Changes to write into the mod so that `desired` results on top of `lower`.
+ * `previous` is the mod's former record: its key and category order is kept, and unchanged
+ * categories are taken from it as is. Removing a scalar field or placed object of the lower layers
+ * is impossible (the format has no such marker) — that is an error.
+ * Returns undefined if `desired` equals `lower`.
  */
 export function diffRecord(lower: GameRecord, desired: GameRecord, previous?: GameRecord): GameRecord | undefined {
   const out = emptyRecord(desired.type, desired.stringId, desired.name);
@@ -178,7 +178,7 @@ export function diffRecord(lower: GameRecord, desired: GameRecord, previous?: Ga
     const entries = diffRefs(lower.refs.get(cat) ?? [], desired.refs.get(cat) ?? []);
     if (entries.length === 0) continue;
     const prev = previous?.refs.get(cat);
-    // Прежний порядок записи мода сохраняется, пока пользователь не переставил добавленные ссылки.
+    // The mod record's previous order is kept until the user reorders the added references.
     const keep = prev !== undefined && sameRefSet(prev, entries) && sameAddedOrder(prev, entries, lower.refs.get(cat) ?? []);
     out.refs.set(cat, keep ? prev.map((r) => ({ ...r })) : entries);
     changed = true;
@@ -195,7 +195,7 @@ export function diffRecord(lower: GameRecord, desired: GameRecord, previous?: Ga
   return changed ? out : undefined;
 }
 
-/** Ключи `wanted` (без повторов): сначала в порядке `first`, затем остальные по порядку. */
+/** Keys of `wanted` (no repeats): first in the order of `first`, then the rest in order. */
 function orderKeys(first: Iterable<string>, wanted: Iterable<string>): string[] {
   const set = new Set(wanted);
   const out: string[] = [];
@@ -205,9 +205,9 @@ function orderKeys(first: Iterable<string>, wanted: Iterable<string>): string[] 
 }
 
 /**
- * Записи категории: сначала удаления и замены значений у ссылок нижних слоёв (в их порядке),
- * затем новые ссылки в нужном порядке. Повторы одной цели в `desired` сводятся к одной ссылке:
- * поверх нижних слоёв повтор не выразить.
+ * Category entries: first deletions and value replacements of lower-layer references (in their order),
+ * then new references in the desired order. Repeats of one target in `desired` collapse to one reference:
+ * a repeat cannot be expressed on top of lower layers.
  */
 function diffRefs(lower: readonly Reference[], desired: readonly Reference[]): Reference[] {
   const want = new Map<string, Reference>();
@@ -225,7 +225,7 @@ function diffRefs(lower: readonly Reference[], desired: readonly Reference[]): R
   return out;
 }
 
-/** Ссылки, добавленные модом (их нет в нижних слоях), идут в одном порядке. */
+/** References added by the mod (absent in lower layers) come in the same order. */
 function sameAddedOrder(a: readonly Reference[], b: readonly Reference[], lower: readonly Reference[]): boolean {
   const low = new Set(lower.map((r) => r.target));
   const x = a.filter((r) => !isRemovedRef(r) && !low.has(r.target)).map((r) => r.target);
@@ -243,7 +243,7 @@ function sameRefSet(a: readonly Reference[], b: readonly Reference[]): boolean {
   });
 }
 
-/** Сравнить две записи по содержимому (без lead/id/флагов; порядок ключей не важен, порядок ссылок важен). */
+/** Compare two records by content (ignoring lead/id/flags; key order does not matter, reference order does). */
 export function recordsEqual(a: GameRecord, b: GameRecord): boolean {
   if (a.type !== b.type || a.stringId !== b.stringId || !bytesEqual(a.name, b.name)) return false;
   for (const dict of SCALAR_DICTS) {

@@ -1,7 +1,7 @@
 /**
- * Сторона редактора в живой связи: выполняет запросы MCP над открытым модом. Правки ИИ
- * применяются сразу одной правкой истории (видны в окне, отменяются Ctrl+Z) и попадают в
- * список наборов изменений: пользователь их смотрит, принимает или откатывает.
+ * Editor side of the live link: runs MCP requests on the open mod. AI edits
+ * are applied at once as one history edit (visible in the window, undone with Ctrl+Z) and go into
+ * the list of change sets: the user reviews, accepts or rolls them back.
  */
 import { writeDataFile } from '../format/write.ts';
 import type { ModContext } from '../model/context.ts';
@@ -11,7 +11,7 @@ import { applyOps, type EditOp } from '../model/ops.ts';
 import { changesetDiff, formatRecordDiff } from '../model/present.ts';
 import { bytesToBase64, type AiChangeset, type LiveRequestBody, type LiveSnapshot, type LiveState, type ProposeResult } from './protocol.ts';
 
-/** Что открыто в окне. */
+/** What is open in the window. */
 export interface LiveSource {
   ctx: ModContext;
   version: number;
@@ -34,7 +34,7 @@ export class LiveHost {
     this.source = source;
   }
 
-  /** Наборы изменений ИИ (новые — в конце). */
+  /** AI change sets (new ones at the end). */
   get changesets(): readonly HostedChangeset[] {
     return this.list;
   }
@@ -52,7 +52,7 @@ export class LiveHost {
     for (const fn of this.listeners) fn();
   }
 
-  /** Открыт другой мод — прежние наборы больше не относятся к нему. */
+  /** Another mod was opened: the previous sets no longer belong to it. */
   reset(): void {
     this.list = [];
     this.emit();
@@ -64,7 +64,7 @@ export class LiveHost {
     return s;
   }
 
-  /** Отметить наборы, отменённые в окне через Ctrl+Z (их больше нет в истории). */
+  /** Mark sets undone in the window with Ctrl+Z (they are no longer in the history). */
   private refresh(ctx: ModContext): void {
     let changed = false;
     for (const c of this.list) {
@@ -89,7 +89,7 @@ export class LiveHost {
     };
   }
 
-  /** Выполнить запрос MCP; ошибка — исключение с понятным текстом. */
+  /** Run an MCP request; an error is an exception with a readable text. */
   handle(req: LiveRequestBody): unknown {
     switch (req.method) {
       case 'hello':
@@ -141,7 +141,7 @@ export class LiveHost {
     this.emit();
   }
 
-  /** Откатить набор (новой правкой; если записи меняли позже — ошибка). */
+  /** Roll back a set (with a new edit; an error if the records were changed later). */
   rollback(id: number): void {
     const c = this.find(id);
     const { ctx } = this.open();

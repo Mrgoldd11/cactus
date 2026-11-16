@@ -1,21 +1,21 @@
 /**
- * Живая связь ИИ с открытым редактором: MCP-сервер подключается по WebSocket (только
- * 127.0.0.1, токен из файла обнаружения) и шлёт запросы JSON. Ответы — от окна редактора.
+ * Live link of the AI with the open editor: the MCP server connects over WebSocket (only
+ * 127.0.0.1, token from the discovery file) and sends JSON requests. Replies come from the editor window.
  *
- * Запросы: `hello` (токен), `state` (версия и что открыто), `snapshot` (то же + файл мода),
- * `propose` (правки — в окне появляются набором изменений ИИ), `changesets` (их состояние).
+ * Requests: `hello` (token), `state` (version and what is open), `snapshot` (the same + the mod file),
+ * `propose` (edits; they show up in the window as an AI change set), `changesets` (their state).
  */
 import type { EditOp } from '../model/ops.ts';
 
 export const LIVE_PROTOCOL = 1;
 
-/** Файл обнаружения, который пишет редактор (`live.json`). */
+/** Discovery file written by the editor (`live.json`). */
 export interface LiveDiscovery {
   protocol: number;
   port: number;
   token: string;
   pid: number;
-  /** Версия редактора. */
+  /** Editor version. */
   app?: string;
 }
 
@@ -31,39 +31,39 @@ export type LiveRequest = LiveRequestBody & { id: number };
 export type LiveResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string };
 
 export interface LiveState {
-  /** Растёт при каждой правке в окне; другой `session` — открыт другой мод. */
+  /** Grows on every edit in the window; a different `session` means another mod was opened. */
   version: number;
   session: number;
   modName: string;
-  /** Путь файла мода; нет — новый мод, ещё не сохранён. */
+  /** Path of the mod file; absent for a new mod not saved yet. */
   modPath?: string;
-  /** Папка игры, открытой в редакторе. */
+  /** Game folder opened in the editor. */
   game?: string;
-  /** Зависимости — нижние слои поверх ванили, по порядку. */
+  /** Dependencies: lower layers over vanilla, in order. */
   dependencies: { name: string; path: string }[];
   dirty: boolean;
 }
 
 export interface LiveSnapshot extends LiveState {
-  /** Текущий мод (только изменения), как его записало бы «Сохранить», в base64. */
+  /** The current mod (changes only), as "Save" would write it, in base64. */
   mod: string;
 }
 
 /**
- * pending — ждёт решения; accepted — принят; rolled-back — откачен кнопкой;
- * undone — отменён в окне (Ctrl+Z).
+ * pending: awaiting a decision; accepted: accepted; rolled-back: rolled back with the button;
+ * undone: undone in the window (Ctrl+Z).
  */
 export type AiChangeStatus = 'pending' | 'accepted' | 'rolled-back' | 'undone';
 
 export interface AiChangeset {
-  /** Id правки в истории отмены редактора. */
+  /** Edit id in the editor's undo history. */
   id: number;
   title: string;
   status: AiChangeStatus;
-  /** Затронутые записи и созданные (по порядку). */
+  /** Affected records and created ones (in order). */
   touched: string[];
   created: string[];
-  /** Разница по записям, текстом (как в `diff`). */
+  /** Per-record difference, as text (as in `diff`). */
   summary: string[];
   at: number;
 }
@@ -75,7 +75,7 @@ export interface ProposeResult {
 
 const CHUNK = 0x8000;
 
-/** base64 без Buffer — работает и в окне, и в Node. */
+/** base64 without Buffer: works both in the window and in Node. */
 export function bytesToBase64(bytes: Uint8Array): string {
   let s = '';
   for (let i = 0; i < bytes.length; i += CHUNK) s += String.fromCharCode(...bytes.subarray(i, i + CHUNK));

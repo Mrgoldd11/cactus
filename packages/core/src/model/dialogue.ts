@@ -1,6 +1,6 @@
 /**
- * Деревья диалогов: DIALOGUE_PACKAGE → (`dialogs`) DIALOGUE → (`lines`) DIALOGUE_LINE → ...
- * Повторно встреченная запись не разворачивается второй раз (диалоги бывают с циклами).
+ * Dialogue trees: DIALOGUE_PACKAGE → (`dialogs`) DIALOGUE → (`lines`) DIALOGUE_LINE → ...
+ * A record met again is not expanded a second time (dialogues can have cycles).
  */
 import { decodeText } from '../text.ts';
 import type { GameRecord } from '../format/types.ts';
@@ -9,15 +9,15 @@ import { describeDialogAction, formatEnumValue, getEnum, refValueEnum } from './
 import { formatFieldValue, formatRecord, refLabel } from './present.ts';
 import { SCALAR_DICTS, scalarMap } from './record-ops.ts';
 
-/** Категории ссылок, по которым идёт дерево. */
+/** Reference categories the tree follows. */
 export const TREE_CATEGORIES = ['dialogs', 'lines'] as const;
 
 export interface DialogueAction {
   stringId: string;
   name: string;
-  /** Поля записи DIALOG_ACTION (`condition name`, `who`, `action name`, ...) и значения ссылки. */
+  /** DIALOG_ACTION record fields (`condition name`, `who`, `action name`, ...) and reference values. */
   fields: string[];
-  /** Условие/действие одной строкой с именами enum (`собеседник: DC_RELATIONS < 20`). */
+  /** Condition/effect as one line with enum names (`target: DC_RELATIONS < 20`). */
   text?: string;
 }
 
@@ -28,22 +28,22 @@ export interface DialogueNode {
   /** text0, text1, ... */
   texts: string[];
   speaker?: number;
-  /** Событие пакета (v0 ссылки `dialogs` у DIALOGUE_PACKAGE), если узел — диалог пакета. */
+  /** Package event (v0 of the `dialogs` reference of DIALOGUE_PACKAGE), if the node is a package dialogue. */
   event?: number;
-  /** DIALOGUE без реплик (`lines` пуст) — в игре ничего не скажет. */
+  /** DIALOGUE without lines (`lines` empty): says nothing in the game. */
   noLines?: boolean;
   conditions: DialogueAction[];
   effects: DialogueAction[];
-  /** Прочие ссылки: категория → подписи целей. */
+  /** Other references: category → target labels. */
   refs: { category: string; targets: string[] }[];
-  /** Прочие поля текстом (`one at a time = true`, ...). */
+  /** Other fields as text (`one at a time = true`, ...). */
   fields: string[];
   children: DialogueNode[];
-  /** Запись уже показана выше — не развёрнута. */
+  /** The record is already shown above: not expanded. */
   repeated?: boolean;
-  /** Записи нет. */
+  /** The record does not exist. */
   missing?: boolean;
-  /** Дальше не развёрнуто из-за ограничений. */
+  /** Not expanded further because of limits. */
   truncated?: boolean;
 }
 
@@ -125,7 +125,7 @@ export function buildDialogueTree(ctx: ModContext, stringId: string, options: Di
 }
 
 export interface FormatTreeOptions {
-  /** Как `kdata.py tree`: все поля и ссылки каждой записи. */
+  /** Like `kdata.py tree`: all fields and references of each record. */
   full?: boolean;
   /** Interface language of the texts (default English). */
   lang?: string;
@@ -143,7 +143,7 @@ function eventLabel(ctx: ModContext, event: number, lang: string): string {
   return `${(TREE_WORDS[lang] ?? TREE_WORDS.en!).event} ${def ? formatEnumValue(def, event, lang) : String(event)}`;
 }
 
-/** Дерево текстом с отступами по два пробела на уровень. */
+/** The tree as text, indented by two spaces per level. */
 export function formatDialogueTree(ctx: ModContext, root: DialogueNode, options: FormatTreeOptions = {}): string[] {
   const out: string[] = [];
   const lang = options.lang ?? 'en';

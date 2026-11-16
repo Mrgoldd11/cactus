@@ -1,7 +1,7 @@
 /**
- * Слияние модов на диске: файл-спутник решений рядом с активным модом
- * (`<имя>.kedit-merge.json`, не часть .mod), чтение мода-источника и определение данных
- * уровня рядом с ним. Сама логика слияния — `model/merge.ts`.
+ * Mod merging on disk: the decision sidecar file next to the active mod
+ * (`<name>.kedit-merge.json`, not part of the .mod), reading the source mod and detecting level
+ * data next to it. The merge logic itself is `model/merge.ts`.
  */
 import { existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -20,18 +20,18 @@ import {
   type MergeStore,
 } from '../model/merge.ts';
 
-/** `<папка мода>/<имя без .mod>.kedit-merge.json`. */
+/** `<mod folder>/<name without .mod>.kedit-merge.json`. */
 export function mergeStorePath(modPath: string): string {
   return join(dirname(modPath), `${basename(modPath).replace(/\.(mod|base)$/i, '')}${MERGE_STORE_SUFFIX}`);
 }
 
-/** Файл-спутник; нет файла — пустой. Битый файл — `MergeError`. */
+/** Sidecar file; no file — empty. A broken file — `MergeError`. */
 export function readMergeStore(modPath: string): MergeStore {
   const p = mergeStorePath(modPath);
   return existsSync(p) ? parseMergeStore(readFileSync(p, 'utf8')) : emptyMergeStore();
 }
 
-/** Записать файл-спутник (сначала во временный файл, потом на место). */
+/** Write the sidecar file (to a temp file first, then into place). */
 export function writeMergeStore(modPath: string, store: MergeStore): string {
   const p = mergeStorePath(modPath);
   const tmp = `${p}.tmp`;
@@ -40,21 +40,21 @@ export function writeMergeStore(modPath: string, store: MergeStore): string {
   return p;
 }
 
-/** Решения слияния мода по пути его файла; нового мода (пути нет) — пустые. */
+/** Merge decisions of a mod by its file path; for a new mod (no path) — empty. */
 export function loadMergeLedger(modPath: string | undefined): MergeLedger {
   return new MergeLedger(modPath !== undefined ? readMergeStore(modPath) : emptyMergeStore());
 }
 
 /**
- * После сохранения мода: действующие слияния становятся постоянными, файл-спутник
- * записывается, если в нём что-то изменилось. Возвращает путь файла или undefined.
+ * After the mod is saved: active merges become permanent, the sidecar file is
+ * written if anything in it changed. Returns the file path or undefined.
  */
 export function saveMergeLedger(ctx: ModContext, ledger: MergeLedger, modPath: string): string | undefined {
   if (!ledger.hasChanges(ctx)) return undefined;
   return writeMergeStore(modPath, ledger.commit(ctx));
 }
 
-/** Прочитать мод-источник (.mod / .base) целиком. */
+/** Read the whole source mod (.mod / .base). */
 export function readMergeSource(path: string): MergeSource {
   let file;
   try {
@@ -71,8 +71,8 @@ export function readMergeSource(path: string): MergeSource {
 const LEVEL_FILE = /\.(zone|level)$/i;
 
 /**
- * Данные уровня источника: файлы `leveldata/*.zone`, `leveldata.level`, `interiors.level` рядом с его .mod.
- * undefined — их нет. Файлы только перечисляются.
+ * Source level data: files `leveldata/*.zone`, `leveldata.level`, `interiors.level` next to its .mod.
+ * undefined — there are none. Files are only listed.
  */
 export function detectLevelData(sourcePath: string): LevelDataInfo | undefined {
   const dir = join(dirname(sourcePath), 'leveldata');

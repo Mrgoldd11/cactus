@@ -1,7 +1,7 @@
 /**
- * Строки в файлах Kenshi — это байты без указания кодировки. В данных игры это UTF-8,
- * в сейвах и части старых модов встречается cp1251. Ядро хранит строковые значения
- * как исходные байты, а эти функции переводят их в текст и обратно.
+ * Strings in Kenshi files are bytes with no stated encoding. Game data is UTF-8;
+ * saves and some old mods contain cp1251. The core stores string values
+ * as the original bytes, and these functions convert them to text and back.
  */
 
 export type TextEncoding = 'utf-8' | 'cp1251' | 'latin1';
@@ -11,7 +11,7 @@ const utf8Loose = new TextDecoder('utf-8', { ignoreBOM: true });
 const cp1251Decoder = new TextDecoder('windows-1251');
 const utf8Encoder = new TextEncoder();
 
-/** Обратная таблица cp1251: символ → байт (строится из декодера, чтобы не держать таблицу руками). */
+/** Reverse cp1251 table: character → byte (built from the decoder, so no hand-kept table). */
 let cp1251Table: Map<number, number> | undefined;
 function cp1251Reverse(): Map<number, number> {
   if (cp1251Table) return cp1251Table;
@@ -43,11 +43,11 @@ export function isValidUtf8(bytes: Uint8Array): boolean {
 }
 
 function asciiToString(bytes: Uint8Array): string {
-  // Короткие строки (ключи полей, id) — одним вызовом: `apply` с типизированным массивом
-  // не проходит через итератор, в отличие от `...` (это была половина времени разбора файла).
+  // Short strings (field keys, ids) in one call: `apply` with a typed array
+  // skips the iterator, unlike `...` (that was half of the file-parse time).
   if (bytes.length <= 8192) return String.fromCharCode.apply(null, bytes as unknown as number[]);
   let out = '';
-  // Кусками, чтобы не упереться в лимит аргументов на длинных строках.
+  // In chunks, to stay under the argument limit on long strings.
   for (let i = 0; i < bytes.length; i += 8192) {
     out += String.fromCharCode(...bytes.subarray(i, i + 8192));
   }
@@ -55,8 +55,8 @@ function asciiToString(bytes: Uint8Array): string {
 }
 
 /**
- * Байты → текст. `auto`: UTF-8, если байты — корректный UTF-8, иначе cp1251.
- * Для `utf-8` некорректные последовательности заменяются на U+FFFD.
+ * Bytes → text. `auto`: UTF-8 if the bytes are valid UTF-8, otherwise cp1251.
+ * For `utf-8`, invalid sequences are replaced with U+FFFD.
  */
 export function decodeText(bytes: Uint8Array, encoding: TextEncoding | 'auto' = 'auto'): string {
   if (isAscii(bytes)) return asciiToString(bytes);
@@ -72,12 +72,12 @@ export function decodeText(bytes: Uint8Array, encoding: TextEncoding | 'auto' = 
   }
 }
 
-/** Какой кодировкой скорее всего записаны байты. ASCII считается UTF-8. */
+/** Which encoding the bytes were most likely written in. ASCII counts as UTF-8. */
 export function detectEncoding(bytes: Uint8Array): 'utf-8' | 'cp1251' {
   return isValidUtf8(bytes) ? 'utf-8' : 'cp1251';
 }
 
-/** Текст → байты. Для cp1251 и latin1 символ без соответствия — ошибка (не теряем данные молча). */
+/** Text → bytes. For cp1251 and latin1 an unmappable character is an error (no silent data loss). */
 export function encodeText(text: string, encoding: TextEncoding = 'utf-8'): Uint8Array {
   if (encoding === 'utf-8') return utf8Encoder.encode(text);
   const out = new Uint8Array(text.length);
@@ -99,7 +99,7 @@ export function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
-/** Первое различие двух буферов или -1. */
+/** First difference of two buffers, or -1. */
 export function firstDifference(a: Uint8Array, b: Uint8Array): number {
   const n = Math.min(a.length, b.length);
   for (let i = 0; i < n; i++) if (a[i] !== b[i]) return i;
@@ -107,9 +107,9 @@ export function firstDifference(a: Uint8Array, b: Uint8Array): number {
 }
 
 /**
- * Идентификаторы (ключи полей, строковые id записей, категории ссылок) нужны как JS-строки.
- * Почти всегда это ASCII/UTF-8; если байты не UTF-8, строка декодируется как latin1
- * (байт = символ), а вызывающий запоминает это, чтобы записать её обратно теми же байтами.
+ * Identifiers (field keys, record string ids, reference categories) are needed as JS strings.
+ * They are almost always ASCII/UTF-8; if the bytes are not UTF-8, the string is decoded as latin1
+ * (byte = character), and the caller remembers this to write it back as the same bytes.
  */
 export function decodeIdentifier(bytes: Uint8Array): { text: string; latin1: boolean } {
   if (isAscii(bytes)) return { text: asciiToString(bytes), latin1: false };

@@ -1,19 +1,19 @@
 /**
- * Помощник перевода модов. Мод-перевод — отдельный мод, который зависит от оригинала, грузится
- * после него и задаёт поверх только тексты: имена записей и текстовые строковые поля. Так
- * устроены «RUS»-патчи мастерской (например, «Expanded Vanilla Armor RUS»).
+ * Mod translation helper. A translation mod is a separate mod that depends on the original, loads
+ * after it and overrides only texts: record names and text string fields. This is how the
+ * Workshop "RUS" patches work (e.g. "Expanded Vanilla Armor RUS").
  *
- * Что считается текстом:
- * - имя записи — у типов, чьи имена переводит игра (`TRANSLATE: ALL | NAME` в `fcs.def`);
- * - строковые поля — те ключи, что переводит официальный перевод игры (`ru_RU.translation`):
- *   `description`, `textN` (реплики) и т. д. Пустые строки и строки без букв (`/INSULT/!`)
- *   переводить нечего.
+ * What counts as text:
+ * - the record name — for types whose names the game translates (`TRANSLATE: ALL | NAME` in `fcs.def`);
+ * - string fields — the keys the game's official translation translates (`ru_RU.translation`):
+ *   `description`, `textN` (lines) etc. Empty strings and strings without letters (`/INSULT/!`)
+ *   have nothing to translate.
  *
- * Тексты оригинала берутся из его собственных записей: новые записи — все тексты, изменённые
- * записи ванили — только тексты, которые мод меняет (остальное переводит перевод игры).
+ * The original's texts come from its own records: new records — all texts, changed
+ * vanilla records — only the texts the mod changes (the rest is covered by the game's translation).
  *
- * Перевод можно выгрузить в CSV, JSON или gettext PO (для Poedit, как у FCS; с оригиналом) и загрузить обратно. При загрузке
- * строка, чей оригинал с тех пор изменился (автор обновил мод), не применяется — она в отчёте.
+ * A translation can be exported to CSV, JSON or gettext PO (for Poedit, like FCS; with the original) and loaded back. On load
+ * a line whose original has changed since (the author updated the mod) is not applied — it goes into the report.
  */
 import { decodeText, encodeText } from '../text.ts';
 import { itemTypeName } from '../format/item-types.ts';
@@ -23,7 +23,7 @@ import { applyLayer, isRemovalMarker, SCALAR_DICTS, scalarMap } from './record-o
 import type { ConflictLayer } from './conflicts.ts';
 import { parsePo } from '../locale/po.ts';
 
-/** Типы, у которых игра переводит имя записи (`fcs.def`, `TRANSLATE: ALL` или `NAME`). */
+/** Types whose record name the game translates (`fcs.def`, `TRANSLATE: ALL` or `NAME`). */
 export const NAME_TRANSLATED_TYPES: ReadonlySet<string> = new Set([
   'ANIMAL_CHARACTER', 'BIOME_GROUP', 'CHARACTER', 'BUILDING',
   'ARMOUR', 'ARTIFACTS', 'CHARACTER_PHYSICS_ATTACHMENT', 'CONTAINER', 'CROSSBOW', 'FACTION', 'ITEM', 'NEST_ITEM',
@@ -31,39 +31,39 @@ export const NAME_TRANSLATED_TYPES: ReadonlySet<string> = new Set([
   'NEW_GAME_STARTOFF', 'RACE', 'RACE_GROUP', 'RESEARCH', 'TOWN', 'WEAPON', 'WEAPON_MANUFACTURER',
 ]);
 
-/** Строковые поля, которые переводит официальный перевод игры (`ru_RU.translation`). */
+/** String fields translated by the game's official translation (`ru_RU.translation`). */
 const TEXT_KEYS: ReadonlySet<string> = new Set([
   'description', 'Description', 'category', 'building category', 'building group', 'building name', 'string',
   'unexplored name', 'display name', 'company description', 'inventory content name', 'stringvar', 'difficulty', 'style',
 ]);
 const TEXT_KEY_PATTERNS = [/^text\d+$/, /^rank\d+$/, /^negative rank\d+$/];
 
-/** Поле `field` у текста: `name` — имя записи, иначе ключ строкового поля. */
+/** `field` of a text: `name` — the record name, otherwise the string field key. */
 export const NAME_FIELD = 'name';
 
 export function isTextKey(key: string): boolean {
   return TEXT_KEYS.has(key) || TEXT_KEY_PATTERNS.some((p) => p.test(key));
 }
 
-/** Есть ли что переводить: буквы вне тегов вида `/INSULT/`. */
+/** Whether there is anything to translate: letters outside tags like `/INSULT/`. */
 export function hasTranslatableText(text: string): boolean {
   return /\p{L}/u.test(text.replace(/\/[A-Z_0-9]+\//g, ''));
 }
 
-/** Текст оригинала, который нужно перевести. */
+/** Original text that needs translating. */
 export interface TextEntry {
-  /** Строковый id записи. */
+  /** String id of the record. */
   id: string;
-  /** Тип записи (`ARMOUR`). */
+  /** Record type (`ARMOUR`). */
   type: string;
-  /** Имя записи в оригинале — подпись для людей. */
+  /** Record name in the original — a label for humans. */
   record: string;
-  /** `name` или ключ строкового поля. */
+  /** `name` or a string field key. */
   field: string;
   original: string;
 }
 
-/** Нижние записи (итог слоёв ниже `index`) для набора id. */
+/** Lower records (result of the layers below `index`) for a set of ids. */
 function lowerRecords(layers: readonly ConflictLayer[], index: number, ids: ReadonlySet<string>): Map<string, GameRecord> {
   const out = new Map<string, GameRecord>();
   const dead = new Set<string>();
@@ -83,7 +83,7 @@ function lowerRecords(layers: readonly ConflictLayer[], index: number, ids: Read
   return out;
 }
 
-/** Тексты записи `rec` слоя поверх `lower` (undefined — запись новая). */
+/** Texts of layer record `rec` on top of `lower` (undefined — the record is new). */
 function recordTexts(rec: GameRecord, lower: GameRecord | undefined): TextEntry[] {
   const type = itemTypeName(rec.type);
   const record = decodeText(rec.name);
@@ -103,8 +103,8 @@ function recordTexts(rec: GameRecord, lower: GameRecord | undefined): TextEntry[
 }
 
 /**
- * Тексты слоя `source` (мода-оригинала) по порядку его записей. `layers` — слои по порядку
- * загрузки, `source` среди них (имя без учёта регистра).
+ * Texts of layer `source` (the original mod) in its record order. `layers` — layers in load
+ * order, `source` among them (name compared case-insensitively).
  */
 export function layerTexts(layers: readonly ConflictLayer[], source: string): TextEntry[] {
   const index = layers.findIndex((l) => l.name.toLowerCase() === source.toLowerCase());
@@ -120,16 +120,16 @@ export function layerTexts(layers: readonly ConflictLayer[], source: string): Te
   return out;
 }
 
-/** Состояние перевода текста: нет перевода / как в оригинале / переведено. */
+/** Translation state of a text: no translation / same as original / translated. */
 export type TranslationStatus = 'todo' | 'same' | 'done';
 
 export interface TranslationRow extends TextEntry {
-  /** Текст в моде-переводе; undefined — мод-перевод поле не задаёт. */
+  /** Text in the translation mod; undefined — the translation mod does not set the field. */
   translation?: string;
   status: TranslationStatus;
 }
 
-/** Что мод контекста (перевод) задаёт для поля записи; undefined — не задаёт. */
+/** What the context mod (translation) sets for a record field; undefined — it does not set it. */
 function modText(ctx: ModContext, id: string, field: string): string | undefined {
   const delta = ctx.delta(id);
   if (!delta || isRemovalMarker(delta)) return undefined;
@@ -143,8 +143,8 @@ function modText(ctx: ModContext, id: string, field: string): string | undefined
 }
 
 /**
- * Строки перевода: тексты оригинала `source` (слой контекста) и что задаёт для них
- * редактируемый мод (мод-перевод).
+ * Translation rows: texts of the original `source` (a context layer) and what the
+ * edited mod (the translation mod) sets for them.
  */
 export function translationRows(ctx: ModContext, source: string): TranslationRow[] {
   return layerTexts(ctx.layers, source).map((e) => {
@@ -167,11 +167,11 @@ export function summarizeTranslation(rows: readonly TranslationRow[]): Translati
   return s;
 }
 
-/** Лишнее в моде-переводе: тексты не из оригиналов и изменения, которые не тексты. */
+/** Extras in the translation mod: texts not from the originals and changes that are not texts. */
 export interface TranslationExtras {
-  /** Тексты для записей или полей, которых в оригиналах нет (устарели или опечатка в id). */
+  /** Texts for records or fields absent from the originals (stale, or an id typo). */
   orphans: { id: string; field: string; text: string }[];
-  /** Записи, в которых мод-перевод меняет не только тексты (числа, ссылки, удаление). */
+  /** Records where the translation mod changes more than texts (numbers, references, deletion). */
   nonText: { id: string; what: string }[];
 }
 
@@ -182,7 +182,7 @@ const EXTRAS_WORDS: Record<string, { deletes: string; created: string; object: (
   zh: { deletes: '删除该记录', created: '新记录', object: (k) => `对象 ${k}` },
 };
 
-/** Проверка мода-перевода: всё ли, что он задаёт, — тексты оригиналов `sources`. */
+/** Check a translation mod: is everything it sets a text of the originals `sources`. */
 export function translationExtras(ctx: ModContext, sources: readonly string[], lang = 'en'): TranslationExtras {
   const w = EXTRAS_WORDS[lang] ?? EXTRAS_WORDS.en!;
   const known = new Set<string>();
@@ -217,8 +217,8 @@ export function translationExtras(ctx: ModContext, sources: readonly string[], l
 }
 
 /**
- * Поставить перевод поля в редактируемый мод. Пустой текст или текст как в оригинале (нижних
- * слоях) — убрать перевод: мод перестаёт задавать поле.
+ * Set a field translation in the edited mod. Empty text or text equal to the original (lower
+ * layers) removes the translation: the mod stops setting the field.
  */
 export function setTranslation(ctx: ModContext, id: string, field: string, text: string): void {
   const lower = ctx.lower(id);
@@ -241,9 +241,9 @@ function keep(text: string, original: Uint8Array | undefined): Uint8Array {
   return original && decodeText(original) === text ? original : encodeText(text);
 }
 
-// ---------------------------------------------------------------- файлы CSV и JSON
+// ---------------------------------------------------------------- CSV and JSON files
 
-/** Строка файла перевода. `original` — текст, с которого переводили (для проверки при загрузке). */
+/** Translation file row. `original` is the text that was translated (checked on load). */
 export interface TranslationFileRow {
   id: string;
   field: string;
@@ -259,7 +259,7 @@ function csvCell(s: string): string {
   return /[",;\r\n\t]/.test(s) || s.trim() !== s ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/** CSV (UTF-8 с BOM — чтобы Excel показал кириллицу; разделитель — запятая; концы строк CRLF). */
+/** CSV (UTF-8 with BOM so Excel shows Cyrillic; comma separator; CRLF line ends). */
 export function formatTranslationCsv(rows: readonly TranslationRow[]): string {
   const lines = [CSV_COLUMNS.join(',')];
   for (const r of rows) lines.push([r.id, r.field, r.type, r.record, r.original, r.translation ?? ''].map(csvCell).join(','));
@@ -283,9 +283,9 @@ function poString(s: string): string {
 }
 
 /**
- * gettext PO для Poedit — как файлы перевода FCS (`locale/Kenshi_translations.txt`). Строка —
- * запись: `msgctxt` = «id|поле» (по нему загрузка находит текст), `msgid` — оригинал,
- * `msgstr` — перевод (пусто — не переведено). Оригинал мода — в заголовке `X-Kedit-Source`.
+ * gettext PO for Poedit — like FCS translation files (`locale/Kenshi_translations.txt`). One entry
+ * per row: `msgctxt` = "id|field" (load finds the text by it), `msgid` — the original,
+ * `msgstr` — the translation (empty — not translated). The mod's original is in the `X-Kedit-Source` header.
  */
 export function formatTranslationPo(source: string, rows: readonly TranslationRow[]): string {
   const out = [
@@ -319,7 +319,7 @@ function parseTranslationPo(text: string): ParsedTranslationFile {
   return { ...(source ? { source } : {}), rows };
 }
 
-/** Разбор CSV: кавычки по RFC 4180, разделитель — из строки заголовка (`,` `;` или табуляция). */
+/** CSV parsing: quotes per RFC 4180, separator taken from the header row (`,` `;` or tab). */
 export function parseCsv(text: string): string[][] {
   const s = text.startsWith('\uFEFF') ? text.slice(1) : text;
   const firstLine = s.slice(0, s.search(/\r?\n|$/));
@@ -364,12 +364,12 @@ export function parseCsv(text: string): string[][] {
 }
 
 export interface ParsedTranslationFile {
-  /** Оригинал из JSON (в CSV не пишется). */
+  /** Original from JSON (not written to CSV). */
   source?: string;
   rows: TranslationFileRow[];
 }
 
-/** Файл перевода: JSON (`kedit-translation`), PO (выгрузка редактора) или CSV с колонками `id`, `field`, `translation` (и `original`). */
+/** Translation file: JSON (`kedit-translation`), PO (editor export) or CSV with columns `id`, `field`, `translation` (and `original`). */
 export function parseTranslationFile(text: string): ParsedTranslationFile {
   const t = text.startsWith('\uFEFF') ? text.slice(1) : text;
   if (t.trimStart().startsWith('{')) {
@@ -416,22 +416,22 @@ export function parseTranslationFile(text: string): ParsedTranslationFile {
 }
 
 export interface ApplyTranslationReport {
-  /** Поставлено новых или изменённых переводов. */
+  /** New or changed translations set. */
   applied: number;
-  /** Перевод уже такой же. */
+  /** Translation already the same. */
   unchanged: number;
-  /** Пустой перевод — пропущено. */
+  /** Empty translation — skipped. */
   empty: number;
-  /** Оригинал изменился с тех пор, как переводили: не применено (с `applyStale` — применено). */
+  /** The original changed since translation: not applied (with `applyStale` — applied). */
   stale: { id: string; field: string; was: string; now: string }[];
-  /** Таких записи или поля в оригинале нет. */
+  /** No such record or field in the original. */
   unknown: { id: string; field: string }[];
 }
 
 /**
- * Загрузить перевод из файла в редактируемый мод (одна правка — одна отмена). Строки сверяются
- * с текстами оригинала `source`: чужие id и поля пропускаются, строки с изменившимся оригиналом
- * не применяются без `applyStale`.
+ * Load a translation from a file into the edited mod (one edit — one undo). Rows are checked
+ * against the texts of the original `source`: foreign ids and fields are skipped, rows whose original
+ * changed are not applied without `applyStale`.
  */
 export function applyTranslationRows(ctx: ModContext, source: string, rows: readonly TranslationFileRow[], options: { applyStale?: boolean } = {}): ApplyTranslationReport {
   const texts = new Map(translationRows(ctx, source).map((r) => [`${r.id}\n${r.field}`, r]));
@@ -464,8 +464,8 @@ export function applyTranslationRows(ctx: ModContext, source: string, rows: read
 }
 
 /**
- * Мод-перевод зависит от оригинала (в заголовке): лаунчер требует оригинал и ставит перевод
- * после него, иначе перевод перекроется оригиналом. Возвращает true, если зависимость добавлена.
+ * A translation mod depends on the original (in the header): the launcher requires the original and puts
+ * the translation after it, otherwise the original would override the translation. Returns true if the dependency was added.
  */
 export function ensureTranslationDependency(ctx: ModContext, source: string): boolean {
   const deps = ctx.info.dependencies;
@@ -493,7 +493,7 @@ const REPORT_WORDS: Record<string, { head: (applied: number, same: number, empty
   },
 };
 
-/** Отчёт загрузки текстом. */
+/** Load report as text. */
 export function formatApplyReport(r: ApplyTranslationReport, lang = 'en'): string[] {
   const w = REPORT_WORDS[lang] ?? REPORT_WORDS.en!;
   const lines = [w.head(r.applied, r.unchanged, r.empty, r.stale.length, r.unknown.length)];

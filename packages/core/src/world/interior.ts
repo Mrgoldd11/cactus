@@ -1,21 +1,21 @@
 /**
- * Интерьеры зданий: раскладки мебели и точек предметов в `interiors.level`.
+ * Building interiors: layouts of furniture and item points in `interiors.level`.
  *
- * Как это устроено в файлах игры (ваниль: 4 слоя, 410 раскладок):
- *  - раскладка — запись INSTANCE_COLLECTION с id `<здание>-<Имя>` (`727-gamedata.base-Noble House`);
- *    поле `associated building` — запись здания (BUILDING), `is exterior` — снаружи (вывески,
- *    флаги; id `EXT-<здание>-<Имя>`), флаги `is shop`, `is bar`, `is recruitment`, `flophouse`;
- *  - у здания много раскладок; какую взять, говорит состояние здания в мире
- *    (`interior layout name`), а где имени нет — игра выбирает сама;
- *  - экземпляры раскладки — мебель (BUILDING: стены, кровати, сундуки) и точки предметов
- *    (ITEM_PLACEMENT_GROUP); позиция и кватернион — от начала координат модели здания;
- *  - у каждого экземпляра состояние: у мебели GAMESTATE_BUILDING `<ключ>-S23` (имя, фракция
- *    владельца, `floornum`, замок, точки использования), у точки предметов — запись
- *    ITEM_PLACEMENT_GROUP со своим id (`base data sid` — что лежит, `floornum`);
- *  - жильцов, охрану и товар в раскладке нет: их ставит игра по шаблонам здания и города.
+ * How it works in the game files (vanilla: 4 layers, 410 layouts):
+ *  - a layout is an INSTANCE_COLLECTION record with id `<building>-<Name>` (`727-gamedata.base-Noble House`);
+ *    field `associated building` — the building record (BUILDING), `is exterior` — outside (signs,
+ *    flags; id `EXT-<building>-<Name>`), flags `is shop`, `is bar`, `is recruitment`, `flophouse`;
+ *  - a building has many layouts; which one to use is given by the building's state in the world
+ *    (`interior layout name`), and where there is no name the game chooses by itself;
+ *  - layout instances are furniture (BUILDING: walls, beds, chests) and item points
+ *    (ITEM_PLACEMENT_GROUP); position and quaternion are relative to the building model's origin;
+ *  - every instance has a state: furniture has GAMESTATE_BUILDING `<key>-S23` (name, owner
+ *    faction, `floornum`, lock, use points), an item point has an
+ *    ITEM_PLACEMENT_GROUP record with its own id (`base data sid` — what lies there, `floornum`);
+ *  - residents, guards and goods are not in the layout: the game places them from building and town templates.
  *
- * Моды кладут в свой `interiors.level` изменённые экземпляры раскладки (с её полями) и состояния
- * полными копиями; новые ключи — `<n>-<мод>-INGAME`. Модуль без доступа к диску.
+ * Mods put changed layout instances (with the layout's fields) and states as full copies into
+ * their own `interiors.level`; new keys are `<n>-<mod>-INGAME`. The module has no disk access.
  */
 import { itemTypeId, itemTypeName } from '../format/item-types.ts';
 import { emptyRecord, type GameRecord, type Instance, type Vec3, type Vec4 } from '../format/types.ts';
@@ -27,47 +27,47 @@ import { UiTextError } from '../ui-text.ts';
 
 export const INTERIORS = 'interiors.level';
 
-/** Что можно ставить внутрь: мебель и точки предметов. */
+/** What can be placed inside: furniture and item points. */
 export const INTERIOR_TYPES = ['BUILDING', 'ITEM_PLACEMENT_GROUP'] as const;
 
 export interface InteriorLayout {
-  /** Id раскладки (`727-gamedata.base-Noble House`). */
+  /** Layout id (`727-gamedata.base-Noble House`). */
   sid: string;
   name: string;
-  /** Здание (BUILDING). */
+  /** Building (BUILDING). */
   building: string;
-  /** Снаружи здания (вывески, флаги). */
+  /** Outside the building (signs, flags). */
   exterior: boolean;
   shop: boolean;
   bar: boolean;
   recruitment: boolean;
   flophouse: boolean;
-  /** Сколько объектов (без удалённых). */
+  /** Number of objects (excluding removed). */
   objects: number;
 }
 
 export type InteriorKind = 'furniture' | 'items' | 'other';
 
 export interface InteriorObject {
-  /** Ключ экземпляра в раскладке. */
+  /** Instance key in the layout. */
   key: string;
   target: string;
   kind: InteriorKind;
-  /** От начала координат модели здания. */
+  /** Relative to the building model's origin. */
   position: Vec3;
   rotation: Vec4;
-  /** Этаж (`floornum` состояния), если есть. */
+  /** Floor (`floornum` of the state), if any. */
   floor?: number;
-  /** Id записи состояния. */
+  /** State record id. */
   state?: string;
-  /** У мебели: заперт, уровень замка. */
+  /** For furniture: locked, lock level. */
   locked?: boolean;
   lockLevel?: number;
-  /** У точки предметов: что лежит (`base data sid`). */
+  /** For an item point: what lies there (`base data sid`). */
   items?: string;
 }
 
-/** Где взять тип записи по id (ModContext.get / headline). */
+/** Where to get a record's type by id (ModContext.get / headline). */
 export interface RecordTypes {
   headline(sid: string): Pick<GameRecord, 'type' | 'name'> | undefined;
 }
@@ -94,7 +94,7 @@ function requireLoaded(edits: WorldEdits): void {
   if (!edits.isLoaded(INTERIORS)) throw new UiTextError({ en: 'Interiors are not read yet', ru: 'Интерьеры ещё не прочитаны', zh: '内部布局尚未读取' });
 }
 
-/** Раскладки здания (или все, без `building`): сначала внутренние, по имени. */
+/** Layouts of a building (or all, without `building`): interior ones first, by name. */
 export function interiorLayouts(edits: WorldEdits, building?: string): InteriorLayout[] {
   requireLoaded(edits);
   const out: InteriorLayout[] = [];
@@ -107,7 +107,7 @@ export function interiorLayouts(edits: WorldEdits, building?: string): InteriorL
   return out.sort((a, b) => Number(a.exterior) - Number(b.exterior) || a.name.localeCompare(b.name));
 }
 
-/** Одна раскладка; undefined — нет. */
+/** One layout; undefined — none. */
 export function interiorLayout(edits: WorldEdits, sid: string): InteriorLayout | undefined {
   requireLoaded(edits);
   const rec = edits.record(INTERIORS, sid);
@@ -136,7 +136,7 @@ function objectOf(edits: WorldEdits, types: RecordTypes, key: string, inst: Inst
   return o;
 }
 
-/** Объекты раскладки (без удалённых). */
+/** Layout objects (excluding removed). */
 export function layoutObjects(edits: WorldEdits, types: RecordTypes, layout: string): InteriorObject[] {
   requireLoaded(edits);
   const rec = edits.record(INTERIORS, layout);
@@ -146,14 +146,14 @@ export function layoutObjects(edits: WorldEdits, types: RecordTypes, layout: str
   return out;
 }
 
-/** Один объект раскладки; undefined — нет или удалён. */
+/** One layout object; undefined — absent or removed. */
 export function layoutObject(edits: WorldEdits, types: RecordTypes, layout: string, key: string): InteriorObject | undefined {
   requireLoaded(edits);
   const inst = edits.instance(INTERIORS, layout, key);
   return inst ? objectOf(edits, types, key, inst) : undefined;
 }
 
-/** Этаж по высоте: как у ближайшего по высоте объекта с этажом (по умолчанию 0). */
+/** Floor by height: same as the object with a floor nearest in height (default 0). */
 export function floorAt(objects: readonly InteriorObject[], y: number, except?: string): number {
   let best: InteriorObject | undefined;
   for (const o of objects) {
@@ -163,7 +163,7 @@ export function floorAt(objects: readonly InteriorObject[], y: number, except?: 
   return best?.floor ?? 0;
 }
 
-/** Образец состояния: такой же объект в любой раскладке (сначала в этой). */
+/** State template: the same object in any layout (this one first). */
 function templateOf(edits: WorldEdits, layout: string, target: string, type: string): { inst: Instance; state: GameRecord } | undefined {
   const order = [layout, ...edits.holders(INTERIORS).filter((h) => h !== layout)];
   for (const h of order) {
@@ -178,7 +178,7 @@ function templateOf(edits: WorldEdits, layout: string, target: string, type: str
   return undefined;
 }
 
-/** Фракция-владелец мебели раскладки (у соседей). */
+/** Owner faction of the layout's furniture (taken from neighbours). */
 function ownerOf(edits: WorldEdits, layout: string): string | undefined {
   const rec = edits.record(INTERIORS, layout);
   for (const inst of rec?.instances.values() ?? []) {
@@ -200,14 +200,14 @@ export interface InteriorPlaceResult {
   key: string;
   state: string;
   floor: number;
-  /** Состояние скопировано с такого же объекта (undefined — собрано заново). */
+  /** The state was copied from the same object (undefined — built from scratch). */
   template?: string;
 }
 
 /**
- * Поставить мебель или точку предметов в раскладку. Состояние — копия состояния такого же
- * объекта (замок, точки использования), этаж — как у ближайшего по высоте соседа, фракция —
- * как у мебели раскладки.
+ * Place furniture or an item point in a layout. The state is a copy of the state of the same
+ * object (lock, use points), the floor matches the neighbour nearest in height, the faction
+ * matches the layout's furniture.
  */
 export function placeInterior(
   edits: WorldEdits,
@@ -266,7 +266,7 @@ export function placeInterior(
   return out;
 }
 
-/** Сдвинуть / повернуть объект раскладки; сменил высоту — этаж и высота в состоянии следом. */
+/** Move / rotate a layout object; if the height changed, the floor and height in the state follow. */
 export function moveInterior(edits: WorldEdits, types: RecordTypes, layout: string, key: string, position: Vec3, rotation: Vec4, label = 'Move object in an interior'): void {
   requireLoaded(edits);
   const cur = layoutObject(edits, types, layout, key);
@@ -285,22 +285,22 @@ export function moveInterior(edits: WorldEdits, types: RecordTypes, layout: stri
   });
 }
 
-/** Убрать объект из раскладки. */
+/** Remove an object from a layout. */
 export function removeInterior(edits: WorldEdits, layout: string, key: string, label = 'Remove object from an interior'): void {
   requireLoaded(edits);
   edits.remove(INTERIORS, layout, key, label);
 }
 
 export interface LayoutUsage {
-  /** Здания в мире с этой раскладкой по имени (`interior layout name`). */
+  /** Buildings in the world with this layout by name (`interior layout name`). */
   named: BuildingPlacement[];
-  /** Здания того же типа без имени раскладки: какую взять, игра решает сама. */
+  /** Buildings of the same type without a layout name: the game decides which one to use. */
   unnamed: BuildingPlacement[];
-  /** Всего зданий этого типа в мире. */
+  /** Total buildings of this type in the world. */
   total: number;
 }
 
-/** Где в мире стоят здания с этой раскладкой. */
+/** Where in the world the buildings with this layout stand. */
 export function layoutUsage(world: WorldIndex, layout: InteriorLayout): LayoutUsage {
   const out: LayoutUsage = { named: [], unnamed: [], total: 0 };
   const name = layout.name.toLowerCase();
@@ -314,7 +314,7 @@ export function layoutUsage(world: WorldIndex, layout: InteriorLayout): LayoutUs
   return out;
 }
 
-/** Раскладка здания в мире по имени из его состояния (undefined — игра выбирает сама или нет такой). */
+/** A world building's layout by the name from its state (undefined — the game chooses, or no such layout). */
 export function layoutOfBuilding(edits: WorldEdits, b: Pick<BuildingPlacement, 'target' | 'interior' | 'exterior'>, exterior = false): InteriorLayout | undefined {
   requireLoaded(edits);
   const name = (exterior ? b.exterior : b.interior)?.toLowerCase();

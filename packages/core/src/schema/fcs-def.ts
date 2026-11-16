@@ -1,20 +1,20 @@
 /**
- * Парсер `fcs.def` — описания полей записей, которым пользуется FCS.
+ * Parser of `fcs.def` — the record field descriptions FCS uses.
  *
- * Строение файла:
+ * File structure:
  * ```
- * [TYPE]  или  [TYPE1,TYPE2, TYPE3]      — секция для одного или нескольких типов записей
- * category:                               — заголовок группы полей (без значения)
- * имя поля:  <значение> [модификаторы] "описание"
- * condition "поле" if "другое" is Enum.A or Enum.B   — когда поле показывать
- * OWNED: lines                            — категория ссылок, записи в которой «принадлежат» этой
- * TRANSLATE: ALL | NAME | FIELDS [if ...] — что из записи переводится
- * // комментарий
+ * [TYPE]  or  [TYPE1,TYPE2, TYPE3]       — section for one or several record types
+ * category:                               — field group header (no value)
+ * field name:  <value> [modifiers] "description"
+ * condition "field" if "other" is Enum.A or Enum.B   — when to show the field
+ * OWNED: lines                            — reference category whose entries are "owned" by this record
+ * TRANSLATE: ALL | NAME | FIELDS [if ...] — what in the record is translated
+ * // comment
  * ```
- * Значения: `True`/`False`, целое, дробное (`1.0`), `"строка"`, `"Ogre mesh|*.mesh"` (файл
- * с фильтром), `TEXTURE_DDS`/`TEXTURE_ANY` (файл-текстура), `#RRGGBB` (цвет), `Enum.VALUE`,
- * `TYPE` или `TYPE (v0, v1, v2)` (ссылка с значениями по умолчанию), `TYPE (x,y,z) (w,x,y,z)`
- * (экземпляры), `null`. Модификаторы: `looped` (поле повторяется: text0, text1, …),
+ * Values: `True`/`False`, integer, fractional (`1.0`), `"string"`, `"Ogre mesh|*.mesh"` (file
+ * with a filter), `TEXTURE_DDS`/`TEXTURE_ANY` (texture file), `#RRGGBB` (color), `Enum.VALUE`,
+ * `TYPE` or `TYPE (v0, v1, v2)` (reference with default values), `TYPE (x,y,z) (w,x,y,z)`
+ * (instances), `null`. Modifiers: `looped` (the field repeats: text0, text1, …),
  * `multiline`, `bitset`.
  */
 
@@ -29,57 +29,57 @@ export type FieldKind =
   | 'reference'
   | 'instance'
   | 'null'
-  // Векторов в fcs.def нет; эти виды появляются только у полей, выведенных из данных.
+  // fcs.def has no vectors; these kinds appear only on fields inferred from data.
   | 'vec3'
   | 'vec4';
 
 export interface FieldDef {
   name: string;
   kind: FieldKind;
-  /** Значение по умолчанию: bool/int/float/string/color (как число), enum — имя значения. */
+  /** Default value: bool/int/float/string/color (as a number), enum — the value name. */
   default?: boolean | number | string;
-  /** Описание с раскрытыми `\n`. */
+  /** Description with `\n` expanded. */
   description?: string;
-  /** Группа (заголовок `category:` выше поля). */
+  /** Group (the `category:` header above the field). */
   category?: string;
-  /** Для enum: имя enum'а из `fcs_enums.def`. */
+  /** For enum: the enum name from `fcs_enums.def`. */
   enumName?: string;
-  /** Для reference/instance: тип записей, на которые ссылается поле. */
+  /** For reference/instance: the record type the field references. */
   targetType?: string;
-  /** Для reference: значения v0..v2 по умолчанию; длина = сколько значений используется. */
+  /** For reference: default v0..v2 values; length = how many values are used. */
   refDefaults?: number[];
-  /** Для instance: позиция и поворот по умолчанию. */
+  /** For instance: default position and rotation. */
   instanceDefaults?: { position: number[]; rotation: number[] };
-  /** Для file: фильтр диалога выбора файла (`Ogre mesh|*.mesh`) или `TEXTURE_DDS`/`TEXTURE_ANY`. */
+  /** For file: the file-picker filter (`Ogre mesh|*.mesh`) or `TEXTURE_DDS`/`TEXTURE_ANY`. */
   fileFilter?: string;
   looped?: boolean;
   multiline?: boolean;
   bitset?: boolean;
-  /** Поле не описано в fcs.def, а выведено из данных (`withInferredFields`). */
+  /** The field is not described in fcs.def but inferred from data (`withInferredFields`). */
   inferred?: boolean;
-  /** Поле не описано в fcs.def, но известно из FCS (`builtin-enums.ts`). */
+  /** The field is not described in fcs.def but known from FCS (`builtin-enums.ts`). */
   builtin?: boolean;
   /** Schema extension (mod folder name) that added the field; absent for the game's own fields. */
   extension?: string;
-  /** Номер строки в fcs.def (с 1); 0 у выведенных полей. */
+  /** Line number in fcs.def (1-based); 0 for inferred fields. */
   line: number;
 }
 
 export interface FieldCondition {
-  /** Поле, видимость которого зависит от условия. */
+  /** A field whose visibility depends on a condition. */
   field: string;
-  /** Поле, от значения которого зависит. */
+  /** The field whose value it depends on. */
   dependsOn: string;
   negate: boolean;
-  /** Допустимые значения (через `or`), как в файле: `MapFeatureMode.FOLIAGE`, `False`. */
+  /** Allowed values (joined by `or`), as in the file: `MapFeatureMode.FOLIAGE`, `False`. */
   values: string[];
   line: number;
 }
 
 export interface TranslateRule {
-  /** ALL — имя и строковые поля, NAME — только имя, FIELDS — только поля. */
+  /** ALL — name and string fields, NAME — name only, FIELDS — fields only. */
   mode: string;
-  /** Условие как в файле (`named is false`), если есть. */
+  /** Condition as in the file (`named is false`), if any. */
   condition?: string;
   line: number;
 }
@@ -91,7 +91,7 @@ export interface FcsSection {
   conditions: FieldCondition[];
   owned: { category: string; line: number }[];
   translate: TranslateRule[];
-  /** Заголовки групп в порядке появления. */
+  /** Group headers in order of appearance. */
   categories: string[];
 }
 
@@ -125,12 +125,12 @@ function parseNumberList(s: string): number[] {
     .map(Number);
 }
 
-/** Разбор значения поля (всё после двоеточия). Возвращает undefined, если значение не распознано. */
+/** Parse a field value (everything after the colon). Returns undefined if the value is not recognized. */
 function parseFieldValue(raw: string, name: string, line: number): FieldDef | string {
   let rest = raw.trim();
   const def: FieldDef = { name, kind: 'null', line };
 
-  // 1. Основное значение.
+  // 1. Main value.
   let token: string;
   let quoted: string | undefined;
   if (rest.startsWith('"')) {
@@ -145,7 +145,7 @@ function parseFieldValue(raw: string, name: string, line: number): FieldDef | st
     rest = rest.slice(token.length);
   }
 
-  // 2. Группы в скобках: (0, 24,0) и (1,0,0,0).
+  // 2. Parenthesized groups: (0, 24,0) and (1,0,0,0).
   const groups: number[][] = [];
   for (;;) {
     const m = /^\s*\(([^)]*)\)/.exec(rest);
@@ -154,7 +154,7 @@ function parseFieldValue(raw: string, name: string, line: number): FieldDef | st
     rest = rest.slice(m[0].length);
   }
 
-  // 3. Модификаторы до описания.
+  // 3. Modifiers before the description.
   for (;;) {
     const m = /^\s*([a-z]+)\b/.exec(rest);
     if (!m || !MODIFIERS.has(m[1]!)) break;
@@ -162,7 +162,7 @@ function parseFieldValue(raw: string, name: string, line: number): FieldDef | st
     rest = rest.slice(m[0].length);
   }
 
-  // 4. Описание: от первой до последней кавычки (внутри бывают неэкранированные кавычки).
+  // 4. Description: from the first to the last quote (unescaped quotes occur inside).
   rest = rest.trim();
   if (rest.length > 0) {
     const first = rest.indexOf('"');
@@ -171,7 +171,7 @@ function parseFieldValue(raw: string, name: string, line: number): FieldDef | st
     def.description = unescapeDescription(rest.slice(first + 1, last));
   }
 
-  // 5. Вид поля.
+  // 5. Field kind.
   if (quoted !== undefined) {
     if (quoted.includes('|') && quoted.includes('*')) {
       def.kind = 'file';

@@ -1,8 +1,8 @@
 /**
- * Проверки диалога для показа прямо на графе: битые ссылки, диалог без реплик, реплика, которую
- * игра не выберет, запертый диалог, который ничто не отпирает, реплика без текста и продолжения,
- * ответ игрока, после которого разговор кончается, мод перебивает ванильный диалог с действием,
- * реплики мода, ни к чему не привязанные.
+ * Dialogue checks shown right on the graph: broken references, dialogue without lines, a line the
+ * game never picks, a locked dialogue that nothing unlocks, a line without text and continuation,
+ * a player answer after which the conversation ends, a mod overriding a vanilla dialogue with an effect,
+ * mod lines attached to nothing.
  */
 import { itemTypeName } from '../format/item-types.ts';
 import type { UiText } from '../ui-text.ts';
@@ -29,9 +29,9 @@ export type DialogCheckSeverity = 'error' | 'warning' | 'info';
 export interface DialogCheck {
   kind: DialogCheckKind;
   severity: DialogCheckSeverity;
-  /** Узел графа (или запись мода вне графа для `orphan`). */
+  /** Graph node (or a mod record outside the graph for `orphan`). */
   node: string;
-  /** Связанная запись: кто перебивает, кто затеняет. */
+  /** Related record: who overrides, who shadows. */
   other?: string;
   /** English text. */
   text: string;
@@ -51,10 +51,10 @@ const SEVERITY: Record<DialogCheckKind, DialogCheckSeverity> = {
   orphan: 'warning',
 };
 
-/** Категории ссылок, которые отпирают диалог. */
+/** Reference categories that unlock a dialogue. */
 const UNLOCK_CATEGORIES: ReadonlySet<string> = new Set(['unlocks', 'unlock but keep me']);
 
-/** Реплики мода (новые), на которые не ведёт ни диалог, ни другая реплика. */
+/** Mod lines (new) that no dialogue and no other line leads to. */
 export function orphanLines(ctx: ModContext): string[] {
   const out: string[] = [];
   for (const d of ctx.modRecords()) {

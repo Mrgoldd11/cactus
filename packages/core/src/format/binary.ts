@@ -1,4 +1,4 @@
-/** Низкоуровневое чтение/запись little-endian. */
+/** Low-level little-endian reading/writing. */
 
 export class FormatError extends Error {
   readonly offset: number;
@@ -14,9 +14,9 @@ export class ByteReader {
   readonly bytes: Uint8Array;
   readonly view: DataView;
   pos = 0;
-  /** Биты последнего прочитанного float, если это NaN. */
+  /** Bits of the last read float, if it was NaN. */
   lastNaNBits: number | undefined;
-  /** Исходные биты последнего прочитанного float, если это был NaN. */
+  /** Original bits of the last read float, if it was NaN. */
   constructor(bytes: Uint8Array) {
     this.bytes = bytes;
     this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -50,7 +50,7 @@ export class ByteReader {
     return v;
   }
 
-  /** float32; для NaN дополнительно возвращает исходные биты через `lastNaNBits`. */
+  /** float32; for NaN it also returns the original bits via `lastNaNBits`. */
   f32(): number {
     this.need(4, 'float');
     const v = this.view.getFloat32(this.pos, true);
@@ -64,7 +64,7 @@ export class ByteReader {
     return this.bytes[this.pos++]!;
   }
 
-  /** Строка: int32 длина + байты. Возвращается копия байтов. */
+  /** String: int32 length + bytes. A copy of the bytes is returned. */
   str(): Uint8Array {
     const start = this.pos;
     const n = this.i32();
@@ -75,7 +75,7 @@ export class ByteReader {
     return v;
   }
 
-  /** Счётчик элементов: int32 >= 0 и не больше, чем могло бы поместиться в остаток файла. */
+  /** Element count: int32 >= 0 and no more than could fit into the rest of the file. */
   count(minItemSize: number, what: string): number {
     const start = this.pos;
     const n = this.i32();
@@ -127,7 +127,7 @@ export class ByteWriter {
     this.pos += 4;
   }
 
-  /** float32; NaN пишется с сохранёнными битами, если они известны. */
+  /** float32; NaN is written with the saved bits, if known. */
   f32(v: number, nanBits?: number): void {
     this.ensure(4);
     if (Number.isNaN(v)) this.view.setUint32(this.pos, nanBits ?? CANONICAL_NAN, true);
@@ -151,7 +151,7 @@ export class ByteWriter {
     this.bytes(v);
   }
 
-  /** Перезаписать int32 по уже записанному смещению (для полей длины). */
+  /** Overwrite an int32 at an already written offset (for length fields). */
   patchI32(offset: number, v: number): void {
     this.view.setInt32(offset, v, true);
   }

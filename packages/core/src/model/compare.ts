@@ -1,7 +1,7 @@
 /**
- * Таблицы сравнения (этап 5): записи одного типа (оружие, арбалеты, броня, предметы, сумки…)
- * в столбцах из схемы. Для каждой ячейки — значение, кто его поменял (сам мод или другие моды
- * поверх ванили), для числовых столбцов — наибольшее и наименьшее значение (выбросы).
+ * Comparison tables (stage 5): records of one type (weapons, crossbows, armour, items, bags…)
+ * in columns from the schema. For each cell: the value, who changed it (the mod itself or other mods
+ * over vanilla), for numeric columns the highest and lowest value (outliers).
  */
 import { decodeText } from '../text.ts';
 import type { GameRecord } from '../format/types.ts';
@@ -13,12 +13,12 @@ import { enumValue, fieldEnum } from './enums.ts';
 import { formatFloat } from './present.ts';
 import { applyLayer, isRemovalMarker, scalarEqual, scalarMap, type ScalarDict, type ScalarValue } from './record-ops.ts';
 
-/** Типы для сравнения по умолчанию (как в меню FCS: оружие, арбалеты, броня, предметы, сумки). */
+/** Default types for comparison (as in the FCS menu: weapons, crossbows, armour, items, bags). */
 export const COMPARE_TYPES = ['WEAPON', 'CROSSBOW', 'ARMOUR', 'ITEM', 'CONTAINER'] as const;
 
-/** Столбцов по умолчанию для типов без готового набора: числовые поля, которые различаются. */
+/** Default columns for types without a preset: numeric fields that differ. */
 const DEFAULT_COLUMNS = 8;
-/** Готовые наборы столбцов: то, что обычно сравнивают (цена, вес, урон, защита). */
+/** Column presets: what is usually compared (price, weight, damage, protection). */
 const PRESET_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   WEAPON: ['value', 'weight kg', 'cut damage multiplier', 'blunt damage multiplier', 'armour penetration', 'attack mod', 'defence mod', 'bleed mult', 'length', 'material cost'],
   CROSSBOW: ['value', 'weight kg', 'pierce damage', 'range', 'shot speed', 'reload time min', 'reload time max', 'accuracy perfect skill', 'bleed mult'],
@@ -26,7 +26,7 @@ const PRESET_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   ITEM: ['value', 'weight kg', 'stackable', 'charges', 'production time', 'quality'],
   CONTAINER: ['value', 'weight kg', 'storage size width', 'storage size height', 'encumbrance effect', 'stackable bonus mult', 'stealth mult'],
 };
-/** Внешний вид и место в инвентаре — в столбцы по умолчанию не берём. */
+/** Appearance and inventory placement are not taken into default columns. */
 const COSMETIC = /icon|offset|scale|footprint|sound|zoom|equip/i;
 const COMPARABLE: readonly ScalarDict[] = ['bools', 'ints', 'floats', 'strings'];
 
@@ -38,19 +38,19 @@ export interface CompareColumn {
   kind: CompareKind;
   category?: string;
   description?: string;
-  /** Значения у записей таблицы различаются. */
+  /** The values differ between the table's records. */
   varies: boolean;
 }
 
-/** Кто поменял значение: сам мод (`mine`) или другие загруженные моды поверх ванили (`mods`). */
+/** Who changed the value: the mod itself (`mine`) or other loaded mods over vanilla (`mods`). */
 export type CompareMark = 'mine' | 'mods';
 
 export interface CompareCell {
   value?: ScalarValue;
-  /** Значение для показа (enum — имя). */
+  /** Display value (enum by name). */
   text: string;
   mark?: CompareMark;
-  /** Моды (кроме самого), которые задают это поле не как в ванили. */
+  /** Mods (other than this one) that set this field differently from vanilla. */
   layers?: string[];
 }
 
@@ -59,7 +59,7 @@ export interface CompareRow {
   name: string;
   localized?: string;
   status: RecordStatus | undefined;
-  /** Запись добавлена модом (не из ванили): первый слой, где она есть, или сам мод. */
+  /** The record is added by a mod (not from vanilla): the first layer where it exists, or the mod itself. */
   addedBy?: string;
   cells: Map<string, CompareCell>;
 }
@@ -68,9 +68,9 @@ export interface CompareTable {
   type: string;
   columns: CompareColumn[];
   rows: CompareRow[];
-  /** Столбцы по умолчанию. */
+  /** Default columns. */
   defaultColumns: string[];
-  /** Наименьшее и наибольшее значение числового столбца (если различаются). */
+  /** Lowest and highest value of a numeric column (if they differ). */
   range(key: string): { min: number; max: number } | undefined;
 }
 
@@ -81,7 +81,7 @@ function kindOf(dict: ScalarDict, isEnum: boolean): CompareKind {
   return 'text';
 }
 
-/** Значение для показа в ячейке: число, «да/нет» как true/false, текст как есть, enum — имя. */
+/** Value shown in a cell: number, "yes/no" as true/false, text as is, enum by name. */
 export function compareText(ctx: ModContext, typeName: string, rec: GameRecord, dict: ScalarDict, key: string, v: ScalarValue | undefined): string {
   if (v === undefined) return '';
   if (dict === 'ints') {
@@ -96,8 +96,8 @@ export function compareText(ctx: ModContext, typeName: string, rec: GameRecord, 
 }
 
 /**
- * Таблица сравнения записей типа `typeName`. `ids` — готовый список id этого типа (индекс
- * редактора), иначе перебираются все записи. Удалённые модом записи не входят.
+ * Comparison table of records of type `typeName`. `ids`: prebuilt id list of this type (editor
+ * index); otherwise all records are scanned. Records deleted by the mod are not included.
  */
 export function compareTable(ctx: ModContext, typeName: string, options: { ids?: Iterable<string> } = {}): CompareTable {
   const type = ctx.typeId(typeName);
@@ -108,7 +108,7 @@ export function compareTable(ctx: ModContext, typeName: string, options: { ids?:
   }
   const want = new Set(recs.map((r) => r.stringId));
 
-  // Ваниль по слоям (для отметки «поменяли моды») и что задаёт каждый небазовый слой.
+  // Vanilla by layers (for the "changed by mods" mark) and what each non-base layer sets.
   const vanilla = new Map<string, GameRecord | undefined>();
   const firstLayer = new Map<string, string>();
   const modEntries = new Map<string, { layer: string; rec: GameRecord }[]>();
@@ -126,7 +126,7 @@ export function compareTable(ctx: ModContext, typeName: string, options: { ids?:
     }
   }
 
-  // Столбцы: поля схемы (по порядку fcs.def), затем поля из данных, которых нет в схеме.
+  // Columns: schema fields (in fcs.def order), then fields from the data that are not in the schema.
   const columns = new Map<string, CompareColumn>();
   const ts = ctx.schema?.types.get(typeName);
   for (const f of ts?.fields.values() ?? []) {
@@ -182,7 +182,7 @@ export function compareTable(ctx: ModContext, typeName: string, options: { ids?:
     return row;
   });
 
-  // Различаются ли значения; диапазон числовых.
+  // Whether the values differ; range of numeric ones.
   const ranges = new Map<string, { min: number; max: number }>();
   for (const col of columns.values()) {
     const seen = new Set<string>();

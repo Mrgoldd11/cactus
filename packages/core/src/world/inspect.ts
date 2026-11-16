@@ -1,23 +1,23 @@
 /**
- * «Что внутри» записи — для карточки по клику на объект сцены или часть модели и для ИИ (MCP).
- * Скриптов у объектов Kenshi нет: «внутри» — это сама запись, откуда она (ваниль, какой мод
- * её меняет) и её связи: на что она ссылается (части, мебель, товары, отряды, диалоги…) и кто
- * ссылается на неё. Только то, что есть в данных; ничего не додумываем.
+ * "What's inside" a record — for the card shown on clicking a scene object or model part, and for AI (MCP).
+ * Kenshi objects have no scripts: "inside" is the record itself, where it comes from (vanilla, which mod
+ * changes it) and its links: what it references (parts, furniture, goods, squads, dialogues…) and who
+ * references it. Only what is in the data; nothing is made up.
  */
 import type { ModContext, RecordStatus } from '../model/context.ts';
 
 export interface InsideLink {
   sid: string;
-  /** Имя записи; нет — записи нет в данных (ссылка в пустоту). */
+  /** Record name; none — the record is not in the data (a reference to nowhere). */
   name?: string;
   localizedName?: string;
   type?: string;
-  /** Числа ссылки (v0, v1, v2) или координаты размещённого объекта. */
+  /** Reference numbers (v0, v1, v2) or coordinates of a placed object. */
   values?: number[];
 }
 
 export interface InsideGroup {
-  /** Категория ссылки (`parts`, `interior`, `vendors`…) или `instances` — размещённые объекты. */
+  /** Reference category (`parts`, `interior`, `vendors`…) or `instances` — placed objects. */
   category: string;
   links: InsideLink[];
 }
@@ -29,15 +29,15 @@ export interface RecordInside {
   localizedName?: string;
   type?: string;
   status?: RecordStatus;
-  /** Слой, где запись появилась (gamedata.base, мод…). */
+  /** Layer where the record first appeared (gamedata.base, a mod…). */
   origin?: string;
-  /** Все слои, задающие запись; больше одного — её меняют моды. */
+  /** All layers that define the record; more than one — mods change it. */
   layers: string[];
-  /** На что ссылается запись, по категориям в порядке записи. */
+  /** What the record references, by category in record order. */
   links: InsideGroup[];
-  /** Кто ссылается на запись, по категориям ссылки. */
+  /** Who references the record, by reference category. */
   usedBy: InsideGroup[];
-  /** Сколько обратных ссылок всего (в `usedBy` — не больше `limit` на категорию). */
+  /** Total number of back references (`usedBy` holds at most `limit` per category). */
   usedByTotal: number;
 }
 
@@ -54,7 +54,7 @@ function link(ctx: ModContext, sid: string, values?: number[]): InsideLink {
   return out;
 }
 
-/** Карточка записи. `limit` — сколько обратных ссылок показывать на категорию (по умолчанию 20). */
+/** Record card. `limit` — how many back references to show per category (default 20). */
 export function inspectRecord(ctx: ModContext, sid: string, options: { limit?: number } = {}): RecordInside {
   const limit = options.limit ?? 20;
   const rec = ctx.get(sid);
@@ -102,7 +102,7 @@ function linkText(l: InsideLink, w: (typeof INSIDE_WORDS)[string]): string {
   return `${l.type ?? ''} «${l.name}»${l.localizedName ? ` (${l.localizedName})` : ''} [${l.sid}]`;
 }
 
-/** Карточка текстом (для ИИ): шапка, «внутри» по категориям, «кто ссылается». */
+/** Card as text (for AI): header, "inside" by category, "referenced by". */
 export function formatInside(card: RecordInside, lang = 'en'): string {
   const w = INSIDE_WORDS[lang] ?? INSIDE_WORDS.en!;
   if (!card.exists) return `${card.sid}: ${w.notInData}`;

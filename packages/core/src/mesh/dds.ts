@@ -1,19 +1,19 @@
 /**
- * Текстуры DDS игры в RGBA. В Kenshi почти все текстуры сжаты DXT1 / DXT3 / DXT5 (BC1–BC3);
- * несжатые 32-битные тоже читаем. Распаковка на процессоре: так картинка одинаково выходит
- * и в окне (WebGL без расширений сжатия), и в тестах, и при рендере иконок.
+ * Game DDS textures to RGBA. In Kenshi almost all textures are DXT1 / DXT3 / DXT5 (BC1–BC3) compressed;
+ * uncompressed 32-bit ones are read too. Decompression runs on the CPU, so the picture comes out the same
+ * in the window (WebGL without compression extensions), in tests and when rendering icons.
  *
- * Можно взять уменьшенный уровень (mip), если он есть: `maxSize` — наибольшая сторона.
+ * A smaller level (mip) can be taken if present: `maxSize` is the largest side.
  */
 
 export interface DdsImage {
   width: number;
   height: number;
-  /** r, g, b, a по 8 бит, строки сверху вниз. */
+  /** r, g, b, a 8 bits each, rows top to bottom. */
   rgba: Uint8Array;
-  /** Формат в файле: `DXT1`, `DXT5`, `RGBA32`… */
+  /** Format in the file: `DXT1`, `DXT5`, `RGBA32`… */
   format: string;
-  /** Номер взятого уровня mip (0 — полный размер). */
+  /** Number of the mip level taken (0 = full size). */
   level: number;
 }
 
@@ -33,7 +33,7 @@ interface Header {
   height: number;
   mipCount: number;
   format: string;
-  /** Байт на блок 4×4 (сжатые) или на пиксель (несжатые). */
+  /** Bytes per 4×4 block (compressed) or per pixel (uncompressed). */
   blockBytes: number;
   compressed: boolean;
   masks?: { r: number; g: number; b: number; a: number; bits: number };
@@ -83,13 +83,13 @@ function levelSize(h: Header, w: number, hh: number): number {
   return h.compressed ? Math.max(1, Math.ceil(w / 4)) * Math.max(1, Math.ceil(hh / 4)) * h.blockBytes : w * hh * h.blockBytes;
 }
 
-/** Размеры и формат без распаковки. */
+/** Dimensions and format without decompression. */
 export function ddsInfo(bytes: Uint8Array): { width: number; height: number; format: string; mipCount: number } {
   const h = readHeader(bytes);
   return { width: h.width, height: h.height, format: h.format, mipCount: h.mipCount };
 }
 
-/** Распаковать DDS в RGBA. `maxSize` — взять первый уровень mip, у которого обе стороны ≤ него. */
+/** Decompress DDS to RGBA. `maxSize`: take the first mip level whose both sides are ≤ it. */
 export function decodeDds(bytes: Uint8Array, options: { maxSize?: number } = {}): DdsImage {
   const h = readHeader(bytes);
   let w = h.width;
@@ -116,7 +116,7 @@ function decodeRaw(data: Uint8Array, w: number, hh: number, h: Header): Uint8Arr
   const step = m.bits / 8;
   const chan = (px: number, mask: number): number => {
     if (mask === 0) return 255;
-    const shift = 31 - Math.clz32(mask & -mask); // номер младшего бита маски
+    const shift = 31 - Math.clz32(mask & -mask); // index of the mask's lowest set bit
     const width = 32 - Math.clz32(mask >>> shift);
     const val = (px & mask) >>> shift;
     return width >= 8 ? val >>> (width - 8) : Math.round((val * 255) / ((1 << width) - 1));
@@ -158,7 +158,7 @@ function decodeBlocks(data: Uint8Array, w: number, hh: number, format: string): 
           pal[6] = 0;
           pal[7] = 255;
         }
-        // 48 бит индексов, по 3 на пиксель
+        // 48 bits of indices, 3 per pixel
         let bits = 0;
         let have = 0;
         let p = b + 2;

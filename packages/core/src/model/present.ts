@@ -1,6 +1,6 @@
 /**
- * Компактное текстовое представление записей, ссылок и разниц — для CLI и MCP.
- * Ссылки всегда показываются с именем цели: `Имя [sid]`.
+ * Compact text view of records, references and diffs — for CLI and MCP.
+ * References always show the target name: `Name [sid]`.
  */
 import { decodeText } from '../text.ts';
 import type { GameRecord, Instance, Reference } from '../format/types.ts';
@@ -89,7 +89,7 @@ const ZH: PresentWords = {
 const PRESENT_WORDS: Record<string, PresentWords> = { en: EN, ru: RU, zh: ZH };
 const words = (lang: string): PresentWords => PRESENT_WORDS[lang] ?? EN;
 
-/** Кратчайшая запись float32, которая читается обратно в то же число. */
+/** Shortest float32 notation that reads back as the same number. */
 export function formatFloat(v: number): string {
   if (!Number.isFinite(v)) return String(v);
   for (let p = 1; p <= 9; p++) {
@@ -130,7 +130,7 @@ export function dictLabel(dict: ScalarDict): string {
   return DICT_LABEL[dict];
 }
 
-/** `Имя [sid]`; для отсутствующей цели — `<нет> [sid]`, для удалённой — `<удалена> Имя [sid]`. */
+/** `Name [sid]`; for a missing target — `<missing> [sid]`, for a deleted one — `<deleted> Name [sid]` (English words). */
 export function refLabel(ctx: ModContext, target: string, lang = 'en'): string {
   const w = words(lang);
   const rec = ctx.get(target);
@@ -149,7 +149,7 @@ function formatInstance(ctx: ModContext, i: Instance, lang = 'en'): string {
   return `${refLabel(ctx, i.target, lang)} pos (${i.position.map(formatFloat).join(', ')}) rot (${i.rotation.map(formatFloat).join(', ')})${i.states.length ? ` states ${i.states.length}` : ''}`;
 }
 
-/** Заголовок записи: `ТИП sid «имя» (рус.) — статус`. */
+/** Record header: `TYPE sid "name" (Russian) — status`. */
 export function recordHeadline(ctx: ModContext, rec: GameRecord): string {
   const ru = ctx.localizedName(rec.stringId);
   const status = ctx.status(rec.stringId);
@@ -157,17 +157,17 @@ export function recordHeadline(ctx: ModContext, rec: GameRecord): string {
 }
 
 export interface FormatRecordOptions {
-  /** Категории ссылок, которые не показывать. */
+  /** Reference categories not to show. */
   hideCategories?: readonly string[];
-  /** Сколько ссылок показывать в одной категории (остальные — «… ещё N»). */
+  /** How many references to show per category (the rest — "… N more"). */
   maxRefsPerCategory?: number;
-  /** Показывать слои, в которых задана запись. */
+  /** Show the layers that define the record. */
   showLayers?: boolean;
   /** Interface language of the words (English by default). */
   lang?: string;
 }
 
-/** Запись построчно: поля по словарям, затем ссылки с именами целей и объекты. */
+/** Record line by line: fields by dictionary, then references with target names, then instances. */
 export function formatRecord(ctx: ModContext, rec: GameRecord, options: FormatRecordOptions = {}): string[] {
   const lang = options.lang ?? 'en';
   const w = words(lang);
@@ -200,7 +200,7 @@ export function formatRecord(ctx: ModContext, rec: GameRecord, options: FormatRe
 }
 
 /**
- * Значение поля для показа: у enum — имя (`DR_ONCE_ONLY «один раз» (5)`), иначе как
+ * Field value for display: for an enum — its name (`DR_ONCE_ONLY «один раз» (5)`), otherwise as
  * `formatScalar`.
  */
 export function formatFieldValue(ctx: ModContext, rec: GameRecord, dict: ScalarDict, key: string, v: ScalarValue, lang = 'en'): string {
@@ -211,7 +211,7 @@ export function formatFieldValue(ctx: ModContext, rec: GameRecord, dict: ScalarD
   return formatScalar(dict, v);
 }
 
-/** Одна строка изменения поля/ссылки; `rec` — запись после изменения (для имён enum). */
+/** One line of a field/reference change; `rec` is the record after the change (for enum names). */
 export function formatFieldChange(ctx: ModContext, c: FieldChange, rec?: GameRecord, lang = 'en'): string {
   const w = words(lang);
   const fmt = (dict: ScalarDict, key: string, v: ScalarValue): string => (rec ? formatFieldValue(ctx, rec, dict, key, v, lang) : formatScalar(dict, v));
@@ -251,12 +251,12 @@ export function formatRecordDiff(ctx: ModContext, d: RecordDiff, lang = 'en'): s
   return [head, ...d.fields.map((c) => `    ${formatFieldChange(ctx, c, rec, lang)}`)];
 }
 
-/** Что мод меняет в записи относительно нижних слоёв. */
+/** What the mod changes in a record relative to the lower layers. */
 export function modRecordDiff(ctx: ModContext, stringId: string): RecordDiff | undefined {
   return diffRecordStates(ctx.lower(stringId), ctx.get(stringId));
 }
 
-/** Итоговые разницы правки (по записям): состояние до и после. */
+/** Net diffs of an edit (per record): state before and after. */
 export function changesetDiff(ctx: ModContext, cs: Changeset): RecordDiff[] {
   const first = new Map<string, GameRecord | undefined>();
   const last = new Map<string, GameRecord | undefined>();
@@ -275,7 +275,7 @@ export function changesetDiff(ctx: ModContext, cs: Changeset): RecordDiff[] {
   return out;
 }
 
-/** Правка текстом: заголовок и изменения по записям. */
+/** Edit as text: header and changes per record. */
 export function formatChangeset(ctx: ModContext, cs: Changeset, lang = 'en'): string[] {
   const lines = [`#${cs.id} ${cs.label}`];
   for (const op of cs.ops) {
@@ -295,7 +295,7 @@ export interface Page<T> {
   items: T[];
   total: number;
   offset: number;
-  /** Смещение следующей страницы, если она есть. */
+  /** Offset of the next page, if there is one. */
   next?: number;
 }
 
@@ -307,7 +307,7 @@ export function page<T>(items: readonly T[], offset = 0, limit = 50): Page<T> {
   return out;
 }
 
-/** Строка «показано a–b из N; дальше: offset=…». */
+/** Line "shown a–b of N; next: offset=…". */
 export function pageFooter(p: Page<unknown>, lang = 'en'): string {
   const w = words(lang);
   if (p.total === 0) return w.nothingFound;
@@ -323,14 +323,14 @@ export interface RecordJson {
   status?: string;
   layers?: string[];
   fields: Record<string, Record<string, boolean | number | string | number[]>>;
-  /** Имена значений enum-полей: поле → имя (`repetition limit` → `DR_ONCE_ONLY`). */
+  /** Names of enum field values: field → name (`repetition limit` → `DR_ONCE_ONLY`). */
   enums?: Record<string, string>;
-  /** `note` — условие/действие диалога или имя события пакета. */
+  /** `note` — dialogue condition/effect or package event name. */
   refs: Record<string, { target: string; name: string; values: number[]; note?: string }[]>;
   instances: Record<string, { target: string; name: string; position: number[]; rotation: number[]; states: number }>;
 }
 
-/** Запись как JSON: поля по словарям, ссылки с именами целей. */
+/** Record as JSON: fields by dictionary, references with target names. */
 export function recordToJson(ctx: ModContext, rec: GameRecord, options: { maxRefsPerCategory?: number } = {}): RecordJson {
   const out: RecordJson = { stringId: rec.stringId, type: ctx.typeName(rec.type), name: decodeText(rec.name), fields: {}, refs: {}, instances: {} };
   const ru = ctx.localizedName(rec.stringId);

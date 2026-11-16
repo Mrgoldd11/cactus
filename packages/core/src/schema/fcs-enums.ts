@@ -1,13 +1,13 @@
 /**
- * Парсер `fcs_enums.def` — перечисления для выпадающих списков:
+ * Parser of `fcs_enums.def` — enums for dropdowns:
  * ```
- * enum Name { A, B=5, C }          // однострочный
- * enum shared EventTriggerEnum {   // многострочный, `// …` после значения — его описание
- *     //TASKS                      // комментарий на отдельной строке — название группы
- *     EV_PLAYER_TALK_TO_ME,        // описание
+ * enum Name { A, B=5, C }          // single-line
+ * enum shared EventTriggerEnum {   // multi-line, `// …` after a value is its description
+ *     //TASKS                      // a comment on its own line is a group name
+ *     EV_PLAYER_TALK_TO_ME,        // description
  * }
  * ```
- * Значения считаются как в C: с 0 или от последнего `=N`, дальше +1.
+ * Values are counted as in C: from 0 or from the last `=N`, then +1.
  */
 import { unescapeDescription, type ParseWarning } from './fcs-def.ts';
 
@@ -15,9 +15,9 @@ export interface EnumValue {
   name: string;
   value: number;
   description?: string;
-  /** Группа (комментарий на отдельной строке перед значением, напр. `TASKS`). */
+  /** Group (a comment on its own line before the value, e.g. `TASKS`). */
   group?: string;
-  /** Короткая подпись по-русски (`builtin-enums.ts`). */
+  /** Short Russian label (`builtin-enums.ts`). */
   label?: string;
   /** Schema extension (mod folder name) that added the value; absent for the game's own values. */
   extension?: string;
@@ -28,7 +28,7 @@ export interface EnumDef {
   shared: boolean;
   values: EnumValue[];
   line: number;
-  /** Enum встроен в FCS, его нет в fcs_enums.def (`builtin-enums.ts`). */
+  /** The enum is built into FCS and absent from fcs_enums.def (`builtin-enums.ts`). */
   builtin?: boolean;
   /** Schema extension (mod folder name) that created the enum; absent for the game's own enums. */
   extension?: string;
@@ -70,7 +70,7 @@ export function parseFcsEnums(text: string, options: ParseEnumsOptions = {}): Fc
     for (let item of chunk.split(',')) {
       item = item.trim().replace(/\s*=\s*/g, '=');
       if (item === '') continue;
-      // Опечатка в файле игры: «CARAVAN. MILITARY» — точка вместо запятой.
+      // Typo in the game file: "CARAVAN. MILITARY" — a period instead of a comma.
       const parts = item.split(/\s*\.\s+|\s+/).filter((p) => p.length > 0);
       if (parts.length > 1) {
         warnings.push({ line: lineNo, message: `значения без запятой: «${item}»`, text: raw });
@@ -122,7 +122,7 @@ export function parseFcsEnums(text: string, options: ParseEnumsOptions = {}): Fc
         group = undefined;
         line = m[3] ?? '';
       } else if (current && line.startsWith('{')) {
-        // «{» на следующей строке после «enum Name»
+        // "{" on the line after "enum Name"
       } else {
         warnings.push({ line: lineNo, message: 'строка вне enum', text: raw });
         continue;
@@ -137,7 +137,7 @@ export function parseFcsEnums(text: string, options: ParseEnumsOptions = {}): Fc
     const close = line.indexOf('}');
     const body = close >= 0 ? line.slice(0, close) : line;
     if (body.trim() === '') {
-      // Комментарий на отдельной строке — название группы.
+      // A comment on its own line is a group name.
       if (comment !== undefined && comment !== '' && close < 0) group = comment;
     } else {
       addValues(body, comment, lineNo, raw);

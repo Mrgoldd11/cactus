@@ -1,15 +1,15 @@
 /**
- * «Где в игре»: цепочка обратных ссылок от записи вверх до места в мире.
+ * "Where in game": a chain of back references from a record up to a place in the world.
  *
- * Пример: катана ← ассортимент «weapon vendor UC big city» (VENDOR_LIST.weapons) ← отряд
- * «weapon vendor UC big» (SQUAD_TEMPLATE.vendors) ← города Груз и Хэн (TOWN.residents) →
- * координаты города из `leveldata.level`, здание магазина из зоны.
+ * Example: katana ← stock "weapon vendor UC big city" (VENDOR_LIST.weapons) ← squad
+ * "weapon vendor UC big" (SQUAD_TEMPLATE.vendors) ← the towns Heft and Heng (TOWN.residents) →
+ * town coordinates from `leveldata.level`, the shop building from the zone.
  *
- * Идём только по «восходящим» связям из таблицы `UP_EDGES` (кто продаёт, кто носит, где
- * живёт отряд, какой пакет диалогов…), иначе обратные ссылки уводят в рецепты, исследования
- * и прочее, что к месту в мире отношения не имеет. Результат — дерево (каждая запись
- * раскрывается один раз, повторы помечены) и итог: роль (продаётся / носят / живёт…),
- * отряд-носитель и места.
+ * Only "upward" links from the `UP_EDGES` table are followed (who sells, who carries, where
+ * the squad lives, which dialogue package…), otherwise back references lead into recipes, research
+ * and other things unrelated to a place in the world. The result is a tree (each record
+ * is expanded once, repeats are marked) and a summary: role (sold / carried / lives…),
+ * carrier squad and places.
  */
 import { decodeText } from '../text.ts';
 import { itemTypeName } from '../format/item-types.ts';
@@ -24,7 +24,7 @@ export interface WhereEdge {
   ru: string;
   en: string;
   zh?: string;
-  /** Роль, если это первый шаг от исходной записи. */
+  /** Role, if this is the first step from the source record. */
   role?: WhereRole;
 }
 
@@ -37,7 +37,7 @@ const faction: WhereEdge = { ru: 'отряды фракции', en: 'faction squ
 const wild: WhereEdge = { ru: 'бродят в биоме', en: 'biome spawns', zh: '生物群系刷新', role: 'lives' };
 const says: WhereEdge = { ru: 'диалог', en: 'dialogue', zh: '对话', role: 'says' };
 
-/** `ТИП.категория` (у записи-источника) → смысл связи. `ТИП.*` — любая категория. */
+/** `TYPE.category` (of the source record) → meaning of the link. `TYPE.*` — any category. */
 export const UP_EDGES: Readonly<Record<string, WhereEdge>> = {
   'VENDOR_LIST.*': sold,
   'CHARACTER.weapons': gear,
@@ -99,7 +99,7 @@ export const UP_EDGES: Readonly<Record<string, WhereEdge>> = {
   'CHARACTER.dialogue package': { ru: 'пакет диалогов персонажа', en: 'character dialogue package', zh: '角色对话包', role: 'says' },
 };
 
-/** Типы, которые сами по себе «место»: дальше вверх идём только по таблице, но место фиксируем. */
+/** Types that are a "place" by themselves: further up we follow only the table, but the place is recorded. */
 const PLACE_KIND: Readonly<Record<string, WherePlace['kind']>> = {
   TOWN: 'town',
   FACTION: 'faction',
@@ -119,7 +119,7 @@ export interface WhereRecordInfo {
   id: string;
   type: string;
   name: string;
-  /** Русское имя (из gamedata.po), если есть. */
+  /** Russian name (from gamedata.po), if any. */
   localizedName?: string;
 }
 
@@ -135,14 +135,14 @@ export interface SquadInfo {
 export interface WherePosition {
   position: Vec3;
   zone?: ZoneCoord;
-  /** Город, к которому относится (для зданий). */
+  /** The town it belongs to (for buildings). */
   town?: WhereRecordInfo;
-  /** Подпись (имя здания и т. п.). */
+  /** Label (building name etc.). */
   label?: string;
 }
 
 
-/** Шаг пути: запись `id` ссылается на предыдущую запись пути категорией `category`. */
+/** Path step: record `id` references the previous path record via category `category`. */
 export interface WhereStep extends WhereRecordInfo {
   category: string;
   ru: string;
@@ -152,24 +152,24 @@ export interface WhereStep extends WhereRecordInfo {
 export interface WherePlace extends WhereRecordInfo {
   kind: 'town' | 'faction' | 'biome' | 'road' | 'start' | 'campaign' | 'building';
   positions: WherePosition[];
-  /** Путь от носителя (или исходной записи) до места. Пусто, если место — сам носитель. */
+  /** Path from the carrier (or the source record) to the place. Empty if the place is the carrier itself. */
   path: WhereStep[];
-  /** Город попал в итог только через свой вариант (`override town`): разрушенный, захваченный… */
+  /** The town got into the summary only through its variant (`override town`): destroyed, captured… */
   variant?: WhereRecordInfo;
 }
 
 export interface WhereNode extends WhereRecordInfo {
-  /** Связь: эта запись ссылается на нижний узел категорией `category`. */
+  /** Link: this record references the lower node via category `category`. */
   via?: { category: string; ru: string; en: string; zh?: string };
-  /** Путь к иконке (поле `icon`, относительно папки игры), если есть. */
+  /** Icon path (field `icon`, relative to the game folder), if any. */
   icon?: string;
   up: WhereNode[];
-  /** Запись уже раскрыта выше в дереве. */
+  /** The record is already expanded higher in the tree. */
   repeat?: boolean;
-  /** Сколько связей не показано из-за лимитов. */
+  /** How many links are not shown because of limits. */
   hidden?: number;
   squad?: SquadInfo;
-  /** Координаты: города, здания отряда, экземпляры записи в зонах. */
+  /** Coordinates: towns, squad buildings, record instances in zones. */
   towns?: TownPlacement[];
   buildings?: BuildingPlacement[];
   instances?: { count: number; sample: Placement[] };
@@ -177,9 +177,9 @@ export interface WhereNode extends WhereRecordInfo {
 
 export interface WhereFact {
   role: WhereRole;
-  /** Отряд (или персонаж), через которого запись попадает в мир. */
+  /** The squad (or character) through which the record gets into the world. */
   holder?: WhereRecordInfo & { squad?: SquadInfo };
-  /** Путь от исходной записи до носителя (или до записи-места, если носителя нет). */
+  /** Path from the source record to the carrier (or to the place record if there is no carrier). */
   path: WhereStep[];
   places: WherePlace[];
 }
@@ -187,21 +187,21 @@ export interface WhereFact {
 export interface WhereResult {
   root: WhereNode;
   facts: WhereFact[];
-  /** Был ли мир (файлы уровня) — без него координат нет. */
+  /** Whether there was a world (level files) — without it there are no coordinates. */
   hasWorld: boolean;
-  /** Дерево обрезано лимитом. */
+  /** The tree was cut by a limit. */
   truncated: boolean;
 }
 
 export interface WhereOptions {
   world?: WorldIndex;
-  /** Максимум узлов дерева (по умолчанию 400). */
+  /** Maximum tree nodes (default 400). */
   maxNodes?: number;
-  /** Максимум показанных связей у одного узла (по умолчанию 40). */
+  /** Maximum links shown per node (default 40). */
   maxChildren?: number;
-  /** Максимальная глубина (по умолчанию 10). */
+  /** Maximum depth (default 10). */
   maxDepth?: number;
-  /** Сколько экземпляров в зонах показывать на узел (по умолчанию 5). */
+  /** How many zone instances to show per node (default 5). */
   instanceSample?: number;
 }
 
@@ -250,7 +250,7 @@ export interface WhereParent {
   edge: WhereEdge;
 }
 
-/** Восходящие связи записи: кто на неё ссылается по таблице `UP_EDGES` (без повторов). */
+/** Upward links of a record: who references it per the `UP_EDGES` table (no repeats). */
 export function whereParents(ctx: ModContext, id: string): WhereParent[] {
   const seen = new Set<string>();
   const out: WhereParent[] = [];
@@ -307,15 +307,15 @@ class WhereWalker {
   }
 
   /**
-   * Вариант города (`Heng (override) …`) без своего места в мире: показываем базовый город, на
-   * который ведёт `override town`, а не вариант.
+   * A town variant (`Heng (override) …`) without its own place in the world: show the base town
+   * that `override town` points to, not the variant.
    */
   private isTownVariant(s: string): boolean {
     if (this.world && this.world.towns(s).length > 0) return false;
     return this.parents(s).some((p) => p.category === 'override town');
   }
 
-  /** Места выше записи (города, фракции, биомы…) → путь до них (связи снизу вверх). */
+  /** Places above the record (towns, factions, biomes…) → path to them (links bottom-up). */
   placesAbove(s: string, stack = new Set<string>()): Map<string, WhereParent[]> {
     const cached = this.aboveCache.get(s);
     if (cached) return cached;
@@ -325,7 +325,7 @@ class WhereWalker {
     if (kind && !this.isTownVariant(s)) out.set(s, []);
     stack.add(s);
     for (const p of this.parents(s)) {
-      // Выше места идём только от варианта города к базовому (старты игры, карты и т. п. — не «где»).
+      // Above a place we go only from a town variant to its base town (game starts, maps etc. are not "where").
       if (kind && p.category !== 'override town') continue;
       for (const [place, path] of this.placesAbove(p.source, stack)) {
         const prev = out.get(place);
@@ -337,7 +337,7 @@ class WhereWalker {
     return out;
   }
 
-  /** Обход от исходной записи до носителей (отрядов) и до мест без носителя. */
+  /** Walk from the source record to carriers (squads) and to places without a carrier. */
   facts(rootId: string): RawFact[] {
     const facts = new Map<string, RawFact>();
     const add = (role: WhereRole, holder: string | undefined, path: WhereParent[], places: Map<string, WhereParent[]>): void => {
@@ -347,7 +347,7 @@ class WhereWalker {
         f = { role, ...(holder ? { holder } : {}), path, places: new Map() };
         facts.set(k, f);
       }
-      // Без носителя у каждого места свой путь от исходной записи.
+      // Without a carrier each place has its own path from the source record.
       for (const [pl, rest] of places) if (!f.places.has(pl)) f.places.set(pl, holder ? rest : [...path, ...rest]);
     };
     const walk = (s: string, role: WhereRole | undefined, character: string | undefined, path: WhereParent[], stack: Set<string>): void => {
@@ -368,7 +368,7 @@ class WhereWalker {
       if (ps.length === 0 && s !== rootId && ch === s) add(r, s, path, new Map());
       stack.add(s);
       for (const p of ps) {
-        // Список торговца, выданный городу или фракции как добыча, — уже не «продаётся».
+        // A vendor list given to a town or faction as loot is no longer "sold".
         const next = p.edge.role === 'loot' ? 'loot' : (role ?? p.edge.role ?? 'related');
         walk(p.source, next, ch, [...path, p], stack);
       }
@@ -412,7 +412,7 @@ export function whereInGame(ctx: ModContext, id: string, options: WhereOptions =
     }
   };
 
-  // Дерево: обход в ширину, каждая запись раскрывается один раз.
+  // Tree: breadth-first walk, each record is expanded once.
   const root: WhereNode = { ...info(ctx, id, rootRec), up: [] };
   decorate(root, rootRec);
   const expanded = new Set<string>([id]);
@@ -461,12 +461,12 @@ export function whereInGame(ctx: ModContext, id: string, options: WhereOptions =
     places.sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) || displayName(a).localeCompare(displayName(b)));
     return fact;
   });
-  // Сама запись стоит в зонах (здание, мебель, группа предметов…).
+  // The record itself stands in zones (building, furniture, item group…).
   if (world) {
     const inst = world.instancesOf(id).filter((p) => p.holderType !== 'GAMESTATE_TOWN_INSTANCE_LIST');
     if (inst.length) facts.push({ role: 'placed', path: [], places: instancePlaces(ctx, world, inst) });
   }
-  // Выше — факты с местами в обычных городах; места только в вариантах (разрушен, захвачен) — ниже.
+  // Above — facts with places in ordinary towns; places only in variants (destroyed, captured) — below.
   const located = (f: WhereFact, plain: boolean): number =>
     f.places.filter((p) => p.positions.length > 0 && (!plain || (p.kind === 'town' && !p.variant))).length;
   facts.sort(
@@ -493,7 +493,7 @@ function placeOf(ctx: ModContext, id: string, world: WorldIndex | undefined, pat
   return place;
 }
 
-/** Экземпляры в зонах → места по городам (ближайший город) или «вне городов». */
+/** Zone instances → places by town (nearest town) or "outside towns". */
 function instancePlaces(ctx: ModContext, world: WorldIndex, inst: readonly Placement[]): WherePlace[] {
   const byTown = new Map<string, WherePlace>();
   for (const p of inst) {
@@ -687,7 +687,7 @@ export function whereRoleText(role: WhereRole, lang = 'en'): string {
   return whereWords(lang).roles[role];
 }
 
-/** Короткое имя для людей: русское (без разметки рода), иначе английское. */
+/** Short name for humans: Russian (without gender markup), otherwise English. */
 export function displayName(r: WhereRecordInfo): string {
   return r.localizedName ? plainName(r.localizedName) : r.name;
 }
@@ -697,7 +697,7 @@ function nameList(names: string[], max: number, w: WhereWords): string {
   return u.length > max ? `${u.slice(0, max).join(', ')}${w.andMore(u.length - max)}` : u.join(', ');
 }
 
-/** Кто носитель, для строки итога: `«Оружейник» (отряд «weapon vendor UC big»)`. */
+/** Who the carrier is, for the summary line: `“Weaponsmith” (squad “weapon vendor UC big”)`. */
 export function formatWhereHolder(f: WhereFact, lang = 'en'): string {
   const w = whereWords(lang);
   const h = f.holder;
@@ -707,7 +707,7 @@ export function formatWhereHolder(f: WhereFact, lang = 'en'): string {
   return h.type === 'SQUAD_TEMPLATE' ? w.ofSquad(h.name) : `«${displayName(h)}»`;
 }
 
-/** Одна строка итога: «Продаётся у «Оружейник» (отряд «weapon vendor UC big»): Груз, Хэн». */
+/** One summary line: "Sold by “Weaponsmith” (squad “weapon vendor UC big”): Heft, Heng". */
 export function formatWhereFact(f: WhereFact, lang = 'en'): string {
   const w = whereWords(lang);
   const who = formatWhereHolder(f, lang);
@@ -728,23 +728,23 @@ function label(r: WhereRecordInfo): string {
   return `«${r.name}»${r.localizedName && r.localizedName !== r.name ? ` (${plainName(r.localizedName)})` : ''} [${r.id}]`;
 }
 
-/** Путь словами: `← VENDOR_LIST «…» [id] (weapons) ← SQUAD_TEMPLATE «…» [id] (vendors)`. */
+/** Path in words: `← VENDOR_LIST “…” [id] (weapons) ← SQUAD_TEMPLATE “…” [id] (vendors)`. */
 export function formatWherePath(path: readonly WhereStep[]): string {
   return path.map((s) => `← ${s.type} ${label(s)} (${s.category})`).join(' ');
 }
 
 export interface FormatWhereOptions {
-  /** Показывать дерево связей. По умолчанию нет — путь есть у каждого итога. */
+  /** Show the link tree. No by default — every summary has a path. */
   tree?: boolean;
-  /** Сколько итогов показать (по умолчанию 20). */
+  /** How many summaries to show (default 20). */
   maxFacts?: number;
-  /** Сколько мест с координатами на итог (по умолчанию 8). */
+  /** How many places with coordinates per summary (default 8). */
   maxPlaces?: number;
   /** Interface language of the text (`en` by default; MCP stays English). */
   lang?: string;
 }
 
-/** Текст для CLI и MCP: итог с путями и координатами, по желанию — дерево связей. */
+/** Text for the CLI and MCP: summary with paths and coordinates, optionally the link tree. */
 export function formatWhere(res: WhereResult, options: FormatWhereOptions = {}): string {
   const lang = options.lang ?? 'en';
   const w = whereWords(lang);

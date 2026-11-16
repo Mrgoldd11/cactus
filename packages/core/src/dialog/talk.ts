@@ -1,20 +1,20 @@
 /**
- * Симулятор разговора: какие диалоги есть у персонажа на событие (по клику — событие 1), откуда
- * они взялись и какой из них игра, скорее всего, выберет.
+ * Conversation simulator: which dialogues a character has for an event (click = event 1), where
+ * they came from and which of them the game will most likely pick.
  *
- * Откуда игра берёт кандидатов (по данным ванили и проверкам мода Vanilla Talk):
- * - `CHARACTER.dialogue` — только событие 1;
- * - `CHARACTER.dialogue package` → `DIALOGUE_PACKAGE.dialogs` (v0 ссылки — событие),
- *   с пакетами из `inheritsFrom`;
- * - отряды персонажа (SQUAD_TEMPLATE `leader`, `squad`, `squad2`, `choosefrom list`): у лидера —
- *   `dialog leader`, у всех — `dialog squad`;
- * - фракция (своя или фракции отрядов): `dialog default`.
+ * Where the game takes candidates from (from vanilla data and checks with the Vanilla Talk mod):
+ * - `CHARACTER.dialogue`: event 1 only;
+ * - `CHARACTER.dialogue package` → `DIALOGUE_PACKAGE.dialogs` (v0 of the reference = event),
+ *   with packages from `inheritsFrom`;
+ * - the character's squads (SQUAD_TEMPLATE `leader`, `squad`, `squad2`, `choosefrom list`): for the leader
+ *   `dialog leader`, for everyone `dialog squad`;
+ * - faction (own or the squads' factions): `dialog default`.
  *
- * Выбор — по правилу игры, разобранному по её коду (`model/dialogue-score.ts`): очки = `score bonus`
- * с надбавками за условия; из прошедших проверки игра берёт тех, у кого очков больше всех, а из
- * равных — случайно и поровну. Симулятор считает два расклада: «без условий» (проходят только
- * записи, которые проходят всегда) и для каждого диалога с условиями — «его условия выполнены,
- * остальные нет».
+ * The pick follows the game's rule decoded from its code (`model/dialogue-score.ts`): score = `score bonus`
+ * with bonuses for conditions; of those that passed the checks the game takes the ones with the highest score, and among
+ * equals picks randomly with equal odds. The simulator computes two setups: "no conditions" (only
+ * records that always pass get through) and, for each dialogue with conditions, "its conditions are met,
+ * the others are not".
  */
 import type { GameRecord } from '../format/types.ts';
 import { itemTypeName } from '../format/item-types.ts';
@@ -35,7 +35,7 @@ import {
 import { formatEnumValue, refValueEnum } from '../model/enums.ts';
 import { uiText, UiTextError, type UiText } from '../ui-text.ts';
 
-/** Событие «игрок заговорил со мной» (EV_PLAYER_TALK_TO_ME). */
+/** Event "the player talked to me" (EV_PLAYER_TALK_TO_ME). */
 export const EVENT_TALK = 1;
 
 export type TalkVia = 'character' | 'character-package' | 'squad-leader' | 'squad' | 'faction';
@@ -50,12 +50,12 @@ export const TALK_VIA_LABELS: Readonly<Record<TalkVia, UiText>> = {
 
 export interface TalkSource {
   via: TalkVia;
-  /** Запись, в которой стоит ссылка на диалог: персонаж или пакет. */
+  /** The record that holds the reference to the dialogue: a character or a package. */
   holder: string;
   dialog: string;
 }
 
-/** Персонаж → отряды, в которых он есть (и лидер ли он там). */
+/** Character → squads it is in (and whether it is the leader there). */
 export type SquadIndex = ReadonlyMap<string, readonly { squad: string; leader: boolean }[]>;
 
 const refs = (r: GameRecord | undefined, cat: string): readonly { target: string; v0: number }[] => r?.refs.get(cat) ?? [];
@@ -75,7 +75,7 @@ export function squadIndex(ctx: ModContext): SquadIndex {
   return idx;
 }
 
-/** Фракции персонажа: своя или (если её нет) фракции его отрядов. */
+/** The character's factions: its own or (if none) the factions of its squads. */
 export function characterFactions(ctx: ModContext, c: GameRecord, sq: SquadIndex): string[] {
   const own = refs(c, 'faction').map((r) => r.target);
   if (own.length) return own;
@@ -84,7 +84,7 @@ export function characterFactions(ctx: ModContext, c: GameRecord, sq: SquadIndex
   return [...out];
 }
 
-/** Диалоги пакета с номерами событий, с учётом `inheritsFrom`. */
+/** Package dialogues with event numbers, including `inheritsFrom`. */
 export function packageDialogs(ctx: ModContext, pkg: string, seen = new Set<string>()): { event: number; dialog: string; pkg: string }[] {
   if (seen.has(pkg)) return [];
   seen.add(pkg);
@@ -95,7 +95,7 @@ export function packageDialogs(ctx: ModContext, pkg: string, seen = new Set<stri
   return out;
 }
 
-/** Все диалоги персонажа на событие и откуда они взялись (в порядке источников). */
+/** All of the character's dialogues for the event and where they came from (in source order). */
 export function talkSources(ctx: ModContext, c: GameRecord, event: number, sq: SquadIndex = squadIndex(ctx)): TalkSource[] {
   const out: TalkSource[] = [];
   if (event === EVENT_TALK) for (const r of refs(c, 'dialogue')) out.push({ via: 'character', holder: c.stringId, dialog: r.target });
@@ -112,7 +112,7 @@ export function talkSources(ctx: ModContext, c: GameRecord, event: number, sq: S
   return out;
 }
 
-/** Действия диалога, которые важно не перебить своим диалогом. Значения — DialogActionEnum. */
+/** Dialogue effects that matter not to override with your own dialogue. Values are DialogActionEnum. */
 export type ActionKind = 'arrest' | 'attack' | 'trade' | 'recruit';
 
 export const ACTION_KINDS: Readonly<Record<ActionKind, readonly number[]>> = {
@@ -135,7 +135,7 @@ export const ACTION_KIND_LABELS: Readonly<Record<ActionKind, UiText>> = {
 
 const KIND_OF = new Map<number, ActionKind>(Object.entries(ACTION_KINDS).flatMap(([k, vs]) => vs.map((v) => [v, k as ActionKind] as const)));
 
-/** Виды действий во всём дереве диалога (эффекты реплик → DIALOG_ACTION `action name`). */
+/** Kinds of effects in the whole dialogue tree (line effects → DIALOG_ACTION `action name`). */
 export function dialogActionKinds(ctx: ModContext, dialog: string): ActionKind[] {
   const found = new Set<ActionKind>();
   const seen = new Set<string>();
@@ -154,11 +154,11 @@ export function dialogActionKinds(ctx: ModContext, dialog: string): ActionKind[]
   return (Object.keys(ACTION_KINDS) as ActionKind[]).filter((k) => found.has(k));
 }
 
-/** `score bonus` как есть, без надбавок игры (очки, с которыми игра сравнивает, — {@link dialogueScore}). */
+/** `score bonus` as is, without the game's bonuses (the score the game compares by is {@link dialogueScore}). */
 export const dialogScore = (rec: GameRecord | undefined): number => rec?.ints.get('score bonus') ?? 0;
 const chanceOf = (rec: GameRecord | undefined): number => rec?.floats.get('chance temporary') ?? 100;
 
-/** Диалог подходит всегда: сам проходит проверки при любом раскладе, и такая же у него корневая реплика. */
+/** The dialogue always fits: it passes the checks in any setup itself, and so does its root line. */
 export function dialogAlwaysApplies(ctx: ModContext, dialog: string): boolean {
   const r = ctx.get(dialog);
   if (!r || !alwaysPasses(r)) return false;
@@ -168,7 +168,7 @@ export function dialogAlwaysApplies(ctx: ModContext, dialog: string): boolean {
   });
 }
 
-/** Лучшие очки, которые получит диалог в розыгрыше: его очки плюс очки лучшей реплики, с которой он начнётся. */
+/** Best score the dialogue gets in the draw: its score plus the score of the best line it starts with. */
 export function dialogBestTotal(ctx: ModContext, dialog: string): number | undefined {
   const leaf = (sid: string, seen: ReadonlySet<string>): number | undefined => {
     const r = ctx.get(sid);
@@ -186,7 +186,7 @@ export function dialogBestTotal(ctx: ModContext, dialog: string): number | undef
   return l === undefined ? undefined : dialogueScore(ctx, r).total + l;
 }
 
-/** Ключ, по которому игра ставит диалог в список: его очки + max(0, лучшие очки корневых реплик). */
+/** Key by which the game places the dialogue in the list: its score + max(0, best score of the root lines). */
 export function dialogSortKey(ctx: ModContext, dialog: string): number {
   const r = ctx.get(dialog);
   if (!r) return 0;
@@ -197,12 +197,12 @@ export function dialogSortKey(ctx: ModContext, dialog: string): number {
 }
 
 /**
- * - `wins` — без всяких условий игра выберет именно его;
- * - `random` — без условий выпадет случайно, вместе с другими (`odds` — шанс);
- * - `if-conditions` — когда его условия выполнены, игра выберет его;
- * - `tie` — когда его условия выполнены, выпадет случайно, вместе с другими;
- * - `shadowed` — не прозвучит: даже при выполненных условиях игра выберет другой (`by`);
- * - `locked`, `empty`, `missing` — заблокирован, без реплик, записи нет.
+ * - `wins`: without any conditions the game picks exactly this one;
+ * - `random`: without conditions it comes up randomly, together with others (`odds` = chance);
+ * - `if-conditions`: when its conditions are met, the game picks it;
+ * - `tie`: when its conditions are met, it comes up randomly, together with others;
+ * - `shadowed`: never plays: even with met conditions the game picks another one (`by`);
+ * - `locked`, `empty`, `missing`: locked, no lines, no record.
  */
 export type TalkVerdict = 'wins' | 'random' | 'if-conditions' | 'tie' | 'shadowed' | 'locked' | 'empty' | 'missing';
 
@@ -221,28 +221,28 @@ export interface TalkCandidate {
   dialog: string;
   name: string;
   localized?: string;
-  /** Все источники этого диалога (один диалог может прийти несколькими путями). */
+  /** All sources of this dialogue (one dialogue can come by several paths). */
   sources: TalkSource[];
-  /** Очки, как их считает игра: `score bonus` с надбавками. */
+  /** Score as the game computes it: `score bonus` with bonuses. */
   score: number;
-  /** `score bonus` как есть. */
+  /** `score bonus` as is. */
   bonus: number;
   scoreParts: ScorePart[];
-  /** Лучшие очки в розыгрыше: очки диалога + очки первой реплики. */
+  /** Best score in the draw: dialogue score + score of the first line. */
   total?: number;
   chance: number;
-  /** Условия самого диалога текстом. */
+  /** Conditions of the dialogue itself as text. */
   conditions: string[];
   always: boolean;
-  /** Слой, где диалог появился (`Dialogue.mod`, имя мода, ...). */
+  /** Layer where the dialogue appeared (`Dialogue.mod`, mod name, ...). */
   origin?: string;
   actions: ActionKind[];
   verdict: TalkVerdict;
-  /** Шанс, что выпадет именно он (0..1): без условий (`wins`, `random`) или при его условиях (`if-conditions`, `tie`). */
+  /** Chance that exactly this one comes up (0..1): without conditions (`wins`, `random`) or with its conditions (`if-conditions`, `tie`). */
   odds?: number;
-  /** Для `random` / `tie` — с кем вместе в розыгрыше. */
+  /** For `random` / `tie`: who else is in the draw. */
   with?: string[];
-  /** Для `shadowed` — кто его перебивает. */
+  /** For `shadowed`: who overrides it. */
   by?: string;
 }
 
@@ -250,20 +250,20 @@ export interface TalkLine {
   id: string;
   speakerLabel?: string;
   choice: boolean;
-  /** Очки, как их считает игра. */
+  /** Score as the game computes it. */
   score?: number;
   scoreParts?: ScorePart[];
   chance?: number;
-  /** Шанс, что разговор начнётся с этой реплики (0..1), для корневых реплик NPC. */
+  /** Chance that the conversation starts with this line (0..1), for root NPC lines. */
   odds?: number;
-  /** Для реплики с условиями — шанс, когда её условия выполнены. */
+  /** For a line with conditions: the chance when its conditions are met. */
   oddsIf?: number;
   conditions: string[];
   effects: string[];
   texts: { en: string; localized?: string }[];
-  /** Реплику перебивает соседняя (подходит всегда, раньше в списке, очков больше). */
+  /** The line is overridden by a sibling (always fits, earlier in the list, higher score). */
   shadowedBy?: string;
-  /** Варианты игрока после реплики NPC (один уровень). */
+  /** Player options after the NPC line (one level). */
   choices: TalkLine[];
 }
 
@@ -273,21 +273,21 @@ export interface TalkSimulation {
   localized?: string;
   event: number;
   eventLabel: string;
-  /** В порядке, в котором их перебирает игра; заблокированные, пустые и без записи — в конце. */
+  /** In the order the game goes through them; locked, empty and missing ones at the end. */
   candidates: TalkCandidate[];
-  /** Диалог, который без условий выберет игра наверняка. */
+  /** The dialogue the game surely picks without conditions. */
   winner?: string;
-  /** Розыгрыш без условий: из них игра выберет случайно (у `winner` — он один). */
+  /** Draw without conditions: the game picks randomly from these (`winner` has only one). */
   pool: string[];
-  /** Чьё начало разговора показано в `opening`. */
+  /** Whose conversation opening is shown in `opening`. */
   openingOf?: string;
-  /** Начало разговора: корневые реплики. */
+  /** Conversation opening: root lines. */
   opening: TalkLine[];
 }
 
 export interface TalkOptions {
   translation?: TranslationIndex;
-  /** Готовый индекс отрядов (для повторных вызовов). */
+  /** Prebuilt squad index (for repeated calls). */
   squads?: SquadIndex;
   /** Interface language of the event label (default English). */
   lang?: string;
@@ -324,10 +324,10 @@ const toLine = (n: DialogueGraphNode): TalkLine => {
 };
 
 const EPS = 1e-9;
-/** Расклад «без условий»: проходят только записи, которые проходят всегда. */
+/** "No conditions" setup: only records that always pass get through. */
 const SURE_ENV: ChooseEnv = { passes: (_sid, r) => alwaysPasses(r) };
 
-/** Расклад «условия диалога выполнены»: всё его дерево проходит, раса собеседника совпала (+2). */
+/** "Dialogue conditions met" setup: its whole tree passes, the target's race matched (+2). */
 function ifEnv(ctx: ModContext, dialog: string): ChooseEnv {
   const tree = dialogueTreeIds(ctx, dialog);
   return {
@@ -412,7 +412,7 @@ export function simulateTalk(ctx: ModContext, character: string, event = EVENT_T
       }
     }
   }
-  // В порядке игры; заблокированные, пустые и без записи — в конце.
+  // In game order; locked, empty and missing ones at the end.
   const rank = new Map(chooseOrder(ctx, list).map((d, i) => [d, i]));
   const live = (x: TalkCandidate): number => (x.verdict === 'locked' || x.verdict === 'empty' || x.verdict === 'missing' ? 1 : 0);
   const candidates = [...byDialog.values()].sort((a, b) => live(a) - live(b) || (rank.get(a.dialog) ?? 0) - (rank.get(b.dialog) ?? 0));
@@ -623,7 +623,7 @@ const textOf = (l: TalkLine, w: TalkWords): string => {
   return `«${t.localized ?? t.en}»${l.texts.length > 1 ? w.variants(l.texts.length - 1) : ''}`;
 };
 
-/** Правило выбора простыми словами (для CLI и MCP; в редакторе — та же подсказка с переводом). */
+/** The pick rule in plain words (for CLI and MCP; the editor shows the same hint, translated). */
 export const TALK_RULES: readonly string[] = talkEn.rules;
 
 /** The choice rule in an interface language. */
@@ -649,7 +649,7 @@ function reason(x: TalkCandidate, nameOf: (d: string) => string, w: TalkWords): 
   }
 }
 
-/** Отчёт симуляции текстом (для CLI и MCP). */
+/** Simulation report as text (for CLI and MCP). */
 export function formatTalk(sim: TalkSimulation, lang = 'en'): string[] {
   const w = talkWords(lang);
   const out = [w.head(sim.localized ?? sim.name, sim.character, sim.eventLabel)];

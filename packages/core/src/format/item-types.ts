@@ -1,10 +1,10 @@
 /**
- * Тип записи в бинарных файлах хранится числом — индексом в этом списке
- * (порядок игрового enum itemType; сверено с OpenConstructionSet и с комментариями
- * `Type:` в locale/<язык>/gamedata.po). Имена совпадают с секциями `fcs.def`.
+ * The record type is stored in binary files as a number, an index into this list
+ * (order of the game enum itemType; checked against OpenConstructionSet and the
+ * `Type:` comments in locale/<language>/gamedata.po). Names match the `fcs.def` sections.
  *
- * Это единственное, что ядро знает о данных «из головы»: в файлах игры таблицы
- * «номер → имя» нет.
+ * This is the only thing the core knows about the data "by heart": the game files have no
+ * "number → name" table.
  */
 export const ITEM_TYPE_NAMES = [
   'BUILDING', // 0
@@ -146,12 +146,12 @@ export interface ItemTypes {
 /** The built-in table alone. */
 export const VANILLA_ITEM_TYPES: ItemTypes = { extra: new Map(), extraByName: new Map() };
 
-/** Имя типа по номеру; для неизвестных номеров — `TYPE_<n>`. `types` — таблица схемы с типами расширений. */
+/** Type name by number; `TYPE_<n>` for unknown numbers. `types` is the schema table with extension types. */
 export function itemTypeName(type: number, types?: ItemTypes): string {
   return ITEM_TYPE_NAMES[type] ?? types?.extra.get(type) ?? `TYPE_${type}`;
 }
 
-/** Номер типа по имени (`DIALOGUE` → 18) или undefined. `types` — таблица схемы с типами расширений. */
+/** Type number by name (`DIALOGUE` → 18) or undefined. `types` is the schema table with extension types. */
 export function itemTypeId(name: string, types?: ItemTypes): number | undefined {
   return byName.get(name) ?? types?.extraByName.get(name);
 }

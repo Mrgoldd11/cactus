@@ -2,7 +2,7 @@ import { decodeText, encodeText, type TextEncoding } from '../text.ts';
 import type { DataFile, GameRecord } from './types.ts';
 import { itemTypeName, type ItemTypes } from './item-types.ts';
 
-/** Список модов из заголовка («a.mod,b.mod») → массив имён; пустые элементы отбрасываются. */
+/** Mod list from the header ("a.mod,b.mod") → array of names; empty elements are dropped. */
 export function splitModList(bytes: Uint8Array): string[] {
   return decodeText(bytes)
     .split(',')
@@ -22,7 +22,7 @@ export function recordTypeName(rec: GameRecord, types?: ItemTypes): string {
   return itemTypeName(rec.type, types);
 }
 
-/** Краткая сводка файла — удобно для отладки и отчётов. */
+/** Short file summary, handy for debugging and reports. */
 export function summarize(file: DataFile, types?: ItemTypes): { fileType: number; records: number; byType: Map<string, number> } {
   const byType = new Map<string, number>();
   for (const r of file.records) {

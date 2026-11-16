@@ -1,12 +1,12 @@
 /**
- * Проверка мода: битые ссылки (на несуществующие и удалённые записи), поля, которых нет в
- * схеме, значения не того вида, ссылки на записи не того типа, значения enum вне списка.
+ * Mod check: broken references (to missing and deleted records), fields absent from the
+ * schema, values of the wrong kind, references to records of the wrong type, enum values out of range.
  *
- * Проверяется то, что задаёт мод: ключи его записей, а не унаследованные значения ваниль.
- * Отдельно — записи нижних слоёв, которые ссылаются на удалённые модом записи; висячие ссылки
- * на записи, удалённые зависимостью (не ванилью) или модом поверх слоя, где ссылка появилась;
- * диалоги без реплик; свои диалоги, которые по очкам не уступают ванильным с действием (арест,
- * атака, торговля, найм).
+ * What the mod sets is checked: the keys of its records, not values inherited from vanilla.
+ * Separately — lower-layer records that reference records the mod deleted; dangling references
+ * to records deleted by a dependency (not vanilla) or by a mod above the layer where the reference appeared;
+ * dialogues without lines; own dialogues that score no lower than vanilla ones with an effect (arrest,
+ * attack, trade, recruit).
  */
 import { itemTypeName } from '../format/item-types.ts';
 import type { GameRecord } from '../format/types.ts';
@@ -36,7 +36,7 @@ export interface ValidationIssue {
   severity: 'error' | 'warning';
   code: IssueCode;
   stringId: string;
-  /** Ключ поля или категория ссылок. */
+  /** Field key or reference category. */
   key?: string;
   target?: string;
   /** English text (logs, MCP, JSON). */
@@ -48,11 +48,11 @@ export interface ValidationIssue {
 const msg = (t: UiText): { message: string; texts: UiText } => ({ message: t.en, texts: t });
 
 export interface ValidateOptions {
-  /** Схема; по умолчанию — схема контекста. */
+  /** Schema; defaults to the context schema. */
   schema?: GameSchema;
   /**
-   * Дополнить схему полями, которые встречаются в нижних слоях (по умолчанию да): так
-   * поля, которые игра знает, но fcs.def не описывает, не считаются ошибкой.
+   * Extend the schema with fields found in the lower layers (yes by default): so
+   * fields the game knows but fcs.def does not describe are not treated as errors.
    */
   inferFromLayers?: boolean;
 }
@@ -108,9 +108,9 @@ export function validateMod(ctx: ModContext, options: ValidateOptions = {}): Val
 }
 
 /**
- * Записи, удалённые зависимостями (слоями после ванили, кроме самого мода), на которые в
- * итоговом состоянии ещё ссылаются живые записи. Так выглядит `CHARACTER.dialogue`, когда
- * поздний мод удалил диалог: игра получит ссылку в никуда.
+ * Records deleted by dependencies (layers after vanilla, except the mod itself) that live
+ * records still reference in the final state. This is what `CHARACTER.dialogue` looks like when
+ * a later mod deleted the dialogue: the game gets a reference to nowhere.
  */
 function checkDependencyDeletions(ctx: ModContext, issues: ValidationIssue[]): void {
   for (const layer of ctx.layers) {
@@ -132,7 +132,7 @@ function checkDependencyDeletions(ctx: ModContext, issues: ValidationIssue[]): v
   }
 }
 
-/** DIALOGUE без реплик: свои и те, на которые мод ссылается. В игре такой диалог молчит. */
+/** DIALOGUE without lines: own ones and those the mod references. In game such a dialogue stays silent. */
 function checkEmptyDialogues(ctx: ModContext, issues: ValidationIssue[]): void {
   const empty = (sid: string): boolean => {
     const rec = ctx.get(sid);
@@ -160,11 +160,11 @@ function checkEmptyDialogues(ctx: ModContext, issues: ValidationIssue[]): void {
 }
 
 /**
- * Диалог, который мод дописал в пакет (`dialogs`) или персонажу (`dialogue`, клик), может попасть в
- * розыгрыш вместе с уже бывшим там диалогом того же события с действием (арест, атака, торговля,
- * найм): его лучшие очки (с первой репликой, как у игры) не меньше, или игра ставит его в списке
- * раньше. Тогда игра может выбрать диалог мода, и действие не случится (паладины не арестуют,
- * торговец не откроет меню). Свой диалог стоит сделать запасным — `score bonus` ниже, например −100.
+ * A dialogue the mod added to a package (`dialogs`) or a character (`dialogue`, click) may enter the
+ * draw together with an existing dialogue of the same event that has an effect (arrest, attack, trade,
+ * recruit): its best score (with the first line, as the game does) is not lower, or the game lists it
+ * earlier. Then the game may pick the mod's dialogue and the effect will not happen (paladins won't arrest,
+ * the trader won't open the menu). Make your dialogue a fallback — lower `score bonus`, e.g. −100.
  */
 function checkActionOverrides(ctx: ModContext, issues: ValidationIssue[]): void {
   let sq: SquadIndex | undefined;
@@ -267,7 +267,7 @@ function checkSchema(ctx: ModContext, schema: GameSchema, delta: GameRecord, rec
         continue;
       }
       const want = DICT_FOR_KIND[f.kind];
-      // У выведенных полей и полей вида null (FCS рисует их особо) вид не проверяется.
+      // Kind is not checked for derived fields and null-kind fields (FCS draws them specially).
       if (f.inferred || want === undefined) continue;
       if (want !== dict) {
         issues.push({ severity: 'error', code: 'wrong-kind', stringId: sid, key, ...msg({ en: `field ${key} must be ${f.kind} but is written to ${dict}`, ru: `поле ${key} должно быть ${f.kind}, а записано в ${dict}`, zh: `字段 ${key} 应为 ${f.kind}，却写入了 ${dict}` }) });

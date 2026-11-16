@@ -1,6 +1,6 @@
 /**
- * Схема игры: типы записей и их поля (fcs.def), перечисления (fcs_enums.def) и дерево
- * категорий (fcs_layout.def), собранные вместе и проверенные друг по другу.
+ * Game schema: record types and their fields (fcs.def), enums (fcs_enums.def) and the category
+ * tree (fcs_layout.def), put together and cross-checked.
  */
 import { ITEM_TYPE_NAMES, isItemTypeName, itemTypeId, VANILLA_ITEM_TYPES, type ItemTypes } from '../format/item-types.ts';
 import { parseFcsDef, type FcsDef, type FieldCondition, type FieldDef, type FieldKind, type TranslateRule } from './fcs-def.ts';
@@ -10,17 +10,17 @@ import { BUILTIN_ENUM_LABELS, BUILTIN_ENUMS, BUILTIN_FIELD_ENUMS } from './built
 
 export interface TypeSchema {
   name: string;
-  /** Поля по имени, в порядке первого появления в fcs.def. */
+  /** Fields by name, in order of first appearance in fcs.def. */
   fields: Map<string, FieldDef>;
   conditions: FieldCondition[];
-  /** Категории ссылок, записи в которых принадлежат этой записи (`OWNED:`). */
+  /** Reference categories whose entries are owned by this record (`OWNED:`). */
   owned: string[];
   translate: TranslateRule[];
-  /** Строки секций fcs.def, из которых собран тип. */
+  /** Lines of the fcs.def sections the type is built from. */
   sectionLines: number[];
-  /** Типа нет в fcs.def, он выведен из данных. */
+  /** The type is not in fcs.def; it is inferred from data. */
   inferred?: boolean;
-  /** Типа нет в fcs.def, но его поля известны из FCS (`builtin-enums.ts`). */
+  /** The type is not in fcs.def, but its fields are known from FCS (`builtin-enums.ts`). */
   builtin?: boolean;
   /** Schema extension (mod folder name) that introduced the type; absent for the game's own types. */
   extension?: string;
@@ -46,8 +46,8 @@ export interface GameSchema {
   enums: Map<string, EnumDef>;
   layout: LayoutNode[];
   /**
-   * Перечисления, на которые ссылается fcs.def, но которых нет в fcs_enums.def: они
-   * встроены в FCS/игру. Имя → поля `ТИП.поле`, которые его используют.
+   * Enums referenced by fcs.def but absent from fcs_enums.def: they are
+   * built into FCS/the game. Name → the `TYPE.field` fields that use it.
    */
   externalEnums: Map<string, string[]>;
   warnings: SchemaWarning[];
@@ -86,7 +86,7 @@ export interface SchemaPart {
   itemTypeHints?: ItemTypeDecl[];
 }
 
-/** Собрать схему из уже разобранных файлов. */
+/** Build the schema from already parsed files. */
 export function buildGameSchema(def: FcsDef, enums?: FcsEnums, layout?: FcsLayout): GameSchema {
   const parts: SchemaPart[] = [{ source: 'fcs.def', def }];
   if (enums) parts.push({ source: 'fcs_enums.def', enums });
@@ -281,7 +281,7 @@ export function buildGameSchemaFromParts(parts: readonly SchemaPart[], preWarnin
   }
   addBuiltinFields(types, enumMap);
 
-  // Перекрёстные проверки.
+  // Cross-checks.
   const haveEnums = parts.some((p) => p.enums !== undefined);
   const externalEnums = new Map<string, string[]>();
   for (const t of types.values()) {
@@ -338,7 +338,7 @@ function labelled(enumName: string, v: EnumValue): EnumValue {
   return label !== undefined ? { ...v, label } : v;
 }
 
-/** Перечисления из `builtin-enums.ts` поверх fcs_enums.def; разобранные данные не меняются. */
+/** Enums from `builtin-enums.ts` on top of fcs_enums.def; the parsed data is not changed. */
 function mergeBuiltinEnums(parsed: ReadonlyMap<string, EnumDef>, warn: (line: number, message: string) => void): Map<string, EnumDef> {
   const out = new Map<string, EnumDef>();
   for (const [name, e] of parsed) out.set(name, { ...e, values: e.values.map((v) => labelled(name, v)) });
@@ -349,7 +349,7 @@ function mergeBuiltinEnums(parsed: ReadonlyMap<string, EnumDef>, warn: (line: nu
       continue;
     }
     if (!e.shared) continue;
-    // `enum shared`: номера по имени из C#, порядок и описания — из файла.
+    // `enum shared`: numbers by name from C#, order and descriptions from the file.
     const seen = new Set<string>();
     const values: EnumValue[] = [];
     for (const v of e.values) {
@@ -366,7 +366,7 @@ function mergeBuiltinEnums(parsed: ReadonlyMap<string, EnumDef>, warn: (line: nu
   return out;
 }
 
-/** Поля из `BUILTIN_FIELD_ENUMS` для типов, которых нет в fcs.def (DIALOG_ACTION). */
+/** Fields from `BUILTIN_FIELD_ENUMS` for types absent from fcs.def (DIALOG_ACTION). */
 function addBuiltinFields(types: Map<string, TypeSchema>, enums: ReadonlyMap<string, EnumDef>): void {
   for (const [typeName, fields] of Object.entries(BUILTIN_FIELD_ENUMS)) {
     let t = types.get(typeName);
@@ -384,7 +384,7 @@ function addBuiltinFields(types: Map<string, TypeSchema>, enums: ReadonlyMap<str
   }
 }
 
-/** Разобрать тексты файлов и собрать схему. */
+/** Parse file texts and build the schema. */
 export function parseGameSchema(sources: SchemaSources): GameSchema {
   return buildGameSchema(
     parseFcsDef(sources.fcsDef),
@@ -394,8 +394,8 @@ export function parseGameSchema(sources: SchemaSources): GameSchema {
 }
 
 /**
- * Поле по ключу из данных. Учитывает повторяющиеся поля (`looped`): ключ `text3`
- * находит описание `text0`.
+ * Field by a key from the data. Handles repeating fields (`looped`): the key `text3`
+ * finds the description of `text0`.
  */
 export function findField(type: TypeSchema, key: string): FieldDef | undefined {
   const exact = type.fields.get(key);
@@ -406,7 +406,7 @@ export function findField(type: TypeSchema, key: string): FieldDef | undefined {
   return base?.looped ? base : undefined;
 }
 
-/** Словарь записи, в котором хранится значение поля этого вида. */
+/** The record dictionary that stores a value of this field kind. */
 export type RecordDict = 'bools' | 'floats' | 'ints' | 'vec3s' | 'vec4s' | 'strings' | 'files' | 'refs' | 'instances';
 
 export const DICT_FOR_KIND: Record<FieldKind, RecordDict | undefined> = {

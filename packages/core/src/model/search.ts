@@ -1,6 +1,6 @@
 /**
- * Поиск записей: по имени (английскому и русскому из gamedata.po), строковому id, типу,
- * статусу и значениям полей; плюс «где угодно» — подстрока в любом значении записи.
+ * Record search: by name (English and Russian from gamedata.po), string id, type,
+ * status and field values; plus "anywhere" — a substring in any value of the record.
  */
 import { decodeText } from '../text.ts';
 import { itemTypeId, type ItemTypes } from '../format/item-types.ts';
@@ -10,10 +10,10 @@ import { SCALAR_DICTS, scalarMap } from './record-ops.ts';
 import { formatScalar } from './present.ts';
 import { UiTextError } from '../ui-text.ts';
 
-/** `~` и `:` — «содержит», `!:` — «не содержит», `regex` — регулярное выражение (`поле?шаблон`). */
+/** `~` and `:` — "contains", `!:` — "does not contain", `regex` — regular expression (`field?pattern`). */
 export type FilterOp = '=' | '!=' | '~' | '!~' | 'regex' | '<' | '>' | '<=' | '>=' | 'exists';
 
-/** Условие на поле: ключ любого словаря или категория ссылок (тогда значение — id или имя цели). */
+/** Field condition: a key of any dictionary or a reference category (then the value is a target id or name). */
 export interface FieldFilter {
   key: string;
   op: FilterOp;
@@ -21,17 +21,17 @@ export interface FieldFilter {
 }
 
 export interface SearchQuery {
-  /** Подстрока имени (англ. или рус.) или строкового id, без учёта регистра. */
+  /** Substring of the name (English or Russian) or string id, case-insensitive. */
   text?: string;
-  /** Только точное совпадение имени. */
+  /** Exact name match only. */
   exact?: boolean;
-  /** Тип: имя (`DIALOGUE`) или номер. */
+  /** Type: name (`DIALOGUE`) or number. */
   type?: string | number;
   fields?: readonly FieldFilter[];
   status?: readonly RecordStatus[];
-  /** Подстрока в чём угодно: имени, id, ключах, значениях, целях ссылок. */
+  /** Substring in anything: name, id, keys, values, reference targets. */
   anywhere?: string;
-  /** Только записи, которые задаёт мод (новые, изменённые, удалённые). */
+  /** Only records the mod defines (new, changed, deleted). */
   modOnly?: boolean;
 }
 
@@ -44,8 +44,8 @@ export interface SearchHit {
 }
 
 /**
- * `key=value`, `key!=value`, `key~text` (или `key:text`), `key!:text` (не содержит), `key?шаблон`
- * (регулярное выражение, без учёта регистра), `key>=3`, `key?` (поле есть). Как в поиске FCS.
+ * `key=value`, `key!=value`, `key~text` (or `key:text`), `key!:text` (does not contain), `key?pattern`
+ * (regular expression, case-insensitive), `key>=3`, `key?` (field present). As in the FCS search.
  */
 export function parseFieldFilter(text: string): FieldFilter {
   const exists = /^(.+)\?$/.exec(text);
@@ -61,7 +61,7 @@ export function parseFieldFilter(text: string): FieldFilter {
 
 const regexCache = new Map<string, RegExp>();
 
-/** Регулярное выражение условия `поле?шаблон`; неверный шаблон — понятная ошибка. */
+/** Regular expression of a `field?pattern` condition; an invalid pattern gives a clear error. */
 function regexOf(pattern: string): RegExp {
   let re = regexCache.get(pattern);
   if (!re) {
@@ -113,7 +113,7 @@ function compare(actual: string, op: FilterOp, expected: string): boolean {
   }
 }
 
-/** Значения поля записи текстом (для ссылок — id и имена целей). */
+/** Field values of a record as text (for references — target ids and names). */
 function fieldValues(ctx: ModContext, rec: GameRecord, key: string): string[] | undefined {
   for (const dict of SCALAR_DICTS) {
     const v = scalarMap(rec, dict).get(key);
@@ -131,8 +131,8 @@ const NUMERIC_OPS: readonly FilterOp[] = ['<', '>', '<=', '>='];
 const REF_VALUE = /^(.+)\.v([012])$/;
 
 /**
- * Условия по ссылкам, как в FCS: `список>5` — сколько ссылок в списке, `список.v0=4` — значение
- * ссылки (хотя бы одной), `Ref>0` — сколько записей ссылаются на эту. undefined — не такое условие.
+ * Reference conditions, as in FCS: `list>5` — how many references are in the list, `list.v0=4` — a reference
+ * value (at least one), `Ref>0` — how many records reference this one. undefined — not such a condition.
  */
 function matchRefs(ctx: ModContext, rec: GameRecord, f: FieldFilter): boolean | undefined {
   if (f.key === 'Ref') return compare(String(ctx.referencesTo(rec.stringId).length), f.op === 'exists' ? '>=' : f.op, f.op === 'exists' ? '0' : (f.value ?? ''));
@@ -159,7 +159,7 @@ export function matchesFilter(ctx: ModContext, rec: GameRecord, f: FieldFilter):
   return values.some((v) => compare(v, f.op, f.value ?? ''));
 }
 
-/** Всё содержимое записи одной строкой в нижнем регистре — для поиска «где угодно». */
+/** All record contents as one lowercase string — for the "anywhere" search. */
 export function recordHaystack(ctx: ModContext, rec: GameRecord): string {
   const parts = [rec.stringId, decodeText(rec.name), ctx.localizedName(rec.stringId) ?? ''];
   for (const dict of SCALAR_DICTS) {
@@ -173,7 +173,7 @@ export function recordHaystack(ctx: ModContext, rec: GameRecord): string {
   return parts.join('\n').toLowerCase();
 }
 
-/** Все совпадения по порядку слоёв (порядку первого появления записей). */
+/** All matches in layer order (order of first appearance of records). */
 export function searchRecords(ctx: ModContext, q: SearchQuery): SearchHit[] {
   const type = q.type === undefined ? undefined : resolveTypeFilter(q.type, ctx.schema?.itemTypes);
   const text = q.text?.toLowerCase();
@@ -185,7 +185,7 @@ export function searchRecords(ctx: ModContext, q: SearchQuery): SearchHit[] {
     const status = ctx.status(sid);
     if (!status) continue;
     if (statuses && !statuses.has(status)) continue;
-    // Удалённые модом записи ищутся по их последнему состоянию в нижних слоях.
+    // Records deleted by the mod are searched by their last state in the lower layers.
     const rec = ctx.get(sid) ?? ctx.lower(sid);
     if (!rec) continue;
     if (type !== undefined && rec.type !== type) continue;
@@ -210,16 +210,16 @@ export function formatHit(h: SearchHit): string {
 }
 
 export interface RecordLookup {
-  /** Найденная запись, если она одна. */
+  /** The found record, if there is exactly one. */
   stringId?: string;
-  /** Подходящие записи, если их несколько (или ни одной). */
+  /** Matching records, if there are several (or none). */
   candidates: SearchHit[];
 }
 
 /**
- * Запись по строковому id или имени (англ. или рус.): сначала id, потом точное имя, потом
- * подстрока. `preferTypes` — при нескольких совпадениях оставить записи этих типов (для
- * `tree` — диалоги), если такие есть.
+ * Record by string id or name (English or Russian): id first, then exact name, then
+ * substring. `preferTypes` — with several matches keep records of these types (for
+ * `tree` — dialogues), if there are any.
  */
 export function lookupRecord(ctx: ModContext, spec: string, options: { preferTypes?: readonly string[] } = {}): RecordLookup {
   if (ctx.get(spec) ?? ctx.lower(spec)) return { stringId: spec, candidates: [] };

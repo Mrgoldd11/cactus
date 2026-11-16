@@ -1,29 +1,29 @@
 /**
- * Состояние нового здания в мире (GAMESTATE_BUILDING `<ключ>-S23`).
+ * State of a new building in the world (GAMESTATE_BUILDING `<key>-S23`).
  *
- * Без состояния игра считает поставленное модом здание стройплощадкой «на продажу» (0/400
- * стройматериалов) — проверено в игре. У всех 14 637 зданий с состоянием в зонах ванили
- * `is complete` = true, а материалы в состоянии повторяют запись здания:
- *  - `<i>construction mats` — количество i-й ссылки `construction` (v0); без ссылок —
+ * Without a state the game treats a mod-placed building as a construction site "for sale" (0/400
+ * building materials) — checked in game. All 14,637 buildings with a state in vanilla zones have
+ * `is complete` = true, and the materials in the state mirror the building record:
+ *  - `<i>construction mats` — amount of the i-th `construction` reference (v0); without references —
  *    `0construction mats` = `build materials`;
- *  - `construction progress` — их сумма.
- * Хэндлы (`handle*`, `isInsideBuilding*`, `residents*`) не пишем: это номера объектов
- * сохранения, копия чужих дала бы два здания с одним номером. В интерьерах игры состояния
- * без хэндлов — обычное дело (23 тыс. из 28 тыс.).
+ *  - `construction progress` — their sum.
+ * Handles (`handle*`, `isInsideBuilding*`, `residents*`) are not written: they are save object
+ * numbers, and copying someone else's would give two buildings with one number. In game interiors, states
+ * without handles are common (23k of 28k).
  */
 import { itemTypeId, itemTypeName } from '../format/item-types.ts';
 import { emptyRecord, type GameRecord } from '../format/types.ts';
 import { encodeText } from '../text.ts';
 
-/** Версия формата состояния — как у всех состояний ванили. */
+/** State format version — same as all vanilla states. */
 export const BUILDING_STATE_VERSION = 270;
 
-/** Id состояния здания по ключу экземпляра. */
+/** Building state id by instance key. */
 export function buildingStateId(key: string): string {
   return `${key}-S23`;
 }
 
-/** Готовое (достроенное) состояние здания `building` с высотой в мире `worldY`. */
+/** Finished (fully built) state of building `building` at world height `worldY`. */
 export function newBuildingState(building: GameRecord, stateId: string, worldY: number): GameRecord {
   const st = emptyRecord(itemTypeId('GAMESTATE_BUILDING') ?? 0, stateId, encodeText('0'));
   const mats = (building.refs.get('construction') ?? []).map((r) => r.v0);
@@ -45,8 +45,8 @@ export function newBuildingState(building: GameRecord, stateId: string, worldY: 
 }
 
 /**
- * Для `WorldEdits.place`: состояние готового здания, если `record` — здание (BUILDING);
- * иначе состояний нет.
+ * For `WorldEdits.place`: the finished-building state if `record` is a building (BUILDING);
+ * otherwise there are no states.
  */
 export function newBuildingStates(record: GameRecord | undefined, worldY: number): ((key: string) => GameRecord[]) | undefined {
   if (!record || itemTypeName(record.type) !== 'BUILDING') return undefined;

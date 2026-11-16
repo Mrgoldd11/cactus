@@ -1,16 +1,16 @@
 /**
- * Разбор двоичных моделей Ogre (`.mesh`) — так хранятся все модели Kenshi: оружие, броня,
- * здания, мебель, персонажи. В игре встречаются три версии сериализатора:
- * `MeshSerializer_v1.100` (Ogre 1.10+), `MeshSerializer_v1.8` и `MeshSerializer_v1.41`.
+ * Parser of binary Ogre models (`.mesh`): this is how all Kenshi models are stored: weapons, armour,
+ * buildings, furniture, characters. Three serializer versions occur in the game:
+ * `MeshSerializer_v1.100` (Ogre 1.10+), `MeshSerializer_v1.8` and `MeshSerializer_v1.41`.
  *
- * Файл — вложенные блоки «id (uint16) + длина (uint32) + данные». Длины блоков у старых
- * версий Ogre считаются неверно (у подмодели длина меньше её же геометрии), поэтому читаем
- * по порядку, как сам Ogre: блок за блоком, не перескакивая по длине. Нужно только то, что
- * рисуется: геометрия (позиции, нормали, UV, цвет вершин), индексы и имя материала каждой
- * подмодели. LOD, рёбра теней, позы и анимации идут после подмоделей — на них чтение
- * заканчивается.
+ * The file is nested chunks "id (uint16) + length (uint32) + data". Old Ogre versions compute chunk
+ * lengths wrongly (a submesh's length is smaller than its own geometry), so we read
+ * sequentially, like Ogre itself: chunk after chunk, never skipping by length. Only what is
+ * drawn is needed: geometry (positions, normals, UV, vertex colour), indices and the material name of each
+ * submesh. LOD, shadow edges, poses and animations come after the submeshes; reading
+ * stops at them.
  *
- * Модуль без доступа к диску и без three.js: на входе байты, на выходе массивы.
+ * The module has no disk access and no three.js: bytes in, arrays out.
  */
 
 const M_HEADER = 0x1000;
@@ -27,44 +27,44 @@ const M_GEOMETRY_VERTEX_BUFFER_DATA = 0x5210;
 const M_MESH_SKELETON_LINK = 0x6000;
 const M_MESH_BONE_ASSIGNMENT = 0x7000;
 
-/** Смысл элемента вершины (Ogre `VertexElementSemantic`). */
+/** Meaning of a vertex element (Ogre `VertexElementSemantic`). */
 const SEM_POSITION = 1;
 const SEM_NORMAL = 4;
 const SEM_DIFFUSE = 5;
 const SEM_TEXCOORD = 7;
 
-/** Вид примитивов (Ogre `RenderOperation::OperationType`). */
+/** Primitive kind (Ogre `RenderOperation::OperationType`). */
 export const OP_TRIANGLE_LIST = 4;
 export const OP_TRIANGLE_STRIP = 5;
 export const OP_TRIANGLE_FAN = 6;
 
 export interface MeshGeometry {
   vertexCount: number;
-  /** x, y, z на вершину. */
+  /** x, y, z per vertex. */
   positions: Float32Array;
   normals?: Float32Array;
-  /** Первый набор UV: u, v на вершину. */
+  /** First UV set: u, v per vertex. */
   uvs?: Float32Array;
-  /** Цвет вершин r, g, b, a (0…1), если есть. */
+  /** Vertex colour r, g, b, a (0…1), if present. */
   colors?: Float32Array;
 }
 
 export interface MeshSubmesh {
-  /** Имя материала Ogre (`Material#84`). В Kenshi текстуру обычно задаёт запись, а не он. */
+  /** Ogre material name (`Material#84`). In Kenshi the texture is usually set by the record, not by it. */
   material: string;
   operation: number;
-  /** Общая геометрия модели или своя. */
+  /** Shared model geometry or its own. */
   geometry: MeshGeometry;
   indices: Uint16Array | Uint32Array;
 }
 
 export interface OgreMesh {
-  /** Строка версии из заголовка: `[MeshSerializer_v1.8]`. */
+  /** Version string from the header: `[MeshSerializer_v1.8]`. */
   version: string;
   submeshes: MeshSubmesh[];
-  /** Имя скелета, если модель анимирована. */
+  /** Skeleton name, if the model is animated. */
   skeleton?: string;
-  /** Рамка по всем вершинам (своя, не из файла). */
+  /** Bounding box over all vertices (computed, not from the file). */
   bounds: { min: [number, number, number]; max: [number, number, number] };
 }
 
@@ -83,13 +83,13 @@ interface Element {
   index: number;
 }
 
-/** Число компонент float у типа элемента; undefined — тип, который не читаем. */
+/** Number of float components of an element type; undefined for a type we do not read. */
 function floatCount(type: number): number | undefined {
   // VET_FLOAT1..VET_FLOAT4
   return type >= 0 && type <= 3 ? type + 1 : undefined;
 }
 
-/** Цвет вершины в одном uint32: COLOUR (4), COLOUR_ARGB (10), COLOUR_ABGR (11), UBYTE4 (9). */
+/** Vertex colour in one uint32: COLOUR (4), COLOUR_ARGB (10), COLOUR_ABGR (11), UBYTE4 (9). */
 function isPackedColour(type: number): boolean {
   return type === 4 || type === 9 || type === 10 || type === 11;
 }
@@ -142,7 +142,7 @@ class Reader {
     return v;
   }
 
-  /** Строка до `\n` (так Ogre пишет строки). */
+  /** String up to `\n` (this is how Ogre writes strings). */
   line(): string {
     const end = this.bytes.indexOf(10, this.pos);
     if (end < 0) throw new MeshFormatError(`строка без конца на ${this.pos}`);
@@ -159,12 +159,12 @@ class Reader {
     return s;
   }
 
-  /** id следующего блока, не сдвигая позицию; undefined — конец файла. */
+  /** id of the next chunk without moving the position; undefined at end of file. */
   peekChunk(): number | undefined {
     return this.left >= 6 ? this.view.getUint16(this.pos, true) : undefined;
   }
 
-  /** Заголовок блока: id и длина (длине у старых версий верить нельзя). */
+  /** Chunk header: id and length (the length of old versions cannot be trusted). */
   chunk(): { id: number; length: number } {
     const id = this.u16();
     const length = this.u32();
@@ -225,7 +225,7 @@ function decodeVertices(vertexCount: number, elements: readonly Element[], buffe
       for (let v = 0; v < vertexCount; v++) {
         const base = v * buf.size + el.offset;
         const b0 = buf.data[base]!, b1 = buf.data[base + 1]!, b2 = buf.data[base + 2]!, b3 = buf.data[base + 3]!;
-        // В памяти (little-endian): ARGB → B G R A, ABGR → R G B A. COLOUR (4) в D3D-сборках — ARGB.
+        // In memory (little-endian): ARGB → B G R A, ABGR → R G B A. COLOUR (4) in D3D builds is ARGB.
         const [r, g, b, a] = el.type === 11 || el.type === 9 ? [b0, b1, b2, b3] : [b2, b1, b0, b3];
         out.set([r / 255, g / 255, b / 255, a / 255], v * 4);
       }
@@ -282,7 +282,7 @@ function readSubmesh(r: Reader, shared: MeshGeometry | undefined): MeshSubmesh {
   return { material, operation, geometry, indices };
 }
 
-/** Разобрать `.mesh`. Бросает `MeshFormatError`, если файл не модель Ogre или испорчен. */
+/** Parse a `.mesh`. Throws `MeshFormatError` if the file is not an Ogre model or is corrupt. */
 export function parseOgreMesh(bytes: Uint8Array): OgreMesh {
   const r = new Reader(bytes);
   const head = r.u16();
@@ -328,7 +328,7 @@ function boundsOf(subs: readonly MeshSubmesh[]): OgreMesh['bounds'] {
   return { min, max };
 }
 
-/** Индексы как список треугольников (полосы и веера разворачиваются). */
+/** Indices as a triangle list (strips and fans are unrolled). */
 export function triangleIndices(sub: MeshSubmesh): Uint32Array {
   const ix = sub.indices;
   if (sub.operation === OP_TRIANGLE_LIST) return Uint32Array.from(ix);

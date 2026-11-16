@@ -1,42 +1,42 @@
 /**
- * Парсер gettext PO (`locale/<язык>/gamedata.po`).
+ * gettext PO parser (`locale/<language>/gamedata.po`).
  *
- * В переводах Kenshi у записи бывают комментарии:
+ * In Kenshi translations an entry may have comments:
  * ```
- * #. Type: BUILDING                 — тип игровой записи
- * #. Name: Ancient Citadel          — её имя
- * #: 5316-TwoStorey.mod:0           — строковый id записи; `:N` — номер строкового поля,
- *                                     без номера — имя записи. Ссылок может быть несколько.
+ * #. Type: BUILDING                 — type of the game record
+ * #. Name: Ancient Citadel          — its name
+ * #: 5316-TwoStorey.mod:0           — string id of the record; `:N` is the string field number,
+ *                                     no number means the record name. There may be several references.
  * #, fuzzy
- * #~ msgid "..."                    — устаревшая запись
+ * #~ msgid "..."                    — obsolete entry
  * ```
  */
 
 export interface PoReference {
-  /** Строковый id записи (`5316-TwoStorey.mod`). */
+  /** String id of the record (`5316-TwoStorey.mod`). */
   stringId: string;
-  /** Номер строкового поля; undefined — имя записи. */
+  /** String field number; undefined means the record name. */
   field?: number;
 }
 
 export interface PoEntry {
-  /** `# …` — комментарии переводчика. */
+  /** `# …`: translator comments. */
   comments: string[];
-  /** `#. …` — комментарии из исходников. */
+  /** `#. …`: comments from the sources. */
   extracted: string[];
-  /** `#: …` как в файле, по одному элементу на ссылку. */
+  /** `#: …` as in the file, one element per reference. */
   references: string[];
   /** `#, …` */
   flags: string[];
-  /** `#| …` — предыдущий msgid. */
+  /** `#| …`: previous msgid. */
   previous: string[];
   msgctxt?: string;
   msgid: string;
   msgidPlural?: string;
-  /** msgstr или msgstr[0..n]. */
+  /** msgstr or msgstr[0..n]. */
   msgstr: string[];
   obsolete: boolean;
-  /** Номер строки, где начинается запись (с 1). */
+  /** Line number where the entry starts (1-based). */
   line: number;
 }
 
@@ -47,9 +47,9 @@ export interface PoWarning {
 }
 
 export interface PoFile {
-  /** Разобранная запись с пустым msgid (заголовок), если есть. */
+  /** The parsed entry with an empty msgid (the header), if any. */
   header?: PoEntry;
-  /** Заголовок как пары «ключ: значение». */
+  /** Header as "key: value" pairs. */
   headers: Map<string, string>;
   entries: PoEntry[];
   warnings: PoWarning[];
@@ -74,7 +74,7 @@ export function parsePo(text: string): PoFile {
   const warnings: PoWarning[] = [];
   let entry = newEntry(1);
   let hasKeyword = false;
-  /** Куда дописывать строки-продолжения `"..."`. */
+  /** Where to append continuation strings `"..."`. */
   let target: { set: (s: string) => void } | undefined;
 
   let empty = true;
@@ -107,7 +107,7 @@ export function parsePo(text: string): PoFile {
         obsolete = true;
         line = line.slice(2).trim();
         if (line === '') return;
-        // `#~| msgid "..."` — предыдущий msgid устаревшей записи.
+        // `#~| msgid "..."`: previous msgid of an obsolete entry.
         if (line.startsWith('|')) {
           obsolete = false;
           line = '#' + line;
@@ -115,7 +115,7 @@ export function parsePo(text: string): PoFile {
       }
 
       if (!obsolete && line.startsWith('#')) {
-        // Комментарий после ключевых слов начинает новую запись.
+        // A comment after keywords starts a new entry.
         if (hasKeyword) flush();
         touch(lineNo);
         const kind = line[1];
@@ -145,7 +145,7 @@ export function parsePo(text: string): PoFile {
       }
       const keyword = m[1]!;
       const value = unescapePoString(m[3]!);
-      // msgctxt или msgid после msgstr — новая запись без пустой строки между ними.
+      // msgctxt or msgid after msgstr: a new entry without an empty line between them.
       if ((keyword === 'msgctxt' || keyword === 'msgid') && entry.msgstr.length > 0) flush();
       touch(lineNo);
       hasKeyword = true;
@@ -188,7 +188,7 @@ export function parsePoReference(ref: string): PoReference {
   return m ? { stringId: m[1]!, field: Number(m[2]) } : { stringId: ref };
 }
 
-/** Значение комментария `#. Ключ: значение`. */
+/** Value of a `#. Key: value` comment. */
 export function poExtracted(entry: PoEntry, key: string): string | undefined {
   const prefix = `${key}:`;
   const line = entry.extracted.find((x) => x.startsWith(prefix));
@@ -197,17 +197,17 @@ export function poExtracted(entry: PoEntry, key: string): string | undefined {
 
 export interface RecordTranslation {
   stringId: string;
-  /** Из `#. Type:`. Комментарии Type/Name относятся к первой ссылке записи PO, поэтому тип берётся только оттуда. */
+  /** From `#. Type:`. Type/Name comments refer to the first reference of the PO entry, so the type is taken only from there. */
   type?: string;
-  /** Перевод имени записи. */
+  /** Translation of the record name. */
   name?: PoEntry;
-  /** Номер строкового поля → перевод. */
+  /** String field number → translation. */
   fields: Map<number, PoEntry>;
 }
 
 /**
- * Индекс переводов по строковым id записей. Устаревшие (`#~`) записи пропускаются.
- * Если на одно поле ссылаются несколько записей PO, остаётся первая.
+ * Translation index by record string ids. Obsolete (`#~`) entries are skipped.
+ * If several PO entries refer to one field, the first one stays.
  */
 export function indexPoByRecord(po: PoFile): Map<string, RecordTranslation> {
   const index = new Map<string, RecordTranslation>();
@@ -229,7 +229,7 @@ export function indexPoByRecord(po: PoFile): Map<string, RecordTranslation> {
   return index;
 }
 
-/** Перевод msgid → msgstr (первая неустаревшая запись с непустым переводом). */
+/** Translate msgid → msgstr (the first non-obsolete entry with a non-empty translation). */
 export function poTranslationMap(po: PoFile): Map<string, string> {
   const map = new Map<string, string>();
   for (const e of po.entries) {

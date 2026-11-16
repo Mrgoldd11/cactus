@@ -1,8 +1,8 @@
 /**
- * Перепись NPC (этап 5): все персонажи (CHARACTER) с фракцией, городами, где живут их отряды,
- * уникальностью, клик-диалогами и пакетами диалогов; группы по фракции и по городу с весом
- * «сколько городов» (кого встретишь чаще). Плюс правка: дать пакет диалогов выбранным
- * персонажам одной отменой. Работает на ванили и на любом наборе модов; только чтение, кроме
+ * NPC census (stage 5): all characters (CHARACTER) with faction, towns where their squads live,
+ * uniqueness, click dialogues and dialogue packages; groups by faction and by town weighted by
+ * "how many towns" (whom you meet more often). Plus an edit: give a dialogue package to the selected
+ * characters with one undo. Works on vanilla and on any set of mods; read-only except
  * `addDialoguePackage`.
  */
 import { itemTypeName } from '../format/item-types.ts';
@@ -14,32 +14,32 @@ export interface CensusChar {
   sid: string;
   name: string;
   localized?: string;
-  /** Состояние записи в моде: new / changed — персонаж уже в моде. */
+  /** Record state in the mod: new / changed means the character is already in the mod. */
   status?: RecordStatus;
   unique: boolean;
   dumb: boolean;
   trader: boolean;
-  /** Фракции: своя или фракции отрядов, а если нет — фракции городов, где живут отряды. */
+  /** Factions: own or the squads' factions, and if none, the factions of the towns where the squads live. */
   factions: string[];
-  /** Города, где живут его отряды (жители города и жители фракции города, бар, бродячие). */
+  /** Towns where its squads live (town residents and town faction residents, bar, wandering). */
   towns: string[];
-  /** Отряды, в которые он входит. */
+  /** Squads it belongs to. */
   squads: string[];
-  /** Свои пакеты диалогов (`dialogue package`). */
+  /** Own dialogue packages (`dialogue package`). */
   packages: string[];
-  /** Свои диалоги (`dialogue`). */
+  /** Own dialogues (`dialogue`). */
   dialogues: string[];
-  /** Сколько разных клик-диалогов (событие «игрок заговорил») из всех источников. */
+  /** How many distinct click dialogues (event "the player talked") from all sources. */
   talks: number;
 }
 
 export interface CensusGroup {
-  /** sid фракции или города; '' — «без фракции» / «не в городах». */
+  /** sid of the faction or town; '' = "no faction" / "not in towns". */
   key: string;
   name: string;
   localized?: string;
   chars: string[];
-  /** Сумма по персонажам: число городов (не меньше 1). Чем больше — тем чаще встречаются. */
+  /** Sum over characters: number of towns (at least 1). The more, the more often they are met. */
   weight: number;
 }
 
@@ -60,14 +60,14 @@ function idsOf(ctx: ModContext, type: string, index: TypeIndex | undefined): rea
   return out;
 }
 
-/** Нет своих пакетов и своих диалогов. */
+/** No own packages and no own dialogues. */
 export const censusNoPackage = (c: CensusChar): boolean => c.packages.length === 0 && c.dialogues.length === 0;
-/** Вес персонажа: число городов, не меньше 1. */
+/** Character weight: number of towns, at least 1. */
 export const censusWeight = (c: CensusChar): number => Math.max(1, c.towns.length);
 
 export function npcCensus(ctx: ModContext, options: CensusOptions = {}): Census {
   const sq = squadIndex(ctx);
-  // Отряд → города, где он живёт; город → его фракция.
+  // Squad → towns where it lives; town → its faction.
   const squadTowns = new Map<string, Set<string>>();
   const townFaction = new Map<string, string>();
   for (const t of idsOf(ctx, 'TOWN', options.index)) {
@@ -125,8 +125,8 @@ export function npcCensus(ctx: ModContext, options: CensusOptions = {}): Census 
 }
 
 /**
- * Дать пакет диалогов персонажам одной правкой (одна отмена). Кому пакет уже дан — пропуск.
- * Возвращает, скольким добавлен.
+ * Give a dialogue package to characters with one edit (one undo). Those who already have it are skipped.
+ * Returns how many got it.
  */
 export function addDialoguePackage(ctx: ModContext, chars: readonly string[], pkg: string): number {
   const p = ctx.get(pkg);

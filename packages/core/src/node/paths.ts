@@ -3,26 +3,26 @@ import { dirname, join, resolve } from 'node:path';
 import { findGogInstalls, findSteamInstalls, isKenshiDir, manualInstall } from './detect.ts';
 
 /**
- * Где лежит игра. Порядок поиска:
- * 1. переменные окружения `KENSHI_DIR` и `KENSHI_WORKSHOP_DIR`;
- * 2. файл `kenshi-paths.json` (`{ "kenshi": "...", "workshop": "..." }`) в текущей папке или выше;
- * 3. папка из настроек редактора (`options.preferred`), если там есть игра;
- * 4. автопоиск: Steam (все библиотеки), потом GOG;
- * 5. стандартная папка Steam — только чтобы сообщение об ошибке назвало путь.
+ * Where the game is. Search order:
+ * 1. environment variables `KENSHI_DIR` and `KENSHI_WORKSHOP_DIR`;
+ * 2. the file `kenshi-paths.json` (`{ "kenshi": "...", "workshop": "..." }`) in the current folder or above;
+ * 3. the folder from the editor settings (`options.preferred`), if the game is there;
+ * 4. auto-detection: Steam (all libraries), then GOG;
+ * 5. the standard Steam folder — only so the error message names a path.
  */
 export interface GamePaths {
-  /** Папка игры (там `data/`, `mods/`, `fcs.def`). */
+  /** Game folder (contains `data/`, `mods/`, `fcs.def`). */
   kenshi: string;
-  /** Папка мастерской Steam для Kenshi (`.../workshop/content/233860`). */
+  /** Steam Workshop folder for Kenshi (`.../workshop/content/233860`). */
   workshop: string;
 }
 
-/** Стандартная папка Steam; используется, только если игру не нашли. */
+/** Standard Steam folder; used only if the game was not found. */
 export const DEFAULT_KENSHI_DIR = 'C:/Program Files (x86)/Steam/steamapps/common/Kenshi';
 export const KENSHI_APP_ID = '233860';
 export const CONFIG_FILE_NAME = 'kenshi-paths.json';
 
-/** Мастерская по умолчанию: `<steamapps>/workshop/content/233860` рядом с `<steamapps>/common/Kenshi`. */
+/** Default Workshop: `<steamapps>/workshop/content/233860` next to `<steamapps>/common/Kenshi`. */
 export function defaultWorkshopDir(kenshiDir: string): string {
   return resolve(kenshiDir, '..', '..', 'workshop', 'content', KENSHI_APP_ID);
 }
@@ -38,7 +38,7 @@ function findConfig(from: string): string | undefined {
   }
 }
 
-/** Пути, заданные явно: `KENSHI_DIR` / `KENSHI_WORKSHOP_DIR` и `kenshi-paths.json`. Без автопоиска. */
+/** Explicitly set paths: `KENSHI_DIR` / `KENSHI_WORKSHOP_DIR` and `kenshi-paths.json`. No auto-detection. */
 export function configuredGamePaths(cwd: string = process.cwd(), env: NodeJS.ProcessEnv = process.env): Partial<GamePaths> {
   let kenshi = env['KENSHI_DIR'] || undefined;
   let workshop = env['KENSHI_WORKSHOP_DIR'] || undefined;
@@ -53,7 +53,7 @@ export function configuredGamePaths(cwd: string = process.cwd(), env: NodeJS.Pro
 }
 
 export interface ResolveGamePathsOptions {
-  /** Папка игры из настроек редактора: берётся после явных настроек, до автопоиска. */
+  /** Game folder from the editor settings: taken after explicit settings, before auto-detection. */
   preferred?: string | undefined;
 }
 
@@ -70,7 +70,7 @@ export function resolveGamePaths(cwd: string = process.cwd(), env: NodeJS.Proces
   return pick(DEFAULT_KENSHI_DIR, defaultWorkshopDir(DEFAULT_KENSHI_DIR));
 }
 
-/** Ванильные слои в порядке загрузки. */
+/** Vanilla layers in load order. */
 import { VANILLA_FILES } from '../vanilla.ts';
 
 export { VANILLA_FILES };
@@ -91,7 +91,7 @@ function isDir(p: string): boolean {
   }
 }
 
-/** Все .mod из `<игра>/mods/*` и из мастерской `<workshop>/*`. */
+/** All .mod files from `<game>/mods/*` and from the Workshop `<workshop>/*`. */
 export function installedModFiles(paths: GamePaths): { source: 'mods' | 'workshop'; path: string }[] {
   const out: { source: 'mods' | 'workshop'; path: string }[] = [];
   const scan = (root: string, source: 'mods' | 'workshop'): void => {

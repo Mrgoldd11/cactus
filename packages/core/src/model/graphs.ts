@@ -1,8 +1,8 @@
 /**
- * Графы связей (этап 5): дерево исследований (что открывает что, чертежи, цена), крафт
- * (станок → что делает → из чего) и состав отрядов и городов (кто, сколько, вероятность,
- * торговцы). Только чтение итоговых записей; правка — значения одной ссылки (`setLinkValues`),
- * одной отменой. Работает на любом наборе модов: битые ссылки помечаются `missing`.
+ * Link graphs (stage 5): research tree (what unlocks what, blueprints, cost), crafting
+ * (workbench → what it makes → from what) and composition of squads and towns (who, how many, probability,
+ * traders). Read-only over resulting records; the edit is the values of one reference (`setLinkValues`),
+ * with one undo. Works on any set of mods: broken references are marked `missing`.
  */
 import { decodeText } from '../text.ts';
 import { itemTypeId } from '../format/item-types.ts';
@@ -10,28 +10,28 @@ import type { GameRecord, Reference } from '../format/types.ts';
 import { plainName } from '../world/where.ts';
 import { EditError, type ModContext, type RecordStatus } from './context.ts';
 
-/** Запись в графе: имя, русское имя, состояние в моде. */
+/** A record in the graph: name, Russian name, state in the mod. */
 export interface GraphRef {
   sid: string;
   type: string;
   name: string;
   localized?: string;
   status?: RecordStatus;
-  /** Ссылка есть, а записи нет (удалена или из отсутствующего мода). */
+  /** The reference exists but the record does not (deleted or from a missing mod). */
   missing?: boolean;
 }
 
-/** Ссылка `from.category → target` и её значения (что они значат — по полю схемы). */
+/** Reference `from.category → target` and its values (their meaning comes from the schema field). */
 export interface GraphLink {
   from: string;
   category: string;
   target: string;
   values: [number, number, number];
-  /** Сколько значений у поля по схеме (0 — значения не используются). */
+  /** How many values the field has by schema (0 = values are not used). */
   arity: number;
 }
 
-/** Готовый список id по типам (индекс редактора); без него записи перебираются. */
+/** Prebuilt id lists by type (editor index); without it records are scanned. */
 export type TypeIndex = ReadonlyMap<string, readonly string[]>;
 
 export interface GraphOptions {
@@ -78,10 +78,10 @@ const str = (rec: GameRecord, key: string): string => {
   return v ? decodeText(v) : '';
 };
 
-// ── Исследования ─────────────────────────────────────────────────────────────
+// ── Research ─────────────────────────────────────────────────────────────────
 
 export const RESEARCH_TYPE = 'RESEARCH';
-/** Поля «что открывает» исследование. */
+/** Fields of what a research "unlocks". */
 export const RESEARCH_UNLOCKS = ['enable buildings', 'enable item', 'enable weapon type', 'enable weapon model', 'enable armour', 'enable crossbow', 'enable backpack', 'enable robotics', 'improve buildings'] as const;
 
 export interface ResearchUnlock extends GraphRef {
@@ -103,11 +103,11 @@ export interface ResearchNode extends GraphRef {
   blueprintOnly: boolean;
   levelUpgrade: boolean;
   cost: ResearchCost[];
-  /** Чертёж-предмет. */
+  /** Blueprint item. */
   blueprint?: GraphRef;
-  /** Списки торговцев, где продаётся чертёж (VENDOR_LIST.blueprints). */
+  /** Trader lists where the blueprint is sold (VENDOR_LIST.blueprints). */
   soldBy: GraphRef[];
-  /** Что нужно изучить раньше. */
+  /** What must be researched first. */
   requires: GraphLink[];
   unlocks: ResearchUnlock[];
 }
@@ -155,13 +155,13 @@ export function researchGraph(ctx: ModContext, options: GraphOptions = {}): Rese
   return { nodes, categories: [...categories].sort() };
 }
 
-// ── Крафт ────────────────────────────────────────────────────────────────────
+// ── Crafting ─────────────────────────────────────────────────────────────────
 
-/** Поля BUILDING_FUNCTIONALITY: что станок делает. */
+/** BUILDING_FUNCTIONALITY fields: what the workbench makes. */
 export const CRAFT_FIELDS = ['item crafts', 'weapon crafts', 'armour crafts', 'crossbow crafts', 'backpack crafts', 'robotics crafts', 'produces'] as const;
 
 export interface CraftInput extends GraphRef {
-  /** Сколько штук на одну вещь (значение / 100). */
+  /** How many units per one item (value / 100). */
   amount: number;
   link: GraphLink;
 }
@@ -169,9 +169,9 @@ export interface CraftInput extends GraphRef {
 export interface CraftProduct extends GraphRef {
   field: string;
   link: GraphLink;
-  /** Из чего (ингредиенты вещи; у станка с «overrides ingredients» — то, что он потребляет). */
+  /** From what (the item's ingredients; for a workbench with "overrides ingredients", what it consumes). */
   inputs: CraftInput[];
-  /** Часов на штуку (production time вещи). */
+  /** Hours per unit (the item's production time). */
   hours?: number;
 }
 
@@ -184,14 +184,14 @@ export interface CraftStation extends GraphRef {
   products: CraftProduct[];
 }
 
-/** Ингредиенты вещи (ITEM, CROSSBOW, LIMB_REPLACEMENT). */
+/** Ingredients of an item (ITEM, CROSSBOW, LIMB_REPLACEMENT). */
 export function ingredientsOf(ctx: ModContext, sid: string): CraftInput[] {
   const rec = ctx.get(sid);
   if (!rec) return [];
   return refs(rec, 'ingredients').map((r) => ({ ...graphRef(ctx, r.target), amount: r.v0 / 100, link: link(ctx, rec, 'ingredients', r) }));
 }
 
-/** Станки: здания, у которых функция что-то делает или производит. */
+/** Workbenches: buildings whose function makes or produces something. */
 export function craftingStations(ctx: ModContext, options: GraphOptions = {}): CraftStation[] {
   const byFunc = new Map<string, Omit<CraftStation, keyof GraphRef | 'functionality'> | null>();
   const describe = (fsid: string): Omit<CraftStation, keyof GraphRef | 'functionality'> | null => {
@@ -227,18 +227,18 @@ export function craftingStations(ctx: ModContext, options: GraphOptions = {}): C
   return stations;
 }
 
-// ── Отряды и города ──────────────────────────────────────────────────────────
+// ── Squads and towns ─────────────────────────────────────────────────────────
 
-/** Поля отряда с персонажами. */
+/** Squad fields with characters. */
 export const SQUAD_MEMBER_FIELDS = ['leader', 'squad', 'squad2', 'choosefrom list', 'animals', 'animals2'] as const;
-/** Поля отряда с другими отрядами. */
+/** Squad fields with other squads. */
 export const SQUAD_SQUAD_FIELDS = ['housemates', 'slaves', 'prisoners'] as const;
 
 export interface SquadMember extends GraphRef {
   field: string;
   min: number;
   max: number;
-  /** Для `choosefrom list` — шанс (вес). */
+  /** For `choosefrom list`: the chance (weight). */
   chance?: number;
   link: GraphLink;
 }
@@ -252,19 +252,19 @@ export interface SquadComposition extends GraphRef {
   faction?: GraphRef;
   trader: boolean;
   members: SquadMember[];
-  /** Сколько случайных из `choosefrom list` (мин, макс). */
+  /** How many random ones from `choosefrom list` (min, max). */
   randomChars: [number, number];
   vendors: SquadVendor[];
-  /** Соседи, рабы, пленники. */
+  /** Housemates, slaves, prisoners. */
   squads: SquadMember[];
 }
 
-/** Мин/макс по значениям ссылки поля отряда. */
+/** Min/max from the reference values of a squad field. */
 function counts(field: string, r: Reference): { min: number; max: number; chance?: number } {
   if (field === 'leader') return { min: r.v0, max: r.v0 };
   if (field === 'choosefrom list') return { min: 0, max: 1, chance: r.v0 };
   if (field === 'slaves' || field === 'prisoners') return { min: 1, max: 1 };
-  // squad, squad2, housemates, animals: v0 — мин, v1 — макс (0 — без разброса).
+  // squad, squad2, housemates, animals: v0 = min, v1 = max (0 = no spread).
   return { min: r.v0, max: Math.max(r.v0, r.v1) };
 }
 
@@ -287,13 +287,13 @@ export function squadComposition(ctx: ModContext, sid: string): SquadComposition
 }
 
 export interface TownSquad extends GraphRef {
-  /** residents, bar squads, roaming squads, default resident или faction residents (жители по умолчанию от фракции). */
+  /** residents, bar squads, roaming squads, default resident or faction residents (default residents from the faction). */
   field: string;
   count: number;
   priority?: number;
-  /** Шанс появления, % (у отрядов бара). */
+  /** Spawn chance, % (for bar squads). */
   chance?: number;
-  /** Ссылку можно править (у `default resident` значений нет). */
+  /** The reference can be edited (`default resident` has no values). */
   link: GraphLink;
 }
 
@@ -301,9 +301,9 @@ export interface TownComposition extends GraphRef {
   faction?: GraphRef;
   townType: number;
   squads: TownSquad[];
-  /** Город наследует жителей фракции (своих нет или «residents override» выключен). */
+  /** The town inherits the faction's residents (it has none of its own, or "residents override" is off). */
   usesFaction: boolean;
-  /** Замены города (по состоянию мира). */
+  /** Town replacements (by world state). */
   overrides: GraphRef[];
 }
 
@@ -333,11 +333,11 @@ export function townComposition(ctx: ModContext, sid: string): TownComposition |
   return out;
 }
 
-// ── Правка ───────────────────────────────────────────────────────────────────
+// ── Editing ──────────────────────────────────────────────────────────────────
 
 /**
- * Поменять значения ссылки `from.category → target` (одна отмена). Ссылка должна быть в
- * итоговой записи; место ссылки в списке сохраняется.
+ * Change the values of reference `from.category → target` (one undo). The reference must be in the
+ * resulting record; its place in the list is preserved.
  */
 export function setLinkValues(ctx: ModContext, l: Pick<GraphLink, 'from' | 'category' | 'target'>, values: readonly number[]): void {
   const rec = ctx.get(l.from);

@@ -1,13 +1,13 @@
 /**
- * Парсер `fcs_layout.def` — дерево категорий в левой панели FCS:
+ * Parser of `fcs_layout.def` — the category tree in the FCS left panel:
  * ```
  * [FCS_LAYOUT]
  * Items:                 ITEM "item function!=ITEM_BOOK"
  * <TAB>Weapons:          WEAPON
  * <TAB><TAB>Models:      MATERIAL_SPECS_WEAPON
  * ```
- * Вложенность — число табуляций. Фильтр — условия через `;`: `поле==значение`,
- * `поле=значение` (то же самое) или `поле!=значение`.
+ * Nesting is the number of tabs. The filter is conditions separated by `;`: `field==value`,
+ * `field=value` (the same) or `field!=value`.
  */
 import type { ParseWarning } from './fcs-def.ts';
 
@@ -82,7 +82,7 @@ export function parseFcsLayout(text: string): FcsLayout {
   return { roots, warnings };
 }
 
-/** Все узлы дерева в порядке обхода. */
+/** All tree nodes in traversal order. */
 export function* walkLayout(nodes: readonly LayoutNode[]): Generator<LayoutNode> {
   for (const n of nodes) {
     yield n;

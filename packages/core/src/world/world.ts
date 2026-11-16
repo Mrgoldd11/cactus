@@ -1,14 +1,14 @@
 /**
- * Мир игры: файлы уровня (`leveldata.level`) и зон (`zone.X.Y.zone`) по слоям — ваниль
- * (`data/newland/leveldata` и подпапки Newwworld / Dialogue / rebirth), затем моды
- * (`<папка мода>/leveldata`). Файлы с одним и тем же относительным именем сливаются по слоям
- * так же, как записи .mod (`applyLayer`): id записей вроде `0-buildinglist` повторяются в
- * каждой зоне, поэтому сливать можно только внутри одного файла.
+ * The game world: level files (`leveldata.level`) and zone files (`zone.X.Y.zone`) by layer — vanilla
+ * (`data/newland/leveldata` and the subfolders Newwworld / Dialogue / rebirth), then mods
+ * (`<mod folder>/leveldata`). Files with the same relative name are merged by layer
+ * the same way as .mod records (`applyLayer`): record ids like `0-buildinglist` repeat in
+ * every zone, so merging is only possible within one file.
  *
- * Общая модель — размещённые экземпляры (`Placement`): что стоит, где (vec3) и как повёрнуто
- * (кватернион w, x, y, z), в каком файле и зоне. Поверх неё — города (список городов в
- * `leveldata.level`) и здания (`0-buildinglist` в зонах с состоянием GAMESTATE_BUILDING).
- * Модуль без доступа к диску; чтение — в `node/world.ts`.
+ * The common model is placed instances (`Placement`): what stands, where (vec3) and how it is rotated
+ * (quaternion w, x, y, z), in which file and zone. On top of it — towns (the town list in
+ * `leveldata.level`) and buildings (`0-buildinglist` in zones with GAMESTATE_BUILDING state).
+ * The module has no disk access; reading is in `node/world.ts`.
  */
 import { decodeText } from '../text.ts';
 import { itemTypeName } from '../format/item-types.ts';
@@ -16,9 +16,9 @@ import type { DataFile, GameRecord, Vec3, Vec4 } from '../format/types.ts';
 import { applyLayer } from '../model/record-ops.ts';
 
 export interface WorldFile {
-  /** Слой (имя .mod), из которого файл. */
+  /** The layer (.mod name) the file comes from. */
   layer: string;
-  /** Путь внутри папки `leveldata` через `/`, например `zone.42.22.zone`. */
+  /** Path inside the `leveldata` folder with `/`, e.g. `zone.42.22.zone`. */
   path: string;
   file: DataFile;
 }
@@ -29,31 +29,31 @@ export interface ZoneCoord {
 }
 
 export interface Placement {
-  /** Ключ экземпляра в записи-владельце. */
+  /** Instance key in the owner record. */
   key: string;
-  /** Что размещено (строковый id записи из .mod). */
+  /** What is placed (record string id from the .mod). */
   target: string;
   position: Vec3;
-  /** Кватернион в порядке файла (w, x, y, z). */
+  /** Quaternion in file order (w, x, y, z). */
   rotation: Vec4;
-  /** Строковые id состояний экземпляра (GAMESTATE_*), если есть. */
+  /** String ids of the instance's states (GAMESTATE_*), if any. */
   states: string[];
-  /** Запись файла уровня, в которой лежит экземпляр (например `0-buildinglist`). */
+  /** The level-file record that holds the instance (e.g. `0-buildinglist`). */
   holder: string;
   holderType: string;
-  /** Файл (относительный путь) и последний слой, менявший запись-владельца. */
+  /** File (relative path) and the last layer that changed the owner record. */
   file: string;
   layer: string;
   zone?: ZoneCoord;
 }
 
 export interface TownPlacement extends Placement {
-  /** Зоны, которые занимает город (из GAMESTATE_TOWN). */
+  /** Zones the town occupies (from GAMESTATE_TOWN). */
   zones: ZoneCoord[];
 }
 
 export interface BuildingPlacement extends Placement {
-  /** Поля состояния здания (GAMESTATE_BUILDING). */
+  /** Building state fields (GAMESTATE_BUILDING). */
   name?: string;
   squadTemplate?: string;
   residentsTemplate?: string;
@@ -61,11 +61,11 @@ export interface BuildingPlacement extends Placement {
   exterior?: string;
   faction?: string;
   /**
-   * Высота здания в мире (`world Y pos` состояния). y экземпляра у зданий — высота НАД ЗЕМЛЁЙ:
-   * у ≈ 76 % зданий `world Y pos` = рельеф + y (остальные стоят на чём-то — на платформах, ярусах).
+   * World height of the building (`world Y pos` of the state). A building instance's y is height ABOVE GROUND:
+   * for ≈ 76 % of buildings `world Y pos` = terrain + y (the rest stand on something — platforms, tiers).
    */
   worldY?: number;
-  /** Город (TOWN), к которому привязано здание, если нашёлся. */
+  /** The town (TOWN) the building belongs to, if found. */
   town?: string;
 }
 
@@ -82,7 +82,7 @@ interface MergedRecord {
   layer: string;
 }
 
-/** Дальше этого (по горизонтали) здание к городу «по соседству» не привязываем. */
+/** Beyond this (horizontally) a building is not attached to a "neighbouring" town. */
 const NEAREST_TOWN_MAX = 6000;
 
 const ZONE_RE = /(?:^|\/)zone\.(-?\d+)\.(-?\d+)\.zone$/i;
@@ -112,7 +112,7 @@ function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
 }
 
 export class WorldIndex {
-  /** Относительный путь (в нижнем регистре) → слитые записи файла. */
+  /** Relative path (lowercase) → merged file records. */
   private readonly merged = new Map<string, { path: string; records: Map<string, MergedRecord> }>();
   private readonly byTarget = new Map<string, Placement[]>();
   private readonly townsById = new Map<string, TownPlacement[]>();
@@ -139,14 +139,14 @@ export class WorldIndex {
     this.build();
   }
 
-  /** Пустой мир (нет файлов уровня). */
+  /** Empty world (no level files). */
   static empty(): WorldIndex {
     return new WorldIndex([]);
   }
 
   private build(): void {
-    // Состояния (GAMESTATE_TOWN / GAMESTATE_BUILDING) ищем в том же файле, что и экземпляр:
-    // их id (`133-Newwworld-INGAME-S23`) повторяются в разных зонах.
+    // States (GAMESTATE_TOWN / GAMESTATE_BUILDING) are looked up in the same file as the instance:
+    // their ids (`133-Newwworld-INGAME-S23`) repeat across zones.
     const townByHandle = new Map<string, string>();
     const buildings: { b: BuildingPlacement; townHandle: string | undefined }[] = [];
 
@@ -214,8 +214,8 @@ export class WorldIndex {
         }
       }
     }
-    // Ручка города у здания бывает устаревшей (осталась от слоя Newwworld), тогда берём
-    // ближайший город, в зонах которого лежит здание.
+    // A building's town handle may be stale (left from the Newwworld layer); then we take
+    // the nearest town whose zones contain the building.
     for (const list of this.townsById.values()) for (const t of list) for (const z of t.zones) push(this.townsByZone, `${z.x}.${z.y}`, t);
     for (const { b, townHandle } of buildings) {
       const town = (townHandle ? townByHandle.get(townHandle) : undefined) ?? this.townNear(b)?.target;
@@ -227,37 +227,37 @@ export class WorldIndex {
     }
   }
 
-  /** Все экземпляры, размещающие запись `target` (здания, предметы, города…). */
+  /** All instances placing record `target` (buildings, items, towns…). */
   instancesOf(target: string): readonly Placement[] {
     return this.byTarget.get(target) ?? [];
   }
 
-  /** Все экземпляры мира (кроме пустых — так поздний слой убирает экземпляр). */
+  /** All world instances (except empty ones — that is how a later layer removes an instance). */
   *placements(): Iterable<Placement> {
     for (const [target, list] of this.byTarget) if (target !== '') yield* list;
   }
 
-  /** Все здания с состоянием (GAMESTATE_BUILDING) — с именем, фракцией, отрядами, городом. */
+  /** All buildings with a state (GAMESTATE_BUILDING) — with name, faction, squads, town. */
   buildings(): readonly BuildingPlacement[] {
     return this.buildingList;
   }
 
-  /** Все размещённые города (список городов `leveldata.level`). */
+  /** All placed towns (the town list in `leveldata.level`). */
   allTowns(): TownPlacement[] {
     return [...this.townsById.values()].flat();
   }
 
-  /** Где стоит город (TOWN): по списку городов `leveldata.level`. */
+  /** Where a town (TOWN) stands: from the town list in `leveldata.level`. */
   towns(townId: string): readonly TownPlacement[] {
     return this.townsById.get(townId) ?? [];
   }
 
-  /** Здания, в которых живёт / работает отряд (`squad template` или `residents template`). */
+  /** Buildings where a squad lives / works (`squad template` or `residents template`). */
   buildingsWithSquad(squadId: string): readonly BuildingPlacement[] {
     return this.buildingsBySquad.get(squadId) ?? [];
   }
 
-  /** Ближайший город, в зонах которого лежит точка (не дальше `NEAREST_TOWN_MAX` по горизонтали). */
+  /** Nearest town whose zones contain the point (no farther than `NEAREST_TOWN_MAX` horizontally). */
   townNear(p: { position: Vec3; zone?: ZoneCoord }): TownPlacement | undefined {
     if (!p.zone) return undefined;
     let best: TownPlacement | undefined;
@@ -272,12 +272,12 @@ export class WorldIndex {
     return best;
   }
 
-  /** Слитая запись файла уровня. */
+  /** Merged level-file record. */
   record(path: string, stringId: string): GameRecord | undefined {
     return this.merged.get(path.toLowerCase())?.records.get(stringId)?.rec;
   }
 
-  /** Относительные пути слитых файлов. */
+  /** Relative paths of merged files. */
   files(): string[] {
     return [...this.merged.values()].map((e) => e.path);
   }
@@ -295,7 +295,7 @@ export class WorldIndex {
   }
 }
 
-/** Координаты для людей: `x z` (y — высота), с зоной, если известна. */
+/** Coordinates for humans: `x z` (y is height), with the zone if known. */
 export function formatPosition(position: Vec3, zone?: ZoneCoord): string {
   const r = (n: number): string => String(Math.round(n));
   return `${r(position[0])} ${r(position[2])}${zone ? ` (зона ${zone.x}.${zone.y})` : ''}`;
