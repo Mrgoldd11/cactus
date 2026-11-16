@@ -190,6 +190,34 @@ barman; the live MCP link; on a temporary "game folder" — mods as layers, conf
 order, copying a workshop mod and the **Translation** panel (typing a translation, CSV export,
 import back, undo). Screenshots go to `out/screenshots/`.
 
+## Publishing to the Workshop
+
+The **Publish…** button on the editor toolbar uploads the open mod to the Kenshi Steam Workshop,
+or updates your existing item. It is enabled only for a saved mod in the game's `mods` folder
+(`mods/<name>/<name>.mod`); Workshop downloads cannot be published.
+
+The window shows the title, the description (taken from the mod header; Steam understands
+BBCode, and **Write into the mod** puts an edited description back into the header), tags,
+visibility (a new item starts as *Private*), the preview picture (PNG, JPEG or GIF, up to 1 MB),
+a change note, the files that will be uploaded and the checks that block or warn. A confirm
+step says in plain words what Steam will do on your account; then come the progress and a
+result screen with links to the item.
+
+- Files: the whole mod folder except Cactus companion files (`*.kedit-*`), backups (`*.bak`,
+  `*.old`, …), temporary and system files (`Thumbs.db`, `desktop.ini`) and `.git`/`.svn` folders.
+- The item number is stored next to the mod in `_<mod>.info` and the preview in `_<mod>.img`, in
+  the same format FCS uses, so FCS and Cactus can update the same item. A newly created item's
+  number is written there before the files are uploaded.
+- The upload runs in a separate short-lived process (`steamworks.js`); Steam must be running and
+  logged in to an account that owns Kenshi. Cancelling is safe at any point.
+- Log of every run: `<userData>/logs/steam-upload.log`.
+- `KEDIT_FAKE_STEAM=1` (or a scenario name such as `timeout`, `slow`, `not-running`) replaces
+  Steam with a fake that uploads nothing; the tests use it.
+
+Cactus is not an official tool. Like FCS, it talks to Steam under Kenshi's own app id (233860);
+Steam allows this technically, but Lo-Fi Games have not endorsed it. You publish at your own
+discretion.
+
 ## Search syntax
 
 The search box of the record list, `kedit find --query "…"` and the MCP `find` tool (`query`)
