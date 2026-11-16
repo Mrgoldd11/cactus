@@ -111,7 +111,7 @@ export async function startLiveServer(options: LiveServerOptions): Promise<LiveS
     const reply = (r: LiveResponse): void => { conn.send(JSON.stringify(r)); };
     if (!conn.info) {
       if (req.method !== 'hello' || !sameToken(req.token, token)) {
-        reply({ id: req.id, ok: false, error: 'Неверный токен: подключитесь заново (файл live.json)' });
+        reply({ id: req.id, ok: false, error: 'Invalid token: reconnect (file live.json)' });
         conn.close(1008, 'auth');
         return;
       }

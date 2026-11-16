@@ -148,7 +148,7 @@ describe('live link with the editor', () => {
       ws.addEventListener('close', (ev) => { resolve({ code: ev.code, msg }); });
     });
     expect(closed.code).toBe(1008);
-    expect(closed.msg).toContain('Неверный токен');
+    expect(closed.msg).toContain('Invalid token');
     expect(server.clients()).toEqual([]);
   });
 });

@@ -20,7 +20,7 @@ const session = new Session(paths, process.cwd());
 if (values.mod !== undefined) {
   const dependencies = values.deps?.split(',').map((s) => s.trim()).filter(Boolean);
   const r = session.open({ mod: values.mod, ...(dependencies ? { dependencies } : {}) });
-  process.stderr.write(`kenshi-mcp: открыт ${r.path ?? r.ctx.modName}\n`);
+  process.stderr.write(`kenshi-mcp: opened ${r.path ?? r.ctx.modName}\n`);
 }
 
 await createServer(session).connect(new StdioServerTransport());
