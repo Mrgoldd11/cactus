@@ -37,7 +37,7 @@ Download `Cactus-0.2.0-beta-win-x64.zip`, unzip to a simple folder (e.g. `C:\Cac
 - MCP: `find` with `query`, new `fix` and `cleanup` tools (preview first, change the mod only with `apply: true`).
 
 ## Known limitations (Beta)
-- **Workshop publishing is unofficial.** Like the FCS, Cactus talks to Steam under Kenshi's own app id (233860). Steam allows this technically, but Lo-Fi Games have not endorsed it. Steam must be running and logged in to an account that owns Kenshi. Publishing has been tested end to end against a simulated Steam; **try it first on a Private test item.** Not there yet: "update the mod's info from Steam", an ownership pre-check, and a BBCode preview of the description.
+- **Workshop publishing:** Steam must be running and logged in to an account that owns Kenshi. **Before your first real upload, try a Private test item.** Not there yet: "update the mod's info from Steam", an ownership pre-check, and a BBCode preview of the description.
 - Windows x64 only; zip, no installer; **not code-signed** — SmartScreen will warn ("More info" → "Run anyway").
 - Tested mostly with Steam Kenshi 1.0.65 on one machine; GOG less tested.
 - The real-world foliage and buildings in the World view need the optional Kenshi Bridge plugin and a dump made in the running game; without it, foliage is scattered approximately.

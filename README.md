@@ -43,7 +43,7 @@ In PowerShell: `Get-FileHash .\Cactus-0.2.0-beta-win-x64.zip` — the value must
 
 | | |
 |---|---|
-| ![Publish](docs/screenshots/15-publish.png) | **Publish to the Steam Workshop** from *Mod → Publish…*: new item or update, tags, visibility, preview, change note, checks and a confirm step. Uses the FCS `_<mod>.info` / `_<mod>.img` format, so the FCS and Cactus can update the same item. Unofficial (Kenshi's app id, like the FCS) — try a *Private* test item first. |
+| ![Publish](docs/screenshots/15-publish.png) | **Publish to the Steam Workshop** from *Mod → Publish…*: new item or update, tags, visibility, preview, change note, checks and a confirm step. Uses the FCS `_<mod>.info` / `_<mod>.img` format, so the FCS and Cactus can update the same item. Try a *Private* test item first. |
 | ![Diagnostics](docs/screenshots/10-diagnostics.png) | **Diagnostics with one-click fixes**, "Fix all" per kind and an ignore list, plus new FCS checks. |
 | ![Cleanup](docs/screenshots/11-cleanup.png) | **Mod cleanup**: obsolete fields, no-op changes, orphaned records, invalid references — grouped, with checkboxes. |
 | ![Search](docs/screenshots/09-search.png) | **Search with conditions**: `type=WEAPON; weight kg>10`, `state=mod`, `ref=Katana`, `vendors.weapons:katana`; the **?** button lists the syntax. |
@@ -82,7 +82,7 @@ The tool names, descriptions, parameters and server messages the AI sees are in 
 ## Known limitations of the Beta
 - Windows x64 only; zip + exe, no installer; not code-signed (SmartScreen warning).
 - Tested mostly with Steam Kenshi 1.0.65 on one machine; GOG detection has had less testing.
-- Workshop publishing is unofficial (Kenshi's app id, like the FCS) and was tested against a simulated Steam; try a *Private* test item first. Not there yet: updating the mod's info from Steam, an ownership pre-check, a BBCode preview.
+- Before your first real Workshop upload, try a *Private* test item. Not there yet: updating the mod's info from Steam, an ownership pre-check, a BBCode preview.
 - Some FCS features are missing or weaker (configurable columns, notes, spell check, some dialogue templates, region map editor).
 - World editing (placing/moving objects, building interiors) works in the editor window but has **not yet been checked in the running game**; treat it as experimental.
 - Some panels are rough; it is a one-person project.
