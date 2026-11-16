@@ -11,6 +11,10 @@ import type { SelectionKind } from './selection.ts';
 /** Куда панель встаёт по умолчанию, если её открыть из меню «Окно». */
 export type PanelArea = 'left' | 'center' | 'right' | 'bottom';
 
+/** Window menu sections, in menu order; the first three match the layout presets. */
+export const PANEL_GROUPS = ['data', 'dialogue', 'scene', 'mod'] as const;
+export type PanelGroup = (typeof PANEL_GROUPS)[number];
+
 /** Параметры экземпляра панели (сохраняются в раскладке). */
 export interface PanelParams {
   /** Закреплённая запись: панель показывает её, а не текущий выбор. */
@@ -33,11 +37,13 @@ export interface PanelDef {
   area: PanelArea;
   /**
    * Что панель умеет показывать: виды выбора и типы записей (`CHARACTER`, `DIALOGUE`…).
-   * Панель с `shows` следует за выбором, её можно закрепить на записи (📌).
+   * Панель с `shows` следует за выбором, её можно закрепить на записи (⊙).
    */
   shows?: { kinds: readonly SelectionKind[]; types?: readonly string[] };
   /** Можно открыть несколько экземпляров, каждый закреплён на своей записи. */
   multi?: boolean;
+  /** Section of the Window menu the panel is listed in. */
+  group: PanelGroup;
   /** Место в меню «Окно». */
   order: number;
   /** Пояснение в меню. */

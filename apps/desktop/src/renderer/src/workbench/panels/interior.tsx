@@ -31,7 +31,7 @@ import { useStore, ValueStore } from '../store.ts';
 import { DEFAULT_INTERIOR_EDIT, InteriorView, type InteriorEditSettings, type InteriorItem } from '../../three/interior.ts';
 
 const en = {
-  panel: 'Inside',
+  panel: 'Building interior',
   hint: 'Interior of a building: furniture, chests, workbenches, beds, item spots — move, rotate, add, remove',
   none: 'Select a building (record or object in the World window).',
   loading: 'Reading interiors…',
@@ -89,7 +89,7 @@ const en = {
 };
 type InteriorStrings = typeof en;
 const ru: InteriorStrings = {
-  panel: 'Внутри',
+  panel: 'Интерьер здания',
   hint: 'Интерьер здания: мебель, сундуки, верстаки, кровати, точки предметов — сдвиг, поворот, добавить, удалить',
   none: 'Выберите здание (запись или объект в окне «Мир»).',
   loading: 'Читаю интерьеры…',
@@ -146,7 +146,7 @@ const ru: InteriorStrings = {
   loadingModels: 'модели…',
 };
 const zh: InteriorStrings = {
-  panel: '室内',
+  panel: '建筑内部',
   hint: '建筑内部：家具、箱子、工作台、床、物品点——移动、旋转、添加、移除',
   none: '请选择一座建筑（“世界”窗口中的记录或对象）。',
   loading: '正在读取室内布局…',
@@ -698,7 +698,7 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
 }
 
 registerPanel({
-  id: 'interior',
+  id: 'interior', group: 'scene',
   title: (t) => INTERIOR_STRINGS[langOf(t)].panel,
   hint: (t) => INTERIOR_STRINGS[langOf(t)].hint,
   icon: '⌂',

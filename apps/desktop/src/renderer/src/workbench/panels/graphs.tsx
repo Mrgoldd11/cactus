@@ -145,7 +145,7 @@ function addSquad(ctx: ModContext, b: FlowBuilder, t: Strings, name: Namer, sid:
   const q = squadComposition(ctx, sid);
   if (!q) return;
   const lines: string[] = [];
-  if (q.trader) lines.push(`🛒 ${t.grTrader}`);
+  if (q.trader) lines.push(`¤ ${t.grTrader}`);
   if (q.faction) lines.push(name(q.faction));
   if (q.randomChars[1] > 0) lines.push(t.grRandom(q.randomChars[0], q.randomChars[1]));
   const c = card(name, q, 'squad', lines);
@@ -452,7 +452,7 @@ function GraphsPanel(): ReactNode {
 }
 
 registerPanel({
-  id: 'graphs',
+  id: 'graphs', group: 'data',
   title: (t) => t.panel_graphs,
   icon: '⛬',
   component: GraphsPanel,

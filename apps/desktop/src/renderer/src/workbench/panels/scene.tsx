@@ -39,9 +39,9 @@ function ComponentsPanel({ def, params }: PanelProps): ReactNode {
   );
 }
 
-registerPanel({ id: 'viewport', title: (t) => t.panel_viewport, icon: '◫', component: ViewportPanel, area: 'center', order: 100, placeholder: true });
+registerPanel({ id: 'viewport', group: 'scene', title: (t) => t.panel_viewport, icon: '◫', component: ViewportPanel, area: 'center', order: 100, placeholder: true });
 registerPanel({
-  id: 'components',
+  id: 'components', group: 'scene',
   title: (t) => t.panel_components,
   icon: '⚙',
   component: ComponentsPanel,

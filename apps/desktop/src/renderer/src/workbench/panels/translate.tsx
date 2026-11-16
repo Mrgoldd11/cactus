@@ -337,9 +337,9 @@ function TranslatePanel(): ReactNode {
 }
 
 registerPanel({
-  id: 'translate',
+  id: 'translate', group: 'mod',
   title: (t) => t.panel_translate,
-  icon: '🌐',
+  icon: '¶',
   component: TranslatePanel,
   area: 'center',
   order: 47,

@@ -751,7 +751,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
         )}
         {selLines.length > 0 && (
           <button className="small danger" data-testid="dg-delete" title="Del" onClick={() => { removeSelection(selLines, [...selEdges]); }}>
-            🗑 {t.dgMenuDelete}
+            ✕ {t.dgMenuDelete}
             {selLines.length > 1 ? ` (${selLines.length})` : ''}
           </button>
         )}
@@ -765,7 +765,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
         <ul className="dg-issues" data-testid="dg-issues">
           {shown.slice(0, 30).map((i, k) => (
             <li key={`${i.node}:${i.kind}:${k}`} className={`dg-issue dg-issue-${i.kind} dg-sev-${i.severity}`} data-kind={i.kind} data-node={i.node}>
-              {i.severity === 'error' ? '⛔' : i.severity === 'warning' ? '⚠' : 'ℹ'}{' '}
+              {i.severity === 'error' ? '✖' : i.severity === 'warning' ? '⚠' : 'ℹ'}{' '}
               <button
                 className="link mono"
                 onClick={() => {
@@ -848,7 +848,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
         </ReactFlow>
         {linkFrom !== undefined && (
           <div className="dg-banner" data-testid="dg-link-mode">
-            🔗 {t.dgLinkMode}
+            ⇢ {t.dgLinkMode}
           </div>
         )}
         {menu && (

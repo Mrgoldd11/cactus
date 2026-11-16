@@ -358,7 +358,7 @@ function ModsPanel(): ReactNode {
 }
 
 registerPanel({
-  id: 'mods',
+  id: 'mods', group: 'mod',
   title: (t) => t.panel_mods,
   icon: '⧉',
   component: ModsPanel,

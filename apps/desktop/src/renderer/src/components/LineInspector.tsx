@@ -231,7 +231,7 @@ export function LineInspector({ project, sid, parent, version, onGo, onSelect, o
       <div className="ln-actions">
         {lower && (
           <button className={`small${asInGame ? ' active' : ''}`} data-testid="ln-as-in-game" onClick={() => { setAsInGame(!asInGame); }}>
-            👁 {t.lnShowInGame}
+            ◎ {t.lnShowInGame}
           </button>
         )}
         {(status === 'changed' || status === 'deleted') && (
@@ -254,7 +254,7 @@ export function LineInspector({ project, sid, parent, version, onGo, onSelect, o
         )}
         {isLine && rec && (
           <button className="small danger" data-testid="ln-delete" onClick={() => { setConfirmDelete(true); }}>
-            🗑 {t.lnDelete}
+            ✕ {t.lnDelete}
           </button>
         )}
       </div>

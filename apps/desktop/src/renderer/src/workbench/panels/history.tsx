@@ -10,7 +10,7 @@ function HistoryPanel(): ReactNode {
 }
 
 registerPanel({
-  id: 'history',
+  id: 'history', group: 'mod',
   title: (t) => t.panel_history,
   icon: '↶',
   component: HistoryPanel,

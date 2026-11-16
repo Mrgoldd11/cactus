@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { DockviewApi } from 'dockview-react';
 import { useT } from '../i18n.ts';
-import { allPanels } from './registry.ts';
+import { allPanels, PANEL_GROUPS, type PanelDef, type PanelGroup } from './registry.ts';
 import { PRESETS, type PresetId } from './layouts.ts';
 
 interface Props {
@@ -67,6 +67,27 @@ export function WindowMenu({ api, preset, onPreset, onOpen }: Props): ReactNode 
     else onOpen(id);
   };
 
+  const groupTitle = (g: PanelGroup): string => (g === 'mod' ? t.windowGroup_mod : t[`preset_${g}`]);
+  const item = (d: PanelDef): ReactNode => (
+    <button
+      key={d.id}
+      role="menuitemcheckbox"
+      aria-checked={isOpen(d.id)}
+      className="menu-item"
+      data-testid={`window-panel-${d.id}`}
+      title={d.shows ? t.followsHint : undefined}
+      onClick={() => {
+        toggle(d.id);
+        setOpen(false);
+      }}
+    >
+      <span className="menu-check">{isOpen(d.id) ? '✓' : ''}</span>
+      <span className="menu-icon">{d.icon}</span>
+      {d.title(t)}
+      {d.placeholder && <span className="muted"> · {t.placeholderSoon}</span>}
+    </button>
+  );
+
   return (
     <div className="menu-wrap" ref={ref}>
       <button
@@ -81,26 +102,17 @@ export function WindowMenu({ api, preset, onPreset, onOpen }: Props): ReactNode 
       </button>
       {open && api && (
         <div className="menu" role="menu" data-testid="window-menu-list">
-          <div className="menu-group">{t.windowPanels}</div>
-          {allPanels().filter((d) => !d.placeholder).map((d) => (
-            <button
-              key={d.id}
-              role="menuitemcheckbox"
-              aria-checked={isOpen(d.id)}
-              className="menu-item"
-              data-testid={`window-panel-${d.id}`}
-              title={d.shows ? t.followsHint : undefined}
-              onClick={() => {
-                toggle(d.id);
-                setOpen(false);
-              }}
-            >
-              <span className="menu-check">{isOpen(d.id) ? '✓' : ''}</span>
-              <span className="menu-icon">{d.icon}</span>
-              {d.title(t)}
-              {d.placeholder && <span className="muted"> · {t.placeholderSoon}</span>}
-            </button>
-          ))}
+          {PANEL_GROUPS.map((g) => {
+            const list = allPanels().filter((d) => d.group === g && !d.placeholder);
+            if (list.length === 0) return null;
+            return (
+              <div key={g} role="group" aria-label={groupTitle(g)} data-testid={`window-group-${g}`}>
+                {g !== PANEL_GROUPS[0] && <div className="menu-sep" />}
+                <div className="menu-group">{groupTitle(g)}</div>
+                {list.map(item)}
+              </div>
+            );
+          })}
           <div className="menu-sep" />
           <button
             className="menu-item"

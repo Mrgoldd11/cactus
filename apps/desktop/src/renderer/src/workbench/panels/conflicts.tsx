@@ -122,7 +122,7 @@ function ConflictsPanel(): ReactNode {
 }
 
 registerPanel({
-  id: 'conflicts',
+  id: 'conflicts', group: 'mod',
   title: (t) => t.panel_conflicts,
   icon: '⚔',
   component: ConflictsPanel,

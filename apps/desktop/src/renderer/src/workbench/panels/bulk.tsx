@@ -632,7 +632,7 @@ function BulkPanel(): ReactNode {
 }
 
 registerPanel({
-  id: 'bulk',
+  id: 'bulk', group: 'data',
   title: (t) => t.panel_bulk,
   icon: '⇶',
   component: BulkPanel,

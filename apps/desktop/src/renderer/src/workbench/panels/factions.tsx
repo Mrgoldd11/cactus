@@ -373,7 +373,7 @@ function FactionsPanel(): ReactNode {
 }
 
 registerPanel({
-  id: 'factions',
+  id: 'factions', group: 'scene',
   title: (t) => t.panel_factions,
   icon: '⚑',
   component: FactionsPanel,

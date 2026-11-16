@@ -124,7 +124,7 @@ function HeaderActions({ activePanel, group, containerApi }: IDockviewHeaderActi
     <div className="dv-actions">
       {def?.shows && (params.sid !== undefined || followedSid !== undefined) && (
         <button className={`dv-action${params.sid !== undefined ? ' on' : ''}`} data-testid="panel-pin" title={params.sid !== undefined ? t.unpinPanel : t.pinPanel} onClick={pin}>
-          📌
+          ⊙
         </button>
       )}
       {group.api.location.type === 'grid' && (

@@ -181,7 +181,7 @@ export const zh1 = {
   errors: '个错误',
   warnings: '个警告',
   // живая связь с ИИ
-  aiButton: 'AI',
+  aiButton: 'AI 的更改',
   aiChanges: 'AI 的更改',
   aiServerOff: '实时连接已关闭',
   aiServerFailed: '实时连接启动失败',
@@ -280,6 +280,7 @@ export const zh1 = {
   // рабочее пространство
   windowMenu: '窗口',
   windowPanels: '面板',
+  windowGroup_mod: '模组',
   windowLayouts: '布局',
   resetLayout: '重置布局',
   preset_data: '数据',

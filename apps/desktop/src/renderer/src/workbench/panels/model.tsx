@@ -316,7 +316,7 @@ function ModelPanel({ def, params }: PanelProps): ReactNode {
 }
 
 registerPanel({
-  id: 'model',
+  id: 'model', group: 'scene',
   title: (t) => MODEL_STRINGS[langOf(t)].panel,
   hint: (t) => MODEL_STRINGS[langOf(t)].hint,
   icon: '◈',

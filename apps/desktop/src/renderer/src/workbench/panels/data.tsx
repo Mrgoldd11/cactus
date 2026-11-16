@@ -116,10 +116,10 @@ function AiChangesPanel(): ReactNode {
   );
 }
 
-registerPanel({ id: 'categories', title: (t) => t.panel_categories, icon: '☰', component: CategoriesPanel, area: 'left', order: 10 });
-registerPanel({ id: 'records', title: (t) => t.panel_records, icon: '▤', component: RecordsPanel, area: 'left', order: 20 });
+registerPanel({ id: 'categories', group: 'data', title: (t) => t.panel_categories, icon: '☰', component: CategoriesPanel, area: 'left', order: 10 });
+registerPanel({ id: 'records', group: 'data', title: (t) => t.panel_records, icon: '▤', component: RecordsPanel, area: 'left', order: 20 });
 registerPanel({
-  id: 'inspector',
+  id: 'inspector', group: 'data',
   title: (t) => t.panel_inspector,
   icon: 'ⓘ',
   component: InspectorPanel,
@@ -128,6 +128,6 @@ registerPanel({
   multi: true,
   order: 30,
 });
-registerPanel({ id: 'where', title: (t) => t.panel_where, icon: '⌖', component: WherePanel, area: 'right', shows: { kinds: ['record', 'line'] }, multi: true, order: 70 });
-registerPanel({ id: 'diagnostics', title: (t) => t.panel_diagnostics, icon: '⚠', component: DiagnosticsPanel, area: 'bottom', order: 80 });
-registerPanel({ id: 'ai', title: (t) => t.panel_ai, icon: '✦', component: AiChangesPanel, area: 'right', order: 90 });
+registerPanel({ id: 'where', group: 'data', title: (t) => t.panel_where, icon: '⌖', component: WherePanel, area: 'right', shows: { kinds: ['record', 'line'] }, multi: true, order: 70 });
+registerPanel({ id: 'diagnostics', group: 'mod', title: (t) => t.panel_diagnostics, icon: '⚠', component: DiagnosticsPanel, area: 'bottom', order: 80 });
+registerPanel({ id: 'ai', group: 'mod', title: (t) => t.panel_ai, icon: '✦', component: AiChangesPanel, area: 'right', order: 90 });

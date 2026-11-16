@@ -870,6 +870,30 @@ tr.fs-removed td:first-child {
   height: 100%;
   min-height: 420px;
 }
+/* A character in the dialogue graph: whose dialogues, a switcher, then the graph. */
+.dg-char {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.dg-char > .dg {
+  flex: 1;
+  min-height: 0;
+}
+.dg-char-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.dg-char-who {
+  font-weight: 600;
+}
+.dg-char-bar select {
+  max-width: 420px;
+}
 .dg-bar {
   display: flex;
   justify-content: space-between;
@@ -1694,6 +1718,13 @@ button.small.active {
   border-radius: 4px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  /* Long menus (Window) scroll inside short windows. */
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
+}
+.menu > [role="group"] {
   display: flex;
   flex-direction: column;
 }
@@ -2774,4 +2805,11 @@ input.invalid {
 }
 .backup-size {
   margin-left: auto;
+}
+
+/* Start screen mods table: no Author column in narrow windows (the row tooltip names the author). */
+@media (max-width: 1199px) {
+  [data-testid='mods-table'] .col-author {
+    display: none;
+  }
 }

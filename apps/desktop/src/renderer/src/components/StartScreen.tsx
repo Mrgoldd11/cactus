@@ -169,7 +169,7 @@ export function StartScreen({ games, game, onGame, onChooseFolder, folderError, 
                       <th>{t.colLoadOrder}</th>
                       <th>{t.colMod}</th>
                       <th>{t.colSource}</th>
-                      <th>{t.colAuthor}</th>
+                      <th className="col-author">{t.colAuthor}</th>
                       <th>{t.colRecords}</th>
                     </tr>
                   </thead>
@@ -178,7 +178,9 @@ export function StartScreen({ games, game, onGame, onChooseFolder, folderError, 
                       <tr
                         key={m.path}
                         className="clickable"
-                        title={m.error ?? m.path}
+                        // The author stays in the tooltip: narrow windows hide its column.
+                        title={m.error ?? (m.author ? `${m.path}
+${t.colAuthor}: ${m.author}` : m.path)}
                         onDoubleClick={() => {
                           onOpen({ game, modPath: m.path });
                         }}
@@ -189,7 +191,7 @@ export function StartScreen({ games, game, onGame, onChooseFolder, folderError, 
                           {m.error !== undefined && <span className="error"> ⚠</span>}
                         </td>
                         <td>{m.copyOf !== undefined ? t.modsCopyOf(m.copyOf) : m.source}</td>
-                        <td>{m.author}</td>
+                        <td className="col-author">{m.author}</td>
                         <td className="num">{m.recordCount}</td>
                         <td>
                           <button

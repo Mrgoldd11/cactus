@@ -236,7 +236,7 @@ function CensusPanel(): ReactNode {
 }
 
 registerPanel({
-  id: 'census',
+  id: 'census', group: 'data',
   title: (t) => t.panel_census,
   icon: '☷',
   component: CensusPanel,

@@ -297,7 +297,7 @@ function ComparePanel(): ReactNode {
 }
 
 registerPanel({
-  id: 'compare',
+  id: 'compare', group: 'data',
   title: (t) => t.panel_compare,
   icon: '⚖',
   component: ComparePanel,

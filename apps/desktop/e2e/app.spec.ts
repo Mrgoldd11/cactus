@@ -261,7 +261,7 @@ test('сценарий: копия катаны, имя и урон, в ассо
     await expect(page.getByTestId('window-panel-game')).toContainText('游戏');
     await expect(page.getByTestId('window-panel-model')).toContainText('模型');
     await expect(page.getByTestId('window-panel-world')).toContainText('世界');
-    await expect(page.getByTestId('window-panel-interior')).toContainText('室内');
+    await expect(page.getByTestId('window-panel-interior')).toContainText('建筑内部');
     await page.screenshot({ path: join(shots, '10-chinese.png') });
     await page.getByTestId('window-menu').click();
     await page.getByTestId('lang-current').click();

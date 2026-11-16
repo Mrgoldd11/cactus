@@ -728,10 +728,10 @@ function WorldPanel(): ReactNode {
 }
 
 registerPanel({
-  id: 'world',
+  id: 'world', group: 'scene',
   title: (t) => WORLD_STRINGS[langOf(t)].panel,
   hint: (t) => WORLD_STRINGS[langOf(t)].hint,
-  icon: '🗺',
+  icon: '▦',
   component: WorldPanel,
   area: 'center',
   order: 98,

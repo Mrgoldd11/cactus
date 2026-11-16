@@ -140,7 +140,7 @@ function TraceSection({ onGo }: { onGo: (sid: string) => void }): ReactNode {
 }
 
 registerPanel({
-  id: 'game',
+  id: 'game', group: 'mod',
   title: (t) => GAME_STRINGS[langOf(t)].panel,
   icon: '◉',
   component: GamePanel,

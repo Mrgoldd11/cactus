@@ -571,7 +571,7 @@ function MergePanel(): ReactNode {
                         <td className="muted">
                           {c.conflict && <span className="mg-badge" title={reasonText(t, c)}>⚠ {c.conflictCount > 0 ? c.conflictCount : ''}</span>}
                           {c.kind === 'changed' && <span> {c.fields.length}</span>}
-                          {c.blocked !== undefined && <span title={c.blocked}> 🚫</span>}
+                          {c.blocked !== undefined && <span title={c.blocked}> ⊘</span>}
                           {c.rejectedStale && <span title={t.mgStale}> ⟳</span>}
                         </td>
                       </tr>,
@@ -666,7 +666,7 @@ function MergePanel(): ReactNode {
 }
 
 registerPanel({
-  id: 'merge',
+  id: 'merge', group: 'mod',
   title: (t) => t.panel_merge,
   icon: '⇄',
   component: MergePanel,
