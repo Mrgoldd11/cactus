@@ -1,6 +1,6 @@
 /** Bridge for the window: only the listed `KeditApi` calls, no Node access. */
 import { contextBridge, ipcRenderer } from 'electron';
-import type { LiveRequestBody } from '@kenshi-editor/core';
+import type { LiveRequestBody, UploaderMessage } from '@kenshi-editor/core';
 import { IPC, type GameLinkStatus, type KeditApi, type LiveReply, type LiveStatus } from '../shared/api.ts';
 
 const api: KeditApi = {
@@ -56,6 +56,24 @@ const api: KeditApi = {
     });
   },
   getLiveStatus: () => ipcRenderer.invoke(IPC.getLiveStatus),
+  publishPrepare: (modPath) => ipcRenderer.invoke(IPC.publishPrepare, modPath),
+  publishChoosePreview: () => ipcRenderer.invoke(IPC.publishChoosePreview),
+  publishStart: (req) => ipcRenderer.invoke(IPC.publishStart, req),
+  publishCancel: () => ipcRenderer.invoke(IPC.publishCancel),
+  onPublishEvent: (cb) => {
+    const listener = (_e: unknown, m: UploaderMessage): void => {
+      cb(m);
+    };
+    ipcRenderer.on(IPC.publishEvent, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.publishEvent, listener);
+    };
+  },
+  publishOpenPage: (id) => ipcRenderer.invoke(IPC.publishOpenPage, id),
+  publishWebPage: (id) => ipcRenderer.invoke(IPC.publishWebPage, id),
+  publishCopyLink: (id) => ipcRenderer.invoke(IPC.publishCopyLink, id),
+  publishOpenAgreement: () => ipcRenderer.invoke(IPC.publishOpenAgreement),
+  publishShowLog: () => ipcRenderer.invoke(IPC.publishShowLog),
   onLiveStatus: (cb) => {
     const listener = (_e: unknown, s: LiveStatus): void => {
       cb(s);

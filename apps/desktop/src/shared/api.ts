@@ -3,7 +3,7 @@
  * all reading and writing goes through these calls, main executes them and asks for confirmation
  * if the write goes into the game or Workshop folder.
  */
-import type { ExtensionLayer, LiveRequestBody } from '@kenshi-editor/core';
+import type { ExtensionLayer, LiveRequestBody, UploaderMessage, WorkshopInfo } from '@kenshi-editor/core';
 
 export type GameSource = 'config' | 'steam' | 'gog' | 'manual';
 
@@ -322,6 +322,51 @@ export type GameReply = { ok: true; result: unknown } | { ok: false; code: strin
 export const GAME_COMMANDS = ['state', 'camera', 'teleport', 'speed', 'pause', 'towns', 'trace', 'trace_get'] as const;
 export type GameCommand = (typeof GAME_COMMANDS)[number];
 
+/** Preview picture of a Workshop item. */
+export interface PublishPreview {
+  path: string;
+  size: number;
+  format: 'png' | 'jpeg' | 'gif' | null;
+  /** Thumbnail to show (absent for huge or non-picture files). */
+  dataUrl?: string;
+}
+
+/** What the publish window needs from disk (read-only; nothing reaches Steam). */
+export interface PublishPrep {
+  location: 'mods' | 'workshop' | 'other';
+  modName: string;
+  /** `_<mod>.info`, if it exists and reads. */
+  info: WorkshopInfo | null;
+  infoState: 'missing' | 'ok' | 'unreadable';
+  infoError?: string;
+  /** Existing `_<mod>.img`. */
+  preview: PublishPreview | null;
+  imgPath: string;
+  files: { rel: string; size: number }[];
+  excluded: { rel: string; size: number; reason: 'cactus' | 'backup' | 'temp' | 'system' | 'vcs' }[];
+  totalSize: number;
+  copyOf?: { workshopId?: string };
+  /** Fake Steam scenario (`KEDIT_FAKE_STEAM`), `null` — the real Steam would be used. */
+  fake: string | null;
+  /** A Steam process runs on this computer (`null` — could not tell). */
+  steamRunning: boolean | null;
+  appId: number;
+  logPath: string;
+}
+
+export interface PublishStartRequest {
+  modPath: string;
+  title: string;
+  description: string;
+  changeNote: string;
+  tags: string[];
+  visibility: number;
+  previewPath: string;
+  expectedId: string;
+}
+
+export type PublishStartResult = { ok: true } | { ok: false; reason: 'no-window' | 'busy' | 'not-in-mods' | 'bad-request' | 'no-uploader' | 'spawn-failed' };
+
 export interface KeditApi {
   detectGames(): Promise<GameInstallInfo[]>;
   /** Game folder picker dialog; null — cancelled or there is no game in the folder. */
@@ -416,6 +461,19 @@ export interface KeditApi {
   onGameStatus(cb: (s: GameLinkStatus) => void): () => void;
   /** Command to the game plugin (main lets through only `GAME_COMMANDS`). */
   gameRequest(cmd: GameCommand, args?: object): Promise<GameReply>;
+  /** Publish window: read `_<mod>.info`, preview, upload file list, Steam presence. */
+  publishPrepare(modPath: string): Promise<PublishPrep>;
+  publishChoosePreview(): Promise<PublishPreview | null>;
+  /** Start the uploader process; its messages come through `onPublishEvent`. */
+  publishStart(req: PublishStartRequest): Promise<PublishStartResult>;
+  publishCancel(): Promise<void>;
+  onPublishEvent(cb: (m: UploaderMessage) => void): () => void;
+  /** Workshop page in the Steam client (web page if Steam cannot open it). */
+  publishOpenPage(id: string): Promise<boolean>;
+  publishWebPage(id: string): Promise<boolean>;
+  publishCopyLink(id: string): Promise<boolean>;
+  publishOpenAgreement(): Promise<void>;
+  publishShowLog(): Promise<void>;
 }
 
 export const IPC = {
@@ -463,4 +521,14 @@ export const IPC = {
   gameStatus: 'kedit:game-status',
   getGameStatus: 'kedit:get-game-status',
   gameRequest: 'kedit:game-request',
+  publishPrepare: 'kedit:publish-prepare',
+  publishChoosePreview: 'kedit:publish-choose-preview',
+  publishStart: 'kedit:publish-start',
+  publishCancel: 'kedit:publish-cancel',
+  publishEvent: 'kedit:publish-event',
+  publishOpenPage: 'kedit:publish-open-page',
+  publishWebPage: 'kedit:publish-web-page',
+  publishCopyLink: 'kedit:publish-copy-link',
+  publishOpenAgreement: 'kedit:publish-open-agreement',
+  publishShowLog: 'kedit:publish-show-log',
 } as const;

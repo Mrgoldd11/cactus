@@ -38,6 +38,9 @@ importers:
       '@kenshi-editor/core':
         specifier: workspace:*
         version: link:../../packages/core
+      steamworks.js:
+        specifier: 0.4.0
+        version: 0.4.0
     devDependencies:
       '@kenshi-editor/mcp':
         specifier: workspace:*
@@ -1410,6 +1413,10 @@ packages:
 
   std-env@4.3.0:
     resolution: {integrity: sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag==}
+
+  steamworks.js@0.4.0:
+    resolution: {integrity: sha512-O5TTRs7ucCRql4IA/kYUIQYeghTsXqf3rAm81sC22RDId264LQYqQjuaMEUSqL60I5LdULiGu0W2/A+ZDcKBKA==}
+    engines: {node: '>= 14'}
 
   sumchecker@3.0.1:
     resolution: {integrity: sha512-MvjXzkz/BOfyVDkG0oFOtBxHX2u3gKbMHIF/dXblZsgD3BWOFLmHovIpZY7BykJdAjcqRCBi1WYBNdEC9yI7vg==}
@@ -2922,6 +2929,10 @@ snapshots:
   statuses@2.0.2: {}
 
   std-env@4.3.0: {}
+
+  steamworks.js@0.4.0:
+    dependencies:
+      '@types/node': 26.6.6
 
   sumchecker@3.0.1:
     dependencies:

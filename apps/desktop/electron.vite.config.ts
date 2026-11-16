@@ -17,7 +17,16 @@ const devCsp: Plugin = {
 
 export default defineConfig({
   main: {
-    build: { externalizeDeps: workspace },
+    build: {
+      externalizeDeps: workspace,
+      // Second entry: the Workshop uploader, run as a separate Node process (src/main/publish.ts).
+      rollupOptions: {
+        input: {
+          index: resolve(import.meta.dirname, 'src/main/index.ts'),
+          uploader: resolve(import.meta.dirname, 'src/uploader/index.ts'),
+        },
+      },
+    },
   },
   preload: {
     // Sandboxed window: preload must be a single CommonJS file.

@@ -13,7 +13,8 @@
     "e2e": "electron-vite build && playwright test"
   },
   "dependencies": {
-    "@kenshi-editor/core": "workspace:*"
+    "@kenshi-editor/core": "workspace:*",
+    "steamworks.js": "0.4.0"
   },
   "devDependencies": {
     "@kenshi-editor/mcp": "workspace:*",

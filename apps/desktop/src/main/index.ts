@@ -40,6 +40,7 @@ import { initLog, log, watchWindow } from './log.ts';
 import { startGameLink, stopGameLink } from './game.ts';
 import { APP_TITLE, buildMenu } from './menu.ts';
 import { pick } from './tr.ts';
+import { registerPublishIpc } from './publish.ts';
 import {
   IPC,
   isLang,
@@ -414,6 +415,7 @@ async function exportBackup(e: IpcMainInvokeEvent, ref: ModRef, id: string): Pro
 }
 
 function registerIpc(): void {
+  registerPublishIpc({ games, lang: () => settings.lang, dataDir });
   ipcMain.handle(IPC.autosave, autosaveNow);
   ipcMain.handle(IPC.autosaveClear, (e, ref: ModRef) => {
     clearAutosave(dataDir, ref);
