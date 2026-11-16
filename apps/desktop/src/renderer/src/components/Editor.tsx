@@ -12,6 +12,7 @@ import { MOD_CHANGES_ID, reloadProject, reloadWithDependencies, restoreProject, 
 import { LangSwitch } from '../App.tsx';
 import { BackupsModal, SettingsModal, formatClock, formatTime } from './BackupModals.tsx';
 import { DependenciesModal, ModInfoModal, NewRecordModal } from './Modals.tsx';
+import { PublishModal } from './PublishModal.tsx';
 import { RESCAN_EVENT } from './IssueFixer.tsx';
 import { useAiChangesets, useLiveStatus } from '../live.ts';
 import { SelectionService, useSelectionVersion } from '../workbench/selection.ts';
@@ -37,7 +38,14 @@ interface Props {
   onSettings: (patch: Partial<Settings>) => void;
 }
 
-type ModalKind = 'deps' | 'info' | 'new' | 'backups' | 'settings';
+type ModalKind = 'deps' | 'info' | 'new' | 'backups' | 'settings' | 'publish';
+
+/** A saved mod in `<game>/mods/` (not a Workshop download) — what may be published. */
+function publishable(project: Project): boolean {
+  if (project.path === undefined || project.provenance?.inWorkshop === true) return false;
+  const norm = (x: string): string => x.replace(/\\/g, '/').toLowerCase();
+  return norm(project.path).startsWith(`${norm(project.bundle.game.kenshi).replace(/\/$/, '')}/mods/`);
+}
 
 function blurActive(): void {
   if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -333,6 +341,16 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
         >
           {t.backups}
         </button>
+        <button
+          data-testid="publish-btn"
+          title={publishable(project) ? t.publishBtnTip : t.publishBtnOff}
+          disabled={!publishable(project)}
+          onClick={() => {
+            setModal('publish');
+          }}
+        >
+          {t.publishBtn}
+        </button>
         <span className="sep" />
         <WindowMenu api={apiRef.current} preset={preset} onPreset={choosePreset} onOpen={open} />
         <LayoutSwitch api={apiRef.current} preset={preset} onPreset={choosePreset} />
@@ -422,6 +440,18 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
         <ModInfoModal
           project={project}
           onReport={report}
+          onClose={() => {
+            setModal(undefined);
+          }}
+        />
+      )}
+      {modal === 'publish' && (
+        <PublishModal
+          project={project}
+          onSave={() => save(false)}
+          onReport={(text) => {
+            report(text);
+          }}
           onClose={() => {
             setModal(undefined);
           }}

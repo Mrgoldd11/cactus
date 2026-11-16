@@ -11,6 +11,7 @@ import { fixesEn, fixesRu, fixesZh } from './i18n-fixes.ts';
 import { extensionsEn, extensionsRu, extensionsZh } from './i18n-extensions.ts';
 import { mergeEn, mergeRu } from './i18n-merge.ts';
 import { specialEn, specialRu } from './i18n-special.ts';
+import { publishEn, publishRu, publishZh } from './i18n-publish.ts';
 import { zh1 } from './i18n-zh-1.ts';
 import { zh2 } from './i18n-zh-2.ts';
 import { specialZh } from './i18n-zh-special.ts';
@@ -617,6 +618,7 @@ const en = {
   ...searchEn,
   ...extensionsEn,
   ...fixesEn,
+  ...publishEn,
 };
 
 export type Strings = typeof en;
@@ -1213,9 +1215,10 @@ const ru: Strings = {
   ...searchRu,
   ...extensionsRu,
   ...fixesRu,
+  ...publishRu,
 };
 
-const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh, ...searchZh, ...fixesZh };
+const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh, ...searchZh, ...fixesZh, ...publishZh };
 
 export const STRINGS: Record<Lang, Strings> = { en, ru, zh };
 

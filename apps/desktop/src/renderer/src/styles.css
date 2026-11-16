@@ -2903,3 +2903,42 @@ input.invalid {
     display: none;
   }
 }
+
+/* Publish to Steam Workshop window */
+.publish-form .form {
+  margin: 8px 0;
+}
+.publish-tags {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 2px 12px;
+}
+.publish-preview {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.publish-preview img,
+.publish-thumb-empty {
+  width: 128px;
+  height: 128px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.publish-files {
+  max-height: 120px;
+  overflow: auto;
+  margin: 4px 0;
+  padding-left: 18px;
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+}
+.publish-detail {
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow: auto;
+}
