@@ -7,6 +7,7 @@
  * (`score bonus` с надбавками, см. `dialogue-score.ts`).
  */
 import { decodeText } from '../text.ts';
+import type { UiText } from '../ui-text.ts';
 import type { GameRecord } from '../format/types.ts';
 import { translatedText, type TranslationIndex } from '../locale/translation.ts';
 import type { ModContext } from './context.ts';
@@ -31,7 +32,10 @@ export interface DialogueIssue {
   node: string;
   /** Для `shadowed` — реплика, которая всегда побеждает. */
   by?: string;
+  /** English text. */
   text: string;
+  /** The text in every interface language. */
+  texts: UiText;
 }
 
 export interface DialogueGraphNode {
@@ -176,22 +180,22 @@ export function buildDialogueGraph(ctx: ModContext, stringId: string, options: D
       node.event = n.event;
       if (eventDef) node.eventLabel = formatEnumValue(eventDef, n.event);
     }
-    const issue = (kind: DialogueIssueKind, text: string, by?: string): void => {
-      const i: DialogueIssue = { kind, node: n.stringId, text, ...(by !== undefined ? { by } : {}) };
+    const issue = (kind: DialogueIssueKind, texts: UiText, by?: string): void => {
+      const i: DialogueIssue = { kind, node: n.stringId, text: texts.en, texts, ...(by !== undefined ? { by } : {}) };
       node.issues.push(i);
       issues.push(i);
     };
     if (n.missing) {
       node.missing = true;
-      issue('missing', `нет записи ${n.stringId}`);
+      issue('missing', { en: `record ${n.stringId} is missing`, ru: `нет записи ${n.stringId}`, zh: `没有记录 ${n.stringId}` });
     }
     if (n.noLines) {
       node.noLines = true;
-      issue('no-lines', 'диалог без реплик — в игре ничего не скажет');
+      issue('no-lines', { en: 'dialogue without lines — says nothing in the game', ru: 'диалог без реплик — в игре ничего не скажет', zh: '对话没有台词 — 在游戏中不会说任何话' });
     }
     if (n.truncated) {
       node.truncated = true;
-      issue('truncated', 'дальше не развёрнуто (лимит узлов)');
+      issue('truncated', { en: 'not expanded further (node limit)', ru: 'дальше не развёрнуто (лимит узлов)', zh: '未继续展开（节点上限）' });
     }
     return node;
   };
@@ -215,12 +219,13 @@ export function buildDialogueGraph(ctx: ModContext, stringId: string, options: D
     for (const s of shadowedLines(ctx, node.id)) {
       const target = byId.get(s.line);
       if (!target || target.issues.some((i) => i.kind === 'shadowed')) continue;
-      const i: DialogueIssue = {
-        kind: 'shadowed',
-        node: s.line,
-        by: s.by,
-        text: `не будет выбрана: соседняя реплика «${shortName(ctx, s.by, options.translation)}» подходит всегда, стоит раньше, и очков у неё больше`,
+      const by = shortName(ctx, s.by, options.translation);
+      const texts: UiText = {
+        en: `never chosen: sibling line «${by}» always fits, comes earlier and has a higher score`,
+        ru: `не будет выбрана: соседняя реплика «${by}» подходит всегда, стоит раньше, и очков у неё больше`,
+        zh: `永远不会被选中：同级台词 «${by}» 始终适用、排在前面且分数更高`,
       };
+      const i: DialogueIssue = { kind: 'shadowed', node: s.line, by: s.by, text: texts.en, texts };
       target.issues.push(i);
       issues.push(i);
     }

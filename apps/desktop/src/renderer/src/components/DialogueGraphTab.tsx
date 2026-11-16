@@ -159,7 +159,6 @@ function hiddenBy(graph: DialogueGraph, collapsed: ReadonlySet<string>): { hidde
 
 function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, onShowLine, isLineOpen }: Props): ReactNode {
   const t = useT();
-  // Core explains issues only in Russian so far; other languages get the short dictionary text.
   const lang = useLang();
   const ctx = project.ctx;
   const translation = useGameTexts(project);
@@ -777,7 +776,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
               >
                 {i.node}
               </button>{' '}
-              {inLang({ en: t[`dgIssue_${i.kind}`], ru: i.text }, lang)}
+              {inLang(i.texts, lang)}
             </li>
           ))}
           {shown.length > 30 && <li className="muted">… {shown.length - 30}</li>}
@@ -1047,7 +1046,7 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
       )}
       {notes.map((x, i) => (
         <div key={`i${i}`} className={`dg-warn dg-sev-${x.severity}`} data-kind={x.kind}>
-          {x.severity === 'info' ? 'ℹ' : '⚠'} {inLang({ en: t[`dgIssue_${x.kind}`], ru: x.text }, lang)}
+          {x.severity === 'info' ? 'ℹ' : '⚠'} {inLang(x.texts, lang)}
         </div>
       ))}
       {end && <div className="dg-end small muted">⏹ {t.dgEnd}</div>}

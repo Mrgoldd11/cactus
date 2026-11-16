@@ -16,6 +16,7 @@ import type { ModContext } from './context.ts';
 import { isRemovalMarker, isRemovedRef, SCALAR_DICTS, scalarMap } from './record-ops.ts';
 import { isVanillaLayer } from '../vanilla.ts';
 import { decodeText } from '../text.ts';
+import { uiText, type UiText } from '../ui-text.ts';
 import { ACTION_KIND_LABELS, dialogActionKinds, dialogBestTotal, dialogSortKey, EVENT_TALK, packageDialogs, squadIndex, talkSources, type ActionKind, type SquadIndex } from '../dialog/talk.ts';
 
 export type IssueCode =
@@ -38,8 +39,13 @@ export interface ValidationIssue {
   /** Ключ поля или категория ссылок. */
   key?: string;
   target?: string;
+  /** English text (logs, MCP, JSON). */
   message: string;
+  /** The text in every interface language. */
+  texts?: UiText;
 }
+
+const msg = (t: UiText): { message: string; texts: UiText } => ({ message: t.en, texts: t });
 
 export interface ValidateOptions {
   /** Схема; по умолчанию — схема контекста. */
@@ -74,7 +80,7 @@ export function validateMod(ctx: ModContext, options: ValidateOptions = {}): Val
     const sid = delta.stringId;
     if (isRemovalMarker(delta)) {
       if (ctx.lower(sid)) deletedByMod.push(sid);
-      else issues.push({ severity: 'warning', code: 'remove-missing', stringId: sid, message: 'удаляет запись, которой нет в нижних слоях' });
+      else issues.push({ severity: 'warning', code: 'remove-missing', stringId: sid, ...msg({ en: 'removes a record that is not in the lower layers', ru: 'удаляет запись, которой нет в нижних слоях', zh: '删除了下层中不存在的记录' }) });
       continue;
     }
     const rec = ctx.get(sid);
@@ -94,7 +100,7 @@ export function validateMod(ctx: ModContext, options: ValidateOptions = {}): Val
         stringId: e.source,
         key: e.category,
         target: sid,
-        message: `ссылается на запись ${sid}, которую мод удаляет`,
+        ...msg({ en: `refers to record ${sid}, which the mod removes`, ru: `ссылается на запись ${sid}, которую мод удаляет`, zh: `引用了被本 Mod 删除的记录 ${sid}` }),
       });
     }
   }
@@ -119,7 +125,7 @@ function checkDependencyDeletions(ctx: ModContext, issues: ValidationIssue[]): v
           stringId: e.source,
           key: e.category,
           target: rec.stringId,
-          message: `ссылается на ${rec.stringId} «${decodeText(rec.name)}», которую удаляет ${layer.name}`,
+          ...msg({ en: `refers to ${rec.stringId} «${decodeText(rec.name)}», which ${layer.name} removes`, ru: `ссылается на ${rec.stringId} «${decodeText(rec.name)}», которую удаляет ${layer.name}`, zh: `引用了被 ${layer.name} 删除的 ${rec.stringId} «${decodeText(rec.name)}»` }),
         });
       }
     }
@@ -135,7 +141,7 @@ function checkEmptyDialogues(ctx: ModContext, issues: ValidationIssue[]): void {
   for (const delta of ctx.modRecords()) {
     if (isRemovalMarker(delta)) continue;
     if (empty(delta.stringId)) {
-      issues.push({ severity: 'warning', code: 'empty-dialogue', stringId: delta.stringId, key: 'lines', message: 'диалог без реплик (lines пуст) — в игре ничего не скажет' });
+      issues.push({ severity: 'warning', code: 'empty-dialogue', stringId: delta.stringId, key: 'lines', ...msg({ en: 'dialogue without lines (lines is empty) — says nothing in the game', ru: 'диалог без реплик (lines пуст) — в игре ничего не скажет', zh: '对话没有台词（lines 为空）— 在游戏中不会说任何话' }) });
     }
     for (const [cat, list] of delta.refs) {
       for (const r of list) {
@@ -146,7 +152,7 @@ function checkEmptyDialogues(ctx: ModContext, issues: ValidationIssue[]): void {
           stringId: delta.stringId,
           key: cat,
           target: r.target,
-          message: `ссылка на диалог ${r.target} без реплик — в игре он ничего не скажет`,
+          ...msg({ en: `reference to dialogue ${r.target} without lines — it says nothing in the game`, ru: `ссылка на диалог ${r.target} без реплик — в игре он ничего не скажет`, zh: `引用了没有台词的对话 ${r.target} — 在游戏中不会说任何话` }),
         });
       }
     }
@@ -182,13 +188,18 @@ function checkActionOverrides(ctx: ModContext, issues: ValidationIssue[]): void 
       const act = kindsOf(rv);
       const theirs = dialogBestTotal(ctx, rv) ?? 0;
       if (!act.length || (my < theirs && myKey <= dialogSortKey(ctx, rv))) continue;
+      const acts = (lang: string): string => act.map((a) => uiText(ACTION_KIND_LABELS[a], lang)).join(lang === 'zh' ? '、' : ', ');
       issues.push({
         severity: 'warning',
         code: 'overrides-action',
         stringId: holder,
         key,
         target: added.dialog,
-        message: `диалог ${added.dialog} «${ctx.name(added.dialog) ?? ''}» (очки ${my}) не уступает ${rv} «${ctx.name(rv) ?? ''}» (очки ${theirs}, ${act.map((a) => ACTION_KIND_LABELS[a]).join(', ')}) на событии ${added.event}: игра может выбрать диалог мода, и действие не случится; сделайте свой диалог запасным (score bonus ниже)`,
+        ...msg({
+          en: `dialogue ${added.dialog} «${ctx.name(added.dialog) ?? ''}» (score ${my}) is not below ${rv} «${ctx.name(rv) ?? ''}» (score ${theirs}, ${acts('en')}) on event ${added.event}: the game may pick the mod dialogue and the action will not happen; make your dialogue a fallback (lower score bonus)`,
+          ru: `диалог ${added.dialog} «${ctx.name(added.dialog) ?? ''}» (очки ${my}) не уступает ${rv} «${ctx.name(rv) ?? ''}» (очки ${theirs}, ${acts('ru')}) на событии ${added.event}: игра может выбрать диалог мода, и действие не случится; сделайте свой диалог запасным (score bonus ниже)`,
+          zh: `对话 ${added.dialog} «${ctx.name(added.dialog) ?? ''}»（分数 ${my}）不低于 ${rv} «${ctx.name(rv) ?? ''}»（分数 ${theirs}，${acts('zh')}），事件 ${added.event}：游戏可能选择 Mod 的对话，动作将不会发生；请把你的对话设为备用（降低 score bonus）`,
+        }),
       });
     }
   };
@@ -227,9 +238,9 @@ function dedupe(issues: ValidationIssue[]): ValidationIssue[] {
 function checkTarget(ctx: ModContext, sid: string, key: string, target: string, issues: ValidationIssue[]): void {
   if (ctx.has(target)) return;
   if (ctx.lower(target) || ctx.status(target) === 'deleted') {
-    issues.push({ severity: 'error', code: 'deleted-ref', stringId: sid, key, target, message: `ссылка на удалённую запись ${target}` });
+    issues.push({ severity: 'error', code: 'deleted-ref', stringId: sid, key, target, ...msg({ en: `reference to a removed record ${target}`, ru: `ссылка на удалённую запись ${target}`, zh: `引用了已删除的记录 ${target}` }) });
   } else {
-    issues.push({ severity: 'error', code: 'broken-ref', stringId: sid, key, target, message: `ссылка на несуществующую запись ${target}` });
+    issues.push({ severity: 'error', code: 'broken-ref', stringId: sid, key, target, ...msg({ en: `reference to a missing record ${target}`, ru: `ссылка на несуществующую запись ${target}`, zh: `引用了不存在的记录 ${target}` }) });
   }
 }
 
@@ -245,27 +256,27 @@ function checkSchema(ctx: ModContext, schema: GameSchema, delta: GameRecord, rec
   const typeName = itemTypeName(rec.type, schema.itemTypes);
   const ts: TypeSchema | undefined = schema.types.get(typeName);
   if (!ts) {
-    issues.push({ severity: 'warning', code: 'unknown-type', stringId: sid, message: `тип ${typeName} не описан в схеме` });
+    issues.push({ severity: 'warning', code: 'unknown-type', stringId: sid, ...msg({ en: `type ${typeName} is not described in the schema`, ru: `тип ${typeName} не описан в схеме`, zh: `架构中没有描述类型 ${typeName}` }) });
     return;
   }
   for (const dict of SCALAR_DICTS) {
     for (const [key, value] of scalarMap(delta, dict)) {
       const f = findField(ts, key);
       if (!f) {
-        issues.push({ severity: 'warning', code: 'unknown-field', stringId: sid, key, message: `поля ${key} нет у типа ${typeName}` });
+        issues.push({ severity: 'warning', code: 'unknown-field', stringId: sid, key, ...msg({ en: `type ${typeName} has no field ${key}`, ru: `поля ${key} нет у типа ${typeName}`, zh: `类型 ${typeName} 没有字段 ${key}` }) });
         continue;
       }
       const want = DICT_FOR_KIND[f.kind];
       // У выведенных полей и полей вида null (FCS рисует их особо) вид не проверяется.
       if (f.inferred || want === undefined) continue;
       if (want !== dict) {
-        issues.push({ severity: 'error', code: 'wrong-kind', stringId: sid, key, message: `поле ${key} должно быть ${f.kind}, а записано в ${dict}` });
+        issues.push({ severity: 'error', code: 'wrong-kind', stringId: sid, key, ...msg({ en: `field ${key} must be ${f.kind} but is written to ${dict}`, ru: `поле ${key} должно быть ${f.kind}, а записано в ${dict}`, zh: `字段 ${key} 应为 ${f.kind}，却写入了 ${dict}` }) });
         continue;
       }
       if (f.kind === 'enum' && f.enumName && !f.bitset) {
         const e = schema.enums.get(f.enumName);
         if (e && !e.values.some((v) => v.value === value)) {
-          issues.push({ severity: 'warning', code: 'enum-value', stringId: sid, key, message: `значение ${String(value)} не входит в ${f.enumName}` });
+          issues.push({ severity: 'warning', code: 'enum-value', stringId: sid, key, ...msg({ en: `value ${String(value)} is not in ${f.enumName}`, ru: `значение ${String(value)} не входит в ${f.enumName}`, zh: `值 ${String(value)} 不在 ${f.enumName} 中` }) });
         }
       }
     }
@@ -273,11 +284,11 @@ function checkSchema(ctx: ModContext, schema: GameSchema, delta: GameRecord, rec
   for (const [cat, list] of delta.refs) {
     const f = findField(ts, cat);
     if (!f) {
-      issues.push({ severity: 'warning', code: 'unknown-field', stringId: sid, key: cat, message: `категории ссылок ${cat} нет у типа ${typeName}` });
+      issues.push({ severity: 'warning', code: 'unknown-field', stringId: sid, key: cat, ...msg({ en: `type ${typeName} has no reference category ${cat}`, ru: `категории ссылок ${cat} нет у типа ${typeName}`, zh: `类型 ${typeName} 没有引用类别 ${cat}` }) });
       continue;
     }
     if (f.kind !== 'reference') {
-      if (!f.inferred) issues.push({ severity: 'error', code: 'wrong-kind', stringId: sid, key: cat, message: `поле ${cat} — ${f.kind}, а не ссылка` });
+      if (!f.inferred) issues.push({ severity: 'error', code: 'wrong-kind', stringId: sid, key: cat, ...msg({ en: `field ${cat} is ${f.kind}, not a reference`, ru: `поле ${cat} — ${f.kind}, а не ссылка`, zh: `字段 ${cat} 是 ${f.kind}，不是引用` }) });
       continue;
     }
     if (!f.targetType || f.targetType === 'NULL_ITEM' || f.inferred) continue;
@@ -291,14 +302,25 @@ function checkSchema(ctx: ModContext, schema: GameSchema, delta: GameRecord, rec
           stringId: sid,
           key: cat,
           target: r.target,
-          message: `${cat} ждёт ${f.targetType}, а ${r.target} — ${itemTypeName(t.type, schema.itemTypes)}`,
+          ...msg({
+            en: `${cat} expects ${f.targetType}, but ${r.target} is ${itemTypeName(t.type, schema.itemTypes)}`,
+            ru: `${cat} ждёт ${f.targetType}, а ${r.target} — ${itemTypeName(t.type, schema.itemTypes)}`,
+            zh: `${cat} 需要 ${f.targetType}，而 ${r.target} 是 ${itemTypeName(t.type, schema.itemTypes)}`,
+          }),
         });
       }
     }
   }
 }
 
-export function formatIssue(ctx: ModContext, i: ValidationIssue): string {
+const SEVERITY: Readonly<Record<ValidationIssue['severity'], UiText>> = {
+  error: { en: 'ERROR', ru: 'ОШИБКА', zh: '错误' },
+  warning: { en: 'warning', ru: 'предупр.', zh: '警告' },
+};
+
+/** One issue as a line of text in an interface language (English by default). */
+export function formatIssue(ctx: ModContext, i: ValidationIssue, lang = 'en'): string {
   const name = ctx.name(i.stringId);
-  return `${i.severity === 'error' ? 'ОШИБКА' : 'предупр.'} ${i.code} ${i.stringId}${name !== undefined ? ` «${name}»` : ''}${i.key ? ` [${i.key}]` : ''}: ${i.message}`;
+  const message = i.texts ? uiText(i.texts, lang) : i.message;
+  return `${uiText(SEVERITY[i.severity], lang)} ${i.code} ${i.stringId}${name !== undefined ? ` «${name}»` : ''}${i.key ? ` [${i.key}]` : ''}: ${message}`;
 }

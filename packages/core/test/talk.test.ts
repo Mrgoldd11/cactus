@@ -146,7 +146,7 @@ describe('симулятор разговора', () => {
     expect(sim.candidates.find((x) => x.dialog === 'DC')!.conditions.length).toBe(1);
     // Начало разговора: реплика NPC и выбор игрока под ней.
     expect(sim.opening.map((l) => [l.id, l.texts[0]?.en, l.choices.map((c) => c.texts[0]?.en)])).toEqual([['DV.L', 'DV says hi', ['Bye']]]);
-    const text = formatTalk(sim).join('\n');
+    const text = formatTalk(sim, 'ru').join('\n');
     expect(sim.openingOf).toBe('DV');
     expect(text).toContain('· DV (DV) — выпадет случайно: без условий выпадет случайно, шанс 50%; вместе с «DTIE»');
     expect(text).toContain('итог: без условий игра выберет случайно один из 2');
@@ -182,7 +182,7 @@ describe('симулятор разговора', () => {
 
   it('без диалогов и не персонаж', () => {
     const ctx = ctxOf();
-    expect(formatTalk(simulateTalk(ctx, 'OTHER')).join('\n')).toContain('диалогов на это событие нет');
+    expect(formatTalk(simulateTalk(ctx, 'OTHER'), 'ru').join('\n')).toContain('диалогов на это событие нет');
     expect(() => simulateTalk(ctx, 'PK')).toThrow(/is not a character/);
   });
 });
@@ -198,7 +198,8 @@ describe('проверка: мод перебивает ванильный ди�
     bld.attachToPackages(['C'], quiet, 1);
     const w = validateMod(ctx).filter((i) => i.code === 'overrides-action');
     expect(w.map((i) => [i.stringId, i.target])).toEqual([['PK', loud]]);
-    expect(w[0]!.message).toContain('арест');
+    expect(w[0]!.texts?.ru).toContain('арест');
+    expect(w[0]!.message).toContain('arrest');
   });
 
   it('клик персонажа (CHARACTER.dialogue) сравнивается со всеми диалогами события 1', () => {

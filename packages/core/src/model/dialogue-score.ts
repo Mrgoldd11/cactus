@@ -19,6 +19,7 @@
 import type { GameRecord } from '../format/types.ts';
 import { itemTypeName } from '../format/item-types.ts';
 import type { ModContext } from './context.ts';
+import { uiText, type UiText } from '../ui-text.ts';
 
 /** Ссылки реплики/диалога, которые работают как условия (кроме `conditions`). */
 export const DIALOGUE_CONDITION_CATEGORIES = [
@@ -83,25 +84,26 @@ export interface DialogueScore {
   parts: ScorePart[];
 }
 
-export const SCORE_PART_LABELS: Readonly<Record<ScorePartKey, string>> = {
-  bonus: 'score bonus',
-  conditions: 'условия',
-  tag: 'условие «метка»',
-  locked: 'locked',
-  town: 'в городе фракции',
-  'my-faction': 'моя фракция',
-  'target-faction': 'фракция собеседника',
-  'item-type': 'у собеседника предмет такого типа',
-  item: 'у собеседника предмет',
-  'world-state': 'состояние мира',
-  race: 'раса собеседника',
-  unique: 'unique',
-  'chance-permanent': 'постоянный шанс ниже 99%',
-  'target-type': 'тип собеседника',
-  speaker: 'говорит не «я»',
-  interjector: 'говорит вмешавшийся или весь отряд',
-  interjection: 'узел вмешательства',
-  'race-match': 'раса собеседника совпала (в игре)',
+/** Names of the score parts in the interface languages. */
+export const SCORE_PART_LABELS: Readonly<Record<ScorePartKey, UiText>> = {
+  bonus: { en: 'score bonus' },
+  conditions: { en: 'conditions', ru: 'условия', zh: '条件' },
+  tag: { en: 'condition «tag»', ru: 'условие «метка»', zh: '条件«标签»' },
+  locked: { en: 'locked' },
+  town: { en: 'in a town of the faction', ru: 'в городе фракции', zh: '在派系城镇中' },
+  'my-faction': { en: 'my faction', ru: 'моя фракция', zh: '我的派系' },
+  'target-faction': { en: 'target faction', ru: 'фракция собеседника', zh: '对方派系' },
+  'item-type': { en: 'target has an item of this type', ru: 'у собеседника предмет такого типа', zh: '对方持有此类物品' },
+  item: { en: 'target has the item', ru: 'у собеседника предмет', zh: '对方持有物品' },
+  'world-state': { en: 'world state', ru: 'состояние мира', zh: '世界状态' },
+  race: { en: 'target race', ru: 'раса собеседника', zh: '对方种族' },
+  unique: { en: 'unique' },
+  'chance-permanent': { en: 'chance permanent below 99%', ru: 'постоянный шанс ниже 99%', zh: '永久几率低于 99%' },
+  'target-type': { en: 'target type', ru: 'тип собеседника', zh: '对方类型' },
+  speaker: { en: 'speaker is not «me»', ru: 'говорит не «я»', zh: '说话者不是“我”' },
+  interjector: { en: 'interjector or the whole squad speaks', ru: 'говорит вмешавшийся или весь отряд', zh: '插话者或整个小队发言' },
+  interjection: { en: 'interjection node', ru: 'узел вмешательства', zh: '插话节点' },
+  'race-match': { en: 'target race matched (in game)', ru: 'раса собеседника совпала (в игре)', zh: '对方种族匹配（游戏中）' },
 };
 
 const count = (rec: GameRecord, cat: string): number => rec.refs.get(cat)?.length ?? 0;
@@ -137,8 +139,8 @@ export function dialogueScore(ctx: ModContext, rec: GameRecord): DialogueScore {
 }
 
 /** Разбивка очков текстом: «score bonus 5, условия ×2 +2, …». */
-export function formatScoreParts(parts: readonly ScorePart[]): string {
-  return parts.map((p) => (p.key === 'bonus' ? `score bonus ${String(p.value)}` : `${SCORE_PART_LABELS[p.key]}${p.count !== undefined ? ` ×${String(p.count)}` : ''} ${p.value > 0 ? '+' : ''}${String(p.value)}`)).join(', ');
+export function formatScoreParts(parts: readonly ScorePart[], lang = 'en'): string {
+  return parts.map((p) => (p.key === 'bonus' ? `score bonus ${String(p.value)}` : `${uiText(SCORE_PART_LABELS[p.key], lang)}${p.count !== undefined ? ` ×${String(p.count)}` : ''} ${p.value > 0 ? '+' : ''}${String(p.value)}`)).join(', ');
 }
 
 /**

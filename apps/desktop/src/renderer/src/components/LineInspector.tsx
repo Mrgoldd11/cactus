@@ -47,7 +47,7 @@ import {
   type Reference,
   type TranslationIndex,
 } from '@kenshi-editor/core';
-import { useDataLocale, useT, type Strings } from '../i18n.ts';
+import { useDataLocale, useLang, useT, type Strings } from '../i18n.ts';
 import { useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
 import { tryEdit } from '../hooks.ts';
@@ -421,6 +421,7 @@ function Texts({ ctx, sid, rec, lower, tr, t, edit }: Part & { lower: GameRecord
 }
 
 function ChooseFields({ ctx, sid, rec, lower, t, edit }: Part & { lower: GameRecord | undefined }): ReactNode {
+  const lang = useLang();
   const score = dialogueScore(ctx, rec);
   return (
     <>
@@ -446,7 +447,7 @@ function ChooseFields({ ctx, sid, rec, lower, t, edit }: Part & { lower: GameRec
       </div>
       <div className="small muted" data-testid="ln-score">
         {t.lnScore}: {score.total}
-        {score.parts.length > 1 ? ` (${formatScoreParts(score.parts)})` : ''}
+        {score.parts.length > 1 ? ` (${formatScoreParts(score.parts, lang)})` : ''}
       </div>
     </>
   );

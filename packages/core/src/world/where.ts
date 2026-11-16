@@ -23,18 +23,19 @@ export type WhereRole = 'placed' | 'sold' | 'carried' | 'lying' | 'loot' | 'memb
 export interface WhereEdge {
   ru: string;
   en: string;
+  zh?: string;
   /** Роль, если это первый шаг от исходной записи. */
   role?: WhereRole;
 }
 
-const sold: WhereEdge = { ru: 'в ассортименте', en: 'in vendor list', role: 'sold' };
-const gear: WhereEdge = { ru: 'снаряжение', en: 'equipment', role: 'carried' };
-const placed: WhereEdge = { ru: 'в группе предметов', en: 'in item placement group', role: 'lying' };
-const member: WhereEdge = { ru: 'в отряде', en: 'squad member', role: 'member' };
-const town: WhereEdge = { ru: 'живут в городе', en: 'town residents', role: 'lives' };
-const faction: WhereEdge = { ru: 'отряды фракции', en: 'faction squads', role: 'lives' };
-const wild: WhereEdge = { ru: 'бродят в биоме', en: 'biome spawns', role: 'lives' };
-const says: WhereEdge = { ru: 'диалог', en: 'dialogue', role: 'says' };
+const sold: WhereEdge = { ru: 'в ассортименте', en: 'in vendor list', zh: '在商品列表中', role: 'sold' };
+const gear: WhereEdge = { ru: 'снаряжение', en: 'equipment', zh: '装备', role: 'carried' };
+const placed: WhereEdge = { ru: 'в группе предметов', en: 'in item placement group', zh: '在物品摆放组中', role: 'lying' };
+const member: WhereEdge = { ru: 'в отряде', en: 'squad member', zh: '小队成员', role: 'member' };
+const town: WhereEdge = { ru: 'живут в городе', en: 'town residents', zh: '城镇居民', role: 'lives' };
+const faction: WhereEdge = { ru: 'отряды фракции', en: 'faction squads', zh: '派系小队', role: 'lives' };
+const wild: WhereEdge = { ru: 'бродят в биоме', en: 'biome spawns', zh: '生物群系刷新', role: 'lives' };
+const says: WhereEdge = { ru: 'диалог', en: 'dialogue', zh: '对话', role: 'says' };
 
 /** `ТИП.категория` (у записи-источника) → смысл связи. `ТИП.*` — любая категория. */
 export const UP_EDGES: Readonly<Record<string, WhereEdge>> = {
@@ -42,60 +43,60 @@ export const UP_EDGES: Readonly<Record<string, WhereEdge>> = {
   'CHARACTER.weapons': gear,
   'CHARACTER.crossbows': gear,
   'CHARACTER.clothing': gear,
-  'CHARACTER.inventory': { ru: 'в инвентаре', en: 'inventory', role: 'carried' },
-  'CHARACTER.vendors': { ru: 'торгует', en: 'trades from' },
+  'CHARACTER.inventory': { ru: 'в инвентаре', en: 'inventory', zh: '物品栏', role: 'carried' },
+  'CHARACTER.vendors': { ru: 'торгует', en: 'trades from', zh: '出售来自' },
   'ANIMAL_CHARACTER.weapon': gear,
   'ITEM_PLACEMENT_GROUP.*': placed,
-  'SQUAD_TEMPLATE.special items': { ru: 'особые предметы отряда', en: 'squad special items', role: 'carried' },
-  'SQUAD_TEMPLATE.vendors': { ru: 'торговец отряда', en: 'squad vendor' },
-  'SQUAD_TEMPLATE.leader': { ru: 'лидер отряда', en: 'squad leader', role: 'member' },
+  'SQUAD_TEMPLATE.special items': { ru: 'особые предметы отряда', en: 'squad special items', zh: '小队特殊物品', role: 'carried' },
+  'SQUAD_TEMPLATE.vendors': { ru: 'торговец отряда', en: 'squad vendor', zh: '小队商人' },
+  'SQUAD_TEMPLATE.leader': { ru: 'лидер отряда', en: 'squad leader', zh: '小队首领', role: 'member' },
   'SQUAD_TEMPLATE.squad': member,
   'SQUAD_TEMPLATE.squad2': member,
-  'SQUAD_TEMPLATE.choosefrom list': { ru: 'один из вариантов', en: 'choose-from list', role: 'member' },
-  'SQUAD_TEMPLATE.animals': { ru: 'животные отряда', en: 'squad animals', role: 'member' },
-  'SQUAD_TEMPLATE.animals2': { ru: 'животные отряда', en: 'squad animals', role: 'member' },
-  'SQUAD_TEMPLATE.housemates': { ru: 'соседи по дому', en: 'housemates', role: 'lives' },
-  'SQUAD_TEMPLATE.slaves': { ru: 'рабы отряда', en: 'slaves', role: 'lives' },
-  'SQUAD_TEMPLATE.prisoners': { ru: 'пленники отряда', en: 'prisoners', role: 'lives' },
-  'SQUAD_TEMPLATE.building': { ru: 'здание отряда', en: 'squad building', role: 'lives' },
-  'SQUAD_TEMPLATE.dialog leader': { ru: 'диалог лидера', en: 'leader dialogue', role: 'says' },
-  'SQUAD_TEMPLATE.dialog squad': { ru: 'диалог отряда', en: 'squad dialogue', role: 'says' },
-  'SQUAD_TEMPLATE.dialog animal': { ru: 'диалог животных', en: 'animal dialogue', role: 'says' },
-  'UNIQUE_SQUAD_TEMPLATE.leader': { ru: 'лидер отряда', en: 'squad leader', role: 'member' },
+  'SQUAD_TEMPLATE.choosefrom list': { ru: 'один из вариантов', en: 'choose-from list', zh: '候选列表', role: 'member' },
+  'SQUAD_TEMPLATE.animals': { ru: 'животные отряда', en: 'squad animals', zh: '小队动物', role: 'member' },
+  'SQUAD_TEMPLATE.animals2': { ru: 'животные отряда', en: 'squad animals', zh: '小队动物', role: 'member' },
+  'SQUAD_TEMPLATE.housemates': { ru: 'соседи по дому', en: 'housemates', zh: '室友', role: 'lives' },
+  'SQUAD_TEMPLATE.slaves': { ru: 'рабы отряда', en: 'slaves', zh: '小队奴隶', role: 'lives' },
+  'SQUAD_TEMPLATE.prisoners': { ru: 'пленники отряда', en: 'prisoners', zh: '小队囚犯', role: 'lives' },
+  'SQUAD_TEMPLATE.building': { ru: 'здание отряда', en: 'squad building', zh: '小队建筑', role: 'lives' },
+  'SQUAD_TEMPLATE.dialog leader': { ru: 'диалог лидера', en: 'leader dialogue', zh: '首领对话', role: 'says' },
+  'SQUAD_TEMPLATE.dialog squad': { ru: 'диалог отряда', en: 'squad dialogue', zh: '小队对话', role: 'says' },
+  'SQUAD_TEMPLATE.dialog animal': { ru: 'диалог животных', en: 'animal dialogue', zh: '动物对话', role: 'says' },
+  'UNIQUE_SQUAD_TEMPLATE.leader': { ru: 'лидер отряда', en: 'squad leader', zh: '小队首领', role: 'member' },
   'UNIQUE_SQUAD_TEMPLATE.squad': member,
   'TOWN.residents': town,
-  'TOWN.default resident': { ru: 'жители по умолчанию', en: 'default residents', role: 'lives' },
-  'TOWN.bar squads': { ru: 'в баре города', en: 'bar squads', role: 'lives' },
-  'TOWN.roaming squads': { ru: 'бродят у города', en: 'roaming squads', role: 'lives' },
-  'TOWN.loot spawn': { ru: 'добыча в городе', en: 'loot spawn', role: 'loot' },
-  'TOWN.override town': { ru: 'вариант города', en: 'town override of' },
-  'TOWN.debris building': { ru: 'обломки в городе', en: 'debris building', role: 'lives' },
+  'TOWN.default resident': { ru: 'жители по умолчанию', en: 'default residents', zh: '默认居民', role: 'lives' },
+  'TOWN.bar squads': { ru: 'в баре города', en: 'bar squads', zh: '酒吧小队', role: 'lives' },
+  'TOWN.roaming squads': { ru: 'бродят у города', en: 'roaming squads', zh: '城镇周边游荡小队', role: 'lives' },
+  'TOWN.loot spawn': { ru: 'добыча в городе', en: 'loot spawn', zh: '战利品刷新', role: 'loot' },
+  'TOWN.override town': { ru: 'вариант города', en: 'town override of', zh: '城镇变体' },
+  'TOWN.debris building': { ru: 'обломки в городе', en: 'debris building', zh: '城镇废墟', role: 'lives' },
   'FACTION.residents': faction,
   'FACTION.default resident': faction,
   'FACTION.bar squads': faction,
   'FACTION.squads': faction,
   'FACTION.squad default': faction,
   'FACTION.roaming squads': faction,
-  'FACTION.item spawns': { ru: 'добыча фракции', en: 'faction item spawns', role: 'loot' },
-  'FACTION.dialog default': { ru: 'диалог фракции', en: 'faction dialogue', role: 'says' },
-  'FACTION_CAMPAIGN.squads to use': { ru: 'отряды набега', en: 'campaign squads', role: 'lives' },
-  'FACTION_CAMPAIGN.special leader': { ru: 'лидер набега', en: 'campaign leader', role: 'member' },
-  'SINGLE_DIPLOMATIC_ASSAULT.main squad': { ru: 'отряд набега', en: 'assault squad', role: 'lives' },
+  'FACTION.item spawns': { ru: 'добыча фракции', en: 'faction item spawns', zh: '派系物品刷新', role: 'loot' },
+  'FACTION.dialog default': { ru: 'диалог фракции', en: 'faction dialogue', zh: '派系对话', role: 'says' },
+  'FACTION_CAMPAIGN.squads to use': { ru: 'отряды набега', en: 'campaign squads', zh: '袭击小队', role: 'lives' },
+  'FACTION_CAMPAIGN.special leader': { ru: 'лидер набега', en: 'campaign leader', zh: '袭击首领', role: 'member' },
+  'SINGLE_DIPLOMATIC_ASSAULT.main squad': { ru: 'отряд набега', en: 'assault squad', zh: '袭击小队', role: 'lives' },
   'BIOME_GROUP.homeless spawns': wild,
   'BIOMES.homeless spawns': wild,
-  'BIOME_GROUP.nests': { ru: 'гнездо в биоме', en: 'biome nest', role: 'lives' },
-  'BIOMES.nests': { ru: 'гнездо в биоме', en: 'biome nest', role: 'lives' },
-  'BUILDING.spawns': { ru: 'появляются у здания', en: 'building spawns', role: 'lives' },
-  'ROAD.spawns': { ru: 'на дорогах', en: 'road spawns', role: 'lives' },
-  'NEW_GAME_STARTOFF.squad': { ru: 'старт игры', en: 'game start', role: 'member' },
-  'NEW_GAME_STARTOFF.town': { ru: 'старт игры', en: 'game start', role: 'lives' },
-  'DIALOGUE_LINE.lines': { ru: 'продолжение реплики', en: 'follows line', role: 'says' },
-  'DIALOGUE.lines': { ru: 'реплика диалога', en: 'dialogue line', role: 'says' },
-  'DIALOGUE_PACKAGE.dialogs': { ru: 'в пакете диалогов', en: 'in dialogue package', role: 'says' },
-  'DIALOGUE_PACKAGE.inheritsFrom': { ru: 'наследуется пакетом', en: 'inherited by', role: 'says' },
+  'BIOME_GROUP.nests': { ru: 'гнездо в биоме', en: 'biome nest', zh: '生物群系巢穴', role: 'lives' },
+  'BIOMES.nests': { ru: 'гнездо в биоме', en: 'biome nest', zh: '生物群系巢穴', role: 'lives' },
+  'BUILDING.spawns': { ru: 'появляются у здания', en: 'building spawns', zh: '建筑刷新', role: 'lives' },
+  'ROAD.spawns': { ru: 'на дорогах', en: 'road spawns', zh: '道路刷新', role: 'lives' },
+  'NEW_GAME_STARTOFF.squad': { ru: 'старт игры', en: 'game start', zh: '游戏开局', role: 'member' },
+  'NEW_GAME_STARTOFF.town': { ru: 'старт игры', en: 'game start', zh: '游戏开局', role: 'lives' },
+  'DIALOGUE_LINE.lines': { ru: 'продолжение реплики', en: 'follows line', zh: '后续台词', role: 'says' },
+  'DIALOGUE.lines': { ru: 'реплика диалога', en: 'dialogue line', zh: '对话台词', role: 'says' },
+  'DIALOGUE_PACKAGE.dialogs': { ru: 'в пакете диалогов', en: 'in dialogue package', zh: '在对话包中', role: 'says' },
+  'DIALOGUE_PACKAGE.inheritsFrom': { ru: 'наследуется пакетом', en: 'inherited by', zh: '被继承于', role: 'says' },
   'CHARACTER.dialogue': says,
   'CHARACTER.announcement dialogue': says,
-  'CHARACTER.dialogue package': { ru: 'пакет диалогов персонажа', en: 'character dialogue package', role: 'says' },
+  'CHARACTER.dialogue package': { ru: 'пакет диалогов персонажа', en: 'character dialogue package', zh: '角色对话包', role: 'says' },
 };
 
 /** Типы, которые сами по себе «место»: дальше вверх идём только по таблице, но место фиксируем. */
@@ -159,7 +160,7 @@ export interface WherePlace extends WhereRecordInfo {
 
 export interface WhereNode extends WhereRecordInfo {
   /** Связь: эта запись ссылается на нижний узел категорией `category`. */
-  via?: { category: string; ru: string; en: string };
+  via?: { category: string; ru: string; en: string; zh?: string };
   /** Путь к иконке (поле `icon`, относительно папки игры), если есть. */
   icon?: string;
   up: WhereNode[];
@@ -302,7 +303,7 @@ class WhereWalker {
   }
 
   step(p: WhereParent): WhereStep {
-    return { ...info(this.ctx, p.source), category: p.category, ru: p.edge.ru, en: p.edge.en };
+    return { ...info(this.ctx, p.source), category: p.category, ru: p.edge.ru, en: p.edge.en, ...(p.edge.zh ? { zh: p.edge.zh } : {}) };
   }
 
   /**
@@ -424,7 +425,7 @@ export function whereInGame(ctx: ModContext, id: string, options: WhereOptions =
     const limit = depth >= maxDepth ? 0 : Math.min(ps.length, maxChildren, Math.max(0, maxNodes - count));
     for (const p of ps.slice(0, limit)) {
       const rec = ctx.get(p.source)!;
-      const child: WhereNode = { ...info(ctx, p.source, rec), via: { category: p.category, ru: p.edge.ru, en: p.edge.en }, up: [] };
+      const child: WhereNode = { ...info(ctx, p.source, rec), via: { category: p.category, ru: p.edge.ru, en: p.edge.en, ...(p.edge.zh ? { zh: p.edge.zh } : {}) }, up: [] };
       count++;
       node.up.push(child);
       if (expanded.has(p.source)) {
@@ -502,7 +503,7 @@ function instancePlaces(ctx: ModContext, world: WorldIndex, inst: readonly Place
     if (!place) {
       place = t
         ? { ...info(ctx, t.target), kind: 'town', positions: [], path: [] }
-        : { id: '', type: 'WORLD', name: 'вне городов', localizedName: 'вне городов', kind: 'building', positions: [], path: [] };
+        : { id: '', type: 'WORLD', name: 'outside towns', localizedName: 'вне городов', kind: 'building', positions: [], path: [] };
       byTown.set(key, place);
     }
     place.positions.push({ position: p.position, ...(p.zone ? { zone: p.zone } : {}), ...(t ? { town: info(ctx, t.target) } : {}) });
@@ -529,67 +530,198 @@ function buildingPlaces(ctx: ModContext, squadId: string, world: WorldIndex | un
   return [...byTarget.values()];
 }
 
-export const WHERE_ROLE_RU: Readonly<Record<WhereRole, string>> = {
-  placed: 'Размещено в мире',
-  sold: 'Продаётся у',
-  carried: 'Есть у',
-  lying: 'Лежит в мире',
-  loot: 'Добыча',
-  member: 'Состоит в',
-  lives: 'Живёт',
-  says: 'Говорит',
-  related: 'Связано с',
+/** Words of the text summary (CLI, MCP) in one interface language. */
+interface WhereWords {
+  roles: Readonly<Record<WhereRole, string>>;
+  kinds: Readonly<Record<WherePlace['kind'], string>>;
+  groups: Readonly<Record<'faction' | 'biome' | 'road' | 'campaign' | 'start', string>>;
+  andMore: (n: number) => string;
+  squadOfLeader: (squad: string) => string;
+  ofSquad: (squad: string) => string;
+  noPlace: string;
+  variantNote: string;
+  icon: string;
+  noWorld: string;
+  instances: string;
+  nothing: string;
+  path: string;
+  trader: string;
+  withHim: string;
+  faction: string;
+  interior: string;
+  exterior: string;
+  squad: string;
+  morePlaces: (n: number) => string;
+  moreFacts: (n: number, total: number) => string;
+  tree: string;
+  seeAbove: string;
+  moreHidden: (n: number) => string;
+}
+
+const whereEn: WhereWords = {
+  roles: {
+    placed: 'Placed in the world',
+    sold: 'Sold by',
+    carried: 'Carried by',
+    lying: 'Lies in the world',
+    loot: 'Loot',
+    member: 'Member of',
+    lives: 'Lives',
+    says: 'Says',
+    related: 'Related to',
+  },
+  kinds: { town: 'town', building: 'building', faction: 'faction', biome: 'biome', road: 'roads', start: 'start', campaign: 'raid' },
+  groups: { faction: 'factions', biome: 'biomes', road: 'roads', campaign: 'raids', start: 'game start' },
+  andMore: (n) => ` and ${n} more`,
+  squadOfLeader: (s) => `squad «${s}»`,
+  ofSquad: (s) => `squad «${s}»`,
+  noPlace: ' — no place in the world found',
+  variantNote: ' (* — only in a town variant: destroyed, taken over…)',
+  icon: 'icon',
+  noWorld: '(level files not loaded — no coordinates)',
+  instances: 'Instances in zones',
+  nothing: 'Not found in the world: no upward links (vendors, carriers, squads, towns).',
+  path: 'path',
+  trader: 'trader',
+  withHim: 'with',
+  faction: 'faction',
+  interior: 'interior',
+  exterior: 'sign',
+  squad: 'squad',
+  morePlaces: (n) => `… ${n} more places with coordinates`,
+  moreFacts: (n, total) => `… and ${n} more (${total} in total)`,
+  tree: 'Links (tree):',
+  seeAbove: '  (see above)',
+  moreHidden: (n) => `… ${n} more`,
 };
 
-export const WHERE_KIND_RU: Readonly<Record<WherePlace['kind'], string>> = {
-  town: 'город',
-  building: 'здание',
+const whereRu: WhereWords = {
+  roles: {
+    placed: 'Размещено в мире',
+    sold: 'Продаётся у',
+    carried: 'Есть у',
+    lying: 'Лежит в мире',
+    loot: 'Добыча',
+    member: 'Состоит в',
+    lives: 'Живёт',
+    says: 'Говорит',
+    related: 'Связано с',
+  },
+  kinds: { town: 'город', building: 'здание', faction: 'фракция', biome: 'биом', road: 'дороги', start: 'старт', campaign: 'набег' },
+  groups: { faction: 'фракции', biome: 'биомы', road: 'дороги', campaign: 'набеги', start: 'старт игры' },
+  andMore: (n) => ` и ещё ${n}`,
+  squadOfLeader: (s) => `отряд «${s}»`,
+  ofSquad: (s) => `отряда «${s}»`,
+  noPlace: ' — место в мире не найдено',
+  variantNote: ' (* — только в варианте города: разрушен, захвачен…)',
+  icon: 'иконка',
+  noWorld: '(файлы уровня не загружены — без координат)',
+  instances: 'Экземпляров в зонах',
+  nothing: 'В мире не встречается: нет восходящих связей (продавцы, носители, отряды, города).',
+  path: 'путь',
+  trader: 'торговец',
+  withHim: 'с ним',
   faction: 'фракция',
-  biome: 'биом',
-  road: 'дороги',
-  start: 'старт',
-  campaign: 'набег',
+  interior: 'интерьер',
+  exterior: 'вывеска',
+  squad: 'отряд',
+  morePlaces: (n) => `… мест с координатами ещё ${n}`,
+  moreFacts: (n, total) => `… и ещё ${n} (всего ${total})`,
+  tree: 'Связи (дерево):',
+  seeAbove: '  (см. выше)',
+  moreHidden: (n) => `… ещё ${n}`,
 };
+
+const whereZh: WhereWords = {
+  roles: {
+    placed: '放置在世界中',
+    sold: '出售者',
+    carried: '持有者',
+    lying: '散落在世界中',
+    loot: '战利品',
+    member: '所属',
+    lives: '居住',
+    says: '对话',
+    related: '关联',
+  },
+  kinds: { town: '城镇', building: '建筑', faction: '派系', biome: '生物群系', road: '道路', start: '开局', campaign: '袭击' },
+  groups: { faction: '派系', biome: '生物群系', road: '道路', campaign: '袭击', start: '游戏开局' },
+  andMore: (n) => ` 等另外 ${n} 个`,
+  squadOfLeader: (s) => `小队 «${s}»`,
+  ofSquad: (s) => `小队 «${s}»`,
+  noPlace: ' — 未在世界中找到位置',
+  variantNote: '（* — 仅在城镇变体中：被摧毁、被占领……）',
+  icon: '图标',
+  noWorld: '（未加载关卡文件 — 无坐标）',
+  instances: '区域中的实例',
+  nothing: '世界中没有出现：没有上游关联（商人、携带者、小队、城镇）。',
+  path: '路径',
+  trader: '商人',
+  withHim: '同行',
+  faction: '派系',
+  interior: '室内',
+  exterior: '招牌',
+  squad: '小队',
+  morePlaces: (n) => `… 另有 ${n} 个带坐标的地点`,
+  moreFacts: (n, total) => `… 另有 ${n} 条（共 ${total} 条）`,
+  tree: '关联（树）：',
+  seeAbove: '  （见上文）',
+  moreHidden: (n) => `… 另有 ${n} 个`,
+};
+
+/** Summary words per interface language; a language without an entry uses English. */
+const WHERE_WORDS: Readonly<Record<string, WhereWords>> = { en: whereEn, ru: whereRu, zh: whereZh };
+
+function whereWords(lang = 'en'): WhereWords {
+  return WHERE_WORDS[lang] ?? whereEn;
+}
+
+/** Role titles in Russian (kept for callers that used them). */
+export const WHERE_ROLE_RU: Readonly<Record<WhereRole, string>> = whereRu.roles;
+
+/** Place kinds in Russian (kept for callers that used them). */
+export const WHERE_KIND_RU: Readonly<Record<WherePlace['kind'], string>> = whereRu.kinds;
+
+/** Role title in an interface language. */
+export function whereRoleText(role: WhereRole, lang = 'en'): string {
+  return whereWords(lang).roles[role];
+}
 
 /** Короткое имя для людей: русское (без разметки рода), иначе английское. */
 export function displayName(r: WhereRecordInfo): string {
   return r.localizedName ? plainName(r.localizedName) : r.name;
 }
 
-function nameList(names: string[], max = 10): string {
+function nameList(names: string[], max: number, w: WhereWords): string {
   const u = [...new Set(names)];
-  return u.length > max ? `${u.slice(0, max).join(', ')} и ещё ${u.length - max}` : u.join(', ');
+  return u.length > max ? `${u.slice(0, max).join(', ')}${w.andMore(u.length - max)}` : u.join(', ');
 }
 
 /** Кто носитель, для строки итога: `«Оружейник» (отряд «weapon vendor UC big»)`. */
-export function formatWhereHolder(f: WhereFact): string {
+export function formatWhereHolder(f: WhereFact, lang = 'en'): string {
+  const w = whereWords(lang);
   const h = f.holder;
   if (!h) return '';
   const leader = h.squad?.leader[0];
-  if (leader) return `«${displayName(leader)}» (отряд «${h.name}»)`;
-  return h.type === 'SQUAD_TEMPLATE' ? `отряда «${h.name}»` : `«${displayName(h)}»`;
+  if (leader) return `«${displayName(leader)}» (${w.squadOfLeader(h.name)})`;
+  return h.type === 'SQUAD_TEMPLATE' ? w.ofSquad(h.name) : `«${displayName(h)}»`;
 }
 
 /** Одна строка итога: «Продаётся у «Оружейник» (отряд «weapon vendor UC big»): Груз, Хэн». */
-export function formatWhereFact(f: WhereFact): string {
-  const who = formatWhereHolder(f);
+export function formatWhereFact(f: WhereFact, lang = 'en'): string {
+  const w = whereWords(lang);
+  const who = formatWhereHolder(f, lang);
   const groups: string[] = [];
   const of = (kind: WherePlace['kind']): string[] => f.places.filter((p) => p.kind === kind).map(displayName);
   const towns = f.places.filter((p) => p.kind === 'town').map((p) => `${displayName(p)}${p.variant ? '*' : ''}`);
-  if (towns.length) groups.push(nameList(towns));
-  for (const [kind, title] of [
-    ['faction', 'фракции'],
-    ['biome', 'биомы'],
-    ['road', 'дороги'],
-    ['campaign', 'набеги'],
-    ['start', 'старт игры'],
-  ] as const) {
+  if (towns.length) groups.push(nameList(towns, 10, w));
+  for (const kind of ['faction', 'biome', 'road', 'campaign', 'start'] as const) {
     const n = of(kind);
-    if (n.length) groups.push(`${title}: ${nameList(n, 6)}`);
+    if (n.length) groups.push(`${w.groups[kind]}: ${nameList(n, 6, w)}`);
   }
-  const where = groups.length ? `: ${groups.join('; ')}` : f.places.length ? '' : ' — место в мире не найдено';
-  const note = f.places.some((p) => p.variant) ? ' (* — только в варианте города: разрушен, захвачен…)' : '';
-  return `${WHERE_ROLE_RU[f.role]}${who ? ` ${who}` : ''}${where}${note}`;
+  const where = groups.length ? `: ${groups.join('; ')}` : f.places.length ? '' : w.noPlace;
+  const note = f.places.some((p) => p.variant) ? w.variantNote : '';
+  return `${w.roles[f.role]}${who ? ` ${who}` : ''}${where}${note}`;
 }
 
 function label(r: WhereRecordInfo): string {
@@ -608,54 +740,60 @@ export interface FormatWhereOptions {
   maxFacts?: number;
   /** Сколько мест с координатами на итог (по умолчанию 8). */
   maxPlaces?: number;
+  /** Interface language of the text (`en` by default; MCP stays English). */
+  lang?: string;
 }
 
 /** Текст для CLI и MCP: итог с путями и координатами, по желанию — дерево связей. */
 export function formatWhere(res: WhereResult, options: FormatWhereOptions = {}): string {
+  const lang = options.lang ?? 'en';
+  const w = whereWords(lang);
   const lines: string[] = [];
   const r = res.root;
-  lines.push(`${r.type} ${label(r)}${r.icon ? `  иконка ${r.icon}` : ''}`);
-  if (!res.hasWorld) lines.push('(файлы уровня не загружены — без координат)');
+  lines.push(`${r.type} ${label(r)}${r.icon ? `  ${w.icon} ${r.icon}` : ''}`);
+  if (!res.hasWorld) lines.push(w.noWorld);
   const maxFacts = options.maxFacts ?? 20;
   const maxPlaces = options.maxPlaces ?? 8;
-  if (r.instances) lines.push(`Экземпляров в зонах: ${r.instances.count}`);
-  if (res.facts.length === 0) lines.push('В мире не встречается: нет восходящих связей (продавцы, носители, отряды, города).');
+  if (r.instances) lines.push(`${w.instances}: ${r.instances.count}`);
+  if (res.facts.length === 0) lines.push(w.nothing);
   for (const f of res.facts.slice(0, maxFacts)) {
     lines.push('');
-    lines.push(formatWhereFact(f));
-    if (f.path.length) lines.push(`  путь: ${formatWherePath(f.path)}`);
+    lines.push(formatWhereFact(f, lang));
+    if (f.path.length) lines.push(`  ${w.path}: ${formatWherePath(f.path)}`);
     const sq = f.holder?.squad;
     if (sq) {
       const bits = [
-        sq.trader ? 'торговец' : undefined,
-        sq.members.length ? `с ним ${nameList(sq.members.map((x) => `«${x.name}»`), 4)}` : undefined,
-        sq.faction.length ? `фракция ${sq.faction.map((x) => `«${displayName(x)}»`).join(', ')}` : undefined,
-        sq.interior ? `интерьер «${sq.interior}»` : undefined,
-        sq.exterior ? `вывеска «${sq.exterior}»` : undefined,
+        sq.trader ? w.trader : undefined,
+        sq.members.length ? `${w.withHim} ${nameList(sq.members.map((x) => `«${x.name}»`), 4, w)}` : undefined,
+        sq.faction.length ? `${w.faction} ${sq.faction.map((x) => `«${displayName(x)}»`).join(', ')}` : undefined,
+        sq.interior ? `${w.interior} «${sq.interior}»` : undefined,
+        sq.exterior ? `${w.exterior} «${sq.exterior}»` : undefined,
       ].filter(Boolean);
-      if (bits.length) lines.push(`  отряд: ${bits.join('; ')}`);
+      if (bits.length) lines.push(`  ${w.squad}: ${bits.join('; ')}`);
     }
     const located = f.places.filter((x) => x.positions.length > 0);
     for (const p of located.slice(0, maxPlaces)) {
       const via = p.path.length ? `  ${formatWherePath(p.path)}` : '';
       for (const pos of p.positions.slice(0, 4))
         lines.push(
-          `  ⌖ ${WHERE_KIND_RU[p.kind]} ${p.kind === 'building' ? `«${pos.label ?? p.name}»` : displayName(p)}  ${formatPosition(pos.position, pos.zone)}${pos.town ? `, ${displayName(pos.town)}` : ''}${via}`,
+          `  ⌖ ${w.kinds[p.kind]} ${p.kind === 'building' ? `«${pos.label ?? p.name}»` : displayName(p)}  ${formatPosition(pos.position, pos.zone)}${pos.town ? `, ${displayName(pos.town)}` : ''}${via}`,
         );
     }
-    if (located.length > maxPlaces) lines.push(`  … мест с координатами ещё ${located.length - maxPlaces}`);
+    if (located.length > maxPlaces) lines.push(`  ${w.morePlaces(located.length - maxPlaces)}`);
   }
-  if (res.facts.length > maxFacts) lines.push('', `… и ещё ${res.facts.length - maxFacts} (всего ${res.facts.length})`);
+  if (res.facts.length > maxFacts) lines.push('', w.moreFacts(res.facts.length - maxFacts, res.facts.length));
   if (options.tree) {
-    lines.push('', 'Связи (дерево):');
+    lines.push('', w.tree);
     const walk = (n: WhereNode, depth: number): void => {
       for (const c of n.up) {
         const pad = '  '.repeat(depth + 1);
-        lines.push(`${pad}← ${c.type} ${label(c)}  ${c.via!.category} — ${c.via!.ru}${c.repeat ? '  (см. выше)' : ''}`);
+        const via = c.via!;
+        const edge = lang === 'ru' ? via.ru : lang === 'en' ? via.en : (via.zh ?? via.en);
+        lines.push(`${pad}← ${c.type} ${label(c)}  ${via.category} — ${edge}${c.repeat ? w.seeAbove : ''}`);
         for (const t of c.towns ?? []) lines.push(`${pad}    ⌖ ${formatPosition(t.position, t.zones[0])}`);
         walk(c, depth + 1);
       }
-      if (n.hidden) lines.push(`${'  '.repeat(depth + 1)}… ещё ${n.hidden}`);
+      if (n.hidden) lines.push(`${'  '.repeat(depth + 1)}${w.moreHidden(n.hidden)}`);
     };
     walk(r, 0);
   }

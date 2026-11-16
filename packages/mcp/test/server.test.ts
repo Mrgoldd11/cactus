@@ -59,15 +59,15 @@ describe('kenshi-mcp: чтение', () => {
     expect(show.text).toContain('int money = 99');
     expect(show.text).toContain('→ Magic hat [1-My.mod]  3 0 0');
     expect((await call('refs', { id: '1-My.mod', direction: 'to' })).text).toBe('← Bandit [A] vendors  3 0 0');
-    expect((await call('where', { id: '1-My.mod' })).text).toContain('путь: ← CHARACTER «Bandit» (Разбойник) [A] (vendors)');
+    expect((await call('where', { id: '1-My.mod' })).text).toContain('path: ← CHARACTER «Bandit» (Разбойник) [A] (vendors)');
     expect((await call('tree', { id: 'D1' })).text).toContain('↻ DIALOGUE_LINE L1');
     const inside = (await call('inspect', { id: 'Bandit' })).text;
     expect(inside).toContain('CHARACTER «Bandit» (Разбойник) [A]');
     expect(inside).toContain('vendors (1):');
     expect(inside).toContain('ITEM «Magic hat» [1-My.mod]');
     expect((await call('inspect', { id: '1-My.mod' })).text).toContain('CHARACTER «Bandit» (Разбойник) [A]');
-    expect((await call('talk', { id: 'Bandit' })).text).toContain('Разбойник (A), событие');
-    expect((await call('talk', { id: 'Bandit' })).text).toContain('диалогов на это событие нет');
+    expect((await call('talk', { id: 'Bandit' })).text).toContain('Разбойник (A), event');
+    expect((await call('talk', { id: 'Bandit' })).text).toContain('no dialogues for this event');
     expect((await call('talk', { id: 'D1' })).isError).toBe(true);
     const missing = await call('show', { id: 'nope' });
     expect(missing.isError).toBe(true);
@@ -310,7 +310,7 @@ describe('kenshi-mcp: граф диалога и история', () => {
   it('play: проигрыватель разговора', async () => {
     const r = await call('play', { id: 'Bandit' });
     expect(r.isError, r.text).toBe(false);
-    expect(r.text).toContain('Разбойник (A), событие 1');
+    expect(r.text).toContain('Разбойник (A), event 1');
     expect((await call('play', { id: 'D1' })).isError).toBe(true);
   });
 });

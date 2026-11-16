@@ -187,7 +187,7 @@ describe('где в игре', () => {
     const carried = res.facts.find((f) => f.role === 'carried')!;
     expect(carried.holder?.id).toBe('THIEF');
 
-    const text = formatWhere(res);
+    const text = formatWhere(res, { lang: 'ru' });
     expect(text).toContain('Продаётся у «Weapon Trader» (отряд «weapon vendor»): Town A, Town B');
     expect(text).toContain('← VENDOR_LIST «weapon vendor list» [VL] (weapons) ← SQUAD_TEMPLATE «weapon vendor» [SQ] (vendors)');
     expect(text).toContain('5000 6000 (зона 2.2)');
@@ -204,11 +204,12 @@ describe('где в игре', () => {
     const res = whereInGame(ctx, 'ROCK', { world });
     const placed = res.facts.find((f) => f.role === 'placed')!;
     expect(placed.places[0]!.id).toBe('TB');
-    expect(formatWhere(res)).toContain('Размещено в мире');
+    expect(formatWhere(res, { lang: 'ru' })).toContain('Размещено в мире');
+    expect(formatWhere(res)).toContain('Placed in the world');
   });
 
   it('нет восходящих связей', () => {
-    const text = formatWhere(whereInGame(ctx, 'TRADER'));
+    const text = formatWhere(whereInGame(ctx, 'TRADER'), { lang: 'ru' });
     expect(text).toContain('Состоит в');
     expect(() => whereInGame(ctx, 'nope')).toThrow();
   });

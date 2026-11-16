@@ -33,19 +33,19 @@ import {
   type ScorePart,
 } from '../model/dialogue-score.ts';
 import { formatEnumValue, refValueEnum } from '../model/enums.ts';
-import { UiTextError } from '../ui-text.ts';
+import { uiText, UiTextError, type UiText } from '../ui-text.ts';
 
 /** Событие «игрок заговорил со мной» (EV_PLAYER_TALK_TO_ME). */
 export const EVENT_TALK = 1;
 
 export type TalkVia = 'character' | 'character-package' | 'squad-leader' | 'squad' | 'faction';
 
-export const TALK_VIA_LABELS: Readonly<Record<TalkVia, string>> = {
-  character: 'персонаж (dialogue)',
-  'character-package': 'пакет персонажа',
-  'squad-leader': 'пакет лидера отряда',
-  squad: 'пакет отряда',
-  faction: 'пакет фракции',
+export const TALK_VIA_LABELS: Readonly<Record<TalkVia, UiText>> = {
+  character: { en: 'character (dialogue)', ru: 'персонаж (dialogue)', zh: '角色（dialogue）' },
+  'character-package': { en: 'character package', ru: 'пакет персонажа', zh: '角色对话包' },
+  'squad-leader': { en: 'squad leader package', ru: 'пакет лидера отряда', zh: '小队首领对话包' },
+  squad: { en: 'squad package', ru: 'пакет отряда', zh: '小队对话包' },
+  faction: { en: 'faction package', ru: 'пакет фракции', zh: '派系对话包' },
 };
 
 export interface TalkSource {
@@ -126,7 +126,12 @@ export const ACTION_KINDS: Readonly<Record<ActionKind, readonly number[]>> = {
   recruit: [3, 18, 44, 45, 46],
 };
 
-export const ACTION_KIND_LABELS: Readonly<Record<ActionKind, string>> = { arrest: 'арест', attack: 'атака', trade: 'торговля', recruit: 'найм' };
+export const ACTION_KIND_LABELS: Readonly<Record<ActionKind, UiText>> = {
+  arrest: { en: 'arrest', ru: 'арест', zh: '逮捕' },
+  attack: { en: 'attack', ru: 'атака', zh: '攻击' },
+  trade: { en: 'trade', ru: 'торговля', zh: '交易' },
+  recruit: { en: 'recruit', ru: 'найм', zh: '招募' },
+};
 
 const KIND_OF = new Map<number, ActionKind>(Object.entries(ACTION_KINDS).flatMap(([k, vs]) => vs.map((v) => [v, k as ActionKind] as const)));
 
@@ -201,15 +206,15 @@ export function dialogSortKey(ctx: ModContext, dialog: string): number {
  */
 export type TalkVerdict = 'wins' | 'random' | 'if-conditions' | 'tie' | 'shadowed' | 'locked' | 'empty' | 'missing';
 
-export const TALK_VERDICT_LABELS: Readonly<Record<TalkVerdict, string>> = {
-  wins: 'выберет игра',
-  random: 'выпадет случайно',
-  'if-conditions': 'сработает при условиях',
-  tie: 'при условиях — случайно',
-  shadowed: 'не прозвучит',
-  locked: 'заблокирован (locked)',
-  empty: 'без реплик',
-  missing: 'нет записи',
+export const TALK_VERDICT_LABELS: Readonly<Record<TalkVerdict, UiText>> = {
+  wins: { en: 'the game picks it', ru: 'выберет игра', zh: '游戏会选择' },
+  random: { en: 'comes up at random', ru: 'выпадет случайно', zh: '随机出现' },
+  'if-conditions': { en: 'fires when conditions are met', ru: 'сработает при условиях', zh: '条件满足时触发' },
+  tie: { en: 'when conditions are met — at random', ru: 'при условиях — случайно', zh: '条件满足时随机' },
+  shadowed: { en: 'will not be said', ru: 'не прозвучит', zh: '不会出现' },
+  locked: { en: 'locked', ru: 'заблокирован (locked)', zh: '已锁定（locked）' },
+  empty: { en: 'no lines', ru: 'без реплик', zh: '没有台词' },
+  missing: { en: 'no record', ru: 'нет записи', zh: '没有记录' },
 };
 
 export interface TalkCandidate {
@@ -294,13 +299,13 @@ function eventLabelOf(ctx: ModContext, event: number): string {
 function dialogConditions(rec: GameRecord, root: DialogueGraphNode | undefined): string[] {
   const out = [...(root?.conditions ?? []), ...(root?.filters ?? [])];
   const rep = rec.ints.get('repetition limit') ?? 0;
-  if (rep !== 0) out.push(`повтор не чаще: ${rep}`);
+  if (rep !== 0) out.push(`repetition limit: ${rep}`);
   const tt = rec.ints.get('target is type') ?? 0;
   if (tt !== 0) out.push(`target is type: ${tt}`);
   const ch = chanceOf(rec);
-  if (ch < 100) out.push(`шанс ${ch}%`);
+  if (ch < 100) out.push(`chance ${ch}%`);
   const cp = rec.floats.get('chance permanent') ?? 100;
-  if (cp < 100) out.push(`постоянный шанс ${cp}%`);
+  if (cp < 100) out.push(`chance permanent ${cp}%`);
   if (rec.bools.get('unique')) out.push('unique');
   return out;
 }
@@ -451,48 +456,203 @@ export function simulateTalk(ctx: ModContext, character: string, event = EVENT_T
   return sim;
 }
 
-const textOf = (l: TalkLine): string => {
-  const t = l.texts[0];
-  if (!t) return '(без текста)';
-  return `«${t.localized ?? t.en}»${l.texts.length > 1 ? ` (+${l.texts.length - 1} вариантов)` : ''}`;
-};
-
 const pct = (p: number): string => `${String(Math.round(p * 100))}%`;
 
-/** Правило выбора простыми словами (для CLI и MCP; в редакторе — та же подсказка с переводом). */
-export const TALK_RULES: readonly string[] = [
-  'Игра собирает все диалоги персонажа на событие: свои, из его пакетов, из пакетов отряда и фракции.',
-  'Убирает те, что сейчас не подходят: не выполнены условия, не повезло с шансом или диалог заблокирован.',
-  'Из оставшихся берёт те, у которых больше всего очков. Если таких несколько — случайно, всем поровну: очки не дают «больше шансов».',
-  'Очки = score bonus плюс надбавки: +1 за каждое условие, +2 за фракцию, город, расу, предмет, состояние мира и т. п. Поэтому диалог с выполненными условиями обычно перебивает обычный.',
-  'К очкам диалога прибавляются очки его первой реплики; первая реплика выбирается по тому же правилу.',
-  'Тонкость: игра идёт по списку сверху вниз и не выкидывает уже взятых, поэтому иногда в розыгрыш попадают и диалоги с меньшими очками.',
-  'Диалог с очками ниже −999 не выбирается никогда.',
-];
+/** Words of the talk report (CLI, MCP) in one interface language. */
+interface TalkWords {
+  noText: string;
+  variants: (n: number) => string;
+  rules: readonly string[];
+  wins: string;
+  random: (odds: string, withNames: string) => string;
+  ifConditions: string;
+  tie: (odds: string, withNames: string) => string;
+  shadowedBy: (names: string) => string;
+  shadowed: string;
+  head: (name: string, character: string, event: string) => string;
+  noDialogs: string;
+  winner: (name: string) => string;
+  pool: (n: number, list: string) => string;
+  none: string;
+  overrideNote: string;
+  score: (n: number) => string;
+  withOpening: (n: number) => string;
+  always: string;
+  conditions: string;
+  lineConditions: string;
+  actions: string;
+  from: string;
+  layer: string;
+  opening: (name: string) => string;
+  chance: string;
+  chanceIf: string;
+  player: string;
+  notChosen: (by: string) => string;
+  howTitle: string;
+}
 
-function reason(x: TalkCandidate, nameOf: (d: string) => string): string | undefined {
+const talkEn: TalkWords = {
+  noText: '(no text)',
+  variants: (n) => ` (+${n} variants)`,
+  rules: [
+    'The game collects all dialogues of the character for the event: its own, from its packages, from the squad and faction packages.',
+    'It drops those that do not fit right now: conditions not met, the chance failed or the dialogue is locked.',
+    'Of the rest it takes those with the highest score. If there are several, one at random with equal odds: score does not give «better chances».',
+    'Score = score bonus plus extras: +1 for each condition, +2 for faction, town, race, item, world state and so on. That is why a dialogue with met conditions usually beats a plain one.',
+    'The score of the first line is added to the dialogue score; the first line is picked by the same rule.',
+    'A subtlety: the game walks the list top to bottom and does not drop those already taken, so sometimes dialogues with a lower score get into the draw too.',
+    'A dialogue with a score below −999 is never chosen.',
+  ],
+  wins: 'always fits and has the highest score',
+  random: (o, w) => `without conditions comes up at random, chance ${o}${w ? `; together with ${w}` : ''}`,
+  ifConditions: 'when its conditions are met, the game picks it',
+  tie: (o, w) => `when its conditions are met — at random, chance ${o}; together with ${w}`,
+  shadowedBy: (n) => `even with its conditions met the game picks ${n}`,
+  shadowed: 'the game will not pick it',
+  head: (n, c, e) => `${n} (${c}), event ${e}`,
+  noDialogs: 'no dialogues for this event',
+  winner: (n) => `result: without any conditions the game picks «${n}»`,
+  pool: (n, l) => `result: without conditions the game picks one of ${String(n)} at random: ${l}`,
+  none: 'result: no dialogue fits without conditions — what is said depends on conditions',
+  overrideNote: 'dialogues that «fire when conditions are met» override this when their conditions are met',
+  score: (n) => `score ${String(n)}`,
+  withOpening: (n) => `, with the first line — up to ${String(n)}`,
+  always: 'no conditions',
+  conditions: 'conditions',
+  lineConditions: 'conditions on lines',
+  actions: 'actions',
+  from: 'from',
+  layer: 'layer',
+  opening: (n) => `start of conversation «${n}»:`,
+  chance: 'chance',
+  chanceIf: 'chance if conditions met',
+  player: 'player',
+  notChosen: (b) => ` — will not be chosen (${b})`,
+  howTitle: 'how the game chooses (from its code):',
+};
+
+const talkRu: TalkWords = {
+  noText: '(без текста)',
+  variants: (n) => ` (+${n} вариантов)`,
+  rules: [
+    'Игра собирает все диалоги персонажа на событие: свои, из его пакетов, из пакетов отряда и фракции.',
+    'Убирает те, что сейчас не подходят: не выполнены условия, не повезло с шансом или диалог заблокирован.',
+    'Из оставшихся берёт те, у которых больше всего очков. Если таких несколько — случайно, всем поровну: очки не дают «больше шансов».',
+    'Очки = score bonus плюс надбавки: +1 за каждое условие, +2 за фракцию, город, расу, предмет, состояние мира и т. п. Поэтому диалог с выполненными условиями обычно перебивает обычный.',
+    'К очкам диалога прибавляются очки его первой реплики; первая реплика выбирается по тому же правилу.',
+    'Тонкость: игра идёт по списку сверху вниз и не выкидывает уже взятых, поэтому иногда в розыгрыш попадают и диалоги с меньшими очками.',
+    'Диалог с очками ниже −999 не выбирается никогда.',
+  ],
+  wins: 'подходит всегда, и очков у него больше всех',
+  random: (o, w) => `без условий выпадет случайно, шанс ${o}${w ? `; вместе с ${w}` : ''}`,
+  ifConditions: 'когда условия выполнены, игра выберет его',
+  tie: (o, w) => `когда условия выполнены — случайно, шанс ${o}; вместе с ${w}`,
+  shadowedBy: (n) => `даже при выполненных условиях игра выберет ${n}`,
+  shadowed: 'игра его не выберет',
+  head: (n, c, e) => `${n} (${c}), событие ${e}`,
+  noDialogs: 'диалогов на это событие нет',
+  winner: (n) => `итог: без всяких условий игра выберет «${n}»`,
+  pool: (n, l) => `итог: без условий игра выберет случайно один из ${String(n)}: ${l}`,
+  none: 'итог: без условий не подходит ни один диалог — что прозвучит, зависит от условий',
+  overrideNote: 'диалоги «сработает при условиях» перебьют это, когда их условия выполнены',
+  score: (n) => `очки ${String(n)}`,
+  withOpening: (n) => `, с первой репликой — до ${String(n)}`,
+  always: 'без условий',
+  conditions: 'условия',
+  lineConditions: 'условия у реплик',
+  actions: 'действия',
+  from: 'откуда',
+  layer: 'слой',
+  opening: (n) => `начало разговора «${n}»:`,
+  chance: 'шанс',
+  chanceIf: 'при условиях шанс',
+  player: 'игрок',
+  notChosen: (b) => ` — не будет выбрана (${b})`,
+  howTitle: 'как выбирает игра (по её коду):',
+};
+
+const talkZh: TalkWords = {
+  noText: '（无文本）',
+  variants: (n) => `（+${n} 个变体）`,
+  rules: [
+    '游戏会收集角色在该事件上的所有对话：自己的、来自其对话包的、来自小队和派系对话包的。',
+    '去掉当前不适用的：条件未满足、几率未命中或对话被锁定。',
+    '在剩下的对话中取分数最高的。若有多个，则随机选一个，几率均等：分数不会带来“更大几率”。',
+    '分数 = score bonus 加上加成：每个条件 +1，派系、城镇、种族、物品、世界状态等 +2。因此条件满足的对话通常会压过普通对话。',
+    '对话分数还会加上其第一句台词的分数；第一句台词按同样规则选择。',
+    '细节：游戏从上到下遍历列表，不会剔除已选中的，因此有时分数较低的对话也会进入抽选。',
+    '分数低于 −999 的对话永远不会被选中。',
+  ],
+  wins: '始终适用，且分数最高',
+  random: (o, w) => `无条件时随机出现，几率 ${o}${w ? `；与 ${w} 一起` : ''}`,
+  ifConditions: '条件满足时，游戏会选择它',
+  tie: (o, w) => `条件满足时随机，几率 ${o}；与 ${w} 一起`,
+  shadowedBy: (n) => `即使条件满足，游戏也会选择 ${n}`,
+  shadowed: '游戏不会选择它',
+  head: (n, c, e) => `${n}（${c}），事件 ${e}`,
+  noDialogs: '该事件没有对话',
+  winner: (n) => `结果：无需任何条件，游戏会选择 «${n}»`,
+  pool: (n, l) => `结果：无条件时游戏会从 ${String(n)} 个中随机选一个：${l}`,
+  none: '结果：无条件时没有适用的对话 — 说什么取决于条件',
+  overrideNote: '“条件满足时触发”的对话在条件满足时会覆盖此结果',
+  score: (n) => `分数 ${String(n)}`,
+  withOpening: (n) => `，加上第一句台词 — 最多 ${String(n)}`,
+  always: '无条件',
+  conditions: '条件',
+  lineConditions: '条件在台词上',
+  actions: '动作',
+  from: '来源',
+  layer: '图层',
+  opening: (n) => `对话开头 «${n}»：`,
+  chance: '几率',
+  chanceIf: '条件满足时几率',
+  player: '玩家',
+  notChosen: (b) => ` — 不会被选中（${b}）`,
+  howTitle: '游戏如何选择（依据其代码）：',
+};
+
+const TALK_WORDS: Readonly<Record<string, TalkWords>> = { en: talkEn, ru: talkRu, zh: talkZh };
+
+const talkWords = (lang = 'en'): TalkWords => TALK_WORDS[lang] ?? talkEn;
+
+const textOf = (l: TalkLine, w: TalkWords): string => {
+  const t = l.texts[0];
+  if (!t) return w.noText;
+  return `«${t.localized ?? t.en}»${l.texts.length > 1 ? w.variants(l.texts.length - 1) : ''}`;
+};
+
+/** Правило выбора простыми словами (для CLI и MCP; в редакторе — та же подсказка с переводом). */
+export const TALK_RULES: readonly string[] = talkEn.rules;
+
+/** The choice rule in an interface language. */
+export function talkRules(lang = 'en'): readonly string[] {
+  return talkWords(lang).rules;
+}
+
+function reason(x: TalkCandidate, nameOf: (d: string) => string, w: TalkWords): string | undefined {
   const names = (ds: readonly string[] | undefined): string => (ds ?? []).map((d) => `«${nameOf(d)}»`).join(', ');
   switch (x.verdict) {
     case 'wins':
-      return 'подходит всегда, и очков у него больше всех';
+      return w.wins;
     case 'random':
-      return `без условий выпадет случайно, шанс ${pct(x.odds ?? 0)}${x.with?.length ? `; вместе с ${names(x.with)}` : ''}`;
+      return w.random(pct(x.odds ?? 0), names(x.with));
     case 'if-conditions':
-      return 'когда условия выполнены, игра выберет его';
+      return w.ifConditions;
     case 'tie':
-      return `когда условия выполнены — случайно, шанс ${pct(x.odds ?? 0)}; вместе с ${names(x.with)}`;
+      return w.tie(pct(x.odds ?? 0), names(x.with));
     case 'shadowed':
-      return x.by !== undefined ? `даже при выполненных условиях игра выберет ${names([x.by])}` : 'игра его не выберет';
+      return x.by !== undefined ? w.shadowedBy(names([x.by])) : w.shadowed;
     default:
       return undefined;
   }
 }
 
 /** Отчёт симуляции текстом (для CLI и MCP). */
-export function formatTalk(sim: TalkSimulation): string[] {
-  const out = [`${sim.localized ?? sim.name} (${sim.character}), событие ${sim.eventLabel}`];
+export function formatTalk(sim: TalkSimulation, lang = 'en'): string[] {
+  const w = talkWords(lang);
+  const out = [w.head(sim.localized ?? sim.name, sim.character, sim.eventLabel)];
   if (!sim.candidates.length) {
-    out.push('  диалогов на это событие нет');
+    out.push(`  ${w.noDialogs}`);
     return out;
   }
   const byId = new Map(sim.candidates.map((x) => [x.dialog, x]));
@@ -500,35 +660,37 @@ export function formatTalk(sim: TalkSimulation): string[] {
     const x = byId.get(d);
     return x ? (x.localized ?? x.name) : d;
   };
-  if (sim.winner !== undefined) out.push(`  итог: без всяких условий игра выберет «${nameOf(sim.winner)}»`);
-  else if (sim.pool.length) out.push(`  итог: без условий игра выберет случайно один из ${String(sim.pool.length)}: ${sim.pool.map((d) => `«${nameOf(d)}» (${pct(byId.get(d)?.odds ?? 0)})`).join(', ')}`);
-  else out.push('  итог: без условий не подходит ни один диалог — что прозвучит, зависит от условий');
-  if (sim.candidates.some((x) => x.verdict === 'if-conditions' || x.verdict === 'tie')) out.push('  диалоги «сработает при условиях» перебьют это, когда их условия выполнены');
+  if (sim.winner !== undefined) out.push(`  ${w.winner(nameOf(sim.winner))}`);
+  else if (sim.pool.length) out.push(`  ${w.pool(sim.pool.length, sim.pool.map((d) => `«${nameOf(d)}» (${pct(byId.get(d)?.odds ?? 0)})`).join(', '))}`);
+  else out.push(`  ${w.none}`);
+  if (sim.candidates.some((x) => x.verdict === 'if-conditions' || x.verdict === 'tie')) out.push(`  ${w.overrideNote}`);
+  const viaText = (v: TalkVia): string => uiText(TALK_VIA_LABELS[v], lang);
   for (const x of sim.candidates) {
-    const via = [...new Set(x.sources.map((s) => (s.via === 'character' ? TALK_VIA_LABELS[s.via] : `${TALK_VIA_LABELS[s.via]} ${s.holder}`)))].join('; ');
-    const why = reason(x, nameOf);
-    out.push(`  ${x.verdict === 'wins' ? '▶' : '·'} ${x.localized ?? x.name} (${x.dialog}) — ${TALK_VERDICT_LABELS[x.verdict]}${why ? `: ${why}` : ''}`);
-    const parts = x.scoreParts.some((p) => p.key !== 'bonus') ? ` (${formatScoreParts(x.scoreParts)})` : '';
-    out.push(`      очки ${String(x.score)}${parts}${x.total !== undefined && x.total !== x.score ? `, с первой репликой — до ${String(x.total)}` : ''}`);
-    out.push(`      ${x.always ? 'без условий' : x.conditions.length ? `условия: ${x.conditions.join('; ')}` : 'условия у реплик'}${x.actions.length ? `; действия: ${x.actions.map((a) => ACTION_KIND_LABELS[a]).join(', ')}` : ''}`);
-    out.push(`      откуда: ${via}${x.origin ? `; слой ${x.origin}` : ''}`);
+    const via = [...new Set(x.sources.map((s) => (s.via === 'character' ? viaText(s.via) : `${viaText(s.via)} ${s.holder}`)))].join('; ');
+    const why = reason(x, nameOf, w);
+    out.push(`  ${x.verdict === 'wins' ? '▶' : '·'} ${x.localized ?? x.name} (${x.dialog}) — ${uiText(TALK_VERDICT_LABELS[x.verdict], lang)}${why ? `: ${why}` : ''}`);
+    const parts = x.scoreParts.some((p) => p.key !== 'bonus') ? ` (${formatScoreParts(x.scoreParts, lang)})` : '';
+    out.push(`      ${w.score(x.score)}${parts}${x.total !== undefined && x.total !== x.score ? w.withOpening(x.total) : ''}`);
+    out.push(
+      `      ${x.always ? w.always : x.conditions.length ? `${w.conditions}: ${x.conditions.join('; ')}` : w.lineConditions}${x.actions.length ? `; ${w.actions}: ${x.actions.map((a) => uiText(ACTION_KIND_LABELS[a], lang)).join(', ')}` : ''}`,
+    );
+    out.push(`      ${w.from}: ${via}${x.origin ? `; ${w.layer} ${x.origin}` : ''}`);
   }
   if (sim.openingOf !== undefined) {
-    out.push(`  начало разговора «${nameOf(sim.openingOf)}»:`);
+    out.push(`  ${w.opening(nameOf(sim.openingOf))}`);
     for (const l of sim.opening) {
       const meta = [
-        `очки ${String(l.score ?? 0)}`,
-        ...(l.odds !== undefined && l.odds < 1 - EPS ? [`шанс ${pct(l.odds)}`] : []),
-        ...(l.oddsIf !== undefined ? [`при условиях шанс ${pct(l.oddsIf)}`] : []),
+        w.score(l.score ?? 0),
+        ...(l.odds !== undefined && l.odds < 1 - EPS ? [`${w.chance} ${pct(l.odds)}`] : []),
+        ...(l.oddsIf !== undefined ? [`${w.chanceIf} ${pct(l.oddsIf)}`] : []),
         ...(l.chance !== undefined && l.chance < 100 ? [`chance ${String(l.chance)}%`] : []),
-        ...(l.conditions.length ? [`условия: ${l.conditions.join('; ')}`] : []),
+        ...(l.conditions.length ? [`${w.conditions}: ${l.conditions.join('; ')}`] : []),
       ];
-      out.push(`    ${l.speakerLabel ?? (l.choice ? 'игрок' : 'NPC')}: ${textOf(l)} [${meta.join(', ')}]${l.shadowedBy ? ` — не будет выбрана (${l.shadowedBy})` : ''}`);
-      for (const ch of l.choices) out.push(`      → ${textOf(ch)}${ch.effects.length ? ` [${ch.effects.join('; ')}]` : ''}`);
+      out.push(`    ${l.speakerLabel ?? (l.choice ? w.player : 'NPC')}: ${textOf(l, w)} [${meta.join(', ')}]${l.shadowedBy ? w.notChosen(l.shadowedBy) : ''}`);
+      for (const ch of l.choices) out.push(`      → ${textOf(ch, w)}${ch.effects.length ? ` [${ch.effects.join('; ')}]` : ''}`);
     }
   }
-  out.push('  как выбирает игра (по её коду):');
-  for (const r of TALK_RULES) out.push(`    - ${r}`);
+  out.push(`  ${w.howTitle}`);
+  for (const r of w.rules) out.push(`    - ${r}`);
   return out;
 }
-

@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { validateMod, formatIssue, type ValidationIssue } from '@kenshi-editor/core';
 import type { ModEntry } from '../../../shared/api.ts';
-import { useT, type Strings } from '../i18n.ts';
+import { useLang, useT, type Strings } from '../i18n.ts';
 import { tryEdit } from '../hooks.ts';
 import type { AppliedExtension, Project } from '../project.ts';
 import { Modal } from './widgets.tsx';
@@ -257,6 +257,7 @@ export function ValidationModal({ project, onGo, onClose }: { project: Project; 
 
 /** Список проблем проверки мода (окно «Проверка» и панель «Диагностика»). */
 export function IssueList({ project, issues, onGo }: { project: Project; issues: readonly ValidationIssue[]; onGo: (sid: string) => void }): ReactNode {
+  const lang = useLang();
   if (issues.length === 0) return <p data-testid="validation-ok">✓</p>;
   return (
     <ul className="issues">
@@ -268,7 +269,7 @@ export function IssueList({ project, issues, onGo }: { project: Project; issues:
               onGo(i.stringId);
             }}
           >
-            {formatIssue(project.ctx, i)}
+            {formatIssue(project.ctx, i, lang)}
           </button>
         </li>
       ))}

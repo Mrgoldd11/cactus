@@ -275,15 +275,116 @@ export function playConversation(ctx: ModContext, character: string, input: Play
   return { character, event, steps, waiting };
 }
 
-const PLAY_WHY_LABELS: Record<PlayWhy, string> = {
-  chosen: 'выбран',
-  'chosen-random': 'выбран случайно среди равных',
-  random: 'мог выпасть случайно',
-  outscored: 'перебит (очков меньше или позже в списке игры)',
-  fails: 'не подходит в этом раскладе (условия, шанс, locked)',
-  empty: 'пустой узел без продолжения',
-  missing: 'записи нет',
+/** Words of the play report (MCP, CLI) in one interface language. */
+interface PlayWords {
+  why: Readonly<Record<PlayWhy, string>>;
+  empty: string;
+  player: string;
+  head: (name: string, character: string, event: string, mode: string) => string;
+  onlyAlways: string;
+  conditionsMet: string;
+  step: (n: number, from: string) => string;
+  start: string;
+  after: (from: string) => string;
+  score: string;
+  chance: string;
+  inNode: (node: string, chosen: string, n: number) => string;
+  answers: string;
+  hidden: string;
+  npcGoesOn: (id: string) => string;
+  endNothingNext: string;
+  endNothingFits: string;
+  waiting: string;
+}
+
+const playEn: PlayWords = {
+  why: {
+    chosen: 'chosen',
+    'chosen-random': 'chosen at random among equals',
+    random: 'could have come up at random',
+    outscored: 'outscored (lower score or later in the game list)',
+    fails: 'does not fit in this setup (conditions, chance, locked)',
+    empty: 'empty node without continuation',
+    missing: 'record is missing',
+  },
+  empty: '(empty)',
+  player: 'player',
+  head: (n, c, e, m) => `${n} (${c}), event ${e}; setup: ${m}`,
+  onlyAlways: 'only without conditions',
+  conditionsMet: 'conditions met',
+  step: (n, f) => `step ${String(n)}${f}:`,
+  start: ' (start)',
+  after: (f) => ` (after ${f})`,
+  score: 'score',
+  chance: 'chance',
+  inNode: (node, ch, n) => `in ${node}: ${ch} of ${String(n)}`,
+  answers: 'player answers:',
+  hidden: ' — hidden (conditions not met)',
+  npcGoesOn: (id) => `NPC goes on by itself (${id})`,
+  endNothingNext: 'end: nothing comes next',
+  endNothingFits: 'end: nothing fits',
+  waiting: 'waiting for the player answer: pass the answer id (or @npc) in answers',
 };
+
+const playRu: PlayWords = {
+  why: {
+    chosen: 'выбран',
+    'chosen-random': 'выбран случайно среди равных',
+    random: 'мог выпасть случайно',
+    outscored: 'перебит (очков меньше или позже в списке игры)',
+    fails: 'не подходит в этом раскладе (условия, шанс, locked)',
+    empty: 'пустой узел без продолжения',
+    missing: 'записи нет',
+  },
+  empty: '(пусто)',
+  player: 'игрок',
+  head: (n, c, e, m) => `${n} (${c}), событие ${e}; расклад: ${m}`,
+  onlyAlways: 'только без условий',
+  conditionsMet: 'условия выполнены',
+  step: (n, f) => `шаг ${String(n)}${f}:`,
+  start: ' (начало)',
+  after: (f) => ` (после ${f})`,
+  score: 'очки',
+  chance: 'шанс',
+  inNode: (node, ch, n) => `в ${node}: ${ch} из ${String(n)}`,
+  answers: 'ответы игрока:',
+  hidden: ' — скрыт (условия не выполнены)',
+  npcGoesOn: (id) => `NPC продолжает сам (${id})`,
+  endNothingNext: 'конец: дальше ничего нет',
+  endNothingFits: 'конец: ничего не подходит',
+  waiting: 'ждёт ответа игрока: передайте id ответа (или @npc) в answers',
+};
+
+const playZh: PlayWords = {
+  why: {
+    chosen: '已选中',
+    'chosen-random': '在同分中随机选中',
+    random: '可能随机出现',
+    outscored: '被压过（分数更低或在游戏列表中更靠后）',
+    fails: '在此设定下不适用（条件、几率、locked）',
+    empty: '没有后续的空节点',
+    missing: '没有记录',
+  },
+  empty: '（空）',
+  player: '玩家',
+  head: (n, c, e, m) => `${n}（${c}），事件 ${e}；设定：${m}`,
+  onlyAlways: '仅无条件',
+  conditionsMet: '条件已满足',
+  step: (n, f) => `第 ${String(n)} 步${f}：`,
+  start: '（开始）',
+  after: (f) => `（在 ${f} 之后）`,
+  score: '分数',
+  chance: '几率',
+  inNode: (node, ch, n) => `在 ${node}：${ch}，共 ${String(n)} 个`,
+  answers: '玩家回答：',
+  hidden: ' — 已隐藏（条件未满足）',
+  npcGoesOn: (id) => `NPC 自行继续（${id}）`,
+  endNothingNext: '结束：后面没有内容',
+  endNothingFits: '结束：没有适用的内容',
+  waiting: '等待玩家回答：在 answers 中传入回答 id（或 @npc）',
+};
+
+const PLAY_WORDS: Readonly<Record<string, PlayWords>> = { en: playEn, ru: playRu, zh: playZh };
 
 const pctOf = (x: number): string => `${String(Math.round(x * 100))}%`;
 
@@ -291,7 +392,8 @@ const pctOf = (x: number): string => `${String(Math.round(x * 100))}%`;
  * Разговор из `playConversation` текстом (MCP, CLI): по шагам — из чего игра выбирала и почему,
  * что прозвучало, ответы игрока с id (их передают в `answers` следующего вызова).
  */
-export function formatPlay(ctx: ModContext, res: PlayResult, options: { translation?: TranslationIndex; mode?: PlayMode } = {}): string[] {
+export function formatPlay(ctx: ModContext, res: PlayResult, options: { translation?: TranslationIndex; mode?: PlayMode; lang?: string } = {}): string[] {
+  const w = PLAY_WORDS[options.lang ?? 'en'] ?? playEn;
   const tr = options.translation;
   const label = (sid: string): string => {
     const rec = ctx.get(sid);
@@ -300,32 +402,32 @@ export function formatPlay(ctx: ModContext, res: PlayResult, options: { translat
     const raw = rec.strings.get('text0');
     const en = raw !== undefined ? decodeText(raw) : '';
     const text = translatedText(tr, sid, 'text0', en) ?? en;
-    return `«${text.replace(/\s+/g, ' ').trim() || '(пусто)'}» (${sid})`;
+    return `«${text.replace(/\s+/g, ' ').trim() || w.empty}» (${sid})`;
   };
-  const who = (sid: string): string => (isChoiceRecord(ctx.get(sid)) ? 'игрок' : 'NPC');
+  const who = (sid: string): string => (isChoiceRecord(ctx.get(sid)) ? w.player : 'NPC');
   const c = ctx.get(res.character);
   const out = [
-    `${ctx.localizedName(res.character) ?? (c ? decodeText(c.name) : res.character)} (${res.character}), событие ${String(res.event)}; расклад: ${options.mode === 'none' ? 'только без условий' : 'условия выполнены'}`,
+    w.head(ctx.localizedName(res.character) ?? (c ? decodeText(c.name) : res.character), res.character, String(res.event), options.mode === 'none' ? w.onlyAlways : w.conditionsMet),
   ];
   res.steps.forEach((s, i) => {
-    out.push(`шаг ${String(i + 1)}${s.from === '' ? ' (начало)' : ` (после ${s.from})`}:`);
+    out.push(w.step(i + 1, s.from === '' ? w.start : w.after(s.from)));
     const shown = s.options.filter((o) => o.why !== 'missing');
     if (shown.length > 1 || (shown.length === 1 && shown[0]!.why !== 'chosen')) {
-      for (const o of shown) out.push(`  ${o.why.startsWith('chosen') ? '▶' : '·'} ${label(o.sid)} — ${PLAY_WHY_LABELS[o.why]}, очки ${String(o.score)}${o.odds > 0 && o.odds < 1 ? `, шанс ${pctOf(o.odds)}` : ''}`);
+      for (const o of shown) out.push(`  ${o.why.startsWith('chosen') ? '▶' : '·'} ${label(o.sid)} — ${w.why[o.why]}, ${w.score} ${String(o.score)}${o.odds > 0 && o.odds < 1 ? `, ${w.chance} ${pctOf(o.odds)}` : ''}`);
     }
     for (const lv of s.path) {
       const ch = lv.options.find((o) => o.why.startsWith('chosen'));
-      if (ch && lv.options.length > 1) out.push(`  в ${lv.node}: ${label(ch.sid)} из ${String(lv.options.length)}`);
+      if (ch && lv.options.length > 1) out.push(`  ${w.inNode(lv.node, label(ch.sid), lv.options.length)}`);
     }
     if (s.said !== undefined) out.push(`  ${who(s.said)}: ${label(s.said)}`);
     if (s.answers.length) {
-      out.push('  ответы игрока:');
-      for (const a of s.answers) out.push(`    ${a.sid === s.answered ? '▶' : '-'} ${label(a.sid)}${a.shown ? '' : ' — скрыт (условия не выполнены)'}`);
-      if (s.npcToo) out.push(`    ${s.answered === PLAY_NPC ? '▶' : '-'} NPC продолжает сам (${PLAY_NPC})`);
+      out.push(`  ${w.answers}`);
+      for (const a of s.answers) out.push(`    ${a.sid === s.answered ? '▶' : '-'} ${label(a.sid)}${a.shown ? '' : w.hidden}`);
+      if (s.npcToo) out.push(`    ${s.answered === PLAY_NPC ? '▶' : '-'} ${w.npcGoesOn(PLAY_NPC)}`);
     }
-    if (s.end === 'nothing-next') out.push('  конец: дальше ничего нет');
-    else if (s.end === 'nothing-fits') out.push('  конец: ничего не подходит');
+    if (s.end === 'nothing-next') out.push(`  ${w.endNothingNext}`);
+    else if (s.end === 'nothing-fits') out.push(`  ${w.endNothingFits}`);
   });
-  if (res.waiting) out.push('ждёт ответа игрока: передайте id ответа (или @npc) в answers');
+  if (res.waiting) out.push(w.waiting);
   return out;
 }

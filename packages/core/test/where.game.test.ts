@@ -39,7 +39,7 @@ describe.skipIf(!game)('где в игре: ваниль', () => {
     expect(heng.positions[0]!.position[2]).toBeCloseTo(-41953, -1);
     const shop = f.places.find((p) => p.kind === 'building')!;
     expect(shop.positions.some((p) => p.town?.id === '1074-gamedata.base')).toBe(true);
-    const text = formatWhere({ ...res, facts: [f] });
+    const text = formatWhere({ ...res, facts: [f] }, { lang: 'ru' });
     expect(text).toContain('Продаётся у «Оружейник»');
     expect(text).toContain('Груз, Хэн');
   });
