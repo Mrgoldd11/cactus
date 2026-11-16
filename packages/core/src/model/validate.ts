@@ -384,6 +384,36 @@ const SEVERITY: Readonly<Record<ValidationIssue['severity'], UiText>> = {
   warning: { en: 'warning', ru: 'предупр.', zh: '警告' },
 };
 
+/** Human names of the issue kinds (the window shows these; CLI and MCP keep the codes). */
+export const ISSUE_CODE_LABELS: Readonly<Record<IssueCode, UiText>> = {
+  'broken-ref': { en: 'Reference to a missing record', ru: 'Ссылка на несуществующую запись', zh: '引用了不存在的记录' },
+  'deleted-ref': { en: 'Reference to a deleted record', ru: 'Ссылка на удалённую запись', zh: '引用了已删除的记录' },
+  'unknown-type': { en: 'Type not in the schema', ru: 'Тип не описан в схеме', zh: '架构中没有的类型' },
+  'unknown-field': { en: 'Field not in the schema', ru: 'Поле не описано в схеме', zh: '架构中没有的字段' },
+  'wrong-kind': { en: 'Field written as the wrong kind', ru: 'Поле записано не того вида', zh: '字段写入的类别错误' },
+  'wrong-target-type': { en: 'Reference to a record of the wrong type', ru: 'Ссылка на запись не того типа', zh: '引用了类型错误的记录' },
+  'enum-value': { en: 'Value outside the list', ru: 'Значение не из списка', zh: '值不在列表中' },
+  'remove-missing': { en: 'Removes a record that does not exist', ru: 'Удаляет несуществующую запись', zh: '删除了不存在的记录' },
+  'empty-dialogue': { en: 'Dialogue without lines', ru: 'Диалог без реплик', zh: '没有台词的对话' },
+  'dangling-ref': { en: 'Reference to a record removed by a dependency', ru: 'Ссылка на запись, удалённую зависимостью', zh: '引用了被依赖项删除的记录' },
+  'overrides-action': { en: 'Dialogue overrides a vanilla action', ru: 'Диалог перекрывает действие ванили', zh: '对话覆盖了原版动作' },
+  'type-changed': { en: 'Record type changed between layers', ru: 'Тип записи сменился между слоями', zh: '记录类型在层之间改变' },
+  'id-taken': { en: 'String id taken by another mod', ru: 'Строковый id занят другим модом', zh: '字符串 id 已被其他 Mod 占用' },
+  'too-many-refs': { en: 'Too many references in a list', ru: 'Слишком много ссылок в списке', zh: '列表中的引用过多' },
+};
+
+/** Severity word of an issue in an interface language. */
+export function issueSeverityText(i: ValidationIssue, lang = 'en'): string {
+  return uiText(SEVERITY[i.severity], lang);
+}
+
+/** One issue without severity and code: «sid «name» [key]: message». */
+export function formatIssueText(ctx: ModContext, i: ValidationIssue, lang = 'en'): string {
+  const name = ctx.name(i.stringId);
+  const message = i.texts ? uiText(i.texts, lang) : i.message;
+  return `${i.stringId}${name !== undefined ? ` «${name}»` : ''}${i.key ? ` [${i.key}]` : ''}: ${message}`;
+}
+
 /** One issue as a line of text in an interface language (English by default). */
 export function formatIssue(ctx: ModContext, i: ValidationIssue, lang = 'en'): string {
   const name = ctx.name(i.stringId);

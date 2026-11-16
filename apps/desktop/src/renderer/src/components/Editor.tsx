@@ -11,7 +11,8 @@ import { useProjectVersion, tryEdit } from '../hooks.ts';
 import { MOD_CHANGES_ID, reloadProject, reloadWithDependencies, restoreProject, type Project } from '../project.ts';
 import { LangSwitch } from '../App.tsx';
 import { BackupsModal, SettingsModal, formatClock, formatTime } from './BackupModals.tsx';
-import { DependenciesModal, ModInfoModal, NewRecordModal, ValidationModal } from './Modals.tsx';
+import { DependenciesModal, ModInfoModal, NewRecordModal } from './Modals.tsx';
+import { RESCAN_EVENT } from './IssueFixer.tsx';
 import { useAiChangesets, useLiveStatus } from '../live.ts';
 import { SelectionService, useSelectionVersion } from '../workbench/selection.ts';
 import { ValueStore, useStore } from '../workbench/store.ts';
@@ -36,7 +37,7 @@ interface Props {
   onSettings: (patch: Partial<Settings>) => void;
 }
 
-type ModalKind = 'deps' | 'info' | 'validate' | 'new' | 'backups' | 'settings';
+type ModalKind = 'deps' | 'info' | 'new' | 'backups' | 'settings';
 
 function blurActive(): void {
   if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -317,10 +318,11 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
         <button
           data-testid="validate"
           onClick={() => {
-            setModal('validate');
+            open('diagnostics');
+            window.dispatchEvent(new Event(RESCAN_EVENT));
           }}
         >
-          {t.validation}
+          {t.panel_diagnostics}
         </button>
         <button
           data-testid="backups-btn"
@@ -420,18 +422,6 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
         <ModInfoModal
           project={project}
           onReport={report}
-          onClose={() => {
-            setModal(undefined);
-          }}
-        />
-      )}
-      {modal === 'validate' && (
-        <ValidationModal
-          project={project}
-          onGo={(sid) => {
-            setModal(undefined);
-            go(sid);
-          }}
           onClose={() => {
             setModal(undefined);
           }}

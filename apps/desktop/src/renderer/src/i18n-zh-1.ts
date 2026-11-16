@@ -177,7 +177,6 @@ export const zh1 = {
   unsavedChanges: '有未保存的更改。要放弃吗？',
   editFailed: '修改失败',
   modRecords: 'Mod 记录',
-  validation: '检查',
   errors: '个错误',
   warnings: '个警告',
   // live AI link

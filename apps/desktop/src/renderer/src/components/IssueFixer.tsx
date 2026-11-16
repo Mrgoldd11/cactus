@@ -1,10 +1,13 @@
 /**
  * «Diagnostics» panel body: mod check problems grouped by kind, with fixes from core
  * (`issueFixes` / `planFixes`), multi-select, per-mod ignore list and a rescan button.
- * Every fix (one or a batch) is one history step.
+ * Every fix (one or a batch) is one history step. Kinds are shown by name; the code is a hint.
  */
+
+/** Window event: the toolbar «Diagnostics» button asks the panel to check the mod again. */
+export const RESCAN_EVENT = 'kedit:diagnostics-rescan';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { applyFixPlan, applyOps, FIX_KIND_LABELS, formatIssue, issueFixes, issueKey, planFixes, uiText, validateMod, type IssueFix, type ValidationIssue } from '@kenshi-editor/core';
+import { applyFixPlan, applyOps, FIX_KIND_LABELS, formatIssueText, ISSUE_CODE_LABELS, issueFixes, issueKey, issueSeverityText, planFixes, uiText, validateMod, type IssueCode, type IssueFix, type ValidationIssue } from '@kenshi-editor/core';
 import { useLang, useT } from '../i18n.ts';
 import { tryEdit, useProjectVersion } from '../hooks.ts';
 import type { Project } from '../project.ts';
@@ -43,6 +46,16 @@ export function IssueFixer({ project, onGo, onReport }: { project: Project; onGo
     };
   }, [refKey]);
 
+  useEffect(() => {
+    const onRescan = (): void => {
+      setScan((n) => n + 1);
+    };
+    window.addEventListener(RESCAN_EVENT, onRescan);
+    return () => {
+      window.removeEventListener(RESCAN_EVENT, onRescan);
+    };
+  }, []);
+
   const rows = useMemo<Row[]>(() => {
     const seen = new Map<string, number>();
     return validateMod(project.ctx).map((issue) => {
@@ -58,7 +71,7 @@ export function IssueFixer({ project, onGo, onReport }: { project: Project; onGo
   const errors = rows.filter((r) => !r.ignored && r.issue.severity === 'error').length;
   const warnings = rows.filter((r) => !r.ignored).length - errors;
   const groups = useMemo(() => {
-    const m = new Map<string, Row[]>();
+    const m = new Map<IssueCode, Row[]>();
     for (const r of shown) {
       const list = m.get(r.issue.code);
       if (list) list.push(r);
@@ -145,7 +158,8 @@ export function IssueFixer({ project, onGo, onReport }: { project: Project; onGo
               <div className="issue-group-head">
                 <label>
                   <input type="checkbox" checked={allOn} onChange={(e) => { toggle(list.map((r) => r.id), e.target.checked); }} data-testid="fix-group-check" />{' '}
-                  <b>{code}</b> <span className="muted">({list.length})</span>
+                  <b title={code}>{uiText(ISSUE_CODE_LABELS[code], lang)}</b> <span className="muted">({list.length})</span>{' '}
+                  <span className="muted small" data-testid="fix-group-code">{code}</span>
                 </label>
                 {fixable.length > 0 && (
                   <button className="small" onClick={() => { fixMany(fixable); }} title={t.fixAllOfKindTip} data-testid="fix-all-kind">
@@ -157,8 +171,8 @@ export function IssueFixer({ project, onGo, onReport }: { project: Project; onGo
                 {list.map((r) => (
                   <li key={r.id} className={`${r.issue.severity}${r.ignored ? ' ignored' : ''}`} data-testid="fix-issue" data-key={r.key}>
                     <input type="checkbox" checked={selected.has(r.id)} onChange={(e) => { toggle([r.id], e.target.checked); }} data-testid="fix-check" />
-                    <button className="link" onClick={() => { onGo(r.issue.stringId); }}>
-                      {formatIssue(project.ctx, r.issue, lang)}
+                    <button className="link" title={r.issue.code} onClick={() => { onGo(r.issue.stringId); }}>
+                      {`${issueSeverityText(r.issue, lang)} ${formatIssueText(project.ctx, r.issue, lang)}`}
                     </button>
                     {r.ignored && <span className="muted small">{` [${t.fixIgnoredMark}]`}</span>}
                     <span className="issue-actions">

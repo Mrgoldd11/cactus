@@ -107,10 +107,16 @@ test('fixes: broken reference fixed from Diagnostics, undo, ignore persists; cle
     await row.getByRole('button').click();
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
 
-    await openPanel(page, 'diagnostics');
+    // The toolbar «Diagnostics» button opens the panel (the old read-only window is gone).
+    await page.getByTestId('validate').click();
+    await expect(page.getByTestId('issue-fixer')).toBeVisible();
     const issue = page.locator('[data-testid="fix-issue"]', { hasText: GHOST });
     await expect(issue).toHaveCount(1);
-    await expect(page.locator('[data-testid="fix-group"][data-code="broken-ref"]')).toBeVisible();
+    const kind = page.locator('[data-testid="fix-group"][data-code="broken-ref"]');
+    await expect(kind).toBeVisible();
+    // Kinds are shown by name, the code only as small text / hint.
+    await expect(kind.locator('b')).toHaveText('Ссылка на несуществующую запись');
+    await expect(issue.locator('button.link')).not.toContainText('broken-ref');
     await expect(issue.getByTestId('fix-remove-ref')).toBeVisible();
     await expect(issue.getByTestId('fix-remove-record')).toBeVisible();
     await page.screenshot({ path: join(shots, '50-fix-diagnostics.png') });

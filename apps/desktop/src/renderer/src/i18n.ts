@@ -194,7 +194,6 @@ const en = {
   unsavedChanges: 'There are unsaved changes. Discard them?',
   editFailed: 'Edit failed',
   modRecords: 'Mod records',
-  validation: 'Validation',
   errors: 'errors',
   warnings: 'warnings',
   // live AI link
@@ -793,7 +792,6 @@ const ru: Strings = {
   unsavedChanges: 'Есть несохранённые изменения. Отбросить их?',
   editFailed: 'Правка не выполнена',
   modRecords: 'Записей в моде',
-  validation: 'Проверка',
   errors: 'ошибок',
   warnings: 'предупреждений',
   aiButton: 'Изменения ИИ',

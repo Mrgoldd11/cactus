@@ -2,7 +2,7 @@
  * Windows: mod dependencies, mod info, mod check, new record.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { validateMod, formatIssue, uiText, type ValidationIssue } from '@kenshi-editor/core';
+import { uiText } from '@kenshi-editor/core';
 import type { ModEntry } from '../../../shared/api.ts';
 import { useLang, useT, type Strings } from '../i18n.ts';
 import { tryEdit } from '../hooks.ts';
@@ -237,45 +237,6 @@ function ExtensionNote({ project }: { project: Project }): ReactNode {
         <div className="small muted">{t.extNote}</div>
       </div>
     </>
-  );
-}
-
-export function ValidationModal({ project, onGo, onClose }: { project: Project; onGo: (sid: string) => void; onClose: () => void }): ReactNode {
-  const t = useT();
-  const issues = useMemo(() => validateMod(project.ctx), [project]);
-  const errors = issues.filter((i) => i.severity === 'error').length;
-  return (
-    <Modal
-      title={`${t.validation}: ${errors} ${t.errors}, ${issues.length - errors} ${t.warnings}`}
-      onClose={onClose}
-      wide
-      testId="validation-modal"
-    >
-      <IssueList project={project} issues={issues} onGo={onGo} />
-    </Modal>
-  );
-}
-
-/** List of mod check problems (the «Check» window and the «Diagnostics» panel). */
-export function IssueList({ project, issues, onGo }: { project: Project; issues: readonly ValidationIssue[]; onGo: (sid: string) => void }): ReactNode {
-  const lang = useLang();
-  const t = useT();
-  if (issues.length === 0) return <p className="panel-empty muted" data-testid="validation-ok">✓ {t.diagnosticsOk}</p>;
-  return (
-    <ul className="issues">
-      {issues.map((i, n) => (
-        <li key={n} className={i.severity}>
-          <button
-            className="link"
-            onClick={() => {
-              onGo(i.stringId);
-            }}
-          >
-            {formatIssue(project.ctx, i, lang)}
-          </button>
-        </li>
-      ))}
-    </ul>
   );
 }
 
