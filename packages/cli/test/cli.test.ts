@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, onTestFinished } from 'vitest';
 import { decodeText } from '@kenshi-editor/core';
 import { defaultWorkshopDir, readDataFileSync, writeDataFileSync } from '@kenshi-editor/core/node';
 import { main } from '../src/main.ts';
-import { CHAR, dataFile, makeFixture, rec, type Fixture } from './fixture.ts';
+import { CHAR, ITEM, dataFile, makeFixture, rec, type Fixture } from './fixture.ts';
 
 const EOL = String.fromCharCode(13, 10);
 
@@ -128,6 +128,63 @@ describe('kedit: diff, validate, schema', () => {
     const r = await run('validate', 'My');
     expect(r.code).toBe(1);
     expect(r.out).toContain('broken-ref A');
+  });
+
+  it('validate --fix: preview by default, --apply writes one fix, the result is clean', async () => {
+    const core = await import('@kenshi-editor/core');
+    const f = readDataFileSync(fx.modPath);
+    f.records[0]!.refs.get('vendors')!.push({ target: 'ghost', v0: 1, v1: 0, v2: 0 });
+    f.records[0]!.ints.set('obsolete', 5);
+    writeFileSync(fx.modPath, core.writeDataFile(f));
+    const before = readFileSync(fx.modPath);
+
+    const pre = await run('validate', 'My', '--fix', '--code', 'broken-ref');
+    expect(pre.code, pre.err).toBe(0);
+    expect(pre.out).toContain('broken-ref A');
+    expect(pre.out).toContain('будет исправлено 1');
+    expect(pre.out).toContain('ничего не записано');
+    expect(readFileSync(fx.modPath).equals(before)).toBe(true);
+
+    expect((await run('validate', 'My', '--fix', '--kind', 'nope')).code).toBe(2);
+    // The mod is in the game folder: writing there only with --force.
+    expect((await run('validate', 'My', '--fix', '--apply')).code).toBe(2);
+
+    const out = join(mkdtempSync(join(tmpdir(), 'kedit-fix-')), 'Fixed.mod');
+    const ok = await run('validate', 'My', '--fix', '--apply', '--out', out);
+    expect(ok.code, ok.err).toBe(0);
+    expect(ok.out).toContain('записано');
+    const v = await run('validate', '--mod', out);
+    expect(v.code, v.out).toBe(0);
+    const a = readDataFileSync(out).records.find((r) => r.stringId === 'A')!;
+    expect(a.refs.get('vendors')!.some((r) => r.target === 'ghost')).toBe(false);
+    expect(a.ints.has('obsolete')).toBe(false);
+    expect(a.ints.get('money')).toBe(99);
+  });
+
+  it('cleanup: groups, preview, --apply; a clean mod has nothing to remove', async () => {
+    const core = await import('@kenshi-editor/core');
+    const clean = await run('cleanup', 'My');
+    expect(clean.code, clean.err).toBe(0);
+    expect(clean.out).toContain('будет убрано: 0');
+
+    const f = readDataFileSync(fx.modPath);
+    f.records[0]!.ints.set('obsolete', 5);
+    f.records[1]!.floats.set('weight', 0.5);
+    f.records.push(rec(ITEM, 'X', 'Sword', (r) => r.floats.set('weight', 2)));
+    writeFileSync(fx.modPath, core.writeDataFile(f));
+    const pre = await run('cleanup', 'My');
+    expect(pre.out).toContain('obsolete');
+    expect(pre.out).toContain('будет убрано: 2');
+    expect((await run('cleanup', 'My', '--group', 'no-op')).out).toContain('будет убрано: 1');
+    expect((await run('cleanup', 'My', '--group', 'bogus')).code).toBe(2);
+
+    const out = join(mkdtempSync(join(tmpdir(), 'kedit-clean-')), 'Clean.mod');
+    const ok = await run('cleanup', 'My', '--apply', '--out', out);
+    expect(ok.code, ok.err).toBe(0);
+    const recs = readDataFileSync(out).records;
+    expect(recs.find((r) => r.stringId === 'A')!.ints.has('obsolete')).toBe(false);
+    expect(recs.some((r) => r.stringId === 'X')).toBe(false);
+    expect((await run('cleanup', '--mod', out)).out).toContain('будет убрано: 0');
   });
 
   it('schema: types, fields with description, enum', async () => {

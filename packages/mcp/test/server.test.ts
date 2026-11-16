@@ -38,7 +38,7 @@ describe('kenshi-mcp: reading', () => {
   it('list of tools and resources', async () => {
     const tools = (await client.listTools()).tools.map((t) => t.name);
     expect(tools).toEqual(
-      expect.arrayContaining(['open_mod', 'find', 'show', 'tree', 'refs', 'where', 'inspect', 'talk', 'diff', 'validate', 'edit', 'undo', 'redo', 'history', 'play', 'save', 'schema', 'touched', 'conflicts', 'merge']),
+      expect.arrayContaining(['open_mod', 'find', 'show', 'tree', 'refs', 'where', 'inspect', 'talk', 'diff', 'validate', 'edit', 'undo', 'redo', 'history', 'play', 'save', 'schema', 'touched', 'conflicts', 'merge', 'fix', 'cleanup']),
     );
     const res = await client.listResources();
     expect(res.resources.map((r) => r.uri)).toEqual(expect.arrayContaining(['kenshi://schema/types', 'kenshi://schema/type/CHARACTER']));
@@ -196,6 +196,32 @@ describe('kenshi-mcp: editing and saving', () => {
     const f = readDataFileSync(out);
     expect(f.records.map((r) => decodeText(r.name))).toEqual(['Bandit', 'Magic hat', 'Pick']);
     expect((await call('history')).text).toContain('everything is saved');
+  });
+
+  it('fix and cleanup: preview changes nothing, apply — one edit, undo', async () => {
+    const f = readDataFileSync(fx.modPath);
+    f.records[0]!.refs.get('vendors')!.push({ target: 'ghost', v0: 1, v1: 0, v2: 0 });
+    f.records[0]!.ints.set('obsolete', 5);
+    writeDataFileSync(fx.modPath, f);
+    await call('open_mod', { mod: 'My' });
+    const pre = await call('fix', { codes: ['broken-ref'] });
+    expect(pre.isError, pre.text).toBe(false);
+    expect(pre.text).toContain('broken-ref A');
+    expect(pre.text).toContain('will be fixed 1');
+    expect(pre.text).toContain('preview: nothing changed');
+    expect((await call('validate')).text).toContain('broken-ref A');
+    const ok = await call('fix', { apply: true });
+    expect(ok.text).toContain('applied: #1 Fixed validation problems: 2');
+    expect((await call('validate')).text).toBe('errors 0, warnings 0');
+    expect((await call('undo')).text).toContain('undone:');
+    expect((await call('validate')).text).toContain('broken-ref A');
+
+    const scan = await call('cleanup');
+    expect(scan.text).toContain('will be removed: 2');
+    expect(scan.text).toContain('preview: nothing changed');
+    const only = await call('cleanup', { groups: ['invalid-refs'], apply: true });
+    expect(only.text).toContain('applied: #2 Mod cleanup: removed 1 items');
+    expect((await call('cleanup')).text).toContain('will be removed: 1');
   });
 
   it('bulk: preview changes nothing, apply — one edit', async () => {

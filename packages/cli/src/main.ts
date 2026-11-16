@@ -55,6 +55,7 @@ import { loadModLayers, loadTranslation, loadWorld, readDataFileSync, readModsCf
 import { basename } from 'node:path';
 import { runBuild } from './build.ts';
 import { runBulk } from './bulk.ts';
+import { runCleanup, runValidateFix } from './fix.ts';
 import { runMerge, splitList } from './merge.ts';
 import { modsChange, modsCopy, modsList } from './mods.ts';
 import { runStrings } from './strings.ts';
@@ -99,6 +100,9 @@ Commands:
       --status added,changed,removed  only records with these changes
   diff <a.mod> <b.mod>    difference of two files
   validate                broken references, fields outside the schema, wrong kind; exit code 1 on errors
+      --fix  preview of fixes (--kind remove-ref|revert|remove-record|new-id, --code CODE,…); --apply — write into --out or --mod (one edit)
+  cleanup                 what can be removed from the mod (--mod): obsolete fields, no-op changes, orphans, invalid references…
+      --group obsolete-field,no-op,deleted-base,orphaned,invalid-refs,undefined-type;  preview by default, --apply — write (one edit)
   schema [TYPE]           record types / fields of a type with descriptions from fcs.def  --enum NAME
       --mod M  with the schema extensions of the mod and its dependencies (FCS Extended files), marked [extension NAME]
   bulk <TYPE> [text]      bulk edit of records of a type (text — substring of name or id), conditions --field, --mod-only
@@ -156,6 +160,9 @@ export const HELP_RU = `kedit — данные Kenshi: поиск, просмо�
       --status added,changed,removed  только записи с такими изменениями
   diff <a.mod> <b.mod>    разница двух файлов
   validate                битые ссылки, поля вне схемы, не тот вид; код выхода 1 при ошибках
+      --fix  предпросмотр исправлений (--kind remove-ref|revert|remove-record|new-id, --code КОД,…); --apply — записать в --out или в --mod (одна правка)
+  cleanup                 что можно убрать из мода (--mod): устаревшие поля, пустые изменения, сироты, неверные ссылки…
+      --group obsolete-field,no-op,deleted-base,orphaned,invalid-refs,undefined-type;  по умолчанию предпросмотр, --apply — записать (одна правка)
   schema [ТИП]            типы записей / поля типа с описаниями из fcs.def  --enum ИМЯ
       --mod M  with the schema extensions of the mod and its dependencies (FCS Extended files), marked [extension NAME]
   bulk <ТИП> [текст]      массовая правка записей типа (текст — подстрока имени или id), условия --field, --mod-only
@@ -252,6 +259,9 @@ const OPTIONS = {
   unreject: { type: 'string' },
   'show-rejected': { type: 'boolean' },
   levels: { type: 'boolean' },
+  fix: { type: 'boolean' },
+  code: { type: 'string' },
+  group: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } as const;
 
@@ -259,6 +269,10 @@ type Values = ReturnType<typeof parse>['values'];
 
 function parse(argv: string[]): ReturnType<typeof parseArgs<{ options: typeof OPTIONS; allowPositionals: true; strict: true }>> {
   return parseArgs({ args: argv, options: OPTIONS, allowPositionals: true, strict: true });
+}
+
+function writeTarget(v: Values): { apply: boolean; force: boolean; mod?: string; out?: string } {
+  return { apply: v.apply ?? false, force: v.force ?? false, ...(v.mod !== undefined ? { mod: v.mod } : {}), ...(v.out !== undefined ? { out: v.out } : {}) };
 }
 
 function int(v: string | undefined, name: string, fallback: number): number {
@@ -506,11 +520,18 @@ const COMMANDS: Record<string, Handler> = {
     if (c.values.mod === undefined && c.args[0] !== undefined) c.values.mod = c.args[0];
     if (c.values.mod === undefined) throw new UsageError({ en: 'validate: pass --mod', ru: 'validate: укажите --mod' });
     const ctx = c.ctx();
+    if (c.values.fix) return runValidateFix(c.ws, ctx, { ...writeTarget(c.values), ...(c.values.kind !== undefined ? { kind: c.values.kind } : {}), ...(c.values.code !== undefined ? { codes: c.values.code } : {}) }, int(c.values.limit, 'limit', 200), (l) => { c.io.out(l); });
     const issues = validateMod(ctx);
     const errors = issues.filter((i) => i.severity === 'error').length;
     if (issues.length || c.values.json) c.paged(issues, (i) => [formatIssue(ctx, i, c.lang)]);
     if (!c.values.json) c.io.out(c.t({ en: `errors ${errors}, warnings ${issues.length - errors}`, ru: `ошибок ${errors}, предупреждений ${issues.length - errors}` }));
     return errors > 0 ? 1 : 0;
+  },
+
+  cleanup(c) {
+    if (c.values.mod === undefined && c.args[0] !== undefined) c.values.mod = c.args[0];
+    if (c.values.mod === undefined) throw new UsageError({ en: 'cleanup: pass --mod', ru: 'cleanup: укажите --mod' });
+    return runCleanup(c.ws, c.ctx(), { ...writeTarget(c.values), ...(c.values.group !== undefined ? { groups: c.values.group } : {}) }, int(c.values.limit, 'limit', 200), (l) => { c.io.out(l); });
   },
 
   schema(c) {

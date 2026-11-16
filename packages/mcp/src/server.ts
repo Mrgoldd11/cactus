@@ -15,6 +15,17 @@ import {
   selectMergeChanges,
   unrejectMerge,
   formatBulkPreview,
+  applyCleanup,
+  applyFixPlan,
+  cleanupOps,
+  formatCleanup,
+  formatFix,
+  planFixes,
+  scanCleanup,
+  CLEANUP_GROUPS,
+  FIX_KINDS,
+  type CleanupGroup,
+  type FixKind,
   previewBulk,
   buildDialogueTree,
   findTypeSchema,
@@ -189,6 +200,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         'A mod can extend the schema with FCS Extended files in its folder (fcs.def, fcs_preload.def, *.def.patch): open_mod applies those of the mod and of its dependencies and lists what they add; schema marks such types, fields and enum values with [extension NAME], and schema with extension shows the warnings about those files. DLL plugins of FCS Extended are not run.',
         'Dialogues: tree shows the tree, talk shows which dialogue the game picks for a character, play runs a conversation step by step with player answers; graph edits are the edit operations addLine, insertLine, link, unlink, setText, duplicateLine, deleteLines, addCondition, addEffect.',
         'Bulk edits: bulk shows a was → will be preview first and applies only with apply: true.',
+        'Fixing validation problems: fix; removing obsolete fields, no-op changes, orphans and invalid references: cleanup. Both preview first and apply only with apply: true.',
         'history lists steps in plain words; undo/redo with `to` go back or forward to a given step.',
         'If the game runs with the Kenshi Bridge plugin (optional, separate open-source plugin for RE_Kenshi/KenshiLib, https://github.com/Mrgoldd11/Kenshi-Bridge; the user has to install it themselves): game_state (what is in the game), game_trace (which dialogue the game chose and why), game_towns (game towns, border radii), game_dump (real foliage and all buildings of the game dumped for the World view), game_flyover (camera fly-over that dumps the whole map: only when the user asked, confirm: true), game_command (teleport, camera, speed, pause: only with the user consent, confirm: true).',
         'If Cactus is open: connect_editor. After that everything is read from the editor window, and edit sends changes to the window as a change set that the user accepts or reverts (editor_changes shows their state). In this mode the user does save and undo.',
@@ -436,7 +448,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
     'validate',
     {
       title: 'Validate mod',
-      description: 'Broken references, fields outside the schema, references of the wrong type, values outside the enum, dialogues without lines, dangling references to records removed by dependencies.',
+      description: 'Broken references, fields outside the schema, references of the wrong type, values outside the enum, dialogues without lines, dangling references to records removed by dependencies, too many references in a list, record type changed over the lower layer, string id taken by another mod. The fix tool repairs them.',
       inputSchema: { offset, limit: limit(50) },
       annotations: { ...READ, title: 'Validate mod' },
     },
@@ -499,6 +511,89 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         if (cs && ctx.history().undo.length > before) lines.push(title(ctx, cs), ...formatChangeset(ctx, cs).slice(1));
         else lines.push('nothing changed');
         return lines;
+      }),
+  );
+
+  server.registerTool(
+    'fix',
+    {
+      title: 'Fix validation problems',
+      description: [
+        'Fixes for the problems validate finds: remove-ref (remove the invalid reference or field), revert (return the record or field to the lower layer, or restore a deleted target),',
+        'remove-record (delete a record the mod added), new-id (give the record a free id of this mod and remap the mod references). Only what the mod itself changes is touched.',
+        'Without kind each problem gets its recommended fix. By default only a preview; apply: true applies all chosen fixes as one edit (one undo);',
+        'if the editor is connected, it sends a change set to the window. Saving is separate (save).',
+      ].join('\n'),
+      inputSchema: {
+        kind: z.enum(FIX_KINDS as [FixKind, ...FixKind[]]).optional().describe('Fix kind; problems without such a fix are skipped'),
+        codes: z.array(z.string()).optional().describe('Only problems with these codes (broken-ref, unknown-field, wrong-kind, too-many-refs, type-changed, id-taken, …)'),
+        ids: z.array(z.string()).optional().describe('Only problems of these records (string ids)'),
+        apply: z.boolean().optional().describe('true to apply; without it only a preview'),
+        limit: limit(50),
+      },
+      annotations: { ...EDIT, title: 'Fix validation problems' },
+    },
+    (a) =>
+      run(async () => {
+        const ctx = session.ctx();
+        const codes = a.codes ? new Set(a.codes) : undefined;
+        const ids = a.ids ? new Set(a.ids) : undefined;
+        const issues = validateMod(ctx).filter((i) => (!codes || codes.has(i.code)) && (!ids || ids.has(i.stringId)));
+        const plan = planFixes(ctx, issues, a.kind);
+        const max = a.limit === 0 ? Infinity : (a.limit ?? 50);
+        const lines = plan.fixed.slice(0, max).map((f) => formatFix(f));
+        if (plan.fixed.length > max) lines.push(`… ${plan.fixed.length - max} more (limit)`);
+        lines.push(`problems ${issues.length}, will be fixed ${plan.fixed.length}, without a fix ${plan.skipped.length}`);
+        if (!a.apply) return [...lines, 'preview: nothing changed (apply: true to apply)'];
+        if (plan.ops.length === 0) return [...lines, 'nothing to fix'];
+        if (session.editor) {
+          const r = await session.propose(plan.label, plan.ops);
+          return [...lines, `in the editor: change set #${r.changeset.id} "${r.changeset.title}" is waiting for the user decision (accept / revert)`];
+        }
+        applyFixPlan(ctx, plan);
+        const cs = ctx.history().undo.at(-1);
+        return [...lines, cs ? `applied: ${title(ctx, cs)}` : 'applied'];
+      }),
+  );
+
+  server.registerTool(
+    'cleanup',
+    {
+      title: 'Clean up mod',
+      description: [
+        'What can be removed from the mod: obsolete-field (fields and reference lists the schema does not know, FCS Extended fields count as known), no-op (changes equal to the lower layer),',
+        'deleted-base (changes to records no lower layer has any more), orphaned (new dialogue lines or effects nothing references), invalid-refs (references to missing records),',
+        'undefined-type (new records of a type the schema does not know). By default only a grouped preview; apply: true removes the chosen groups or items as one edit (one undo).',
+      ].join('\n'),
+      inputSchema: {
+        groups: z.array(z.enum(CLEANUP_GROUPS as [CleanupGroup, ...CleanupGroup[]])).optional().describe('Only these groups'),
+        ids: z.array(z.string()).optional().describe('Only items of these records (string ids)'),
+        apply: z.boolean().optional().describe('true to apply; without it only a preview'),
+        limit: limit(100),
+      },
+      annotations: { ...EDIT, title: 'Clean up mod' },
+    },
+    (a) =>
+      run(async () => {
+        const ctx = session.ctx();
+        const scan = scanCleanup(ctx);
+        const groups = a.groups ? new Set(a.groups) : undefined;
+        const ids = a.ids ? new Set(a.ids) : undefined;
+        const items = scan.items.filter((i) => (!groups || groups.has(i.group)) && (!ids || ids.has(i.stringId)));
+        const all = formatCleanup(ctx, { ...scan, items });
+        const max = a.limit === 0 ? Infinity : (a.limit ?? 100);
+        const lines = all.slice(0, max);
+        if (all.length > max) lines.push(`… ${all.length - max} more lines (limit)`);
+        lines.push(`will be removed: ${items.length}`);
+        if (!a.apply) return [...lines, 'preview: nothing changed (apply: true to apply)'];
+        if (items.length === 0) return [...lines, 'nothing to clean'];
+        if (session.editor) {
+          const r = await session.propose(`очистка: ${items.length}`, cleanupOps(items));
+          return [...lines, `in the editor: change set #${r.changeset.id} "${r.changeset.title}" is waiting for the user decision (accept / revert)`];
+        }
+        applyCleanup(ctx, items);
+        const cs = ctx.history().undo.at(-1);
+        return [...lines, cs ? `applied: ${title(ctx, cs)}` : 'applied'];
       }),
   );
 
