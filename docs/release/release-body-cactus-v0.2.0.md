@@ -14,7 +14,7 @@ Download `Cactus-0.2.0-beta-win-x64.zip`, unzip to a simple folder (e.g. `C:\Cac
 Full notes with smaller changes, known limitations and upgrade notes: [release-notes-v0.2.0-beta.md](https://github.com/Mrgoldd11/Cactus/blob/main/docs/release-notes-v0.2.0-beta.md)
 
 ### Heads-up
-- **Workshop publishing is unofficial** (Kenshi's app id, like the FCS); tested against a simulated Steam — try a *Private* test item first.
+- Before your first real Workshop upload, try a *Private* test item.
 - `type=` in search (and `--field type=…` in the CLI / MCP) now means the record type; quote a real field: `"type"=…`.
 - Not code-signed — SmartScreen will warn ("More info" → "Run anyway").
 

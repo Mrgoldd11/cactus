@@ -45,7 +45,7 @@ Open "Assets" and download Cactus-0.2.0-beta-win-x64.zip (about 144 MB).
 [*] Dialogue graph, conversation player and a "Talk" simulator (which dialogue the game would pick and why).
 [*] 3D world view with buildings, foliage, land features and town borders: rotate the camera, move and rotate placed objects.
 [*] 3D model viewer: spin, pan and zoom a record's mesh right in the editor.
-[*] Publish your mod to the Steam Workshop (unofficial, like the FCS: try a Private test item first).
+[*] Publish your mod to the Steam Workshop (try a Private test item first).
 [*] Mod merge, load order and conflicts between mods, translation panel.
 [*] English, Russian and Chinese interface; FCS Extended schema files.
 [*] MCP server: any MCP-capable AI can edit your mod live; changes arrive as a change set you accept or revert (verified with Claude).
