@@ -398,7 +398,8 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
         <span>
           {t.modRecords}: {modCount}
         </span>
-        <span className="mono muted">{project.path ?? t.unsaved}</span>
+        {/* Monospace only for the path: in Consolas the label's space looks doubled. */}
+        <span className={project.path !== undefined ? 'mono muted' : 'muted'}>{project.path ?? t.unsaved}</span>
         <GameIndicator />
         {status && (
           <span className={`status-msg ${status.kind}`} data-testid="status-msg">

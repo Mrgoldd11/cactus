@@ -309,14 +309,24 @@ textarea {
   /* Narrow windows: wrap to a second row instead of pushing AI, settings and language off-screen. */
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   padding: 5px 8px;
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
 }
+/* Tighter spacing than elsewhere: at 1400 px the whole toolbar fits one row in every language. */
+.toolbar > button {
+  padding: 3px 8px;
+}
+.toolbar > .sep {
+  margin: 0 2px;
+}
 .mod-title {
+  /* Zero basis: the title takes only the space left over (ellipsis), so a long name never wraps the row;
+     the large grow factor gives it that space before the spacer, up to its own text width. */
+  flex: 1000 1 0;
   min-width: 0;
-  max-width: 260px;
+  max-width: max-content;
   font-weight: 600;
   margin-right: 8px;
   overflow: hidden;
@@ -1345,7 +1355,7 @@ button.small.active {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin-right: 8px;
+  margin-right: 4px;
 }
 .live-btn.active {
   border-color: var(--accent);
