@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { decodeText } from '@kenshi-editor/core';
+import { decodeText, itemTypeId } from '@kenshi-editor/core';
 import { defaultWorkshopDir, readDataFileSync, writeDataFileSync } from '@kenshi-editor/core/node';
 import { createServer, Session } from '../src/index.ts';
 import { CHAR, dataFile, makeFixture, rec, type Fixture } from '../../cli/test/fixture.ts';
@@ -238,6 +238,35 @@ describe('kenshi-mcp: editing and saving', () => {
     expect(ok.text).toContain('applied: #1');
     expect((await call('undo')).text).toContain('undone:');
     expect((await call('find', { text: 'sabre' })).text).toBe('nothing found');
+  });
+
+  it('race_compat: preview by groups, apply — one edit with the sample values', async () => {
+    const RACE = itemTypeId('RACE')!;
+    const ref = (target: string, v0 = 0) => ({ target, v0, v1: 0, v2: 0 });
+    const records = [
+      rec(RACE, 'GL', 'Greenlander'),
+      rec(RACE, 'NR', 'Lizardfolk'),
+      rec(itemTypeId('ARMOUR')!, 'HAT', 'Cap', (r) => r.refs.set('races', [ref('GL')])),
+      rec(itemTypeId('WEAPON')!, 'AXE', 'Axe', (r) => r.refs.set('race damage', [ref('GL', 150)])),
+      rec(itemTypeId('FACTION')!, 'FAC', 'Holy Nation', (r) => r.refs.set('races', [ref('GL', 60)])),
+    ];
+    for (const r of records) r.changeFlags = 0x80000002;
+    mkdirSync(join(fx.game, 'mods', 'Rc'), { recursive: true });
+    writeDataFileSync(join(fx.game, 'mods', 'Rc', 'Rc.mod'), dataFile(records, [], 0));
+    await call('open_mod', { mod: 'Rc' });
+    const pre = await call('race_compat', { race: 'Lizardfolk', like: 'Greenlander' });
+    expect(pre.isError, pre.text).toBe(false);
+    expect(pre.text).toContain('+ ARMOUR HAT “Cap” races: Greenlander → Greenlander, Lizardfolk');
+    expect(pre.text).toContain('[factions] Faction population: 1, chosen 0 (off by default)');
+    expect(pre.text).toContain('preview: nothing changed');
+    expect((await call('history')).text).not.toContain('#1');
+    expect((await call('race_compat', { race: 'Cap', like: 'Greenlander' })).isError).toBe(true);
+    const ok = await call('race_compat', { race: 'NR', like: 'GL', groups: ['weapons', 'factions'], apply: true });
+    expect(ok.isError, ok.text).toBe(false);
+    expect(ok.text).toContain('applied: #1');
+    expect((await call('show', { id: 'AXE' })).text).toMatch(/Lizardfolk.*150/);
+    expect((await call('show', { id: 'HAT' })).text).not.toContain('Lizardfolk');
+    expect((await call('history')).text).toContain('Race compatibility «Lizardfolk» like «Greenlander» (changes: 2)');
   });
 
   it('merge: preview, merge as one edit, undo, save writes the mod and the decision file', async () => {

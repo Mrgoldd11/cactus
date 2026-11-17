@@ -418,7 +418,9 @@ descriptions and parameters are in English.
   new records; for the dialogue graph — `addLine`, `insertLine`, `link`, `unlink`, `setText`,
   `duplicateLine`, `deleteLines`, `revertLine`, `addCondition`, `addEffect`, `removeAction`;
   enum values can be given by name), `bulk` (preview "was → will be", applied only with
-  `apply: true`), `merge`, `play` (a conversation step by step, like the player in the window),
+  `apply: true`), `race_compat` (a new race works like a sample race: armour and clothing,
+  weapons, dialogue conditions, race groups, start scenarios, animation files; preview, applied
+  only with `apply: true`), `merge`, `play` (a conversation step by step, like the player in the window),
   `undo`/`redo` (with `to` — up to step #N), `history` (steps in plain words, as in the window,
   with a "you are here" mark), `save`;
 - live link to the window: `connect_editor` and `editor_changes` (below);
@@ -530,7 +532,8 @@ not published to npm.
   differences of records), `ops.ts` (JSON operations for the CLI/MCP), `search.ts`,
   `validate.ts`, `diff.ts`, `present.ts`, `dialogue.ts`, `dialogue-graph.ts` (dialogue graph
   and checks for unreachable lines), `schema-view.ts`, `enums.ts` (enum value names),
-  `stable-ids.ts` (stable ids by name), `bulk.ts`, `merge.ts`, `conflicts.ts`,
+  `stable-ids.ts` (stable ids by name), `bulk.ts`, `race-compat.ts` (race compatibility
+  wizard), `merge.ts`, `conflicts.ts`,
   `load-order.ts`, `translate.ts`.
 - `src/dialog/` — `talk.ts` (`simulateTalk`: which dialogues a character considers for an event
   and which one the game picks; `formatTalk`), `play.ts` (conversation player), `builder.ts`

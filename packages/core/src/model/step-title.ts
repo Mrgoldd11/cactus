@@ -295,6 +295,11 @@ class Describer {
       const zh = what!.replace(/^замена /, '替换 ').replace(/^\+ ссылка /, '添加引用 ').replace(/^− ссылка /, '移除引用 ');
       return { ru: `Массовая правка ${field}: ${what} (записей: ${n})`, en: `Bulk edit ${field}: ${en} (records: ${n})`, zh: `批量编辑 ${field}：${zh}（记录：${n}）` };
     }
+    const race = /^раса: («.*») как («.*») \((\d+) правок\)$/s.exec(label);
+    if (race) {
+      const [, a, b, n] = race;
+      return { ru: `Совместимость расы ${a!} как ${b!} (правок: ${n!})`, en: `Race compatibility ${a!} like ${b!} (changes: ${n!})`, zh: `种族兼容 ${a!} 如同 ${b!}（更改：${n!}）` };
+    }
     const merge = /^слияние: (.*) \((\d+) записей\)$/s.exec(label);
     if (merge)
       return { ru: `Слияние с «${merge[1]!}»: записей ${merge[2]!}`, en: `Merge from “${merge[1]!}”: ${merge[2]!} records`, zh: `从 “${merge[1]!}” 合并：${merge[2]!} 条记录` };

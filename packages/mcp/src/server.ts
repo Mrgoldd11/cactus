@@ -4,8 +4,18 @@
  */
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   applyBulk,
+  findRace,
+  formatRaceCompat,
+  parseOgreMesh,
+  planRaceCompat,
+  raceCompatPreview,
+  raceSkeletonWarning,
+  RACE_COMPAT_GROUPS,
+  type RaceCompatGroup,
   applyMerge,
   applyOps,
   formatMergePlan,
@@ -633,6 +643,58 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         );
         const lines = formatBulkPreview(p, a.limit === 0 ? Infinity : (a.limit ?? 50));
         if (!a.apply) return [...lines, 'preview: nothing changed (apply: true to apply)'];
+        if (p.ops.length === 0) return [...lines, 'nothing to change'];
+        if (session.editor) {
+          const r = await session.propose(p.label, p.ops);
+          return [...lines, `in the editor: change set #${r.changeset.id} "${r.changeset.title}" is waiting for the user decision (accept / revert)`];
+        }
+        applyBulk(ctx, p);
+        const cs = ctx.history().undo.at(-1);
+        return [...lines, cs ? `applied: ${title(ctx, cs)}` : 'applied'];
+      }),
+  );
+
+  server.registerTool(
+    'race_compat',
+    {
+      title: 'Race compatibility',
+      description: [
+        'Make a new race work like a sample race ("like Greenlander"): finds every place the sample is referenced and offers to add the new race there with the same values.',
+        'Groups: armour (races / races exclude of armour and clothing), weapons (race damage), items (backpacks and other items), dialogue (my race, my subrace, target race, no target race),',
+        'raceGroups (RACE_GROUP, needed to be playable), starts (NEW_GAME_STARTOFF force race), animations (animation files of the sample race copied into the new race);',
+        'body (combat anatomy, limb replacement, severed limbs, AI Goals of the sample; on when the new race has none of its own);',
+        'off by default: factions (faction population), looks (hairs, hair colors, heads), flags (no hats / no shirts / no shoes, part maps), other. Single-race fields (CHARACTER race, squad race override) are only listed.',
+        'Also warns when the race meshes use different skeletons. By default only a preview; apply: true applies the chosen changes as one edit (one undo) into the open mod;',
+        'if the editor is connected, it sends a change set to the window. Saving is separate (save).',
+      ].join('\n'),
+      inputSchema: {
+        race: z.string().describe('The new race: id or name'),
+        like: z.string().describe('The sample race: id or name'),
+        groups: z.array(z.enum(RACE_COMPAT_GROUPS as [RaceCompatGroup, ...RaceCompatGroup[]])).optional().describe('Apply exactly these groups (default: the groups that are on by default)'),
+        exclude: z.array(z.string()).optional().describe('Records (string ids) to leave out'),
+        apply: z.boolean().optional().describe('true to apply; without it only a preview'),
+        limit: limit(50),
+      },
+      annotations: { ...EDIT, title: 'Race compatibility' },
+    },
+    (a) =>
+      run(async () => {
+        const ctx = session.ctx();
+        const plan = planRaceCompat(ctx, findRace(ctx, a.race), findRace(ctx, a.like));
+        const groups = a.groups ? new Set<RaceCompatGroup>(a.groups) : undefined;
+        const exclude = new Set(a.exclude ?? []);
+        const chosen = new Set(plan.changes.filter((c) => (groups ? groups.has(c.group) : c.checked) && !exclude.has(c.sid)).map((c) => c.key));
+        const lines = formatRaceCompat(plan, chosen, a.limit === 0 ? Infinity : (a.limit ?? 50));
+        const warning = raceSkeletonWarning(ctx, plan, (path) => {
+          try {
+            return parseOgreMesh(readFileSync(join(session.paths.kenshi, path))).skeleton;
+          } catch {
+            return undefined;
+          }
+        });
+        if (warning) lines.push(`warning: ${warning.en}`);
+        if (!a.apply) return [...lines, 'preview: nothing changed (apply: true to apply)'];
+        const p = raceCompatPreview(plan, chosen);
         if (p.ops.length === 0) return [...lines, 'nothing to change'];
         if (session.editor) {
           const r = await session.propose(p.label, p.ops);

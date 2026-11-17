@@ -2576,6 +2576,9 @@ input.invalid {
 .bulk-table .bulk-before { color: var(--deleted); text-decoration: line-through; opacity: 0.8; }
 .bulk-table .bulk-after { color: var(--new); }
 .bulk-skipped { padding: 4px 8px; }
+.rc-group { margin: 4px 0; }
+.rc-group > summary { cursor: pointer; padding: 4px 8px; user-select: none; }
+.rc-group > .table { margin-bottom: 6px; }
 .bulk-need { display: flex; flex-direction: column; gap: 6px; align-items: center; }
 .bulk-need > :first-child:not(.muted) { color: var(--fg, inherit); font-size: 14px; }
 .bulk-help-examples { margin: 8px 0 0; padding-left: 18px; }

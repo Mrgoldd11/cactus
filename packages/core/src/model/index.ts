@@ -24,3 +24,4 @@ export * from './census.ts';
 export * from './merge.ts';
 export * from './fixes.ts';
 export * from './cleanup.ts';
+export * from './race-compat.ts';
