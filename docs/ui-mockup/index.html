@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Cactus: макет «до → после»</title>
+<style>
+  :root {
+    --bg: #1e1f22; --bg2: #26282c; --bg3: #2f3237; --border: #3c4047;
+    --text: #d7dae0; --muted: #8a909a; --accent: #4f8cc9; --sel: #2d4a6b;
+    --new: #6fcf6f; --changed: #e5c07b; --deleted: #e06c75;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #141517; color: var(--text); font: 14px/1.5 'Segoe UI', system-ui, sans-serif; }
+  .page { max-width: 1500px; margin: 0 auto; padding: 24px 20px 80px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .lead { color: var(--muted); margin: 0 0 18px; max-width: 900px; }
+  nav.screens { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; position: sticky; top: 0; background: #141517; padding: 8px 0; z-index: 5; }
+  nav.screens a { color: var(--text); text-decoration: none; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg2); font-size: 13px; }
+  nav.screens a:hover { border-color: var(--accent); }
+  section.screen { margin: 0 0 48px; }
+  section.screen h2 { font-size: 18px; margin: 0 0 4px; }
+  section.screen .why { color: var(--muted); margin: 0 0 10px; }
+  .toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+  .toggle button { background: var(--bg2); color: var(--text); border: 0; padding: 5px 14px; font: inherit; cursor: pointer; border-right: 1px solid var(--border); }
+  .toggle button:last-child { border-right: 0; }
+  .toggle button.on { background: var(--accent); color: #fff; }
+  .frame { width: 100%; aspect-ratio: 1484 / 835; position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); }
+  .frame > img { width: 100%; display: block; }
+  .frame > .app { position: absolute; left: 0; top: 0; width: 1484px; height: 835px; transform-origin: 0 0; }
+  .view { display: none; }
+  .view.on { display: block; }
+  .app.view.on { display: flex; }
+  .frame > .view:not(.on) { display: none !important; }
+  .changes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
+  .changes div { background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; padding: 10px 14px; }
+  .changes h3 { margin: 0 0 6px; font-size: 14px; }
+  .changes ul { margin: 0; padding-left: 18px; }
+  .changes li { margin: 2px 0; }
+  .bad h3 { color: var(--deleted); } .good h3 { color: var(--new); }
+
+  /* ---------- mocked application ---------- */
+  .app { background: var(--bg); color: var(--text); font: 13px/1.35 'Segoe UI', system-ui, sans-serif; display: flex; flex-direction: column; }
+  .app .tb { height: 38px; display: flex; align-items: center; gap: 6px; padding: 0 6px; border-bottom: 1px solid var(--border); background: var(--bg2); flex: none; }
+  .app .sep { width: 1px; height: 22px; background: var(--border); margin: 0 2px; }
+  .app .grow { flex: 1; }
+  .app .b { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg3); color: var(--text); white-space: nowrap; }
+  .app .b.p { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .app .b.on { border-color: var(--accent); background: var(--sel); }
+  .app .b.ghost { background: transparent; }
+  .app .b.dis { color: #5d626b; }
+  .app .b.sm { height: 22px; padding: 0 8px; font-size: 12px; }
+  .app .b .car { font-size: 9px; opacity: .8; }
+  .app .hot { outline: 2px solid var(--changed); outline-offset: 2px; }
+  .app .body { flex: 1; display: flex; min-height: 0; }
+  .app .pane { display: flex; flex-direction: column; border-right: 1px solid var(--border); min-width: 0; }
+  .app .ptabs { height: 30px; display: flex; align-items: stretch; background: var(--bg2); border-bottom: 1px solid var(--border); flex: none; }
+  .app .ptab { display: flex; align-items: center; gap: 6px; padding: 0 12px; color: var(--muted); border-right: 1px solid var(--border); }
+  .app .ptab.on { color: var(--text); background: var(--bg); box-shadow: inset 0 2px 0 var(--accent); }
+  .app .pbody { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+  .app .status { height: 24px; display: flex; align-items: center; gap: 20px; padding: 0 10px; border-top: 1px solid var(--border); background: var(--bg2); color: var(--muted); font-size: 12px; flex: none; }
+  .app .cat { display: flex; justify-content: space-between; padding: 2px 8px 2px 20px; }
+  .app .cat.top { padding-left: 8px; font-weight: 600; }
+  .app .cat.sel { background: var(--sel); }
+  .app .cat span:last-child { color: var(--muted); font-size: 11px; }
+  .app input.f, .app .f { height: 26px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); padding: 0 8px; border-radius: 3px; display: flex; align-items: center; }
+  .app .row { display: grid; grid-template-columns: 1fr 1fr 90px; padding: 0 8px; height: 24px; align-items: center; white-space: nowrap; overflow: hidden; }
+  .app .row > * { overflow: hidden; text-overflow: ellipsis; padding-right: 8px; }
+  .app .row.h { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
+  .app .row.sel { background: var(--sel); }
+  .app .row .t { color: var(--muted); }
+  .app .new { color: var(--new); }
+  .app .muted { color: var(--muted); }
+  .app .badge { font-size: 11px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--new); color: var(--new); }
+  .app .chip { font-size: 11px; padding: 1px 6px; border-radius: 3px; background: var(--bg3); color: var(--muted); }
+  .app .card { margin: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg2); display: flex; gap: 12px; padding: 10px; }
+  .app .thumb { width: 132px; height: 168px; flex: none; border-radius: 3px; background: radial-gradient(ellipse at 50% 40%, #3a3f47, #1a1b1e 75%); display: flex; align-items: flex-start; justify-content: center; position: relative; overflow: hidden; }
+  .app .thumb small { position: absolute; bottom: 0; padding: 2px 0; background: #1a1b1ecc; left: 0; right: 0; text-align: center; color: var(--muted); font-size: 11px; }
+  .app .steps { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .app .st { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+  .app .st .ic { width: 18px; text-align: center; font-weight: 700; flex: none; }
+  .app .st .tx { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app .ok { color: var(--new); } .app .todo { color: var(--muted); } .app .warn { color: var(--changed); }
+  .app .link { color: var(--accent); }
+  .app .fields .fr { display: grid; grid-template-columns: 160px 1fr; padding: 2px 10px; height: 25px; align-items: center; }
+  .app .fields .fr span:first-child { color: var(--new); }
+  .app .fields .fr .v { border: 1px solid var(--border); height: 22px; padding: 0 6px; display: flex; align-items: center; color: var(--text); border-radius: 2px; overflow: hidden; white-space: nowrap; }
+  .app .menu { position: absolute; background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 8px 24px #0009; padding: 4px 0; z-index: 3; min-width: 250px; }
+  .app .menu .mi { padding: 5px 14px; display: flex; justify-content: space-between; gap: 20px; white-space: nowrap; }
+  .app .menu .mi.h { background: var(--sel); }
+  .app .menu .mi .k { color: var(--muted); font-size: 12px; }
+  .app .menu .ms { height: 1px; background: var(--border); margin: 4px 0; }
+  .app .menu .mi.soon { color: #5d626b; }
+  .app .callout { position: absolute; background: #3b3220; border: 1px solid var(--changed); color: #f1dfb6; font-size: 12px; padding: 6px 10px; border-radius: 4px; max-width: 280px; z-index: 4; box-shadow: 0 4px 14px #0008; }
+  .app .callout b { color: var(--changed); }
+  /* workshop */
+  .app .ws { display: flex; height: 100%; }
+  .app .wsteps { width: 220px; flex: none; border-right: 1px solid var(--border); background: var(--bg2); padding: 10px 0; }
+  .app .wsteps .ttl { padding: 0 14px 10px; font-weight: 600; font-size: 14px; }
+  .app .wsteps .ttl small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+  .app .ws-step { display: flex; gap: 10px; padding: 8px 14px; align-items: flex-start; }
+  .app .ws-step.on { background: var(--sel); box-shadow: inset 3px 0 0 var(--accent); }
+  .app .ws-step .n { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; flex: none; }
+  .app .ws-step.done .n { border-color: var(--new); color: var(--new); }
+  .app .ws-step.on .n { border-color: var(--accent); background: var(--accent); color: #fff; }
+  .app .ws-step small { display: block; color: var(--muted); font-size: 12px; }
+  .app .wmain { flex: 1; min-width: 0; padding: 14px 16px; overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
+  .app .wmain h3 { margin: 0; font-size: 15px; }
+  .app .how { color: var(--accent); font-size: 12px; }
+  .app .wmodel { width: 400px; flex: none; border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+  .app .vp { flex: 1; background: radial-gradient(ellipse at 50% 45%, #3a3f47, #18191b 70%); position: relative; display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
+  .app .vp .grid { position: absolute; left: -20%; right: -20%; bottom: 0; height: 40%; background: repeating-linear-gradient(90deg, #ffffff10 0 1px, transparent 1px 40px), repeating-linear-gradient(0deg, #ffffff10 0 1px, transparent 1px 40px); transform: perspective(300px) rotateX(60deg); transform-origin: bottom; }
+  .app .vtb { display: flex; gap: 6px; padding: 6px; border-bottom: 1px solid var(--border); background: var(--bg2); flex-wrap: wrap; }
+  .app .play { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-top: 1px solid var(--border); background: var(--bg2); }
+  .app .bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; position: relative; }
+  .app .bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 38%; background: var(--accent); border-radius: 2px; }
+  .app .grp { border: 1px solid var(--border); border-radius: 4px; }
+  .app .grp .gh { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bg2); }
+  .app .grp .gh .c { margin-left: auto; font-size: 12px; }
+  .app .grp .gr { display: grid; grid-template-columns: 26px 1fr 110px 240px; padding: 4px 10px; border-top: 1px solid var(--border); align-items: center; }
+  .app .cb { width: 14px; height: 14px; border: 1px solid var(--border); border-radius: 2px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; background: var(--bg); }
+  .app .cb.x { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .app .cb.x::after { content: '✓'; }
+  .app .cb.part { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .app .cb.part::after { content: '–'; }
+  .app .strike { text-decoration: line-through; color: var(--deleted); }
+  .app .banner { border: 1px solid #2f5b3a; background: #1f3325; border-radius: 4px; padding: 8px 12px; display: flex; gap: 10px; align-items: center; }
+  .app .empty { border: 1px dashed var(--border); border-radius: 6px; padding: 26px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+  .app .empty .big { font-size: 15px; }
+  .app .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .app .tile { border: 1px solid var(--border); border-radius: 6px; background: var(--bg2); padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; }
+  .app .tile .i { font-size: 22px; width: 30px; text-align: center; }
+  .app .tile b { display: block; margin-bottom: 2px; }
+  .app .tile small { color: var(--muted); }
+  .app .tile.on { border-color: var(--accent); background: var(--sel); }
+  .app .tile.soon { opacity: .5; }
+  .app .howto li { margin: 0 0 10px; }
+  .app .clip { display: grid; grid-template-columns: 26px 1fr 70px 1fr; padding: 4px 10px; border-top: 1px solid var(--border); align-items: center; }
+  .app .clip.on { background: var(--sel); }
+  /* screen A: ordinary record inspector */
+  .app .fields2 { flex: 1; min-height: 0; overflow: hidden; }
+  .app .fgh { padding: 5px 10px 3px; font-weight: 600; background: var(--bg2); border-top: 1px solid var(--border); }
+  .app .fr2 { display: grid; grid-template-columns: 130px 140px 1fr 110px; padding: 0 10px; height: 25px; align-items: center; gap: 6px; white-space: nowrap; }
+  .app .fr2.sel { background: var(--sel); }
+  .app .fr2 .fn { color: var(--new); overflow: hidden; text-overflow: ellipsis; }
+  .app .fr2 .fru { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+  .app .fr2 .v { border: 1px solid var(--border); height: 22px; padding: 0 6px; display: flex; align-items: center; border-radius: 2px; overflow: hidden; text-overflow: ellipsis; }
+  .app .fr2 .v.e { color: var(--muted); font-style: italic; border-style: dashed; }
+  .app .fr2 .fx { font-size: 12px; }
+  .app .descbar { flex: none; border-top: 1px solid var(--border); background: var(--bg2); padding: 8px 12px; font-size: 12.5px; position: relative; }
+  .app .way { display: flex; gap: 12px; align-items: center; border: 1px solid var(--border); border-radius: 4px; padding: 8px 12px; background: var(--bg2); }
+  .app .way .wi { font-size: 20px; width: 28px; text-align: center; }
+  .app .dlg { position: absolute; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 10px 30px #000a; }
+  .app .dlg .dh { display: flex; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .app .dlg .db { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .app .dlg .dr { display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: center; }
+  .app .dlg .df { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Cactus: макет «до → после»</h1>
+    <p class="lead">
+    Пять экранов. Главный — A: инспектор любой записи (на примере книги), это касается всех типов. B–D — про расы, E — меню. Кнопки «До» — настоящие снимки (русский интерфейс), «После» — как предлагается
+    (рисунок, не код). Переключатель над каждым экраном. Под ним — что мешает сейчас и что меняется.
+    Жёлтые выноски отмечают новое.<br>
+    Ориентир — простота FCS при открытии: слева типы, посередине записи, справа поля. Этот путь
+    всегда виден и ничем не загорожен. Поиск, ссылки, карточки и мастера Cactus ему помогают и
+    не встают поперёк. Полный разбор: <code>docs/ui-review-2026-11.md</code>, правила —
+    <code>docs/ui-principles.md</code>.
+  </p>
+  <nav class="screens">
+    <a href="#a">A. Любая запись: книга</a>
+    <a href="#b">B. Своя раса: карточка</a>
+    <a href="#c">C. Мастерская расы: анимации</a>
+    <a href="#d">D. Совместимость после «Применить»</a>
+    <a href="#e">E. Меню «Создать» и «Мод»</a>
+  </nav>
+
+  <!-- ================= A ================= -->
+  <section class="screen" id="a">
+    <h2>A. Любая запись (пример: новая книга): что значит поле и как попасть в игру</h2>
+    <p class="why">Главный экран для всех типов, не только рас. Простоту берём у FCS: поля и ссылки на одной вкладке, описание
+      выделенного поля всегда внизу. От Cactus остаются поиск, «Где в игре» и подсказка, что делать дальше.</p>
+    <div class="toggle">
+      <button data-v="b-new">До: «+ Новая»</button><button data-v="b-fields">До: поля</button><button data-v="b-refs">До: ссылки</button><button data-v="b-where">До: где в игре</button>
+      <button data-v="new">После: «+ Новая»</button><button data-v="after" class="on">После: поля</button><button data-v="where">После: где в игре</button>
+    </div>
+    <div class="frame">
+      <img class="view" data-v="b-new" src="before/30-book-new-modal.png" alt="">
+      <img class="view" data-v="b-fields" src="before/31-book-fields.png" alt="">
+      <img class="view" data-v="b-refs" src="before/32-book-refs.png" alt="">
+      <img class="view" data-v="b-where" src="before/33-book-where.png" alt="">
+      <div class="app view" data-v="new" data-book="new"></div>
+      <div class="app view on" data-v="after" data-book="fields"></div>
+      <div class="app view" data-v="where" data-book="where"></div>
+    </div>
+    <div class="changes">
+      <div class="bad"><h3>Сейчас</h3><ul>
+        <li>«+ Новая» в «Книгах» создаёт не книгу: <code>item function</code> пустой, запись пропадает из списка книг, все поля пустые (нет модели, иконки, цены).</li>
+        <li>Что делает поле, видно только во всплывающей подсказке. В FCS описание выделенного поля всегда внизу окна.</li>
+        <li>Ссылки — отдельная вкладка с кнопками «+ races», «+ material» без объяснений: непонятно, при чём расы к книге.</li>
+        <li>«Где в игре»: «нет восходящих связей» — и всё. Как сделать, чтобы предмет появился, не сказано.</li>
+      </ul></div>
+      <div class="good"><h3>После</h3><ul>
+        <li>«+ Новая» в категории создаёт запись этой категории (книга остаётся книгой) и предлагает образец: модель, иконка, цена берутся из него.</li>
+        <li>Поля и ссылки на одной вкладке, как в FCS. У каждого поля имя игры и русское название; внизу — описание выделенного поля.</li>
+        <li>Пустая ссылка объясняет, что значит пусто: «races — кто может носить; пусто — все».</li>
+        <li>Строка «В игре: пока нигде» над полями и вкладка «Где в игре» со способами попасть в игру и примером образца. Работает для любого типа.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <!-- ================= B ================= -->
+  <section class="screen" id="b">
+    <h2>B. Главное окно, выбрана своя раса</h2>
+    <p class="why">Расовые кнопки уходят из списка в карточку расы. Всё, что с расой сделано и что осталось, видно сразу в инспекторе.</p>
+    <div class="toggle"><button data-v="before">До</button><button data-v="after" class="on">После</button><button data-v="compact">После: карточка свёрнута</button></div>
+    <div class="frame">
+      <img class="view" data-v="before" src="before/19-race-inspector.png" alt="">
+      <div class="app view on" data-v="after">
+        <div class="tb">
+          <span class="b">⌂</span><span class="sep"></span>
+          <span class="b p">Сохранить <span class="car">▾</span></span>
+          <span class="b">↶ <span class="car">▾</span></span><span class="b">↷ <span class="car">▾</span></span>
+          <span class="b">←</span><span class="b">→</span><span class="sep"></span>
+          <span class="b hot">Создать <span class="car">▾</span></span>
+          <span class="b">Мод <span class="car">▾</span></span>
+          <span class="b">✓ Проверить</span>
+          <span class="grow"></span>
+          <span class="b on">Данные</span><span class="b">Диалоги</span><span class="b">Мир</span><span class="b">Окно <span class="car">▾</span></span>
+          <span class="sep"></span>
+          <span class="b ghost">● ИИ</span>
+          <b>● Мой мод.mod</b>
+          <span class="b hot">?</span><span class="b">⚙</span>
+        </div>
+        <div class="body">
+          <div class="pane" style="width:240px"><div class="ptabs"><span class="ptab on">☰ Категории</span></div><div class="pbody cats"></div></div>
+          <div class="pane" style="width:420px">
+            <div class="ptabs"><span class="ptab on">▤ Записи</span></div>
+            <div class="pbody">
+              <div style="display:flex;gap:6px;padding:6px 8px"><span class="f" style="flex:1">Имя, перевод или id…</span><span class="b sm">?</span><span class="f" style="width:80px">Все ▾</span></div>
+              <div style="display:flex;gap:6px;padding:0 8px 6px;align-items:center"><span class="b sm">+ Новая</span><span class="b sm">Копия</span><span class="b sm">Удалить</span><span class="grow"></span><span class="muted" style="font-size:12px">Записей: 54</span></div>
+              <div class="row h"><span>Имя</span><span>Перевод</span><span>Тип</span></div>
+              <div class="races"></div>
+            </div>
+          </div>
+          <div class="pane" style="flex:1;border-right:0">
+            <div class="ptabs"><span class="ptab on">ⓘ Инспектор</span><span class="ptab">◈ Модель</span></div>
+            <div class="pbody">
+              <div style="padding:8px 10px 0;display:flex;align-items:center;gap:10px">
+                <span style="font-size:17px;color:var(--new);font-weight:600">Мохолюды</span>
+                <span class="badge">новая</span><span class="chip" title="RACE">Раса</span><span class="muted">в моде «Мой мод»</span>
+              </div>
+              <div class="card" style="position:relative">
+                <div class="thumb">${FIGURE}<small>щёлкните — модель</small></div>
+                <div class="steps">
+                  <div class="st"><span class="ic ok">✓</span><span class="tx">Создана на основе <b>Зеленоземец</b></span></div>
+                  <div class="st"><span class="ic ok">✓</span><span class="tx">Совместимость: 391 место <span class="muted">— броня 4, диалоги 384, группы рас 2, старты 1</span></span><span class="b sm">Изменить</span></div>
+                  <div class="st"><span class="ic todo">○</span><span class="tx">Свои анимации: <span class="muted">нет</span></span><span class="b sm">Добавить…</span></div>
+                  <div class="st"><span class="ic todo">○</span><span class="tx">Население фракций <span class="muted">— по желанию, не настроено</span></span><span class="b sm">Настроить</span></div>
+                  <div class="st"><span class="ic warn">⚠</span><span class="tx">Мод не сохранён в папку игры <span class="muted">— игра его не увидит</span></span><span class="b sm">Сохранить в mods/…</span></div>
+                  <div style="display:flex;gap:6px;margin-top:6px"><span class="b p">Открыть мастерскую расы</span><span class="b">Новая раса на основе этой…</span></div>
+                </div>
+                <div class="callout" style="right:-6px;top:-40px"><b>Карточка расы.</b> Что сделано и что осталось, с кнопкой на каждый шаг. Считается из данных: работает и для рас из FCS.</div>
+              </div>
+              <div style="display:flex;gap:4px;padding:2px 10px 6px">
+                <span class="b sm on">Поля</span><span class="b sm">Ссылки (105)</span><span class="b sm">Кто ссылается (391)</span><span class="b sm">Где в игре</span><span class="b sm">Изменения</span>
+              </div>
+              <div class="fields">
+                <div class="fr"><span>attachment points</span><span class="v">.\data\ragdoll\attachment…</span></div>
+                <div class="fr"><span>buy value</span><span class="v">100</span></div>
+                <div class="fr"><span>description</span><span class="v">Primarily from farmer cultures, they still tend…</span></div>
+                <div class="fr"><span>filenames prefix</span><span class="v">hu</span></div>
+                <div class="fr"><span>morph num</span><span class="v">5</span></div>
+                <div class="fr"><span>part map female</span><span class="v">.\data\character\skins\ma…</span></div>
+                <div class="fr"><span>part map male</span><span class="v">.\data\character\skins\ma…</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="status"><span>Записей в моде: 392</span><span>Не сохранено</span><span>● Игра не подключена</span><span>Совместимость расы: применено правок 391 (один шаг отмены)</span></div>
+        <div class="callout" style="left:250px;top:700px"><b>Список без расовых кнопок.</b> «+ Новая · Копия · Удалить» в одну строку при любой категории.</div>
+        <div class="callout" style="left:330px;top:44px;max-width:220px"><b>Создать ▾</b> — всё, что создаёт записи (экран E).</div>
+      </div>
+    </div>
+    <div class="changes">
+      <div class="bad"><h3>Сейчас</h3><ul>
+        <li>«Новая раса на основе…» и «Добавить анимации…» в тулбаре списка, только в категории «Расы». Ряд кнопок переносится на вторую строку.</li>
+        <li>Что с расой сделано, не видно: таблица зелёных полей и «Кто ссылается (391)».</li>
+        <li>Вкладки «Модель», «Совмест… ⌄2» и «История» теснят инспектор.</li>
+        <li>Тип «RACE» — код, а не слово.</li>
+      </ul></div>
+      <div class="good"><h3>После</h3><ul>
+        <li>Карточка расы: миниатюра модели и шаги ✓/○/⚠ с кнопками. Мастера открываются отсюда.</li>
+        <li>Список записей одинаковый в любой категории.</li>
+        <li>Панель: «Создать ▾», «Мод ▾» (только свойства мода), «Проверить», «?» — «Как сделать…».</li>
+        <li>Справа две вкладки: Инспектор и Модель. Колонка «Тип» говорит «Раса» (код — в подсказке).</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <!-- ================= C ================= -->
+  <section class="screen" id="c">
+    <h2>C. Мастерская расы: шаг «Анимации», модель рядом</h2>
+    <p class="why">Вместо отдельных вкладок «Совместимость расы», «Добавить анимации» и «Модель» — одна вкладка: шаги слева, модель расы справа. Выбранная анимация сразу играет.</p>
+    <div class="toggle"><button data-v="before">До</button><button data-v="empty">После: пусто</button><button data-v="after" class="on">После: файл выбран</button></div>
+    <div class="frame">
+      <img class="view" data-v="before" src="before/17-tabs-piled.png" alt="">
+      <div class="app view" data-v="empty" data-ws="2">
+            <div class="wmain">
+              <h3>Свои анимации для «Мохолюды»</h3>
+              <div class="empty" style="position:relative">
+                <span class="big">Выберите файл .skeleton с анимациями из Blender.</span>
+                <span class="b p">Выбрать файл .skeleton…</span>
+                <span class="how">Как выгрузить анимации из Blender? ▸</span>
+                <div class="callout" style="left:420px;top:8px"><b>Пустое состояние:</b> одна фраза и одна кнопка. Абзац про Kenshi IO Tools — под «Как выгрузить…». Неактивной кнопки «Добавить (клипов 0)» нет.</div>
+              </div>
+              <div class="muted" style="font-size:12px">Можно пропустить: без своих анимаций раса двигается как Зеленоземец.</div>
+              <div class="grow"></div>
+              <div style="display:flex;gap:8px"><span class="b">← Совместимость</span><span class="grow"></span><span class="b">Пропустить</span><span class="b">Проверка →</span></div>
+            </div>
+            ${WS_MODEL}
+      </div>
+      <div class="app view on" data-v="after" data-ws="2">
+            <div class="wmain">
+              <h3>Свои анимации для «Мохолюды»</h3>
+              <div style="display:flex;gap:8px;align-items:center"><span class="muted">Файл:</span><b>moss_anims.skeleton</b><span class="muted">— 3 анимации</span><span class="b sm">Другой файл…</span><span class="ok">✓ Кости подходят к скелету расы</span></div>
+              <div style="display:flex;gap:16px;align-items:center"><label><span class="cb x"></span> Тот же файл для женского тела</label><label><span class="cb"></span> Дать и другим расам со скелетом людей (7)</label></div>
+              <div class="grp" style="position:relative">
+                <div class="clip" style="background:var(--bg2);color:var(--muted);font-weight:600;border-top:0"><span></span><span>Анимация в файле</span><span>Длина</span><span>Что будет в игре</span></div>
+                <div class="clip on"><span class="cb x"></span><span>▶ moss_idle_sway</span><span>2,4 с</span><span class="new">новая</span></div>
+                <div class="clip"><span class="cb x"></span><span>moss_walk_heavy</span><span>1,1 с</span><span class="new">новая</span></div>
+                <div class="clip"><span class="cb x"></span><span>sit_ground</span><span>3,0 с</span><span class="warn">заменит анимацию «sit_ground» у этой расы</span></div>
+                <div class="callout" style="right:0;top:150px"><b>Щелчок по строке</b> — анимация играет в модели справа. Не нужно «Показать в «Модели»».</div>
+              </div>
+              <div class="muted" style="font-size:12px">Файл ляжет в папку мода: mods/Мой мод/anims/moss_anims.skeleton · <span class="how">Как это работает? ▸</span></div>
+              <div class="grow"></div>
+              <div style="display:flex;gap:8px"><span class="b">← Совместимость</span><span class="grow"></span><span class="b p">Добавить 3 анимации</span><span class="b">Проверка →</span></div>
+            </div>
+            ${WS_MODEL_PLAY}
+      </div>
+    </div>
+    <div class="changes">
+      <div class="bad"><h3>Сейчас</h3><ul>
+        <li>Сценарий «новая раса» открывает 3–4 вкладки справа; заголовки обрезаются.</li>
+        <li>Мастер анимаций не видит модель: «Показать в «Модели»» уводит из мастера.</li>
+        <li>Пустой мастер: абзац на 4 строки, неактивная «Добавить (клипов 0, рас 1)».</li>
+        <li>Слова «клип», «скелет Ogre», «запись файла анимаций», «Actions».</li>
+      </ul></div>
+      <div class="good"><h3>После</h3><ul>
+        <li>Одна вкладка «Мастерская: Мохолюды». Шаги 1–4 с состоянием слева, модель справа на всех шагах.</li>
+        <li>Повторное открытие — та же вкладка. Мастера уходят из меню «Окно».</li>
+        <li>Пустой шаг: одна фраза, одна кнопка, подробности под «Как выгрузить…».</li>
+        <li>«Анимация», «файл .skeleton», «что будет в игре».</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <!-- ================= D ================= -->
+  <section class="screen" id="d">
+    <h2>D. Совместимость после «Применить»: видно, что сделано, и можно убрать часть</h2>
+    <p class="why">Группы не исчезают. У каждой «✓ применено». Снять галочку у применённых строк — и «Убрать (N)» уберёт расу только оттуда, отдельным шагом отмены.</p>
+    <div class="toggle"><button data-v="before">До</button><button data-v="after" class="on">После</button></div>
+    <div class="frame">
+      <img class="view" data-v="before" src="before/15-race-compat-applied.png" alt="">
+      <div class="app view on" data-v="after" data-ws="1">
+            <div class="wmain">
+              <div style="display:flex;gap:8px;align-items:center"><h3>«Мохолюды» работает как</h3><span class="f" style="color:var(--text)">Зеленоземец ▾</span><span class="b sm">⇄</span><span class="grow"></span><span class="how">Как это работает? ▸</span></div>
+              <div class="banner"><span class="ok">✓</span><span>Применено: <b>391 место</b> (один шаг отмены). Новых мест нет.</span></div>
+              <div class="grp"><div class="gh">▸ <span class="cb x"></span><b>Броня и одежда</b><span class="c ok">✓ применено: 4 из 4</span></div></div>
+              <div class="grp" style="position:relative">
+                <div class="gh">▾ <span class="cb part"></span><b>Условия расы в диалогах</b><span class="c"><span class="ok">✓ применено: 384</span> · <span class="warn">убрать: 2</span></span></div>
+                <div class="gr" style="color:var(--muted);font-weight:600"><span></span><span>Запись</span><span>Поле</span><span>Сейчас</span></div>
+                <div class="gr"><span class="cb x"></span><span class="link">Escaped holy nation slave attack</span><span class="muted">target race</span><span>Зеленоземец, Жженоземец, <span class="new">Мохолюды</span></span></div>
+                <div class="gr"><span class="cb"></span><span class="link">Flotsam sees player approach town</span><span class="muted">my race</span><span>Зеленоземец, <span class="strike">Мохолюды</span></span></div>
+                <div class="gr"><span class="cb"></span><span class="link">… Got blood on my rags…</span><span class="muted">my subrace</span><span>Зеленоземец, Шек, <span class="strike">Мохолюды</span></span></div>
+                <div class="gr"><span class="cb x"></span><span class="link">… I'm so glad I'm drunk right now…</span><span class="muted">my subrace</span><span>Зеленоземец, Шек, <span class="new">Мохолюды</span></span></div>
+                <div class="gr muted"><span></span><span>… ещё 380</span><span></span><span></span></div>
+                <div class="callout" style="right:20px;top:205px"><b>Снятая галочка у применённой строки</b> = «убрать расу отсюда». Зачёркнуто — то, что уйдёт.</div>
+              </div>
+              <div class="grp"><div class="gh">▸ <span class="cb x"></span><b>Группы рас редактора персонажа</b><span class="c ok">✓ применено: 2 из 2</span></div></div>
+              <div class="grp"><div class="gh">▸ <span class="cb x"></span><b>Стартовые сценарии</b><span class="c ok">✓ применено: 1 из 1</span></div></div>
+              <div class="grp"><div class="gh">▸ <span class="cb"></span><b>Население фракций</b><span class="c muted">по желанию · 0 из 95</span></div></div>
+              <div class="grow"></div>
+              <div style="display:flex;gap:8px;align-items:center"><span class="b">← Образец и имя</span><span class="grow"></span><span class="b p" style="background:#8a3b42;border-color:#8a3b42">Убрать (2)</span><span class="b">Анимации →</span></div>
+            </div>
+            ${WS_MODEL}
+      </div>
+    </div>
+    <div class="changes">
+      <div class="bad"><h3>Сейчас</h3><ul>
+        <li>После «Применить» остаются «Уже готово: в 391 местах» и одна выключенная группа. Что именно сделано, не видно.</li>
+        <li>Убрать можно только всё сразу через Ctrl+Z.</li>
+        <li>Над списком — абзац на 4 строки и строка «Не меняется: у 95 персонажей…».</li>
+      </ul></div>
+      <div class="good"><h3>После</h3><ul>
+        <li>Группы остаются: «✓ применено: 4 из 4». Строки можно раскрыть и посмотреть.</li>
+        <li>Снятые галочки у применённых строк → «Убрать (N)», новый шаг отмены.</li>
+        <li>Пояснения — под «Как это работает?».</li>
+        <li><i>Нужна правка ядра:</i> <code>planRaceCompat</code> отдаёт список мест «уже есть», а не только число, плюс обратная операция.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <!-- ================= E ================= -->
+  <section class="screen" id="e">
+    <h2>E. Меню «Создать ▾» и «Мод ▾»</h2>
+    <p class="why">Всё, что создаёт записи, — в «Создать». В «Мод» — только свойства мода. «Совместимость расы…» уходит из «Массовых правок», мастера уходят из «Окна».</p>
+    <div class="toggle"><button data-v="before">До: Массовые правки</button><button data-v="before2">До: список рас</button><button data-v="after" class="on">После</button></div>
+    <div class="frame">
+      <img class="view" data-v="before" src="before/21-bulk-from-selection.png" alt="">
+      <img class="view" data-v="before2" src="before/10-races-list.png" alt="">
+      <div class="app view on" data-v="after">
+        ${TB}
+        <div class="body" style="position:relative">
+          <div class="pane" style="width:240px"><div class="ptabs"><span class="ptab on">☰ Категории</span></div><div class="pbody cats"></div></div>
+          <div class="pane" style="width:420px">
+            <div class="ptabs"><span class="ptab on">▤ Записи</span></div>
+            <div class="pbody">
+              <div style="display:flex;gap:6px;padding:6px 8px"><span class="f" style="flex:1">katana; type=WEAPON</span><span class="b sm">?</span><span class="f" style="width:80px">Все ▾</span></div>
+              <div style="display:flex;gap:6px;padding:0 8px 6px;align-items:center"><span class="b sm">+ Новая</span><span class="b sm">Копия (3)</span><span class="b sm">Удалить (3)</span><span class="b sm p">Массовая правка (3)</span><span class="grow"></span><span class="muted" style="font-size:12px">Выбрано: 3</span></div>
+              <div class="row h"><span>Имя</span><span>Перевод</span><span>Тип</span></div>
+              <div class="row sel"><span>Katana</span><span>Катана</span><span class="t">Оружие</span></div>
+              <div class="row sel"><span>Katana (Edge Type 1)</span><span>Катана (Острие 1)</span><span class="t">Оружие</span></div>
+              <div class="row sel"><span>Katana (Edge Type 2)</span><span>Катана (Острие 2)</span><span class="t">Оружие</span></div>
+              <div class="row"><span>Katana (Edge Type 3)</span><span>Катана (Острие 3)</span><span class="t">Оружие</span></div>
+            </div>
+          </div>
+          <div class="pane" style="flex:1;border-right:0">
+            <div class="ptabs"><span class="ptab">ⓘ Инспектор</span><span class="ptab on">⇶ Массовые правки</span></div>
+            <div class="pbody" style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;gap:8px;align-items:center"><b>Записи:</b><span class="f" style="flex:1;color:var(--text)">выбранные в списке (3)</span><span class="how">Как это работает? ▸</span></div>
+              <div style="display:flex;gap:8px;align-items:center"><b>Поле:</b><span class="f" style="width:200px;color:var(--text)">value ▾</span><span class="f" style="width:110px;color:var(--text)">умножить ▾</span><span class="f" style="width:70px;color:var(--text)">1,5</span><span class="b p">Предпросмотр</span></div>
+              <div class="muted">«Совместимость расы…» здесь больше нет: она живёт в карточке расы и в мастерской.</div>
+            </div>
+          </div>
+          <div class="menu" style="left:328px;top:-2px">
+            <div class="mi h"><span>Новая запись…</span><span class="k">Ctrl+N</span></div>
+            <div class="ms"></div>
+            <div class="mi"><span>Новая раса на основе…</span></div>
+            <div class="mi soon"><span>Новый предмет на основе…</span><span class="k">скоро</span></div>
+            <div class="mi soon"><span>Своё существо…</span><span class="k">скоро</span></div>
+          </div>
+          <div class="menu" style="left:420px;top:150px;min-width:220px;opacity:.95">
+            <div class="mi"><span>О моде…</span></div>
+            <div class="mi"><span>Зависимости (3)…</span></div>
+            <div class="mi"><span>Копии…</span></div>
+            <div class="ms"></div>
+            <div class="mi"><span>Опубликовать…</span></div>
+          </div>
+          <div class="callout" style="left:650px;top:150px;max-width:300px"><b>Мод ▾</b> — без «Новой расы»: создание записей переехало в «Создать ▾».</div>
+          <div class="callout" style="left:600px;top:20px;max-width:300px"><b>Создать ▾.</b> Будущие мастера («Новый предмет на основе…», «Своё существо») встают сюда же — правило из <code>ui-principles.md</code>.</div>
+        </div>
+        <div class="status"><span>Записей в моде: 0</span><span>Не сохранено</span><span>● Игра не подключена</span></div>
+      </div>
+    </div>
+    <div class="changes">
+      <div class="bad"><h3>Сейчас</h3><ul>
+        <li>«Совместимость расы…» в шапке «Массовых правок» — даже при правке катан.</li>
+        <li>«Новая раса на основе…» в меню «Мод», рядом с «Зависимостями» и «Копиями».</li>
+        <li>В «Окне» 26 пунктов, среди них мастера и заглушки «Сцена», «Компоненты».</li>
+      </ul></div>
+      <div class="good"><h3>После</h3><ul>
+        <li>«Создать ▾»: новая запись и мастера «… на основе». «Мод ▾»: только свойства мода.</li>
+        <li>«Массовые правки» без чужих кнопок. Мультивыбор и «Массовая правка (3)» — как сейчас (это хорошо).</li>
+        <li>В «Окне» только панели; заглушки скрыты.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <section class="screen">
+    <h2>Порядок работ, если макет подходит</h2>
+    <ol>
+      <li><b>Инспектор любой записи</b> (экран A): поля и ссылки на одной вкладке, русское название рядом с именем поля, описание выделенного поля внизу, пустая ссылка объясняет «пусто». <i>(первый шаг)</i></li>
+      <li><b>«+ Новая» знает категорию</b> и предлагает образец (экран A, «После: + Новая»). Сейчас новая запись в «Книгах» — не книга.</li>
+      <li><b>Строка «В игре» и вкладка «Где в игре» со способами</b> попасть в игру и примером образца (экран A).</li>
+      <li><b>Карточка расы</b>, расовые кнопки уходят из списка, меню «Создать ▾» (экраны B, E).</li>
+      <li><b>Мастерская расы</b> и «уже применено» в совместимости (экраны C, D; для D нужна правка ядра).</li>
+      <li>Пустые состояния, слова, мелочи панели.</li>
+    </ol>
+    <p class="muted">Каждый шаг — отдельный коммит с <code>npm test</code>, e2e и новым снимком <code>scripts/ux-shots.ts</code>.</p>
+  </section>
+</div>
+
+<script>
+  // Shared fragments of the mocked app, filled in before layout.
+  const FIGURE = `<svg width="120" height="160" viewBox="0 0 120 160"><g fill="#7d8b6a" stroke="#4d5640" stroke-width="1.5">
+    <ellipse cx="60" cy="24" rx="13" ry="15"/><rect x="42" y="40" width="36" height="52" rx="10"/>
+    <rect x="28" y="44" width="11" height="44" rx="5"/><rect x="81" y="44" width="11" height="44" rx="5"/>
+    <rect x="45" y="90" width="13" height="58" rx="5"/><rect x="62" y="90" width="13" height="58" rx="5"/></g></svg>`;
+  const FIGURE_BIG = FIGURE.replace('width="120" height="160"', 'width="210" height="280"');
+  const TB = `<div class="tb">
+    <span class="b">⌂</span><span class="sep"></span>
+    <span class="b p">Сохранить <span class="car">▾</span></span>
+    <span class="b">↶ <span class="car">▾</span></span><span class="b">↷ <span class="car">▾</span></span>
+    <span class="b">←</span><span class="b">→</span><span class="sep"></span>
+    <span class="b">Создать <span class="car">▾</span></span><span class="b">Мод <span class="car">▾</span></span><span class="b">✓ Проверить</span>
+    <span class="grow"></span>
+    <span class="b on">Данные</span><span class="b">Диалоги</span><span class="b">Мир</span><span class="b">Окно <span class="car">▾</span></span>
+    <span class="sep"></span><span class="b ghost">● ИИ</span><b>● Мой мод.mod</b><span class="b">?</span><span class="b">⚙</span></div>`;
+  const STATUS = `<div class="status"><span>Записей в моде: 392</span><span>Не сохранено</span><span>● Игра не подключена</span></div>`;
+  const wsTop = (active) => {
+    const steps = [
+      ['Образец и имя', 'Зеленоземец', 'done'],
+      ['Совместимость', '391 место', 'done'],
+      ['Анимации', 'по желанию', ''],
+      ['Проверка', '', ''],
+    ];
+    const list = steps.map(([t, s, st], i) => {
+      const cls = ['ws-step', st, i === active ? 'on' : ''].join(' ');
+      const n = st === 'done' && i !== active ? '✓' : String(i + 1);
+      return `<div class="${cls}"><span class="n">${n}</span><div>${t}${s ? `<small>${s}</small>` : ''}</div></div>`;
+    }).join('');
+    return `${TB}<div class="body">
+      <div class="pane" style="width:240px"><div class="ptabs"><span class="ptab on">☰ Категории</span></div><div class="pbody cats"></div></div>
+      <div class="pane" style="flex:1;border-right:0">
+        <div class="ptabs"><span class="ptab">▤ Записи</span><span class="ptab">ⓘ Инспектор</span><span class="ptab on">⚒ Мастерская: Мохолюды</span></div>
+        <div class="pbody"><div class="ws">
+          <div class="wsteps" style="position:relative"><div class="ttl">Своя раса<small>Мохолюды</small></div>${list}
+            <div class="callout" style="left:12px;bottom:14px;max-width:196px"><b>Одна вкладка на задачу.</b> Открыть снова — эта же вкладка, а не новая.</div></div>`;
+  };
+
+  const vtb = `<div class="vtb"><span class="b sm on">Целиком</span><span class="b sm">Спереди</span><span class="b sm">Кости</span><span class="b sm">Женское тело</span></div>`;
+  const WS_MODEL = `<div class="wmodel">${vtb}<div class="vp"><div class="grid"></div>${FIGURE_BIG}</div>
+    <div class="play"><span class="f" style="color:var(--text);flex:1">idle ▾</span><span class="b sm">▶</span></div></div>`;
+  const WS_MODEL_PLAY = `<div class="wmodel" style="position:relative">${vtb}<div class="vp"><div class="grid"></div>${FIGURE_BIG.replace('<g ', '<g transform="rotate(-4 60 150)" ')}</div>
+    <div class="play"><span class="f" style="color:var(--text);flex:1">moss_idle_sway ▾</span><span class="b sm">❚❚</span><span class="bar"><i></i></span><span class="muted" style="font-size:12px">0,9 / 2,4 с</span></div>
+    <div class="callout" style="left:16px;top:50px;max-width:240px"><b>Модель расы всегда справа</b> — на шагах «Совместимость», «Анимации», «Проверка».</div></div>`;
+
+  const subst = { FIGURE, TB, STATUS, WS_MODEL, WS_MODEL_PLAY };
+  for (const el of document.querySelectorAll('.app')) {
+    const html = el.innerHTML.replace(/\$\{(\w+)\}/g, (m, k) => subst[k] ?? m);
+    // Workshop views: wrap the step body into the shared shell (toolbar, steps, closing tags, status bar).
+    el.innerHTML = el.dataset.ws ? `${wsTop(Number(el.dataset.ws))}${html}</div></div></div></div>${STATUS}` : html;
+  }
+
+  const cats = [['★ Изменения мода', '392', 'top'], ['Постройки', '147'], ['Предметы', '169'], ['Пакеты диалогов', '293'], ['Расы', '54', 'sel'],
+    ['Персонажи', '639'], ['Анимация', '124'], ['Фракции', '103'], ['Города', '346'], ['Урон по частям тела', '9'], ['Биомы', '75'],
+    ['Пакеты ИИ', '219'], ['Списки торговцев', '157'], ['Цветовые схемы', '57'], ['Исследования', '181'], ['Начала игры', '13'],
+    ['Эффекты', '74'], ['Всё', '54952'], ['Прочие типы', '21171']];
+  for (const el of document.querySelectorAll('.cats')) {
+    el.innerHTML = cats.map(([n, c, k]) => `<div class="cat ${k ?? ''}"><span>${n}</span><span>${c}</span></div>`).join('');
+  }
+  const races = [['Hive Soldier Drone', 'Трутень-солдат'], ['Hive Worker Drone', 'Рабочий трутень'], ['King Fishman', 'Король Рыболюдов'],
+    ['Land Bat', 'Ползучая мышь'], ['Leviathan', 'Левиафан'], ['P4 Unit', 'Серия P4'], ['River Raptor', 'Речной ящер'],
+    ['Robot Guard Spider', 'Робопаук-охранник'], ['Scorchlander', 'Жженоземец'], ['Shek', 'Шек'], ['Skeleton', 'Скелет'],
+    ['Skimmer', 'Рвач'], ['Small Spider', 'Маленький паук'], ['Soldierbot', 'Солдабот'], ['Spider', 'Паук'], ['Swamp Raptor', 'Болотный ящер'],
+    ['Swamp Turtle', 'Болотная черепаха'], ['Greenlander', 'Зеленоземец'], ['Hiver', 'Улейник'], ['Hound', 'Пёс'], ['Southern Hive', 'Южный улей'],
+    ['Mossfolk', 'Мохолюды', 'sel']];
+  for (const el of document.querySelectorAll('.races')) {
+    el.innerHTML = races.map(([n, t, k]) => `<div class="row ${k ?? ''}"><span class="${k ? 'new' : ''}">${k ? '● Мохолюды' : n}</span><span>${k ? '' : t}</span><span class="t" title="RACE">Раса</span></div>`).join('');
+  }
+  const all = [['Basic_NEW_Grass', '', 'Трава'], ['!Experienced Man!', '', 'Шаблон отряда'], ['--crossbows all', '', 'Список торговца'],
+    ['001', '001', 'Материал'], ['10 dextrous', '', 'Характеристики'], ['1st contact', '1st contact', 'Дипломатия'], ['2D Cacti', '', 'Растения'],
+    ['Abandoned Mine', 'Заброшенная шахта', 'Постройка'], ['Acid Water', 'Кислотная вода', 'Биом'], ['Agriculture', 'Земледелие', 'Исследование'],
+    ['Animal Den', 'Логово', 'Город'], ['Armour Plating', 'Броневые пластины', 'Предмет'], ['Assassin', 'Убийца', 'Персонаж'],
+    ['Bandit Camp', 'Лагерь бандитов', 'Город'], ['Bar', 'Бар', 'Постройка'], ['Beak Thing', 'Тварь с клювом', 'Раса'],
+    ['Beep', 'Бип', 'Персонаж'], ['Bonedog', 'Костопёс', 'Раса'], ['Brawler', 'Драчун', 'Персонаж'], ['Bugmaster', 'Повелитель жуков', 'Персонаж'],
+    ['Burning Forest', 'Горящий лес', 'Биом'], ['Cage', 'Клетка', 'Постройка']];
+  for (const el of document.querySelectorAll('.allrows')) {
+    el.innerHTML = all.map(([n, t, ty]) => `<div class="row"><span>${n}</span><span>${t}</span><span class="t">${ty}</span></div>`).join('');
+  }
+
+  // Screen B variant: the race card folded into one line, fields visible at once (FCS-like main path).
+  {
+    const src = document.querySelector('#b .app[data-v="after"]');
+    const c = src.cloneNode(true);
+    c.dataset.v = 'compact';
+    c.classList.remove('on');
+    c.querySelector('.card').outerHTML = `<div class="card" style="padding:6px 10px;align-items:center;gap:10px;position:relative">
+      <span class="ok">✓✓</span><span class="todo">○○</span><span>Раса · шагов готово <b>2 из 4</b></span>
+      <span class="muted">— дальше: свои анимации</span><span class="grow"></span>
+      <span class="b sm">Открыть мастерскую</span><span class="b sm ghost">▸ развернуть</span>
+      <div class="callout" style="right:0;top:40px"><b>Свёрнутая карточка</b> — одна строка. Поля видны сразу, как в FCS. Свёрнутость запоминается.</div></div>`;
+    const f = c.querySelector('.fields');
+    for (const [k, v] of [['playable', '✓'], ['single gender', ''], ['swims', '✓'], ['weather immunity0', '0'], ['flayed normal female…', '.\\data\\character\\skins\\hu…'], ['flayed normal male…', '.\\data\\character\\skins\\hu…'], ['swim speed', ''], ['no hats', ''], ['no shirts', ''], ['no shoes', ''], ['gigantic', ''], ['cant enter buildings', '']]) {
+      f.insertAdjacentHTML('beforeend', `<div class="fr"><span>${k}</span><span class="v">${v}</span></div>`);
+    }
+    src.after(c);
+  }
+
+  // Screen A: the inspector of an ordinary record (a new book): FCS-like fields + refs + description bar.
+  {
+    const bookCats = [['★ Изменения мода', '1', 'top'], ['Постройки', '147'], ['Предметы', '170'], ['_Оружие', '48'], ['_Броня', '142'],
+      ['_Материалы', '150'], ['_Группы размещения', '21'], ['_Карты', '18'], ['_Книги', '141', 'sel'], ['_Замена конечностей', '28'],
+      ['Пакеты диалогов', '293'], ['Расы', '53'], ['Персонажи', '639'], ['Фракции', '103'], ['Города', '346'], ['Списки торговцев', '157'],
+      ['Исследования', '181'], ['Всё', '54952']];
+    const catsHtml = bookCats.map(([n, c, k]) => `<div class="cat ${k ?? ''}" style="${n.startsWith('_') ? 'padding-left:34px' : ''}"><span>${n.replace('_', '')}</span><span>${c}</span></div>`).join('');
+    const books = [['_LETTER TEMPLATE', '_LETTER TEMPLATE'], ['A Holy Purpose', 'Святая Цель'], ['Beautiful Tengu: A Tribute', 'Прекрасный Тэнгу'],
+      ['Birth Of The Phoenix', 'Рождение Феникса'], ['Book Of Grace', 'Книга благодати'], ['Book Of Sacrifice', 'Книга жертвования'],
+      ["Captive's Journal I", 'Журнал пленника I'], ["Captive's Journal II", 'Журнал пленника II'], ['Cultural Groupings…', 'Культурные группы…'],
+      ['Flotsam Safehouse Note', 'Записка убежища'], ['Forbidden Sympathy', 'Запретное сочувствие'], ['Holy Edict', 'Святой указ'],
+      ["King Shager's Reign", 'Правление короля Шагера'], ["Kral's Last Stand", 'Последний бой Крала'], ["Lam's Survival Vol.1", 'Выживание с Лэмом'],
+      ['Legend of Luquin I', 'Легенда о Лукине I'], ['Legend of the Foulhound', 'Легенда о Гнилогончей'], ['Legend of the Mist Ghoul', 'Легенда о мглистом упыре'],
+      ['Legend of the Grievewraith', 'Легенда о Мрачнодухе'], ['Legend of the Headless I', 'Легенда о Безголовом I'], ['Lore: Okran', 'Предание об Окране'],
+      ['Mad Scientist Notes', 'Записки безумного учёного'], ['Paladin Handbook', 'Руководство паладина'], ['Scripture of Okran', 'Писание Окрана'],
+      ['Shinobi Code', 'Кодекс шиноби'], ['Tech Hunter Notes', 'Заметки охотника за техникой'], ['The Fall', 'Падение'], ['The Second Empire', 'Вторая Империя'],
+      ['Treatise on Hivers', 'Трактат об улейниках'], ['Twin Moons', 'Две луны']];
+    const rows = '<div class="row sel"><span class="new">● Моя книга</span><span></span><span class="t" title="ITEM, item function = ITEM_BOOK">Книга</span></div>' +
+      books.map(([n, t]) => `<div class="row"><span>${n}</span><span>${t}</span><span class="t" title="ITEM">Книга</span></div>`).join('');
+    const listPane = `<div class="pane" style="width:400px">
+        <div class="ptabs"><span class="ptab on">▤ Записи</span></div>
+        <div class="pbody">
+          <div style="display:flex;gap:6px;padding:6px 8px"><span class="f" style="flex:1">Имя, перевод или id…</span><span class="b sm">?</span><span class="f" style="width:80px">Все ▾</span></div>
+          <div style="display:flex;gap:6px;padding:0 8px 6px;align-items:center"><span class="b sm">+ Новая</span><span class="b sm">Копия</span><span class="b sm">Удалить</span><span class="grow"></span><span class="muted" style="font-size:12px">Записей: 141</span></div>
+          <div class="row h"><span>Имя</span><span>Перевод</span><span>Тип</span></div>${rows}</div></div>`;
+    const head = (tab) => `<div style="padding:8px 10px 0;display:flex;align-items:center;gap:10px">
+        <span style="font-size:17px;color:var(--new);font-weight:600">Моя книга</span>
+        <span class="badge">новая</span><span class="chip" title="ITEM · item function = ITEM_BOOK">Книга</span><span class="muted">на основе «Книга благодати»</span></div>
+      <div class="banner" style="margin:8px 10px 0;border-color:#5b4a2f;background:#33291c;position:relative"><span class="warn">⚠</span>
+        <span><b>В игре: пока нигде</b> <span class="muted">— не продаётся, не лежит в мире, ни у кого нет.</span></span><span class="grow"></span>
+        ${tab === 'fields' ? '<span class="b sm">Где в игре ▸</span>' : ''}
+        ${tab === 'fields' ? '<div class="callout" style="right:8px;top:40px;max-width:300px"><b>Одна строка «В игре» у любой записи:</b> предмет, персонаж, постройка, отряд. Считается тем же расчётом, что вкладка «Где в игре».</div>' : ''}</div>
+      <div style="display:flex;gap:4px;padding:8px 10px 6px">
+        <span class="b sm ${tab === 'fields' ? 'on' : ''}">Поля</span><span class="b sm">Кто ссылается (0)</span><span class="b sm ${tab === 'where' ? 'on' : ''}">Где в игре <span class="warn">⚠</span></span><span class="b sm">Изменения</span></div>`;
+    const fr = (name, ru, val, o = {}) => `<div class="fr2 ${o.sel ? 'sel' : ''}"><span class="fn">${name}</span><span class="fru">${ru}</span><span class="v ${o.empty ? 'e' : ''}">${val}</span><span class="fx">${o.x ?? ''}</span></div>`;
+    const gh = (t) => `<div class="fgh">${t}</div>`;
+    const BS = String.fromCharCode(92);
+    const fieldsHtml = `<div class="fields2" style="position:relative">
+        <div style="display:flex;gap:6px;padding:0 10px 6px"><span class="f" style="width:220px">Найти поле…</span><span class="grow"></span><span class="muted" style="font-size:12px">☐ только изменённые</span></div>
+        ${gh('Книга')}
+        ${fr('item function', 'что это за предмет', 'Книга (ITEM_BOOK)', { x: '<span class="muted">по категории</span>' })}
+        ${fr('description', 'текст книги', 'Forbidden within the Holy Nation. An ancient scripture…', { x: '<span class="muted">как у образца</span>' })}
+        ${gh('Файлы')}
+        ${fr('icon', 'иконка в инвентаре', `.${BS}data${BS}items${BS}icons${BS}Book Of Grace.png`, { sel: true, x: '<span class="b sm">Обзор…</span>' })}
+        ${fr('mesh', 'модель', `.${BS}data${BS}items${BS}meshes${BS}Item_Holy_Bible.mesh`, { x: '<span class="b sm">Обзор…</span>' })}
+        ${fr('ground mesh', 'модель на земле', 'пусто — берётся «mesh»', { empty: true })}
+        ${gh('Цена и инвентарь')}
+        ${fr('value', 'цена', '150')}
+        ${fr('weight kg', 'вес, кг', '1')}
+        ${fr('inventory footprint', 'клеток в инвентаре', '3 × 3')}
+        ${gh('Ссылки')}
+        ${fr('material', 'текстура модели', '→ Item_Atlas_ottos', { x: '<span class="muted">как у образца</span>' })}
+        ${fr('races', 'кто может носить', 'пусто — все расы', { empty: true, x: '<span class="b sm">+ Выбрать…</span>' })}
+        ${fr('races exclude', 'кому нельзя', 'пусто — никому не запрещено', { empty: true, x: '<span class="b sm">+ Выбрать…</span>' })}
+        ${fr('ingredients', 'из чего крафтится', 'пусто — не крафтится', { empty: true, x: '<span class="b sm">+ Выбрать…</span>' })}
+        <div class="muted" style="padding:4px 10px;font-size:12px">▸ ещё 31 поле (сдвиг и масштаб иконки, звук, физика…)</div>
+        <div class="callout" style="left:10px;top:440px;max-width:280px"><b>↑ Имя поля игры остаётся</b> (по нему ищут в FCS и на форумах), рядом — что оно значит.</div>
+        <div class="callout" style="left:420px;top:440px;max-width:300px"><b>↑ Ссылки — в тех же «Полях», ниже, как в FCS.</b> Пустая ссылка говорит, что значит «пусто». Отдельной вкладки «Ссылки» нет.</div>
+      </div>
+      <div class="descbar"><b>icon</b> — иконка в инвентаре<br>Картинка .png, которую видно в инвентаре и у торговца. Используется, только если выключено «auto icon image» (иначе иконка рисуется из модели).
+        <div class="muted" style="font-size:11px;margin-top:3px">fcs.def: inventory icon image or building button image. Only used if 'auto icon image' is false</div>
+        <div class="callout" style="right:10px;top:-50px;max-width:280px"><b>Как в FCS:</b> описание выделенного поля всегда внизу. Сейчас оно только во всплывающей подсказке.</div></div>`;
+    const way = (ic, t, s, btn) => `<div class="way"><span class="wi">${ic}</span><div style="flex:1"><b>${t}</b><div class="muted">${s}</div></div><span class="b sm">${btn}</span></div>`;
+    const whereHtml = `<div style="padding:4px 14px;display:flex;flex-direction:column;gap:10px;position:relative">
+        <div style="font-size:15px">Книга пока не попадает в игру. Предмет появляется одним из способов:</div>
+        ${way('🛒', 'Продаётся у торговца', 'список торговца → отряд торговца → город', 'Добавить в список торговца…')}
+        ${way('📦', 'Лежит в мире', 'группа размещения → постройки, где она стоит', 'Добавить в группу размещения…')}
+        ${way('🧍', 'Есть у персонажа с начала игры', 'особые предметы отряда → где отряд живёт', 'Дать отряду…')}
+        <div class="grp" style="margin-top:4px"><div class="gh"><b>Как у образца «Книга благодати»</b><span class="c muted">3 пути</span></div>
+          <div style="padding:8px 10px;border-top:1px solid var(--border)">🛒 Продаёт <b>Жрец</b> · список «holy church» · отряд «Holy Priest church»<br><span class="muted">⌖ Возрождение, Плохие Зубы · Святая Нация</span>
+            <div style="margin-top:6px"><span class="b sm p">Добавить в тот же список «holy church»</span></div></div>
+          <div style="padding:8px 10px;border-top:1px solid var(--border)">🛒 Продаёт отряд «flotsam refuge» · список «Lore: Flotsam Village Notes»<br><span class="muted">⌖ Бугристый Холм · Ниндзя отщепенцы</span></div>
+          <div style="padding:8px 10px;border-top:1px solid var(--border)">🧍 Есть у <b>Молл</b> · особые предметы отряда «flotsam hq»<br><span class="muted">⌖ Бугристый Холм</span></div></div>
+        <div class="callout" style="right:6px;top:-34px;max-width:300px"><b>Способы — из схемы</b> (какие типы могут ссылаться на этот), пример — из «Где в игре» образца. Для персонажа будет «отряд → город», для постройки — «город».</div>
+      </div>`;
+    const modal = `<div style="position:absolute;left:0;right:0;top:38px;bottom:24px;background:#0008;z-index:2"></div>
+      <div class="dlg" style="left:420px;top:230px;width:600px;z-index:3">
+        <div class="dh"><b>Новая книга</b><span class="grow"></span><span class="muted">✕</span></div>
+        <div class="db">
+          <div class="dr"><span>Имя</span><span class="f" style="color:var(--text)">Моя книга</span></div>
+          <div class="dr"><span>На основе</span><span class="f" style="color:var(--text)">Книга благодати ▾</span></div>
+          <div class="muted" style="font-size:12px;margin:-2px 0 6px 120px">Модель, иконка, цена и вес берутся из образца — потом поменяете.<br>Без образца: <span class="link">пустая запись</span> (все поля по умолчанию).</div>
+          <div class="dr"><span>Будет</span><span>Книга <span class="muted">— item function = ITEM_BOOK, по категории «Книги»</span></span></div>
+        </div>
+        <div class="df"><span class="b">Отмена</span><span class="b p">Создать</span></div>
+      </div>
+      <div class="callout" style="left:1040px;top:240px;max-width:300px;z-index:4"><b>«+ Новая» знает категорию.</b> В «Книгах» — книга, в «Броне» — броня. Образец — выделенная запись или первая в категории.</div>`;
+    const shell = (insp) => `${TB}<div class="body">
+        <div class="pane" style="width:220px"><div class="ptabs"><span class="ptab on">☰ Категории</span></div><div class="pbody">${catsHtml}</div></div>
+        ${listPane}
+        <div class="pane" style="flex:1;border-right:0"><div class="ptabs"><span class="ptab on">ⓘ Инспектор</span></div>
+          <div class="pbody" style="display:flex;flex-direction:column">${insp}</div></div>
+      </div><div class="status"><span>Записей в моде: 1</span><span>Не сохранено</span><span>● Игра не подключена</span></div>`;
+    for (const el of document.querySelectorAll('[data-book]')) {
+      const k = el.dataset.book;
+      if (k === 'fields') el.innerHTML = shell(head('fields') + fieldsHtml);
+      if (k === 'where') el.innerHTML = shell(head('where') + whereHtml);
+      if (k === 'new') {
+        el.innerHTML = shell('<div class="muted" style="margin:auto">Выберите запись</div>') + modal;
+        el.querySelector('.row.sel')?.remove();
+      }
+    }
+  }
+
+  // Before/after toggles.
+  for (const s of document.querySelectorAll('section.screen')) {
+    for (const b of s.querySelectorAll('.toggle button')) {
+      b.addEventListener('click', () => {
+        s.querySelectorAll('.toggle button').forEach((x) => x.classList.toggle('on', x === b));
+        s.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.dataset.v === b.dataset.v));
+        fit();
+      });
+    }
+  }
+  // Scale the 1484×835 mock to the frame width.
+  function fit() {
+    for (const f of document.querySelectorAll('.frame')) {
+      const k = f.clientWidth / 1484;
+      f.querySelectorAll('.app').forEach((a) => { a.style.transform = `scale(${k})`; });
+    }
+  }
+  addEventListener('resize', fit);
+  fit();
+</script>
+</body>
+</html>
