@@ -317,6 +317,22 @@ class Describer {
       const name = d ? this.recordName(d.after!) : same(` «${created[1]!}»`);
       return { ru: `Создана запись${name.ru}`, en: `Created record${name.en}`, zh: `创建了记录${name.zh}` };
     }
+    const many = /^(удалить|копии|восстановить|откатить) запис(?:и|ей): (\d+)$/.exec(label);
+    if (many) {
+      const n = Number(many[2]!);
+      const word = plural(n, 'запись', 'записи', 'записей');
+      const en = `${n} ${n === 1 ? 'record' : 'records'}`;
+      switch (many[1]) {
+        case 'удалить':
+          return { ru: `Удалено: ${n} ${word}`, en: `Deleted ${en}`, zh: `删除了 ${n} 条记录` };
+        case 'копии':
+          return { ru: `Скопировано: ${n} ${word}`, en: `Copied ${en}`, zh: `复制了 ${n} 条记录` };
+        case 'восстановить':
+          return { ru: `Восстановлено: ${n} ${word}`, en: `Restored ${en}`, zh: `恢复了 ${n} 条记录` };
+        default:
+          return { ru: `Отменены правки: ${n} ${word}`, en: `Reverted ${en}`, zh: `撤销了 ${n} 条记录的修改` };
+      }
+    }
     if (/^копия /.test(label)) {
       const d = this.added()[0];
       const name = d ? this.recordName(d.after!) : EMPTY;

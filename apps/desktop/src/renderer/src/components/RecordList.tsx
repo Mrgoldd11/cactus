@@ -3,8 +3,13 @@
  * (`parseSearchQueryParts` from core — the same syntax as `kedit find --query` and MCP `find`), status filter, status colours as in
  * FCS (new — green, changed — yellow, deleted — red struck through), «●» — edit
  * after save. Commands: new, copy, delete, restore, revert.
+ *
+ * Multi-selection as in Explorer: Ctrl+click toggles a record, Shift+click (Shift+arrows) selects a range
+ * from the anchor, Ctrl+A selects all, Esc clears. The focused record (the one the inspector shows) is
+ * still the shared selection; the extra marked records live here. Commands then act on all of them
+ * as one edit, and «Bulk edit (N)» hands them to the bulk panel.
  */
-import { useDeferredValue, useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from 'react';
 import { matchesFilter, parseSearchQueryParts, unknownFilterKeys, type RecordStatus } from '@kenshi-editor/core';
 import { errorText, useDataLocale, useT } from '../i18n.ts';
 import { tryEdit } from '../hooks.ts';
@@ -24,11 +29,28 @@ interface Props {
   onNew: () => void;
   onDuplicate: (sid: string) => void;
   onReport: (err: string | undefined) => void;
+  /** Open «Bulk edits» for these records (multi-selection). */
+  onBulk?: (sids: readonly string[]) => void;
 }
 
 const ROW_HEIGHT = 24;
+const NO_MARKS: ReadonlySet<string> = new Set();
 
-export function RecordList({ project, version, ids, selected, onSelect, searchRef, onNew, onDuplicate, onReport }: Props): ReactNode {
+/** Ids from `a` to `b` inclusive in list order (either direction); just `b` if `a` is not in the list. */
+export function rangeIds(items: readonly { sid: string }[], a: string, b: string): string[] {
+  const i = items.findIndex((e) => e.sid === a);
+  const j = items.findIndex((e) => e.sid === b);
+  if (j < 0) return [];
+  if (i < 0) return [b];
+  const [lo, hi] = i <= j ? [i, j] : [j, i];
+  return items.slice(lo, hi + 1).map((e) => e.sid);
+}
+
+function isTextField(target: EventTarget): boolean {
+  return target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+}
+
+export function RecordList({ project, version, ids, selected, onSelect, searchRef, onNew, onDuplicate, onReport, onBulk }: Props): ReactNode {
   const t = useT();
   const dataLocale = useDataLocale();
   // The translation column exists only when names come in a data language.
@@ -75,15 +97,123 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
     ...(parsed.unknown.length ? [t.searchUnknownKeys(parsed.unknown.join(', '))] : []),
   ];
 
+  // Extra marked records (multi-selection); empty — only the focused record is selected.
+  const [marks, setMarks] = useState<ReadonlySet<string>>(NO_MARKS);
+  // Start of Shift ranges: the last record clicked without Shift.
+  const anchor = useRef<string | undefined>(undefined);
+  // The record this list itself just focused: such a selection change keeps the marks.
+  const ownSelect = useRef<string | undefined>(undefined);
+  const focus = (sid: string): void => {
+    ownSelect.current = sid;
+    onSelect(sid);
+  };
+  // Rows that left the list (another node, search, filter, a removed record) leave the marks too.
+  useEffect(() => {
+    setMarks((m) => {
+      if (m.size === 0) return m;
+      const shown = new Set(items.map((it) => it.sid));
+      const kept = [...m].filter((sid) => shown.has(sid));
+      return kept.length === m.size ? m : kept.length > 0 ? new Set(kept) : NO_MARKS;
+    });
+  }, [items]);
+  // A record selected elsewhere (another panel, back/forward) drops the multi-selection.
+  useEffect(() => {
+    if (selected === ownSelect.current) {
+      ownSelect.current = undefined;
+      return;
+    }
+    ownSelect.current = undefined;
+    anchor.current = selected;
+    setMarks((m) => (selected !== undefined && m.has(selected) ? m : NO_MARKS));
+  }, [selected]);
+
+  // What the commands act on, in list order: the marked records or just the focused one.
+  const picked = useMemo((): string[] => {
+    if (marks.size === 0) return selected !== undefined ? [selected] : [];
+    return items.filter((e) => marks.has(e.sid)).map((e) => e.sid);
+  }, [marks, items, selected]);
+  const multi = picked.length > 1;
+  const isPicked = (sid: string): boolean => (marks.size === 0 ? sid === selected : marks.has(sid));
+  const pickedStatus = picked.map((sid) => ctx.status(sid));
+  const nLive = pickedStatus.filter((s) => s !== 'deleted').length;
+  const nDeleted = pickedStatus.filter((s) => s === 'deleted').length;
+  const nChanged = pickedStatus.filter((s) => s === 'changed').length;
+
   const selIndex = selected !== undefined ? items.findIndex((e) => e.sid === selected) : -1;
   const selStatus = selected !== undefined ? ctx.status(selected) : undefined;
 
+  const clickRow = (e: MouseEvent, sid: string): void => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (e.shiftKey) {
+      const range = rangeIds(items, anchor.current ?? selected ?? sid, sid);
+      setMarks(ctrl ? new Set([...picked, ...range]) : new Set(range));
+      focus(sid);
+      return;
+    }
+    anchor.current = sid;
+    if (!ctrl) {
+      setMarks(NO_MARKS);
+      focus(sid);
+      return;
+    }
+    const next = new Set(marks.size > 0 ? marks : selected !== undefined ? [selected] : []);
+    if (next.delete(sid)) {
+      setMarks(next.size > 0 ? next : NO_MARKS);
+      // The focused record was unmarked: the focus moves to another marked one.
+      if (sid === selected) {
+        const other = items.find((it) => next.has(it.sid));
+        if (other) focus(other.sid);
+      }
+    } else {
+      next.add(sid);
+      setMarks(next);
+      focus(sid);
+    }
+  };
+
   const onKeyDown = (e: KeyboardEvent): void => {
+    const inField = isTextField(e.target);
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.code === 'KeyA' && !inField) {
+      e.preventDefault();
+      setMarks(new Set(items.map((it) => it.sid)));
+      if (selIndex < 0 && items[0]) focus(items[0].sid);
+      return;
+    }
+    if (e.key === 'Escape' && !inField && marks.size > 0) {
+      e.preventDefault();
+      setMarks(NO_MARKS);
+      return;
+    }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     e.preventDefault();
     const next = Math.max(0, Math.min(items.length - 1, selIndex + (e.key === 'ArrowDown' ? 1 : -1)));
     const it = items[next];
-    if (it) onSelect(it.sid);
+    if (!it) return;
+    if (e.shiftKey) {
+      setMarks(new Set(rangeIds(items, anchor.current ?? selected ?? it.sid, it.sid)));
+      focus(it.sid);
+      return;
+    }
+    anchor.current = it.sid;
+    setMarks(NO_MARKS);
+    focus(it.sid);
+  };
+
+  const duplicate = (): void => {
+    if (!multi) {
+      if (selected !== undefined) onDuplicate(selected);
+      return;
+    }
+    onReport(
+      tryEdit(() => {
+        const copies = ctx.duplicateRecords(picked);
+        const last = copies.at(-1);
+        if (last === undefined) return;
+        setMarks(new Set(copies));
+        anchor.current = copies[0];
+        focus(last);
+      }),
+    );
   };
 
   return (
@@ -160,50 +290,84 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
         <button data-testid="new-record" onClick={onNew}>
           + {t.newRecord}
         </button>
-        <button
-          data-testid="duplicate"
-          disabled={selected === undefined || selStatus === 'deleted'}
-          onClick={() => {
-            if (selected !== undefined) onDuplicate(selected);
-          }}
-        >
+        <button data-testid="duplicate" disabled={multi ? nLive === 0 : selected === undefined || selStatus === 'deleted'} onClick={duplicate}>
           {t.duplicate}
+          {multi && nLive > 0 ? ` (${nLive})` : ''}
         </button>
         <button
           data-testid="delete"
-          disabled={selected === undefined || selStatus === 'deleted'}
+          disabled={multi ? nLive === 0 : selected === undefined || selStatus === 'deleted'}
           onClick={() => {
-            if (selected !== undefined) onReport(tryEdit(() => {
+            if (multi)
+              onReport(
+                tryEdit(() => {
+                  ctx.deleteRecords(picked);
+                }),
+              );
+            else if (selected !== undefined) onReport(tryEdit(() => {
               ctx.deleteRecord(selected);
             }));
           }}
         >
           {t.delete}
+          {multi && nLive > 0 ? ` (${nLive})` : ''}
         </button>
-        {selStatus === 'deleted' && (
+        {(multi ? nDeleted > 0 : selStatus === 'deleted') && (
           <button
+            data-testid="restore"
             onClick={() => {
-              if (selected !== undefined) onReport(tryEdit(() => {
+              if (multi)
+                onReport(
+                  tryEdit(() => {
+                    ctx.restoreRecords(picked);
+                  }),
+                );
+              else if (selected !== undefined) onReport(tryEdit(() => {
                 ctx.restoreRecord(selected);
               }));
             }}
           >
             {t.restore}
+            {multi ? ` (${nDeleted})` : ''}
           </button>
         )}
-        {selStatus === 'changed' && (
+        {(multi ? nChanged > 0 : selStatus === 'changed') && (
           <button
+            data-testid="revert"
             onClick={() => {
-              if (selected !== undefined) onReport(tryEdit(() => {
+              if (multi)
+                onReport(
+                  tryEdit(() => {
+                    ctx.revertRecords(picked);
+                  }),
+                );
+              else if (selected !== undefined) onReport(tryEdit(() => {
                 ctx.revertRecord(selected);
               }));
             }}
           >
             {t.revert}
+            {multi ? ` (${nChanged})` : ''}
+          </button>
+        )}
+        {multi && onBulk && nLive > 0 && (
+          <button
+            data-testid="list-bulk"
+            title={t.listBulkTip}
+            onClick={() => {
+              onBulk(picked.filter((sid) => ctx.status(sid) !== 'deleted'));
+            }}
+          >
+            {t.listBulk(nLive)}
           </button>
         )}
         <span className="grow" />
-        <span className="muted" data-testid="list-count">
+        {multi && (
+          <span className="list-picked" data-testid="list-picked" title={t.listPickTip}>
+            {t.listPicked(picked.length)}
+          </span>
+        )}
+        <span className="muted" data-testid="list-count" title={t.listPickTip}>
           {t.records}: {items.length}
         </span>
       </div>
@@ -228,11 +392,18 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
           const st = ctx.status(e.sid) ?? 'base';
           return (
             <div
-              className={`list-row list-grid${grid} st-${st} ${e.sid === selected ? 'selected' : ''}`}
+              className={`list-row list-grid${grid} st-${st}${isPicked(e.sid) ? ' selected' : ''}${multi && e.sid === selected ? ' focused' : ''}`}
               data-sid={e.sid}
               tabIndex={-1}
-              onClick={() => {
-                onSelect(e.sid);
+              onMouseDown={(ev) => {
+                // Shift+click must not select text across rows.
+                if (ev.shiftKey) {
+                  ev.preventDefault();
+                  ev.currentTarget.focus();
+                }
+              }}
+              onClick={(ev) => {
+                clickRow(ev, e.sid);
               }}
             >
               <span className="name" title={e.name}>

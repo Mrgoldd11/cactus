@@ -593,6 +593,20 @@ textarea {
 .list-row.selected {
   background: var(--sel);
 }
+/* Multi-selection: the record the inspector shows among the marked ones. */
+.list-row.focused {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.list-picked {
+  color: var(--accent);
+  margin-right: 8px;
+}
+.bulk-scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .list-row .sid,
 .list-row .type {
   color: var(--muted);

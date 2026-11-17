@@ -745,6 +745,45 @@ export class ModContext {
     if (prev && isRemovalMarker(prev)) this.setDelta(stringId, undefined);
   }
 
+  /** Delete several records as one edit (one undo); already deleted ones are skipped. Returns how many were deleted. */
+  deleteRecords(stringIds: Iterable<string>, options: { removeReferences?: boolean } = {}): number {
+    const ids = [...new Set(stringIds)].filter((sid) => this.status(sid) !== 'deleted');
+    for (const sid of ids) this.require(sid);
+    if (ids.length === 0) return 0;
+    this.transaction(`удалить записи: ${ids.length}`, () => {
+      for (const sid of ids) this.deleteRecord(sid, options);
+    });
+    return ids.length;
+  }
+
+  /** Copies of several records as one edit (one undo); deleted ones are skipped. Returns the new ids in order. */
+  duplicateRecords(stringIds: Iterable<string>): string[] {
+    const ids = [...new Set(stringIds)].filter((sid) => this.status(sid) !== 'deleted');
+    for (const sid of ids) this.require(sid);
+    if (ids.length === 0) return [];
+    return this.transaction(`копии записей: ${ids.length}`, () => ids.map((sid) => this.duplicateRecord(sid)));
+  }
+
+  /** Restore several records deleted by the mod as one edit. Returns how many were restored. */
+  restoreRecords(stringIds: Iterable<string>): number {
+    const ids = [...new Set(stringIds)].filter((sid) => this.status(sid) === 'deleted');
+    if (ids.length === 0) return 0;
+    this.transaction(`восстановить записи: ${ids.length}`, () => {
+      for (const sid of ids) this.restoreRecord(sid);
+    });
+    return ids.length;
+  }
+
+  /** Remove all mod changes of several changed records as one edit. Returns how many were reverted. */
+  revertRecords(stringIds: Iterable<string>): number {
+    const ids = [...new Set(stringIds)].filter((sid) => this.status(sid) === 'changed');
+    if (ids.length === 0) return 0;
+    this.transaction(`откатить записи: ${ids.length}`, () => {
+      for (const sid of ids) this.revertRecord(sid);
+    });
+    return ids.length;
+  }
+
   renameRecord(stringId: string, name: string): void {
     this.editRecord(stringId, (d) => {
       d.name = encodeText(name);

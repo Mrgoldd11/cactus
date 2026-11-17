@@ -2,6 +2,7 @@
  * «Bulk edits» panel: records of one type by field conditions → one operation on a field
  * (set, multiply, add, replace text, including by regex). The «was → will be» table
  * is recomputed at once; «Apply» — one edit (one undo for the whole batch).
+ * From the record list («Bulk edit (N)») the panel can be limited to the records selected there.
  */
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { applyBulk, bulkFieldValue, bulkSelect, BULK_KINDS, BULK_REF_KINDS, restrictBulk, enumValue, fieldEnum, COMPARE_TYPES, DICT_FOR_KIND, BULK_NAME_FIELD, parseFieldFilter, previewBulk, type BulkKind, type BulkPreview, type FieldDef, type FieldFilter, type ModContext } from '@kenshi-editor/core';
@@ -9,6 +10,8 @@ import { errorText, useLang, useT, type Strings } from '../../i18n.ts';
 import { tryEdit, useProjectVersion } from '../../hooks.ts';
 import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
+import { useStore } from '../store.ts';
+import { bulkScope } from '../bulk-scope.ts';
 import { Empty } from './common.tsx';
 
 /** Preview rows at a time (everything is applied). */
@@ -97,10 +100,28 @@ function BulkPanel(): ReactNode {
   const version = useProjectVersion(project);
   const ctx = project.ctx;
   const byType = project.idsByType();
+  // Records selected in the list, by type (most numerous type first); undefined — all records.
+  const scope = useStore(bulkScope);
+  const scopeByType = useMemo((): Map<string, string[]> | undefined => {
+    if (!scope) return undefined;
+    const m = new Map<string, string[]>();
+    for (const sid of scope.ids) {
+      const rec = ctx.get(sid);
+      if (!rec || ctx.status(sid) === 'deleted') continue;
+      const name = ctx.typeName(rec.type);
+      const list = m.get(name);
+      if (list) list.push(sid);
+      else m.set(name, [sid]);
+    }
+    return new Map([...m].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0])));
+  }, [ctx, scope, version]);
+  const scopeCount = scopeByType ? [...scopeByType.values()].reduce((n, l) => n + l.length, 0) : 0;
+  const pool = scopeByType ?? byType;
   const types = useMemo(() => {
+    if (scopeByType) return [...scopeByType.keys()];
     const rest = [...byType.keys()].filter((k) => !(COMPARE_TYPES as readonly string[]).includes(k)).sort();
     return [...COMPARE_TYPES.filter((k) => byType.has(k)), ...rest];
-  }, [byType]);
+  }, [byType, scopeByType]);
   const [type, setType] = useState<string>(() => types[0] ?? 'WEAPON');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('');
@@ -137,6 +158,11 @@ function BulkPanel(): ReactNode {
     const nextDefs = scalarDefs(ctx, next);
     if (!namesFor(kind, nextDefs, refDefs(ctx, next)).includes(field)) setField('');
   };
+  // A new hand-over from the list: switch to the most numerous type of the selection.
+  useEffect(() => {
+    const first = types[0];
+    if (scope && first !== undefined && first !== type) changeType(first);
+  }, [scope?.stamp]);
   const changeKind = (next: BulkKind): void => {
     setKind(next);
     if ((fieldDefs.length > 0 || refFieldDefs.length > 0) && !namesFor(next, fieldDefs, refFieldDefs).includes(field)) setField('');
@@ -195,7 +221,7 @@ function BulkPanel(): ReactNode {
     setCValue('');
   };
 
-  const input = useDeferredValue({ type, search, filter, modOnly, kind, field, find, regex, caseSensitive, value, refValues });
+  const input = useDeferredValue({ type, search, filter, modOnly, kind, field, find, regex, caseSensitive, value, refValues, scope: scope?.stamp });
   const inputKey = JSON.stringify(input);
   // Other conditions — another record set: check marks and sorting start over.
   useEffect(() => {
@@ -203,7 +229,7 @@ function BulkPanel(): ReactNode {
   }, [inputKey]);
   const result = useMemo((): { preview?: BulkPreview; error?: string; missing?: 'field' | 'value' | 'find'; matched?: number; sample?: string[]; condKeys: string[] } => {
     const missing = input.field.trim() === '' ? 'field' : input.kind === 'replace' ? (input.find === '' ? 'find' : undefined) : input.value.trim() === '' ? 'value' : undefined;
-    const query = { type: input.type, ids: byType.get(input.type) ?? [], fields: [] as FieldFilter[], modOnly: input.modOnly, ...(input.search.trim() !== '' ? { text: input.search } : {}) };
+    const query = { type: input.type, ids: pool.get(input.type) ?? [], fields: [] as FieldFilter[], modOnly: input.modOnly, ...(input.search.trim() !== '' ? { text: input.search } : {}) };
     let condKeys: string[] = [];
     try {
       query.fields = parseFilters(input.filter);
@@ -231,7 +257,7 @@ function BulkPanel(): ReactNode {
     } catch (e) {
       return { error: errorText(e), condKeys, ...(missing ? { missing } : {}) };
     }
-  }, [ctx, byType, input, version, lang]);
+  }, [ctx, pool, input, version, lang]);
   const p = result.preview;
   // Taking cleared check marks into account: what will actually be applied.
   const chosen = useMemo(() => (p ? restrictBulk(p, (sid) => !excluded.has(sid)) : undefined), [p, excluded]);
@@ -293,7 +319,7 @@ function BulkPanel(): ReactNode {
           <select value={type} onChange={(e) => { changeType(e.target.value); }} data-testid="bulk-type">
             {types.map((k) => (
               <option key={k} value={k}>
-                {k} ({byType.get(k)?.length ?? 0})
+                {k} ({pool.get(k)?.length ?? 0})
               </option>
             ))}
           </select>
@@ -361,6 +387,21 @@ function BulkPanel(): ReactNode {
           <input type="checkbox" checked={modOnly} onChange={(e) => { setModOnly(e.target.checked); }} data-testid="bulk-mod-only" /> {t.bulkModOnly}
         </label>
       </div>
+      {scope && (
+        <div className="mods-panel-bar bulk-scope" data-testid="bulk-scope">
+          <strong>{t.bulkScope(scopeCount)}</strong>
+          {types.length > 1 && <span className="muted">{t.bulkScopeTypes(types.length)}</span>}
+          <button
+            title={t.bulkScopeClearTip}
+            onClick={() => {
+              bulkScope.set(undefined);
+            }}
+            data-testid="bulk-scope-clear"
+          >
+            {t.bulkScopeClear}
+          </button>
+        </div>
+      )}
       <div className="mods-panel-bar bulk-cond" title={t.bulkCondTip} data-testid="bulk-cond">
         <span className="muted">{t.bulkCondTitle}</span>
         <select value={cField} onChange={(e) => { changeCondField(e.target.value); }} data-testid="bulk-cond-field">
@@ -492,7 +533,7 @@ function BulkPanel(): ReactNode {
             type="button"
             className="link"
             onClick={() => {
-              if (byType.has(exType)) setType(exType);
+              if (pool.has(exType)) setType(exType);
               setSearch('');
               setFilter(exFilter);
               setKind(exKind as BulkKind);

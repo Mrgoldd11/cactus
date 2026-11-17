@@ -198,3 +198,54 @@ describe('bulk reference edits and reference conditions', () => {
     expect(p.skipped).toHaveLength(3);
   });
 });
+
+describe('multi-selection in the record list', () => {
+  it('bulk edit limited to the selected ids', () => {
+    const ctx = make();
+    const p = previewBulk(ctx, { type: 'WEAPON', ids: ['k', 'c'] }, { kind: 'set', field: 'value', value: '7' });
+    expect(p.matched).toBe(2);
+    expect(p.changes.map((c) => c.sid)).toEqual(['k', 'c']);
+    expect(applyBulk(ctx, p)).toBe(2);
+    expect(ctx.get('s')!.ints.get('value')).toBe(80);
+    expect(ctx.history().undo).toHaveLength(1);
+    ctx.undo();
+    expect(ctx.get('k')!.ints.get('value')).toBe(100);
+    expect(ctx.get('c')!.ints.get('value')).toBe(10);
+  });
+
+  it('delete, copy, restore and revert several records: one undo each', () => {
+    const ctx = make();
+    expect(ctx.deleteRecords(['k', 's', 'k'])).toBe(2);
+    expect(ctx.status('k')).toBe('deleted');
+    expect(ctx.status('s')).toBe('deleted');
+    expect(ctx.history().undo).toHaveLength(1);
+    const title = (): { en: string; ru?: string } => describeChangeset(ctx, ctx.history().undo.at(-1)!).text;
+    expect(title()).toMatchObject({ en: 'Deleted 2 records', ru: 'Удалено: 2 записи' });
+    // Already deleted records are skipped.
+    expect(ctx.deleteRecords(['k'])).toBe(0);
+    expect(ctx.history().undo).toHaveLength(1);
+    ctx.undo();
+    expect(ctx.status('k')).toBe('base');
+    expect(ctx.status('s')).toBe('base');
+
+    ctx.deleteRecords(['k', 's']);
+    expect(ctx.restoreRecords(['k', 's', 'c'])).toBe(2);
+    expect(title()).toMatchObject({ en: 'Restored 2 records' });
+    expect(ctx.status('k')).toBe('base');
+
+    const copies = ctx.duplicateRecords(['k', 'c']);
+    expect(copies).toHaveLength(2);
+    expect(copies.map((sid) => ctx.get(sid)!.ints.get('value'))).toEqual([100, 10]);
+    expect(title()).toMatchObject({ en: 'Copied 2 records', ru: 'Скопировано: 2 записи' });
+    const before = ctx.history().undo.length;
+    ctx.undo();
+    expect(copies.some((sid) => ctx.has(sid))).toBe(false);
+    expect(ctx.history().undo).toHaveLength(before - 1);
+
+    applyBulk(ctx, previewBulk(ctx, { type: 'WEAPON' }, { kind: 'add', field: 'value', value: '1' }));
+    expect(ctx.revertRecords(['k', 's'])).toBe(2);
+    expect(title()).toMatchObject({ en: 'Reverted 2 records' });
+    expect(ctx.status('k')).toBe('base');
+    expect(ctx.status('c')).toBe('changed');
+  });
+});

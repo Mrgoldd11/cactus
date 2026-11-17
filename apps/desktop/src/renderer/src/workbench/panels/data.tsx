@@ -18,6 +18,7 @@ import { registerPanel, type PanelProps } from '../registry.ts';
 import { useFollowed, useWorkbench } from '../context.ts';
 import { useSelectionVersion } from '../selection.ts';
 import { useStore } from '../store.ts';
+import { bulkScope } from '../bulk-scope.ts';
 import { Empty } from './common.tsx';
 
 function CategoriesPanel(): ReactNode {
@@ -39,7 +40,7 @@ function CategoriesPanel(): ReactNode {
 }
 
 function RecordsPanel(): ReactNode {
-  const { project, category, selection, go, report, newRecord, searchRef } = useWorkbench();
+  const { project, category, selection, go, report, newRecord, searchRef, open } = useWorkbench();
   const version = useProjectVersion(project);
   useSelectionVersion(selection);
   const nodeId = useStore(category);
@@ -63,6 +64,10 @@ function RecordsPanel(): ReactNode {
         );
       }}
       onReport={report}
+      onBulk={(sids) => {
+        bulkScope.set({ ids: sids, stamp: Date.now() });
+        open('bulk');
+      }}
     />
   );
 }
