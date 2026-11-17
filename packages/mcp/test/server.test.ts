@@ -269,6 +269,37 @@ describe('kenshi-mcp: editing and saving', () => {
     expect((await call('history')).text).toContain('Race compatibility «Lizardfolk» like «Greenlander» (changes: 2)');
   });
 
+  it('race_compat with new_name: preview changes nothing, apply creates the copy and the edits as one step', async () => {
+    const RACE = itemTypeId('RACE')!;
+    const ref = (target: string, v0 = 0) => ({ target, v0, v1: 0, v2: 0 });
+    const records = [
+      rec(RACE, 'GL', 'Greenlander', (r) => r.refs.set('hairs', [ref('HAIR', 50)])),
+      rec(itemTypeId('ATTACHMENT')!, 'HAIR', 'Short hair'),
+      rec(itemTypeId('ARMOUR')!, 'HAT', 'Cap', (r) => r.refs.set('races', [ref('GL')])),
+    ];
+    for (const r of records) r.changeFlags = 0x80000002;
+    mkdirSync(join(fx.game, 'mods', 'Nr'), { recursive: true });
+    writeDataFileSync(join(fx.game, 'mods', 'Nr', 'Nr.mod'), dataFile(records, [], 0));
+    await call('open_mod', { mod: 'Nr' });
+    expect((await call('race_compat', { like: 'GL' })).isError).toBe(true);
+    expect((await call('race_compat', { new_name: 'Greenlander', like: 'GL' })).text).toMatch(/same as the sample/);
+    const pre = await call('race_compat', { new_name: 'Mossfolk', like: 'Greenlander' });
+    expect(pre.isError, pre.text).toBe(false);
+    expect(pre.text).toMatch(/new race: \S+ “Mossfolk”, a copy of GL “Greenlander”/);
+    expect(pre.text).toContain('+ ARMOUR HAT “Cap” races: Greenlander → Greenlander, Mossfolk');
+    expect((await call('find', { text: 'Mossfolk' })).text).toBe('nothing found');
+    expect((await call('history')).text).not.toContain('#1');
+    const ok = await call('race_compat', { new_name: 'Mossfolk', like: 'GL', apply: true });
+    expect(ok.isError, ok.text).toBe(false);
+    expect(ok.text).toContain('applied: #1');
+    expect((await call('history')).text).toContain('New race «Mossfolk» based on «Greenlander» + compatibility (changes: 1)');
+    expect((await call('show', { id: 'HAT' })).text).toContain('Mossfolk');
+    expect((await call('find', { text: 'Mossfolk' })).text).toContain('RACE');
+    await call('undo', {});
+    expect((await call('find', { text: 'Mossfolk' })).text).toBe('nothing found');
+    expect((await call('show', { id: 'HAT' })).text).not.toContain('Mossfolk');
+  });
+
   it('merge: preview, merge as one edit, undo, save writes the mod and the decision file', async () => {
     mkdirSync(join(fx.game, 'mods', 'Other'), { recursive: true });
     const y = rec(4, 'Y', 'Shield', (r) => r.floats.set('weight', 3));

@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { DockviewApi } from 'dockview-react';
+import { createRaceFrom } from '@kenshi-editor/core';
 import type { Lang, Settings, WorkspaceSettings } from '../../../shared/api.ts';
 import { errorText, useT } from '../i18n.ts';
 import { isTypingIn, shortcut } from '../keys.ts';
@@ -12,6 +13,7 @@ import { MOD_CHANGES_ID, reloadProject, reloadWithDependencies, restoreProject, 
 import { LangSwitch } from '../App.tsx';
 import { BackupsModal, SettingsModal, formatClock, formatTime } from './BackupModals.tsx';
 import { DependenciesModal, ModInfoModal, NewRecordModal } from './Modals.tsx';
+import { NewRaceModal } from './NewRaceModal.tsx';
 import { PublishModal } from './PublishModal.tsx';
 import { ModMenu } from './ModMenu.tsx';
 import { RESCAN_EVENT } from './IssueFixer.tsx';
@@ -26,6 +28,7 @@ import { UndoRedoButtons, stepOf } from './History.tsx';
 import { GameIndicator } from './GameLink.tsx';
 import { applyPreset, isPreset, openPanel, type PresetId } from '../workbench/layouts.ts';
 import type { PanelParams } from '../workbench/registry.ts';
+import { raceCompatPair } from '../workbench/race-compat-pair.ts';
 
 export type { StatusMessage } from '../workbench/context.ts';
 
@@ -39,7 +42,7 @@ interface Props {
   onSettings: (patch: Partial<Settings>) => void;
 }
 
-type ModalKind = 'deps' | 'info' | 'new' | 'backups' | 'settings' | 'publish';
+type ModalKind = 'deps' | 'info' | 'new' | 'race' | 'backups' | 'settings' | 'publish';
 
 /** A saved mod in `<game>/mods/` (not a Workshop download) — what may be published. */
 function publishable(project: Project): boolean {
@@ -63,6 +66,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
   const nodeId = useStore(category);
   const [status, setStatus] = useState<StatusMessage | undefined>();
   const [modal, setModal] = useState<ModalKind | undefined>();
+  const [raceSample, setRaceSample] = useState<string | undefined>();
   const searchRef = useRef<HTMLInputElement>(null);
   const aiChangesets = useAiChangesets();
   const liveStatus = useLiveStatus();
@@ -144,6 +148,10 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
       hasPanel: (panelId) => apiRef.current?.panels.some((p) => p.api.component === panelId) ?? false,
       newRecord: () => {
         setModal('new');
+      },
+      newRace: (sample) => {
+        setRaceSample(sample);
+        setModal('race');
       },
       searchRef,
       category,
@@ -321,6 +329,15 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
               },
             },
             {
+              testId: 'new-race-btn',
+              label: t.nrOpen,
+              title: t.nrOpenTip,
+              onClick: () => {
+                setRaceSample(undefined);
+                setModal('race');
+              },
+            },
+            {
               testId: 'deps',
               label: `${t.dependencies} (${ctx.info.dependencies.length})`,
               onClick: () => {
@@ -480,6 +497,30 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
           game={project.bundle.game}
           settings={settings}
           onChange={onSettings}
+          onClose={() => {
+            setModal(undefined);
+          }}
+        />
+      )}
+      {modal === 'race' && (
+        <NewRaceModal
+          project={project}
+          defaultSample={raceSample}
+          onCreate={(sample, name, compat) => {
+            setModal(undefined);
+            let sid: string | undefined;
+            const err = tryEdit(() => {
+              sid = createRaceFrom(ctx, sample, name);
+            });
+            report(err);
+            if (sid === undefined) return;
+            go(sid);
+            setStatus({ text: (s) => s.nrDone(name), kind: 'info' });
+            if (compat) {
+              raceCompatPair.set({ race: sid, sample, stamp: Date.now() });
+              open('race-compat');
+            }
+          }}
           onClose={() => {
             setModal(undefined);
           }}

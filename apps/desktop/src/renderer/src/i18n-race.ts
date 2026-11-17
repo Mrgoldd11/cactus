@@ -28,6 +28,20 @@ export const raceEn = {
   rcApplyTip: 'Add the ticked changes to your mod as one undo step',
   rcSkeletonChecking: 'Checking the skeletons of the race meshes…',
   rcDone: (n: number): string => `Race compatibility: ${n} changes applied (one undo step)`,
+  nrOpen: 'New race based on…',
+  nrOpenTip: 'Create your own race as a copy of an existing one under a new name, then set up its compatibility',
+  nrTitle: 'New race based on…',
+  nrSample: 'Sample race',
+  nrName: 'New race name',
+  nrNamePlaceholder: 'for example, Mossfolk',
+  nrNoSample: 'Choose a sample race',
+  nrSameAsSample: 'The name is the same as the sample race',
+  nrTaken: (race: string): string => `Another race already has this name: ${race}`,
+  nrCompat: 'Set up compatibility right away',
+  nrCompatTip: 'Open the «Race compatibility» wizard with the new race and the sample already chosen',
+  nrIntro:
+    'The new race is a full copy of the sample (body, heads, hairs, animations…) under its own name, added to your mod as one undo step. Compatibility (armour, dialogue, race groups, starts) is set up by the wizard as the next step.',
+  nrDone: (name: string): string => `Race «${name}» created (one undo step)`,
 };
 
 export const raceRu: typeof raceEn = {
@@ -59,6 +73,20 @@ export const raceRu: typeof raceEn = {
   rcApplyTip: 'Добавить отмеченные правки в ваш мод одним шагом отмены',
   rcSkeletonChecking: 'Проверяю скелеты моделей рас…',
   rcDone: (n) => `Совместимость расы: применено правок ${n} (один шаг отмены)`,
+  nrOpen: 'Новая раса на основе…',
+  nrOpenTip: 'Создать свою расу как копию существующей под новым именем и сразу настроить совместимость',
+  nrTitle: 'Новая раса на основе…',
+  nrSample: 'Раса-образец',
+  nrName: 'Имя новой расы',
+  nrNamePlaceholder: 'например, Мохоземец',
+  nrNoSample: 'Выберите расу-образец',
+  nrSameAsSample: 'Имя совпадает с расой-образцом',
+  nrTaken: (race) => `Это имя уже есть у другой расы: ${race}`,
+  nrCompat: 'Сразу настроить совместимость',
+  nrCompatTip: 'Открыть мастер «Совместимость расы» с уже выбранными новой расой и образцом',
+  nrIntro:
+    'Новая раса — полная копия образца (тело, головы, причёски, анимации…) под своим именем; попадает в ваш мод одним шагом отмены. Совместимость (броня, диалоги, группы рас, старты) настраивает мастер следующим шагом.',
+  nrDone: (name) => `Раса «${name}» создана (один шаг отмены)`,
 };
 
 export const raceZh: typeof raceEn = {
@@ -89,4 +117,17 @@ export const raceZh: typeof raceEn = {
   rcApplyTip: '把勾选的更改作为一个撤销步骤加入你的 Mod',
   rcSkeletonChecking: '正在检查种族模型的骨架……',
   rcDone: (n) => `种族兼容：已应用 ${n} 项更改（一个撤销步骤）`,
+  nrOpen: '基于…创建新种族',
+  nrOpenTip: '以现有种族为副本、用新名称创建你自己的种族，然后设置其兼容',
+  nrTitle: '基于…创建新种族',
+  nrSample: '样板种族',
+  nrName: '新种族名称',
+  nrNamePlaceholder: '例如：苔藓族',
+  nrNoSample: '请选择样板种族',
+  nrSameAsSample: '名称与样板种族相同',
+  nrTaken: (race) => `已有其他种族使用此名称：${race}`,
+  nrCompat: '立即设置兼容',
+  nrCompatTip: '打开“种族兼容”向导，并预先选好新种族和样板',
+  nrIntro: '新种族是样板的完整副本（身体、头部、发型、动画……），使用自己的名称，作为一个撤销步骤加入你的 Mod。兼容（护甲、对话、种族组、开局）由向导在下一步设置。',
+  nrDone: (name) => `已创建种族“${name}”（一个撤销步骤）`,
 };

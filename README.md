@@ -156,6 +156,9 @@ What it can do:
   CSV (Excel), PO (Poedit) or JSON and **Import…** back as one undo step; lines whose original
   changed after the export are not applied without a separate button. **Check of the
   translation mod** shows texts beyond the original and edits that are not texts;
+- **New race based on…** (in the races category of the record list, in the **Mod** menu and in
+  the **Race compatibility** wizard): a copy of a sample race under a required new name, one undo
+  step; the wizard then opens with the new race and the sample already chosen;
 - other panels from the **Window** menu: **History**, **Bulk edits**, **Merge mods**,
   **Compare items**, **Faction relations**, **NPC census**, **Graphs**, **Dialogue graph**,
   **Conversation player**, **Diagnostics**, the 3D **World**, **Building interior** and
@@ -419,7 +422,8 @@ descriptions and parameters are in English.
   `duplicateLine`, `deleteLines`, `revertLine`, `addCondition`, `addEffect`, `removeAction`;
   enum values can be given by name), `bulk` (preview "was → will be", applied only with
   `apply: true`), `race_compat` (a new race works like a sample race: armour and clothing,
-  weapons, dialogue conditions, race groups, start scenarios, animation files; preview, applied
+  weapons, dialogue conditions, race groups, start scenarios, animation files; with `new_name`
+  it first creates the new race as a copy of the sample; preview, applied
   only with `apply: true`), `merge`, `play` (a conversation step by step, like the player in the window),
   `undo`/`redo` (with `to` — up to step #N), `history` (steps in plain words, as in the window,
   with a "you are here" mark), `save`;

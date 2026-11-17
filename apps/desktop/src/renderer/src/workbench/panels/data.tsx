@@ -40,7 +40,7 @@ function CategoriesPanel(): ReactNode {
 }
 
 function RecordsPanel(): ReactNode {
-  const { project, category, selection, go, report, newRecord, searchRef, open } = useWorkbench();
+  const { project, category, selection, go, report, newRecord, newRace, searchRef, open } = useWorkbench();
   const version = useProjectVersion(project);
   useSelectionVersion(selection);
   const nodeId = useStore(category);
@@ -68,6 +68,7 @@ function RecordsPanel(): ReactNode {
         bulkScope.set({ ids: sids, stamp: Date.now() });
         open('bulk');
       }}
+      onNewRace={node?.type === 'RACE' ? newRace : undefined}
     />
   );
 }

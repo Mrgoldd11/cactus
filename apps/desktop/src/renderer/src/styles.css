@@ -2577,6 +2577,8 @@ input.invalid {
 .bulk-table .bulk-after { color: var(--new); }
 .bulk-skipped { padding: 4px 8px; }
 .rc-group { margin: 4px 0; }
+.nr-problem { min-height: 1.3em; }
+.nr-problem.error { color: var(--error); }
 .rc-group > summary { cursor: pointer; padding: 4px 8px; user-select: none; }
 .rc-group > .table { margin-bottom: 6px; }
 .bulk-need { display: flex; flex-direction: column; gap: 6px; align-items: center; }

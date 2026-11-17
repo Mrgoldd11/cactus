@@ -300,6 +300,16 @@ class Describer {
       const [, a, b, n] = race;
       return { ru: `Совместимость расы ${a!} как ${b!} (правок: ${n!})`, en: `Race compatibility ${a!} like ${b!} (changes: ${n!})`, zh: `种族兼容 ${a!} 如同 ${b!}（更改：${n!}）` };
     }
+    const newRace = /^новая раса («.*») на основе («.*?»)(?: \+ совместимость \((\d+) правок\))?$/s.exec(label);
+    if (newRace) {
+      const [, a, b, n] = newRace;
+      if (n === undefined) return { ru: `Новая раса ${a!} на основе ${b!}`, en: `New race ${a!} based on ${b!}`, zh: `基于 ${b!} 的新种族 ${a!}` };
+      return {
+        ru: `Новая раса ${a!} на основе ${b!} + совместимость (правок: ${n})`,
+        en: `New race ${a!} based on ${b!} + compatibility (changes: ${n})`,
+        zh: `基于 ${b!} 的新种族 ${a!} + 兼容（更改：${n}）`,
+      };
+    }
     const merge = /^слияние: (.*) \((\d+) записей\)$/s.exec(label);
     if (merge)
       return { ru: `Слияние с «${merge[1]!}»: записей ${merge[2]!}`, en: `Merge from “${merge[1]!}”: ${merge[2]!} records`, zh: `从 “${merge[1]!}” 合并：${merge[2]!} 条记录` };

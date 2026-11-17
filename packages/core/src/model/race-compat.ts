@@ -426,3 +426,47 @@ export function formatRaceCompat(plan: RaceCompatPlan, chosen: ReadonlySet<strin
   lines.push(ru ? `всего правок ${plan.changes.length}, отмечено ${chosen.size}` : `changes ${plan.changes.length}, chosen ${chosen.size}`);
   return lines;
 }
+
+/** History label of «new race based on a sample» (step-title.ts turns it into a clear title). */
+export function newRaceLabel(name: string, sampleName: string, compatCount?: number): string {
+  const base = `новая раса «${name}» на основе «${sampleName}»`;
+  return compatCount === undefined ? base : `${base} + совместимость (${compatCount} правок)`;
+}
+
+/**
+ * Why `name` cannot be the name of a new race copied from `sample` (undefined — it can): empty,
+ * the sample's own name, or the name of another live race (the copy would look like that race
+ * everywhere). Names are compared trimmed and case-insensitively.
+ */
+export function newRaceNameProblem(ctx: ModContext, sample: string, name: string): UiText | undefined {
+  const want = name.trim().toLowerCase();
+  if (want === '') return { en: 'Enter a name for the new race', ru: 'Введите имя новой расы', zh: '请输入新种族的名称' };
+  const sampleRec = ctx.get(sample);
+  if (sampleRec && decodeText(sampleRec.name).trim().toLowerCase() === want)
+    return { en: 'The name is the same as the sample race', ru: 'Имя совпадает с расой-образцом', zh: '名称与样板种族相同' };
+  const raceType = ctx.typeId(RACE);
+  for (const sid of ctx.allStringIds()) {
+    const h = ctx.headline(sid);
+    if (!h || h.type !== raceType || ctx.status(sid) === 'deleted') continue;
+    if (decodeText(h.name).trim().toLowerCase() === want)
+      return { en: `Another race already has this name (${sid})`, ru: `Это имя уже есть у другой расы (${sid})`, zh: `已有其他种族使用此名称（${sid}）` };
+  }
+  return undefined;
+}
+
+/**
+ * New race of the mod: a copy of the sample race (all its fields and references) under a new
+ * name, as one undo step. Returns the id of the new race. The compatibility edits
+ * (`planRaceCompat`) are a separate step.
+ */
+export function createRaceFrom(ctx: ModContext, sample: string, name: string, options: { stringId?: string } = {}): string {
+  const rec = ctx.get(sample);
+  if (!rec || ctx.status(sample) === 'deleted' || ctx.typeName(rec.type) !== RACE)
+    throw new EditError({ en: `${sample} is not a race`, ru: `${sample} — не раса`, zh: `${sample} 不是种族` });
+  const problem = newRaceNameProblem(ctx, sample, name);
+  if (problem) throw new EditError(problem);
+  const clean = name.trim();
+  return ctx.transaction(newRaceLabel(clean, decodeText(rec.name)), () =>
+    ctx.duplicateRecord(sample, { name: clean, ...(options.stringId !== undefined ? { stringId: options.stringId } : {}) }),
+  );
+}

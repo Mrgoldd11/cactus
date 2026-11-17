@@ -4,7 +4,7 @@
  * shown as «was → will be» by group with checkboxes. «Apply» adds the ticked changes into the
  * mod as one undo step. The search itself is in the core (`planRaceCompat`).
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   applyBulk,
   planRaceCompat,
@@ -24,6 +24,8 @@ import { loadMesh } from '../../three/assets.ts';
 import type { Project } from '../../project.ts';
 import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
+import { useStore } from '../store.ts';
+import { raceCompatPair } from '../race-compat-pair.ts';
 import { Empty } from './common.tsx';
 
 /** Rows shown per group (everything ticked is applied). */
@@ -79,15 +81,28 @@ function useSkeletonWarning(project: Project, plan: RaceCompatPlan | undefined, 
 function RaceCompatPanel(): ReactNode {
   const t = useT();
   const lang = useLang();
-  const { project, go, report, status } = useWorkbench();
+  const { project, go, report, status, newRace } = useWorkbench();
   const version = useProjectVersion(project);
   const ctx = project.ctx;
   const races = useMemo(() => {
     const list = (project.idsByType().get('RACE') ?? []).filter((s) => project.status(s) !== 'deleted');
     return [...list].sort((x, y) => raceLabel(project, x).localeCompare(raceLabel(project, y)));
   }, [project, version]);
-  const [race, setRace] = useState(() => defaultRace(project, races));
-  const [sample, setSample] = useState(() => defaultSample(project, races, defaultRace(project, races)));
+  // A pair handed over by «New race based on…» wins over the defaults (each hand-over once).
+  const pair = useStore(raceCompatPair);
+  const usable = pair !== undefined && races.includes(pair.race) && races.includes(pair.sample) ? pair : undefined;
+  const usedStamp = useRef(usable?.stamp);
+  const [chosenRace, setRace] = useState(() => usable?.race ?? defaultRace(project, races));
+  const [chosenSample, setSample] = useState(() => usable?.sample ?? defaultSample(project, races, defaultRace(project, races)));
+  // A chosen race that is gone (its creation undone) shows as «choose a race»; redo brings it back.
+  const race = races.includes(chosenRace) ? chosenRace : '';
+  const sample = races.includes(chosenSample) ? chosenSample : '';
+  useEffect(() => {
+    if (usable === undefined || usedStamp.current === usable.stamp) return;
+    usedStamp.current = usable.stamp;
+    setRace(usable.race);
+    setSample(usable.sample);
+  }, [usable?.stamp]);
   // Checkbox changes against the default choice; reset when the pair of races changes.
   const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(new Map());
   useEffect(() => {
@@ -159,6 +174,9 @@ function RaceCompatPanel(): ReactNode {
         </label>
         <button className="primary" disabled={chosen.length === 0} onClick={apply} title={t.rcApplyTip} data-testid="rc-apply">
           {t.rcApply(chosen.length)}
+        </button>
+        <button onClick={() => { newRace(sample || undefined); }} title={t.nrOpenTip} data-testid="rc-new-race">
+          {t.nrOpen}
         </button>
       </div>
       <div className="muted mods-panel-note">{t.rcIntro}</div>

@@ -6,6 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyBulk,
+  createRaceFrom,
+  newRaceNameProblem,
   describeChangeset,
   emptyRecord,
   encodeText,
@@ -176,5 +178,40 @@ describe('race compatibility', () => {
     expect(raceSkeletonWarning(ctx, plan, (p) => skel[p])?.en).toContain('lizard.skeleton');
     expect(raceSkeletonWarning(ctx, plan, () => 'male.skeleton')).toBeUndefined();
     expect(raceSkeletonWarning(ctx, plan, () => undefined)).toBeUndefined();
+  });
+
+  it('new race based on a sample: name checks, one undo step, then the wizard pair works', () => {
+    const ctx = make();
+    expect(newRaceNameProblem(ctx, 'gl', '  ')?.en).toMatch(/Enter a name/);
+    expect(newRaceNameProblem(ctx, 'gl', ' greenlander ')?.en).toMatch(/same as the sample/);
+    expect(newRaceNameProblem(ctx, 'gl', 'LIZARDFOLK')?.en).toMatch(/Another race.*nr/);
+    expect(newRaceNameProblem(ctx, 'gl', 'Mossfolk')).toBeUndefined();
+    expect(() => createRaceFrom(ctx, 'gl', 'Greenlander')).toThrow(/sample/);
+    expect(() => createRaceFrom(ctx, 'cap', 'Mossfolk')).toThrow(/not a race/);
+    expect(ctx.history().undo).toHaveLength(0);
+
+    const sid = createRaceFrom(ctx, 'gl', '  Mossfolk ');
+    const rec = ctx.get(sid)!;
+    expect(ctx.typeName(rec.type)).toBe('RACE');
+    expect(ctx.name(sid)).toBe('Mossfolk');
+    expect(ctx.status(sid)).toBe('new');
+    // A full copy: the sample's own references come along.
+    expect(rec.refs.get('animation files')?.map((r) => r.target)).toEqual(['anim1']);
+    expect(ctx.history().undo).toHaveLength(1);
+    const step = describeChangeset(ctx, ctx.history().undo.at(-1)!);
+    expect(step.text.ru).toBe('Новая раса «Mossfolk» на основе «Greenlander»');
+    expect(step.text.en).toBe('New race «Mossfolk» based on «Greenlander»');
+
+    // The wizard for the new pair: incoming places are offered, the copied own fields are already there.
+    const plan = planRaceCompat(ctx, sid, 'gl');
+    expect(plan.changes.some((c) => c.key === 'cap|races')).toBe(true);
+    expect(plan.changes.some((c) => c.group === 'animations')).toBe(false);
+    applyBulk(ctx, raceCompatPreview(plan));
+    expect(ctx.history().undo).toHaveLength(2);
+    ctx.undo();
+    expect(ctx.get(sid)).toBeDefined();
+    ctx.undo();
+    expect(ctx.get(sid)).toBeUndefined();
+    expect(ctx.history().undo).toHaveLength(0);
   });
 });

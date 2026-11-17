@@ -31,6 +31,8 @@ interface Props {
   onReport: (err: string | undefined) => void;
   /** Open «Bulk edits» for these records (multi-selection). */
   onBulk?: (sids: readonly string[]) => void;
+  /** «New race based on…» (shown for the races category); the focused record is the suggested sample. */
+  onNewRace?: (sample: string | undefined) => void;
 }
 
 const ROW_HEIGHT = 24;
@@ -50,7 +52,7 @@ function isTextField(target: EventTarget): boolean {
   return target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
 }
 
-export function RecordList({ project, version, ids, selected, onSelect, searchRef, onNew, onDuplicate, onReport, onBulk }: Props): ReactNode {
+export function RecordList({ project, version, ids, selected, onSelect, searchRef, onNew, onDuplicate, onReport, onBulk, onNewRace }: Props): ReactNode {
   const t = useT();
   const dataLocale = useDataLocale();
   // The translation column exists only when names come in a data language.
@@ -294,6 +296,17 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
           {t.duplicate}
           {multi && nLive > 0 ? ` (${nLive})` : ''}
         </button>
+        {onNewRace && (
+          <button
+            data-testid="list-new-race"
+            title={t.nrOpenTip}
+            onClick={() => {
+              onNewRace(selected !== undefined && selStatus !== 'deleted' ? selected : undefined);
+            }}
+          >
+            {t.nrOpen}
+          </button>
+        )}
         <button
           data-testid="delete"
           disabled={multi ? nLive === 0 : selected === undefined || selStatus === 'deleted'}

@@ -396,8 +396,11 @@ export class ModContext {
       if (this.depth === 0) {
         const cs = this.open!;
         this.open = undefined;
-        if (!ok) this.revertOps(cs.ops);
-        else if (cs.ops.length > 0) {
+        if (!ok) {
+          this.revertOps(cs.ops);
+          // A rolled-back edit never reached the history: its number is free again.
+          if (this.nextChangesetId === cs.id + 1) this.nextChangesetId = cs.id;
+        } else if (cs.ops.length > 0) {
           this.undoStack.push(cs);
           this.redoStack.length = 0;
         }

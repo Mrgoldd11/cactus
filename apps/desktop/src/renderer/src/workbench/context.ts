@@ -30,6 +30,8 @@ export interface Workbench {
   hasPanel: (panelId: string) => boolean;
   /** Record creation window. */
   newRecord: () => void;
+  /** «New race based on…» window; `sample` — the preselected sample race. */
+  newRace: (sample?: string) => void;
   searchRef: RefObject<HTMLInputElement | null>;
   /** Category in the tree — filter of the record list. */
   category: ValueStore<string>;

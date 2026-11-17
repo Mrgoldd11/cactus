@@ -9,6 +9,10 @@ import { join } from 'node:path';
 import {
   applyBulk,
   findRace,
+  createRaceFrom,
+  newRaceLabel,
+  type RaceCompatPlan,
+  type EditOp,
   formatRaceCompat,
   parseOgreMesh,
   planRaceCompat,
@@ -185,6 +189,21 @@ const editOp = z.discriminatedUnion('op', [
 ]);
 
 /** Remove keys with value undefined (exactOptionalPropertyTypes). */
+/** Run `fn` inside a transaction that is always rolled back: what-if planning on scratch edits. */
+function scratch<T>(ctx: ModContext, fn: () => T): T {
+  const stop = new Error('scratch');
+  let out: { value: T } | undefined;
+  try {
+    ctx.transaction('scratch', () => {
+      out = { value: fn() };
+      throw stop;
+    });
+  } catch (e) {
+    if (e !== stop) throw e;
+  }
+  return out!.value;
+}
+
 function compact<T extends object>(o: T): T {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
 }
@@ -666,9 +685,12 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         'off by default: factions (faction population), looks (hairs, hair colors, heads), flags (no hats / no shirts / no shoes, part maps), other. Single-race fields (CHARACTER race, squad race override) are only listed.',
         'Also warns when the race meshes use different skeletons. By default only a preview; apply: true applies the chosen changes as one edit (one undo) into the open mod;',
         'if the editor is connected, it sends a change set to the window. Saving is separate (save).',
+        'New race from scratch: give new_name instead of race. The new race is a full copy of the sample (like) under that name (its body, heads, hairs, animations come along), then the compatibility edits;',
+        'the preview shows both, apply: true makes them one edit. The name must not be empty, the name of the sample or of another race.',
       ].join('\n'),
       inputSchema: {
-        race: z.string().describe('The new race: id or name'),
+        race: z.string().optional().describe('The new race: id or name of an existing race (or give new_name instead)'),
+        new_name: z.string().optional().describe('Create the new race as a copy of the sample under this name (instead of race)'),
         like: z.string().describe('The sample race: id or name'),
         groups: z.array(z.enum(RACE_COMPAT_GROUPS as [RaceCompatGroup, ...RaceCompatGroup[]])).optional().describe('Apply exactly these groups (default: the groups that are on by default)'),
         exclude: z.array(z.string()).optional().describe('Records (string ids) to leave out'),
@@ -680,7 +702,18 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
     (a) =>
       run(async () => {
         const ctx = session.ctx();
-        const plan = planRaceCompat(ctx, findRace(ctx, a.race), findRace(ctx, a.like));
+        if ((a.race === undefined) === (a.new_name === undefined)) throw new SessionError('Give either race (an existing race) or new_name (a new race copied from like)');
+        const sample = findRace(ctx, a.like);
+        // A new race is planned on a scratch copy that is rolled back: the preview changes nothing.
+        let newSid: string | undefined;
+        let plan: RaceCompatPlan;
+        if (a.new_name !== undefined) {
+          const name = a.new_name;
+          plan = scratch(ctx, () => {
+            newSid = createRaceFrom(ctx, sample, name);
+            return planRaceCompat(ctx, newSid, sample);
+          });
+        } else plan = planRaceCompat(ctx, findRace(ctx, a.race!), sample);
         const groups = a.groups ? new Set<RaceCompatGroup>(a.groups) : undefined;
         const exclude = new Set(a.exclude ?? []);
         const chosen = new Set(plan.changes.filter((c) => (groups ? groups.has(c.group) : c.checked) && !exclude.has(c.sid)).map((c) => c.key));
@@ -693,8 +726,24 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
           }
         });
         if (warning) lines.push(`warning: ${warning.en}`);
+        if (newSid !== undefined) lines.unshift(`new race: ${newSid} “${plan.raceName}”, a copy of ${plan.sample} “${plan.sampleName}”`);
         if (!a.apply) return [...lines, 'preview: nothing changed (apply: true to apply)'];
         const p = raceCompatPreview(plan, chosen);
+        if (newSid !== undefined) {
+          const sid = newSid;
+          const label = newRaceLabel(plan.raceName, plan.sampleName, p.changes.length);
+          if (session.editor) {
+            const ops: EditOp[] = [{ op: 'duplicate', from: sample, id: sid, name: plan.raceName }, ...p.ops];
+            const r = await session.propose(label, ops);
+            return [...lines, `in the editor: change set #${r.changeset.id} "${r.changeset.title}" is waiting for the user decision (accept / revert)`];
+          }
+          ctx.transaction(label, () => {
+            createRaceFrom(ctx, sample, plan.raceName, { stringId: sid });
+            if (p.ops.length > 0) applyBulk(ctx, p);
+          });
+          const cs = ctx.history().undo.at(-1);
+          return [...lines, cs ? `applied: ${title(ctx, cs)}` : 'applied'];
+        }
         if (p.ops.length === 0) return [...lines, 'nothing to change'];
         if (session.editor) {
           const r = await session.propose(p.label, p.ops);
