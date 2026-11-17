@@ -2,11 +2,13 @@
  * Windows: mod dependencies, mod info, mod check, new record.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { uiText } from '@kenshi-editor/core';
+import { applyLayoutFilters, cloneRecord, defaultSample, emptyRecord, uiText, type CategoryNode, type LayoutFilter } from '@kenshi-editor/core';
 import type { ModEntry } from '../../../shared/api.ts';
 import { useLang, useT, type Strings } from '../i18n.ts';
 import { tryEdit } from '../hooks.ts';
 import type { AppliedExtension, Project } from '../project.ts';
+import { categoryName, newRecordTitle } from '../categoryNames.ts';
+import { RecordPicker } from './RecordPicker.tsx';
 import { Modal } from './widgets.tsx';
 
 export function DependenciesModal({ project, onApply, onClose }: { project: Project; onApply: (deps: string[]) => void; onClose: () => void }): ReactNode {
@@ -240,61 +242,200 @@ function ExtensionNote({ project }: { project: Project }): ReactNode {
   );
 }
 
-export function NewRecordModal({ project, defaultType, onCreate, onClose }: { project: Project; defaultType: string | undefined; onCreate: (type: number, name: string) => void; onClose: () => void }): ReactNode {
+/** What «+ New» creates: type, name, sample to copy (absent — empty record) and the category filters to put on it. */
+export interface NewRecordChoice {
+  type: number;
+  name: string;
+  sample?: string;
+  filters: readonly LayoutFilter[];
+}
+
+const filterText = (f: LayoutFilter): string => `${f.field} ${f.op === '==' ? '=' : '≠'} ${f.value}`;
+
+const NO_IDS: ReadonlySet<string> = new Set();
+
+/**
+ * «+ New» window. In a category of the chosen type the record is created in that category
+ * (its `fcs_layout.def` conditions are put on it) and copied from a sample: the record selected in
+ * the list, otherwise the first one of the category. «empty record» drops the sample.
+ */
+export function NewRecordModal({
+  project,
+  node,
+  selected,
+  onCreate,
+  onClose,
+}: {
+  project: Project;
+  node: CategoryNode | undefined;
+  selected: string | undefined;
+  onCreate: (choice: NewRecordChoice) => void;
+  onClose: () => void;
+}): ReactNode {
   const t = useT();
+  const lang = useLang();
+  const ctx = project.ctx;
   const types = useMemo(() => {
-    const s = new Set([...project.idsByType().keys(), ...(project.ctx.schema?.types.keys() ?? [])]);
-    return [...s].filter((x) => project.ctx.typeId(x) !== undefined).sort();
-  }, [project]);
-  const [type, setType] = useState(defaultType ?? types[0] ?? 'ITEM');
+    const s = new Set([...project.idsByType().keys(), ...(ctx.schema?.types.keys() ?? [])]);
+    return [...s].filter((x) => ctx.typeId(x) !== undefined).sort();
+  }, [project, ctx]);
+  const [type, setType] = useState(node?.type ?? types[0] ?? 'ITEM');
   const [name, setName] = useState('');
+  // The sample the user picked for a type; another type falls back to the default sample.
+  const [choice, setChoice] = useState<{ type: string; sample: string | undefined } | undefined>();
+  const [picking, setPicking] = useState(false);
+  const catNode = node?.type !== undefined && node.type === type ? node : undefined;
+  const filters = useMemo(() => catNode?.filters ?? [], [catNode]);
+  // Sample candidates in list order: the category records, or all records of the type.
+  const candidates = useMemo(() => {
+    const ids = catNode ? project.idsForNode(catNode) : (project.idsByType().get(type) ?? []);
+    const live = ids.filter((sid) => ctx.status(sid) !== 'deleted' && project.entry(sid) !== undefined);
+    const hay = (sid: string): string => project.entry(sid)!.hay;
+    return live.sort((a, b) => (hay(a) < hay(b) ? -1 : hay(a) > hay(b) ? 1 : 0));
+  }, [project, ctx, catNode, type]);
+  const autoSample = useMemo(() => (catNode ? defaultSample(ctx, candidates, selected) : undefined), [ctx, catNode, candidates, selected]);
+  const sample = choice?.type === type ? choice.sample : autoSample;
+  const sampleEntry = sample !== undefined ? project.entry(sample) : undefined;
+  // Conditions the record would still miss after creation (a value not known to the editor).
+  const unmet = useMemo(() => {
+    const typeId = ctx.typeId(type);
+    if (filters.length === 0 || typeId === undefined) return [];
+    const src = sample !== undefined ? ctx.get(sample) : undefined;
+    const draft = src ? cloneRecord(src) : emptyRecord(typeId, '', new Uint8Array());
+    return applyLayoutFilters(ctx.schema, draft, filters);
+  }, [ctx, type, sample, filters]);
+  const catName = catNode ? categoryName(catNode.label, lang) : '';
+  const title = catNode ? (newRecordTitle(catNode.label, lang) ?? t.nwInCategory(catName)) : t.nwPlain;
   const create = (): void => {
-    const id = project.ctx.typeId(type);
-    if (id !== undefined && name.trim()) onCreate(id, name.trim());
+    const id = ctx.typeId(type);
+    if (id !== undefined && name.trim()) onCreate({ type: id, name: name.trim(), ...(sample !== undefined ? { sample } : {}), filters });
+  };
+  const pickSample = (sid: string | undefined): void => {
+    setChoice({ type, sample: sid });
+  };
+  const openPicker = (): void => {
+    setPicking(true);
   };
   return (
-    <Modal
-      title={t.newRecord}
-      onClose={onClose}
-      testId="new-record-modal"
-      footer={
-        <>
-          <span className="grow" />
-          <button onClick={onClose}>{t.cancel}</button>
-          <button className="primary" disabled={!name.trim()} onClick={create} data-testid="new-record-create">
-            {t.create}
-          </button>
-        </>
-      }
-    >
-      <div className="form">
-        <label>{t.type}</label>
-        <select
-          value={type}
-          data-testid="new-record-type"
-          onChange={(e) => {
-            setType(e.target.value);
+    <>
+      <Modal
+        title={title}
+        onClose={onClose}
+        testId="new-record-modal"
+        footer={
+          <>
+            <span className="grow" />
+            <button onClick={onClose}>{t.cancel}</button>
+            <button className="primary" disabled={!name.trim()} onClick={create} data-testid="new-record-create">
+              {t.create}
+            </button>
+          </>
+        }
+      >
+        <div className="form">
+          <label>{t.type}</label>
+          <select
+            value={type}
+            data-testid="new-record-type"
+            onChange={(e) => {
+              setType(e.target.value);
+            }}
+          >
+            {types.map((x) => (
+              <option key={x} value={x}>
+                {x}
+              </option>
+            ))}
+          </select>
+          <label>{t.name}</label>
+          <input
+            autoFocus
+            value={name}
+            data-testid="new-record-name"
+            onChange={(e) => {
+              setName(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') create();
+            }}
+          />
+          {(sampleEntry !== undefined || candidates.length > 0) && (
+            <>
+              <label>{t.nwSample}</label>
+              {sampleEntry ? (
+                <button className="new-record-sample" data-testid="new-record-sample" data-sid={sample} title={t.nwSampleTip} onClick={openPicker}>
+                  <span className="grow">{sampleEntry.localized || sampleEntry.name || sampleEntry.sid}</span>
+                  <span>▾</span>
+                </button>
+              ) : (
+                <div>
+                  <span className="muted">{t.nwEmptyChosen}</span>{' '}
+                  <button className="link" data-testid="new-record-sample" onClick={openPicker}>
+                    {t.nwUseSample}
+                  </button>
+                </div>
+              )}
+              {sampleEntry && (
+                <>
+                  <span />
+                  <div className="small muted" data-testid="new-record-sample-hint">
+                    {t.nwSampleHint}
+                    <br />
+                    {t.nwWithout}{' '}
+                    <button
+                      className="link"
+                      data-testid="new-record-empty"
+                      onClick={() => {
+                        pickSample(undefined);
+                      }}
+                    >
+                      {t.nwEmptyLink}
+                    </button>{' '}
+                    {t.nwEmptyTail}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+          {catNode && (
+            <>
+              <label>{t.nwWill}</label>
+              <div data-testid="new-record-will">
+                <b>{t.nwWillCategory(catName)}</b>
+                <span className="muted">
+                  {' — '}
+                  {[type, ...filters.map(filterText)].join(', ')}
+                  {filters.length === 0 && ` (${t.nwNoCategory})`}
+                </span>
+              </div>
+              {unmet.length > 0 && (
+                <>
+                  <span />
+                  <div className="small warn" data-testid="new-record-unmet">
+                    {t.nwUnmet(unmet.map(filterText).join(', '))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </Modal>
+      {picking && (
+        <RecordPicker
+          project={project}
+          title={t.nwPickSample}
+          targetType={type}
+          ids={candidates}
+          exclude={NO_IDS}
+          onPick={(sid) => {
+            pickSample(sid);
+            setPicking(false);
           }}
-        >
-          {types.map((x) => (
-            <option key={x} value={x}>
-              {x}
-            </option>
-          ))}
-        </select>
-        <label>{t.name}</label>
-        <input
-          autoFocus
-          value={name}
-          data-testid="new-record-name"
-          onChange={(e) => {
-            setName(e.target.value);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') create();
+          onClose={() => {
+            setPicking(false);
           }}
         />
-      </div>
-    </Modal>
+      )}
+    </>
   );
 }

@@ -186,3 +186,82 @@ const CATEGORY_NAMES: Partial<Record<Lang, Readonly<Record<string, string>>>> = 
 export function categoryName(label: string, lang: Lang): string {
   return CATEGORY_NAMES[lang]?.[label] ?? label;
 }
+
+/**
+ * Title of the «+ New» window for a category, by the node label: «New book», «Новая книга».
+ * Only common categories have one (Russian needs the grammatical gender); others get the
+ * generic «New record in “…”».
+ */
+const newEn: Readonly<Record<string, string>> = {
+  Buildings: 'New building',
+  Walls: 'New wall',
+  Furniture: 'New furniture',
+  Doors: 'New door',
+  Lights: 'New light',
+  Plants: 'New plant',
+  Items: 'New item',
+  Weapons: 'New weapon',
+  'Ranged Weapons': 'New ranged weapon',
+  Crossbows: 'New crossbow',
+  Armour: 'New armour',
+  Bags: 'New bag',
+  Maps: 'New map',
+  Books: 'New book',
+  'Dialogue Package': 'New dialogue package',
+  Dialogue: 'New dialogue',
+  Races: 'New race',
+  Characters: 'New character',
+  Animals: 'New animal',
+  Faction: 'New faction',
+  Squads: 'New squad',
+  Towns: 'New town',
+  Biomes: 'New biome',
+  'AI Packages': 'New AI package',
+  'Vendor Lists': 'New vendor list',
+  Research: 'New research',
+  'Game Starts': 'New game start',
+  Effects: 'New effect',
+};
+
+const newRu: Readonly<Record<string, string>> = {
+  Buildings: 'Новая постройка',
+  Walls: 'Новая стена',
+  Furniture: 'Новая мебель',
+  Doors: 'Новая дверь',
+  Lights: 'Новый источник света',
+  Plants: 'Новое растение',
+  Items: 'Новый предмет',
+  Weapons: 'Новое оружие',
+  'Ranged Weapons': 'Новое стрелковое оружие',
+  Crossbows: 'Новый арбалет',
+  Armour: 'Новая броня',
+  Bags: 'Новая сумка',
+  Maps: 'Новая карта',
+  Books: 'Новая книга',
+  'Dialogue Package': 'Новый пакет диалогов',
+  Dialogue: 'Новый диалог',
+  Races: 'Новая раса',
+  Characters: 'Новый персонаж',
+  Animals: 'Новое животное',
+  Faction: 'Новая фракция',
+  Squads: 'Новый отряд',
+  Towns: 'Новый город',
+  Biomes: 'Новый биом',
+  'AI Packages': 'Новый пакет ИИ',
+  'Vendor Lists': 'Новый список торговца',
+  Research: 'Новое исследование',
+  'Game Starts': 'Новое начало игры',
+  Effects: 'Новый эффект',
+};
+
+const NEW_TITLES: Partial<Record<Lang, Readonly<Record<string, string>>>> = {
+  en: newEn,
+  ru: newRu,
+  // «新建» + the category name reads naturally in Chinese.
+  zh: Object.fromEntries(Object.keys(newEn).flatMap((k) => (zh[k] !== undefined ? [[k, `新建${zh[k]}`]] : []))),
+};
+
+/** «+ New» window title for a category node; undefined — use the generic title. */
+export function newRecordTitle(label: string, lang: Lang): string | undefined {
+  return NEW_TITLES[lang]?.[label];
+}

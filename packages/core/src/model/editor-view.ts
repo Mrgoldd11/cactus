@@ -110,6 +110,47 @@ export function matchesLayoutFilters(schema: GameSchema | undefined, rec: GameRe
   });
 }
 
+/** Record value that makes `field == value` of a layout filter true; undefined — not known how. */
+function layoutFilterValue(schema: GameSchema | undefined, type: TypeSchema | undefined, typeName: string, rec: GameRecord, flt: LayoutFilter): { dict: ScalarDict; value: ScalarValue } | undefined {
+  const def = type && findField(type, flt.field);
+  const dict = def ? DICT_FOR_KIND[def.kind] : undefined;
+  const raw = flt.value.trim();
+  if (dict === 'bools' || (!def && /^(true|false)$/i.test(raw))) return /^(true|false)$/i.test(raw) ? { dict: 'bools', value: raw.toLowerCase() === 'true' } : undefined;
+  if (dict === 'ints' || (!def && /^-?\d+$/.test(raw))) {
+    const n = layoutEnumValue(schema, type, typeName, rec, flt.field, raw);
+    return n === undefined ? undefined : { dict: 'ints', value: n };
+  }
+  if (dict === 'floats') return Number.isFinite(Number(raw)) && raw !== '' ? { dict: 'floats', value: Number(raw) } : undefined;
+  if (dict === 'strings' || dict === 'files' || !def) return { dict: dict === 'files' ? 'files' : 'strings', value: encodeText(flt.value) };
+  return undefined;
+}
+
+/**
+ * Make a record (a draft) satisfy layout filters, so that a new record created in a category
+ * stays in it: `field == value` sets the value; a violated `field != value` drops the field back
+ * to its default. Returns the filters still not satisfied afterwards (e.g. an unknown enum value).
+ */
+export function applyLayoutFilters(schema: GameSchema | undefined, rec: GameRecord, filters: readonly LayoutFilter[]): LayoutFilter[] {
+  const typeName = itemTypeName(rec.type, schema?.itemTypes);
+  const type = schema?.types.get(typeName);
+  const unmet: LayoutFilter[] = [];
+  const drop = (key: string): void => {
+    for (const dict of SCALAR_DICTS) scalarMap(rec, dict).delete(key);
+  };
+  for (const flt of filters) {
+    if (matchesLayoutFilters(schema, rec, [flt])) continue;
+    if (flt.op === '==') {
+      const v = layoutFilterValue(schema, type, typeName, rec, flt);
+      if (v) {
+        drop(flt.field);
+        scalarMap(rec, v.dict).set(flt.field, v.value);
+      }
+    } else drop(flt.field);
+    if (!matchesLayoutFilters(schema, rec, [flt])) unmet.push(flt);
+  }
+  return unmet;
+}
+
 /** Does the record match the tree node. */
 export function matchesCategory(schema: GameSchema | undefined, rec: GameRecord, node: CategoryNode): boolean {
   if (node.id === OTHER_TYPES_ID) return false;

@@ -109,6 +109,17 @@ class Describer {
     return { en: ` “${short(en)}”`, ru: ` «${short(tr)}»`, zh: ` “${short(tr)}”` };
   }
 
+  /** Data-language name of a live record of `typeName` named `name` in the data; undefined — none or no translation. */
+  translatedByName(typeName: string, name: string): string | undefined {
+    for (const sid of this.ctx.allStringIds()) {
+      const h = this.ctx.headline(sid);
+      if (!h || itemTypeName(h.type) !== typeName || decodeText(h.name) !== name) continue;
+      const tr = this.ctx.localizedName(sid);
+      if (tr !== undefined) return tr;
+    }
+    return undefined;
+  }
+
   added(): RecordDiff[] {
     return this.diffs.filter((d) => d.change === 'added');
   }
@@ -303,12 +314,24 @@ class Describer {
     const newRace = /^новая раса («.*») на основе («.*?»)(?: \+ совместимость \((\d+) правок\))?$/s.exec(label);
     if (newRace) {
       const [, a, b, n] = newRace;
-      if (n === undefined) return { ru: `Новая раса ${a!} на основе ${b!}`, en: `New race ${a!} based on ${b!}`, zh: `基于 ${b!} 的新种族 ${a!}` };
+      // The label keeps the sample's name as in the data; show it in the data language like other names.
+      const tr = this.translatedByName('RACE', b!.slice(1, -1));
+      const bt = tr !== undefined ? `«${tr}»` : b!;
+      if (n === undefined) return { ru: `Новая раса ${a!} на основе ${bt}`, en: `New race ${a!} based on ${b!}`, zh: `基于 ${bt} 的新种族 ${a!}` };
       return {
-        ru: `Новая раса ${a!} на основе ${b!} + совместимость (правок: ${n})`,
+        ru: `Новая раса ${a!} на основе ${bt} + совместимость (правок: ${n})`,
         en: `New race ${a!} based on ${b!} + compatibility (changes: ${n})`,
-        zh: `基于 ${b!} 的新种族 ${a!} + 兼容（更改：${n}）`,
+        zh: `基于 ${bt} 的新种族 ${a!} + 兼容（更改：${n}）`,
       };
+    }
+    const newRec = /^новая запись «(.*)» по образцу (.+)$/s.exec(label);
+    if (newRec) {
+      const [, a, from] = newRec;
+      const d = this.added()[0];
+      const name = d ? this.recordName(d.after!) : same(` «${a!}»`);
+      const src = this.ctx.get(from!) ?? this.ctx.lower(from!);
+      const sample = src ? this.recordName(src) : same(` ${from!}`);
+      return { ru: `Новая запись${name.ru} по образцу${sample.ru}`, en: `New record${name.en} based on${sample.en}`, zh: `基于${sample.zh} 的新记录${name.zh}` };
     }
     const anims = /^анимации («.*»): клипов (\d+), рас (\d+)$/s.exec(label);
     if (anims) {

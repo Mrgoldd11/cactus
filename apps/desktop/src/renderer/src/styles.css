@@ -1030,6 +1030,19 @@ tr.fs-removed td:first-child {
 .badge.role-loot {
   border-color: var(--changed);
 }
+/* «+ New»: the sample button — record name on the left, arrow on the right. */
+.new-record-sample {
+  display: flex;
+  gap: 6px;
+  text-align: left;
+  min-width: 0;
+}
+.new-record-sample > .grow {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .small {
   font-size: 12px;
 }

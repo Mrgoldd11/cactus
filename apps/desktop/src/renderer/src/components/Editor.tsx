@@ -4,7 +4,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { DockviewApi } from 'dockview-react';
-import { createRaceFrom } from '@kenshi-editor/core';
+import { createRaceFrom, createRecordIn } from '@kenshi-editor/core';
 import type { Lang, Settings, WorkspaceSettings } from '../../../shared/api.ts';
 import { errorText, useT } from '../i18n.ts';
 import { isTypingIn, shortcut } from '../keys.ts';
@@ -271,6 +271,8 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
   }, []);
 
   const node = nodeId === MOD_CHANGES_ID ? undefined : findNode(project.tree, nodeId);
+  const latestRecord = selection.latest((s) => s.kind === 'record');
+  const selectedSid = latestRecord?.kind === 'record' ? latestRecord.sid : undefined;
   const modCount = useMemo(() => ctx.modRecords().length, [ctx, version]);
 
   const applyDeps = (deps: string[]): void => {
@@ -529,12 +531,13 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
       {modal === 'new' && (
         <NewRecordModal
           project={project}
-          defaultType={node?.type}
-          onCreate={(type, name) => {
+          node={node}
+          selected={selectedSid}
+          onCreate={(choice) => {
             setModal(undefined);
             report(
               tryEdit(() => {
-                go(ctx.createRecord(type, name));
+                go(createRecordIn(ctx, choice));
               }),
             );
           }}

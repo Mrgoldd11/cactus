@@ -15,9 +15,11 @@ interface Props {
   exclude: ReadonlySet<string>;
   onPick: (sid: string) => void;
   onClose: () => void;
+  /** Offer only these records (e.g. those of a category) instead of all records of the type. */
+  ids?: readonly string[];
 }
 
-export function RecordPicker({ project, title, targetType, exclude, onPick, onClose }: Props): ReactNode {
+export function RecordPicker({ project, title, targetType, exclude, onPick, onClose, ids }: Props): ReactNode {
   const t = useT();
   const [query, setQuery] = useState('');
   const [anyType, setAnyType] = useState(targetType === undefined);
@@ -26,7 +28,7 @@ export function RecordPicker({ project, title, targetType, exclude, onPick, onCl
 
   const items = useMemo(() => {
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const source = !anyType && targetType !== undefined ? (project.idsByType().get(targetType) ?? []) : project.allIds();
+    const source = ids ?? (!anyType && targetType !== undefined ? (project.idsByType().get(targetType) ?? []) : project.allIds());
     const out: IndexEntry[] = [];
     for (const sid of source) {
       if (exclude.has(sid) || ctx.status(sid) === 'deleted') continue;
@@ -34,7 +36,7 @@ export function RecordPicker({ project, title, targetType, exclude, onPick, onCl
       if (e && terms.every((term) => e.hay.includes(term))) out.push(e);
     }
     return out.sort((a, b) => (a.hay < b.hay ? -1 : a.hay > b.hay ? 1 : 0));
-  }, [project, ctx, query, anyType, targetType, exclude]);
+  }, [project, ctx, query, anyType, targetType, exclude, ids]);
 
   const cur = Math.min(cursor, items.length - 1);
   const pick = (e: IndexEntry | undefined): void => {
@@ -81,7 +83,7 @@ export function RecordPicker({ project, title, targetType, exclude, onPick, onCl
             e.preventDefault();
           }}
         />
-        {targetType !== undefined && (
+        {targetType !== undefined && ids === undefined && (
           <label className="muted nowrap">
             <input
               type="checkbox"
