@@ -6,9 +6,9 @@
  * The file is nested chunks "id (uint16) + length (uint32) + data". Old Ogre versions compute chunk
  * lengths wrongly (a submesh's length is smaller than its own geometry), so we read
  * sequentially, like Ogre itself: chunk after chunk, never skipping by length. Only what is
- * drawn is needed: geometry (positions, normals, UV, vertex colour), indices and the material name of each
- * submesh. LOD, shadow edges, poses and animations come after the submeshes; reading
- * stops at them.
+ * drawn is needed: geometry (positions, normals, UV, vertex colour), indices, the material name of each
+ * submesh and bone weights of animated models. LOD, shadow edges, poses and animations come after
+ * the submeshes; reading stops at them.
  *
  * The module has no disk access and no three.js: bytes in, arrays out.
  */
@@ -28,6 +28,19 @@ const M_GEOMETRY_VERTEX_BUFFER = 0x5200;
 const M_GEOMETRY_VERTEX_BUFFER_DATA = 0x5210;
 const M_MESH_SKELETON_LINK = 0x6000;
 const M_MESH_BONE_ASSIGNMENT = 0x7000;
+
+/** Raw bone assignments of one geometry: vertex, bone handle, weight. */
+class Assignments {
+  readonly vertex: number[] = [];
+  readonly bone: number[] = [];
+  readonly weight: number[] = [];
+
+  read(r: Reader): void {
+    this.vertex.push(r.u32());
+    this.bone.push(r.u16());
+    this.weight.push(r.f32());
+  }
+}
 
 /** Meaning of a vertex element (Ogre `VertexElementSemantic`). */
 const SEM_POSITION = 1;
@@ -49,7 +62,23 @@ export interface MeshGeometry {
   uvs?: Float32Array;
   /** Vertex colour r, g, b, a (0…1), if present. */
   colors?: Float32Array;
+  /** Bone weights of an animated model; absent when the geometry has no bone assignments. */
+  skin?: MeshSkin;
 }
+
+/** Up to `SKIN_SLOTS` bones per vertex: the strongest ones, weights normalized to sum 1. */
+export interface MeshSkin {
+  /** Bone handles (as in the `.skeleton`), `SKIN_SLOTS` per vertex; unused slots are 0 with weight 0. */
+  bones: Uint16Array;
+  weights: Float32Array;
+  /** Vertices with no assignment at all (they follow the model root, not a bone). */
+  unassigned: number;
+  /** Assignments dropped because a vertex had more than `SKIN_SLOTS` bones. */
+  dropped: number;
+}
+
+/** Bones per vertex kept for skinning (Ogre and three.js both use 4). */
+export const SKIN_SLOTS = 4;
 
 export interface MeshSubmesh {
   /** Ogre material name (`Material#84`). In Kenshi the texture is usually set by the record, not by it. */
@@ -238,7 +267,7 @@ function decodeVertices(vertexCount: number, elements: readonly Element[], buffe
   return geo;
 }
 
-function readSubmesh(r: Reader, shared: MeshGeometry | undefined): MeshSubmesh {
+function readSubmesh(r: Reader, shared: MeshGeometry | undefined, sharedBones: Assignments): MeshSubmesh {
   const material = r.line();
   const useShared = r.bool();
   const indexCount = r.u32();
@@ -265,6 +294,7 @@ function readSubmesh(r: Reader, shared: MeshGeometry | undefined): MeshSubmesh {
     geometry = readGeometry(r);
   }
   let operation = OP_TRIANGLE_LIST;
+  const bones = useShared ? sharedBones : new Assignments();
   for (;;) {
     const id = r.peekChunk();
     if (id === M_SUBMESH_OPERATION) {
@@ -272,7 +302,7 @@ function readSubmesh(r: Reader, shared: MeshGeometry | undefined): MeshSubmesh {
       operation = r.u16();
     } else if (id === M_SUBMESH_BONE_ASSIGNMENT) {
       r.chunk();
-      r.slice(10);
+      bones.read(r);
     } else if (id === M_SUBMESH_TEXTURE_ALIAS) {
       r.chunk();
       r.line();
@@ -281,7 +311,49 @@ function readSubmesh(r: Reader, shared: MeshGeometry | undefined): MeshSubmesh {
   }
   for (const i of indices)
     if (i >= geometry.vertexCount) throw new MeshFormatError({ en: `index ${i} is out of the vertex range (${geometry.vertexCount}) in “${material}”`, ru: `индекс ${i} за пределами вершин (${geometry.vertexCount}) у «${material}»`, zh: `“${material}”中的索引 ${i} 超出顶点范围（${geometry.vertexCount}）` });
+  if (!useShared && bones.vertex.length > 0) geometry.skin = buildSkin(geometry.vertexCount, bones);
   return { material, operation, geometry, indices };
+}
+
+/** Keep the `SKIN_SLOTS` strongest bones of each vertex and normalize their weights. */
+function buildSkin(vertexCount: number, a: Assignments): MeshSkin {
+  const bones = new Uint16Array(vertexCount * SKIN_SLOTS);
+  const weights = new Float32Array(vertexCount * SKIN_SLOTS);
+  const used = new Uint8Array(vertexCount);
+  let dropped = 0;
+  for (let i = 0; i < a.vertex.length; i++) {
+    const v = a.vertex[i]!;
+    const w = a.weight[i]!;
+    if (v >= vertexCount) throw new MeshFormatError({ en: `bone weight for vertex ${v}, but there are only ${vertexCount}`, ru: `вес кости для вершины ${v}, а вершин всего ${vertexCount}`, zh: `顶点 ${v} 有骨骼权重，但只有 ${vertexCount} 个顶点` });
+    if (!(w > 0)) continue;
+    const base = v * SKIN_SLOTS;
+    if (used[v]! < SKIN_SLOTS) {
+      bones[base + used[v]!] = a.bone[i]!;
+      weights[base + used[v]!] = w;
+      used[v]!++;
+      continue;
+    }
+    // Full: replace the weakest slot if this one is stronger.
+    dropped++;
+    let weakest = 0;
+    for (let s = 1; s < SKIN_SLOTS; s++) if (weights[base + s]! < weights[base + weakest]!) weakest = s;
+    if (w > weights[base + weakest]!) {
+      bones[base + weakest] = a.bone[i]!;
+      weights[base + weakest] = w;
+    }
+  }
+  let unassigned = 0;
+  for (let v = 0; v < vertexCount; v++) {
+    const base = v * SKIN_SLOTS;
+    let sum = 0;
+    for (let s = 0; s < SKIN_SLOTS; s++) sum += weights[base + s]!;
+    if (sum <= 0) {
+      unassigned++;
+      continue;
+    }
+    for (let s = 0; s < SKIN_SLOTS; s++) weights[base + s] = weights[base + s]! / sum;
+  }
+  return { bones, weights, unassigned, dropped };
 }
 
 /** Parse a `.mesh`. Throws `MeshFormatError` if the file is not an Ogre model or is corrupt. */
@@ -300,6 +372,7 @@ export function parseOgreMesh(bytes: Uint8Array): OgreMesh {
   if (top.id !== M_MESH) throw new MeshFormatError({ en: `expected the mesh block, got 0x${top.id.toString(16)}`, ru: `ждали блок модели, а 0x${top.id.toString(16)}`, zh: `应为网格数据块，实际为 0x${top.id.toString(16)}` });
   r.bool(); // skeletallyAnimated
   let shared: MeshGeometry | undefined;
+  const sharedBones = new Assignments();
   for (;;) {
     const id = r.peekChunk();
     if (id === M_GEOMETRY) {
@@ -307,15 +380,16 @@ export function parseOgreMesh(bytes: Uint8Array): OgreMesh {
       shared = readGeometry(r);
     } else if (id === M_SUBMESH) {
       r.chunk();
-      mesh.submeshes.push(readSubmesh(r, shared));
+      mesh.submeshes.push(readSubmesh(r, shared, sharedBones));
     } else if (id === M_MESH_SKELETON_LINK) {
       r.chunk();
       mesh.skeleton = r.line();
     } else if (id === M_MESH_BONE_ASSIGNMENT) {
       r.chunk();
-      r.slice(10);
+      sharedBones.read(r);
     } else break;
   }
+  if (shared && sharedBones.vertex.length > 0) shared.skin = buildSkin(shared.vertexCount, sharedBones);
   mesh.bounds = boundsOf(mesh.submeshes);
   return mesh;
 }

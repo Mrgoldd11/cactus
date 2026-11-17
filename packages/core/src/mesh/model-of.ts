@@ -62,6 +62,19 @@ export interface ModelPiece {
   triplanar?: boolean;
   /** Second diffuse texture of DUAL_TEXTURE / DUAL_TRIPLANAR, blended in by vertex colour alpha. */
   texture2?: string;
+  /**
+   * Extra clip sources for an animated model: RACE `animation files` → ANIMATION_FILE `male animation`
+   * / `female animation`. The game adds their clips to (or overrides) those of the mesh's own skeleton.
+   */
+  animationFiles?: AnimationSource[];
+}
+
+/** A `.skeleton` whose clips can be played on a model, and the record that names it. */
+export interface AnimationSource {
+  /** Path relative to the game folder. */
+  skeleton: string;
+  /** ANIMATION_FILE record. */
+  source: string;
 }
 
 export interface RecordModel {
@@ -278,7 +291,8 @@ function foliagePieces(rec: GameRecord, sid: string, out: RecordModel, modeField
 }
 
 /**
- * Record model. `interior: true`: for a building, interior parts instead of exterior ones.
+ * Record model. `interior: true`: for a building, interior parts instead of exterior ones. `female: true`: for a
+ * race, the female body instead of the male one.
  * Empty `pieces`: the record has no model (or it is in a `.phs`).
  */
 /**
@@ -302,7 +316,7 @@ export function foliageRockOf(ctx: ModContext, building: GameRecord): GameRecord
   return best;
 }
 
-export function modelOfRecord(ctx: ModContext, sid: string, options: { interior?: boolean } = {}): RecordModel {
+export function modelOfRecord(ctx: ModContext, sid: string, options: { interior?: boolean; female?: boolean } = {}): RecordModel {
   const rec = ctx.get(sid);
   const type = rec ? itemTypeName(rec.type) : '';
   const out: RecordModel = { sid, type, pieces: [], notes: [] };
@@ -332,6 +346,10 @@ export function modelOfRecord(ctx: ModContext, sid: string, options: { interior?
     if (rec.bools.get('hidden') !== true) foliagePieces(rec, sid, out, 'texture mode');
     return out;
   }
+  if (type === 'RACE') {
+    racePieces(ctx, rec, out, options.female === true);
+    return out;
+  }
   const fields = MESH_FIELDS[type] ?? [...rec.files.keys()];
   const field = fields.find((f) => isMesh(file(rec, f)));
   if (!field) return out;
@@ -342,6 +360,29 @@ export function modelOfRecord(ctx: ModContext, sid: string, options: { interior?
   else mat = materialOf(ctx, refs(rec, 'material')[0]?.target);
   out.pieces.push(withMaterial(piece, mat));
   return out;
+}
+
+/**
+ * RACE: the body mesh of one gender (the other one if that is empty), the body texture and the
+ * race's extra animation files of the same gender.
+ */
+function racePieces(ctx: ModContext, rec: GameRecord, out: RecordModel, female: boolean): void {
+  const order = female ? ['female', 'male'] : ['male', 'female'];
+  const gender = order.find((g) => isMesh(file(rec, `${g} mesh`)));
+  if (!gender) return;
+  const piece: ModelPiece = { mesh: file(rec, `${gender} mesh`)!, source: rec.stringId, field: `${gender} mesh` };
+  const tex = file(rec, `body texture ${gender}`);
+  if (tex) piece.texture = tex;
+  const nrm = file(rec, `nm ${gender}`);
+  if (nrm) piece.normalMap = nrm;
+  const anims: AnimationSource[] = [];
+  for (const r of refs(rec, 'animation files')) {
+    const af = ctx.get(r.target);
+    const skel = af ? file(af, `${gender} animation`) : undefined;
+    if (skel && /\.skeleton$/i.test(skel)) anims.push({ skeleton: skel, source: r.target });
+  }
+  if (anims.length > 0) piece.animationFiles = anims;
+  out.pieces.push(piece);
 }
 
 /** Does the record have a model (for menus and buttons, without parsing files). */

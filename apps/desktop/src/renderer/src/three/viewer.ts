@@ -1,7 +1,7 @@
 /**
  * 3D preview view: the camera orbits the model (left button — rotate, middle or right
  * — pan, wheel — closer/farther), light «from the viewer», a grid on the floor. Renders only when
- * something changed.
+ * something changed, or every frame while an animation plays (`setTicker`).
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -20,6 +20,11 @@ export class ModelViewer {
   private frameRequested = false;
   private wire = false;
   private readonly ray = new THREE.Raycaster();
+  private ticker: ((dt: number) => void) | undefined;
+  private tickFrame = 0;
+  private lastTick = 0;
+  private bones: THREE.SkeletonHelper | undefined;
+  private showBones = false;
 
   constructor(host: HTMLElement) {
     this.host = host;
@@ -68,6 +73,44 @@ export class ModelViewer {
     this.renderer.render(this.scene, this.camera);
   }
 
+  /**
+   * Called every frame with the seconds since the previous one, then the frame is drawn; undefined
+   * stops the loop (rendering goes back to on-demand).
+   */
+  setTicker(fn: ((dt: number) => void) | undefined): void {
+    this.ticker = fn;
+    cancelAnimationFrame(this.tickFrame);
+    if (!fn) return;
+    this.lastTick = performance.now();
+    const step = (now: number): void => {
+      if (this.ticker !== fn) return;
+      const dt = Math.max(0, Math.min((now - this.lastTick) / 1000, 0.25));
+      this.lastTick = now;
+      fn(dt);
+      this.render();
+      this.tickFrame = requestAnimationFrame(step);
+    };
+    this.tickFrame = requestAnimationFrame(step);
+  }
+
+  /** Bones of the model's skeletons drawn over it (seen through the surface). */
+  setBonesVisible(on: boolean): void {
+    this.showBones = on;
+    this.placeBones();
+    this.requestRender();
+  }
+
+  private placeBones(): void {
+    if (this.bones) {
+      this.scene.remove(this.bones);
+      this.bones.dispose();
+      this.bones = undefined;
+    }
+    if (!this.showBones || !this.model?.getObjectByProperty('isBone', true)) return;
+    this.bones = new THREE.SkeletonHelper(this.model);
+    this.scene.add(this.bones);
+  }
+
   /** Show a model (the previous one is removed, the caller frees it). */
   setModel(obj: THREE.Object3D | undefined): void {
     if (this.model) this.scene.remove(this.model);
@@ -76,6 +119,7 @@ export class ModelViewer {
       this.scene.add(obj);
       this.applyWire();
     }
+    this.placeBones();
     this.placeGrid();
     this.frame('home');
   }
@@ -184,6 +228,7 @@ export class ModelViewer {
     const prevAlpha = this.renderer.getClearAlpha();
     const prevRatio = this.renderer.getPixelRatio();
     if (this.grid) this.grid.visible = false;
+    if (this.bones) this.bones.visible = false;
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(size, size, false);
     this.renderer.setClearColor(0x000000, 0);
@@ -192,6 +237,7 @@ export class ModelViewer {
     this.render();
     const url = this.renderer.domElement.toDataURL('image/png');
     if (this.grid) this.grid.visible = true;
+    if (this.bones) this.bones.visible = true;
     this.renderer.setPixelRatio(prevRatio);
     this.renderer.setClearColor(prevColor, prevAlpha);
     this.renderer.setSize(prevSize.x, prevSize.y, true);
@@ -205,6 +251,8 @@ export class ModelViewer {
   }
 
   dispose(): void {
+    this.setTicker(undefined);
+    if (this.bones) this.bones.dispose();
     this.resize.disconnect();
     this.controls.dispose();
     this.model = undefined;

@@ -352,7 +352,7 @@ export function readGameAsset(game: GameInstallInfo, relPath: string): Uint8Arra
 
 const assetIndexes = new Map<string, Map<string, string>>();
 
-/** File name → full path for every model and texture under the game's `data` (built once). */
+/** File name → full path for every model, skeleton and texture under the game's `data` (built once). */
 function assetIndex(root: string): Map<string, string> {
   const known = assetIndexes.get(root);
   if (known) return known;
@@ -368,7 +368,7 @@ function assetIndex(root: string): Map<string, string> {
     for (const e of list) {
       const full = join(dir, e.name);
       if (e.isDirectory()) walk(full);
-      else if (/\.(dds|mesh|png)$/i.test(e.name) && !index.has(e.name.toLowerCase())) index.set(e.name.toLowerCase(), full);
+      else if (/\.(dds|mesh|png|skeleton)$/i.test(e.name) && !index.has(e.name.toLowerCase())) index.set(e.name.toLowerCase(), full);
     }
   };
   walk(join(root, 'data'));
