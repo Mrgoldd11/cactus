@@ -10,6 +10,7 @@ import {
   planRaceCompat,
   raceCompatGroupText,
   raceCompatPreview,
+  raceCompatSituation,
   raceMeshes,
   RACE_COMPAT_DEFAULT_ON,
   RACE_COMPAT_GROUPS,
@@ -129,6 +130,9 @@ function RaceCompatPanel(): ReactNode {
     [plan],
   );
   const contextCount = plan?.changes.filter((c) => c.contextOnly).length ?? 0;
+  // Why there is nothing (or only the sample's own contents) to add, in plain words.
+  const situation = plan ? raceCompatSituation(plan) : undefined;
+  const sampleLabel = plan ? raceLabel(project, plan.sample) : '';
 
   const setMany = (list: readonly RaceCompatChange[], on: boolean): void => {
     setOverrides((prev) => {
@@ -169,6 +173,17 @@ function RaceCompatPanel(): ReactNode {
         <label>
           {t.rcRace} {pick(race, setRace, 'rc-race')}
         </label>
+        <button
+          disabled={!race || !sample}
+          onClick={() => {
+            setRace(sample);
+            setSample(race);
+          }}
+          title={t.rcSwapTip}
+          data-testid="rc-swap"
+        >
+          ⇄ {t.rcSwap}
+        </button>
         <label>
           {t.rcLike} {pick(sample, setSample, 'rc-like')}
         </label>
@@ -198,7 +213,13 @@ function RaceCompatPanel(): ReactNode {
           {plan.info.length > 0 && <div>{t.rcInfo(plan.info.length)}</div>}
         </div>
       )}
-      {plan && plan.changes.length === 0 && <Empty text={t.rcNothing} />}
+      {plan && situation === 'unused' && (
+        <div className="rc-why" data-testid="rc-why">
+          <div>{plan.changes.length === 0 ? t.rcUnused(sampleLabel) : t.rcUnusedOwn(sampleLabel)}</div>
+          {plan.raceUses > 0 && <div data-testid="rc-swap-hint">{t.rcSwapHint(raceLabel(project, plan.race), sampleLabel, plan.raceUses)}</div>}
+        </div>
+      )}
+      {plan && situation === 'done' && <Empty text={t.rcNothing} />}
       {groups.length > 0 && (
         <div className="table-wrap">
           {groups.map(({ g, list }) => {

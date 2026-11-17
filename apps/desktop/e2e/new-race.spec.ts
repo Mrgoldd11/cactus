@@ -85,6 +85,19 @@ test('new race based on a sample: name checks, copy, wizard opened with the pair
     await expect(armour.getByTestId('rc-row').first().locator('.bulk-after')).toContainText('E2E Mossfolk');
     await page.screenshot({ path: join(shots, '39-new-race-compat.png') });
 
+    // Swapped pair: the fresh copy is used nowhere, so the wizard says why the list is empty and
+    // that Greenlander (used in many places) is probably meant to be «my race» the other way round.
+    await expect(panel.getByTestId('rc-why')).toHaveCount(0);
+    await panel.getByTestId('rc-swap').click();
+    await expect(panel.getByTestId('rc-race')).toHaveValue(GREENLANDER);
+    await expect(panel.getByTestId('rc-like')).toHaveValue(race);
+    await expect(panel.getByTestId('rc-why')).toContainText('E2E Mossfolk');
+    await expect(panel.getByTestId('rc-swap-hint')).toBeVisible();
+    await page.screenshot({ path: join(shots, '40-race-compat-swapped.png') });
+    await panel.getByTestId('rc-swap').click();
+    await expect(panel.getByTestId('rc-race')).toHaveValue(race);
+    await expect(armour).toHaveCount(1);
+
     // Creating the race is one undo step (Ctrl+Z): the copy is gone.
     await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
     await page.keyboard.press('Control+z');

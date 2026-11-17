@@ -18,6 +18,7 @@ import {
   ModContext,
   planRaceCompat,
   raceCompatPreview,
+  raceCompatSituation,
   raceSkeletonWarning,
   readDataFile,
   writeDataFile,
@@ -213,5 +214,32 @@ describe('race compatibility', () => {
     ctx.undo();
     expect(ctx.get(sid)).toBeUndefined();
     expect(ctx.history().undo).toHaveLength(0);
+  });
+  it('explains an empty plan: the sample unused (maybe a swapped pair) or everything done', () => {
+    const ctx = make();
+    // Lizardfolk is listed only next to Greenlander already → nothing to do.
+    const done = planRaceCompat(ctx, 'gl', 'nr');
+    expect(done.changes).toHaveLength(0);
+    expect(raceCompatSituation(done)).toBe('done');
+    expect(formatRaceCompat(done, new Set()).join('\n')).toMatch(/nothing to do/);
+
+    // A fresh copy of Greenlander is used nowhere: as the sample it has nothing outside itself.
+    const copy = createRaceFrom(ctx, 'gl', 'Mossfolk');
+    const swapped = planRaceCompat(ctx, 'gl', copy);
+    expect(raceCompatSituation(swapped)).toBe('unused');
+    expect(swapped.raceUses).toBeGreaterThan(0);
+    const text = formatRaceCompat(swapped, new Set(), 50, 'ru').join('\n');
+    expect(text).toMatch(/нигде больше не используется/);
+    expect(text).toMatch(/перепутаны/);
+
+    // The same unused sample for another unused race: no swap hint.
+    const other = createRaceFrom(ctx, 'gl', 'Ashfolk');
+    const plain = planRaceCompat(ctx, other, copy);
+    expect(raceCompatSituation(plain)).toBe('unused');
+    expect(plain.raceUses).toBe(0);
+    expect(formatRaceCompat(plain, new Set()).join('\n')).not.toMatch(/swapped/);
+
+    // Places to add the new race to → no explanation needed.
+    expect(raceCompatSituation(planRaceCompat(ctx, copy, 'gl'))).toBeUndefined();
   });
 });

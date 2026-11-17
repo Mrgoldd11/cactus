@@ -99,6 +99,38 @@ export interface RaceCompatPlan {
   /** Places that already have the new race next to the sample (nothing to do). */
   already: number;
   info: RaceCompatInfo[];
+  /**
+   * List places outside the two races that already reference the new race (armour, dialogue,
+   * race groups…). When the sample is unused but this is not zero, the pair is likely swapped.
+   */
+  raceUses: number;
+}
+
+/**
+ * Why the plan has nothing (or only the sample's own contents) to add:
+ * - `unused`: the sample race is not listed anywhere outside itself (only, maybe, as the single
+ *   race of some characters), so only what the sample itself carries can be offered;
+ * - `done`: the sample is used, and the new race is already everywhere it is;
+ * - undefined: there are places to add the new race to.
+ */
+export type RaceCompatSituation = 'unused' | 'done' | undefined;
+
+export function raceCompatSituation(plan: RaceCompatPlan): RaceCompatSituation {
+  if (plan.changes.some((c) => c.sid !== plan.race)) return undefined;
+  if (plan.already === 0) return 'unused';
+  return plan.changes.length === 0 ? 'done' : undefined;
+}
+
+/** List places (not single-race fields) outside `race` and `other` that reference `race`. */
+function listUses(ctx: ModContext, race: string, other: string): number {
+  const seen = new Set<string>();
+  for (const e of ctx.referencesTo(race)) {
+    if (!e.ref || e.source === race || e.source === other) continue;
+    const rec = ctx.get(e.source);
+    if (!rec || ctx.status(e.source) === 'deleted' || SINGLE_RACE[ctx.typeName(rec.type)] === e.category) continue;
+    seen.add(`${e.source}|${e.category}`);
+  }
+  return seen.size;
 }
 
 export interface RaceCompatOptions {
@@ -304,7 +336,7 @@ export function planRaceCompat(ctx: ModContext, race: string, sample: string, op
   const order = new Map(RACE_COMPAT_GROUPS.map((g, i) => [g, i]));
   changes.sort((a, b) => order.get(a.group)! - order.get(b.group)! || a.type.localeCompare(b.type) || a.name.localeCompare(b.name) || a.field.localeCompare(b.field));
   info.sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
-  return { race, sample, raceName, sampleName: recordName(ctx, sampleRec!, sample), changes, already, info };
+  return { race, sample, raceName, sampleName: recordName(ctx, sampleRec!, sample), changes, already, info, raceUses: listUses(ctx, race, sample) };
 }
 
 /** Step label (Russian, a step-title key): `раса: «New» как «Greenlander» (12 правок)`. */
@@ -423,6 +455,22 @@ export function formatRaceCompat(plan: RaceCompatPlan, chosen: ReadonlySet<strin
     lines.push(ru ? `не меняется (одна раса, а не список): ${parts}` : `not changed (a single race, not a list): ${parts}`);
   }
   if (plan.already) lines.push(ru ? `уже есть новая раса: ${plan.already}` : `already have the new race: ${plan.already}`);
+  const situation = raceCompatSituation(plan);
+  if (situation === 'unused') {
+    lines.push(
+      ru
+        ? `образец «${plan.sampleName}» нигде больше не используется (ни в броне, ни в диалогах, ни в группах рас, ни в стартах): ${plan.changes.length ? 'можно перенести только то, что есть у самого образца' : 'а всё, что есть у самого образца, у новой расы уже есть'}`
+        : `the sample “${plan.sampleName}” is not used anywhere else (no armour, dialogue, race groups or starts): ${plan.changes.length ? 'only what the sample itself carries can be copied' : 'and the new race already has everything the sample itself carries'}`,
+    );
+    if (plan.raceUses > 0)
+      lines.push(
+        ru
+          ? `возможно, раса и образец перепутаны: «${plan.raceName}» используется в ${plan.raceUses} местах; поменяйте race и like местами`
+          : `the pair may be swapped: “${plan.raceName}” is used in ${plan.raceUses} places; swap race and like`,
+      );
+  } else if (situation === 'done') {
+    lines.push(ru ? 'делать нечего: новая раса уже есть везде, где образец' : 'nothing to do: the new race is already everywhere the sample is');
+  }
   lines.push(ru ? `всего правок ${plan.changes.length}, отмечено ${chosen.size}` : `changes ${plan.changes.length}, chosen ${chosen.size}`);
   return lines;
 }

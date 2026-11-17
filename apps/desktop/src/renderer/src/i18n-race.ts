@@ -28,6 +28,14 @@ export const raceEn = {
   rcApplyTip: 'Add the ticked changes to your mod as one undo step',
   rcSkeletonChecking: 'Checking the skeletons of the race meshes…',
   rcDone: (n: number): string => `Race compatibility: ${n} changes applied (one undo step)`,
+  rcSwap: 'Swap',
+  rcSwapTip: 'Swap «My race» and «works like»',
+  rcUnused: (sample: string): string =>
+    `Nothing to do: the sample race «${sample}» is not used anywhere else (no armour, dialogue, race groups or starts), and your race already has everything the sample itself carries.`,
+  rcUnusedOwn: (sample: string): string =>
+    `The sample race «${sample}» is not used anywhere else (no armour, dialogue, race groups or starts). Below is only what can be copied from the sample itself into your race.`,
+  rcSwapHint: (race: string, sample: string, n: number): string =>
+    `Maybe the races are the other way round: «${race}» is used in ${n} places. If «${sample}» should work like «${race}», swap them with «⇄ Swap».`,
   nrOpen: 'New race based on…',
   nrOpenTip: 'Create your own race as a copy of an existing one under a new name, then set up its compatibility',
   nrTitle: 'New race based on…',
@@ -73,6 +81,14 @@ export const raceRu: typeof raceEn = {
   rcApplyTip: 'Добавить отмеченные правки в ваш мод одним шагом отмены',
   rcSkeletonChecking: 'Проверяю скелеты моделей рас…',
   rcDone: (n) => `Совместимость расы: применено правок ${n} (один шаг отмены)`,
+  rcSwap: 'Поменять',
+  rcSwapTip: 'Поменять местами «Моя раса» и «работает как»',
+  rcUnused: (sample) =>
+    `Делать нечего: раса-образец «${sample}» больше нигде не используется (ни в броне, ни в диалогах, ни в группах рас, ни в стартах), а всё, что есть у неё самой, у вашей расы уже есть.`,
+  rcUnusedOwn: (sample) =>
+    `Раса-образец «${sample}» больше нигде не используется (ни в броне, ни в диалогах, ни в группах рас, ни в стартах). Ниже только то, что можно перенести из самого образца в вашу расу.`,
+  rcSwapHint: (race, sample, n) =>
+    `Возможно, расы перепутаны местами: «${race}» используется в ${n} местах. Если это «${sample}» должна работать как «${race}», нажмите «⇄ Поменять».`,
   nrOpen: 'Новая раса на основе…',
   nrOpenTip: 'Создать свою расу как копию существующей под новым именем и сразу настроить совместимость',
   nrTitle: 'Новая раса на основе…',
@@ -117,6 +133,11 @@ export const raceZh: typeof raceEn = {
   rcApplyTip: '把勾选的更改作为一个撤销步骤加入你的 Mod',
   rcSkeletonChecking: '正在检查种族模型的骨架……',
   rcDone: (n) => `种族兼容：已应用 ${n} 项更改（一个撤销步骤）`,
+  rcSwap: '互换',
+  rcSwapTip: '互换“我的种族”和“如同”',
+  rcUnused: (sample) => `无需操作：样板种族“${sample}”在其他地方都没有使用（护甲、对话、种族组、开局中都没有），而样板本身带有的内容你的种族已经都有了。`,
+  rcUnusedOwn: (sample) => `样板种族“${sample}”在其他地方都没有使用（护甲、对话、种族组、开局中都没有）。下面只有可以从样板本身复制到你的种族的内容。`,
+  rcSwapHint: (race, sample, n) => `也许两个种族选反了：“${race}”在 ${n} 处被使用。如果应该是“${sample}”如同“${race}”，请点击“⇄ 互换”。`,
   nrOpen: '基于…创建新种族',
   nrOpenTip: '以现有种族为副本、用新名称创建你自己的种族，然后设置其兼容',
   nrTitle: '基于…创建新种族',
