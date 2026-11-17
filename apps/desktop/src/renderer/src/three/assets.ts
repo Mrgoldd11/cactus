@@ -18,6 +18,14 @@ function key(game: GameInstallInfo, path: string): string {
   return `${game.kenshi}|${path.toLowerCase()}`;
 }
 
+/** Drop a cached file (it was just copied or replaced on disk): the next load reads it again. */
+export function forgetAsset(game: GameInstallInfo, path: string): void {
+  const k = key(game, path);
+  meshes.delete(k);
+  skeletons.delete(k);
+  textures.delete(k);
+}
+
 /** Model from the game folder; null — no file. Parse error — exception. */
 export function loadMesh(game: GameInstallInfo, path: string): Promise<OgreMesh | null> {
   const k = key(game, path);

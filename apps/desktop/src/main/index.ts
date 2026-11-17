@@ -41,12 +41,14 @@ import { startGameLink, stopGameLink } from './game.ts';
 import { APP_TITLE, buildMenu } from './menu.ts';
 import { pick } from './tr.ts';
 import { registerPublishIpc } from './publish.ts';
+import { assetDialogFilters, importModAsset, meshSkeletonNames, readPickedAsset } from './mod-assets.ts';
 import {
   IPC,
   isLang,
   DATA_LOCALE_AUTO,
   DATA_LOCALE_NONE,
   type GameInstallInfo,
+  type ImportModAssetRequest,
   type LiveReply,
   type AutosaveResult,
   type BackupItem,
@@ -125,6 +127,9 @@ initLog(
 let knownGames: GameInstallInfo[] = [];
 let currentGame: GameInstallInfo | undefined;
 const dirtyWindows = new Map<number, string>();
+
+/** Files the user picked in the «Open» dialog this run: only these may be copied into a mod. */
+const pickedAssets = new Set<string>();
 
 function windowOf(e: IpcMainInvokeEvent): BrowserWindow | undefined {
   return BrowserWindow.fromWebContents(e.sender) ?? undefined;
@@ -500,6 +505,21 @@ function registerIpc(): void {
   );
   ipcMain.handle(IPC.readTerrainTile, (_e, game: GameInstallInfo, level: number, tx: number, ty: number) => readTerrainTile(game, level, tx, ty));
   ipcMain.handle(IPC.savePngFile, savePngFile);
+  ipcMain.handle(IPC.chooseModAsset, async (e, kind: unknown) => {
+    if (kind !== 'skeleton' && kind !== 'mesh' && kind !== 'texture') return null;
+    const win = windowOf(e);
+    const opts = { properties: ['openFile' as const], defaultPath: app.getPath('documents'), filters: assetDialogFilters(kind) };
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    const path = r.canceled ? undefined : r.filePaths[0];
+    if (path === undefined) return null;
+    const got = readPickedAsset(path, kind);
+    if ('bytes' in got) pickedAssets.add(resolve(path).toLowerCase());
+    return got;
+  });
+  ipcMain.handle(IPC.importModAsset, (_e, req: ImportModAssetRequest) => importModAsset(req, (p) => pickedAssets.has(resolve(p).toLowerCase())));
+  ipcMain.handle(IPC.meshSkeletonNames, (_e, game: GameInstallInfo, paths: unknown) =>
+    Array.isArray(paths) ? meshSkeletonNames(game, paths.filter((p): p is string => typeof p === 'string').slice(0, 2000)) : [],
+  );
   ipcMain.handle(IPC.readTranslation, (_e, game: GameInstallInfo, locale: unknown) => (isLocaleCode(locale) ? readTranslationBytes(game, locale) : null));
   ipcMain.handle(IPC.readGamedataPo, (_e, game: GameInstallInfo, locale: unknown) => (isLocaleCode(locale) ? readGamedataPoText(game, locale) : null));
   ipcMain.handle(IPC.listGameLocales, (_e, game: GameInstallInfo) => listLocales(game));

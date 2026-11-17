@@ -33,6 +33,8 @@ interface Props {
   onBulk?: (sids: readonly string[]) => void;
   /** «New race based on…» (shown for the races category); the focused record is the suggested sample. */
   onNewRace?: (sample: string | undefined) => void;
+  /** «Add animations» wizard for the selected race (shown in the races category). */
+  onAddAnims?: (race: string | undefined) => void;
 }
 
 const ROW_HEIGHT = 24;
@@ -52,7 +54,7 @@ function isTextField(target: EventTarget): boolean {
   return target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
 }
 
-export function RecordList({ project, version, ids, selected, onSelect, searchRef, onNew, onDuplicate, onReport, onBulk, onNewRace }: Props): ReactNode {
+export function RecordList({ project, version, ids, selected, onSelect, searchRef, onNew, onDuplicate, onReport, onBulk, onNewRace, onAddAnims }: Props): ReactNode {
   const t = useT();
   const dataLocale = useDataLocale();
   // The translation column exists only when names come in a data language.
@@ -305,6 +307,17 @@ export function RecordList({ project, version, ids, selected, onSelect, searchRe
             }}
           >
             {t.nrOpen}
+          </button>
+        )}
+        {onAddAnims && (
+          <button
+            data-testid="list-add-anims"
+            title={t.aaOpenTip}
+            onClick={() => {
+              onAddAnims(selected !== undefined && selStatus !== 'deleted' ? selected : undefined);
+            }}
+          >
+            {t.aaOpen}
           </button>
         )}
         <button

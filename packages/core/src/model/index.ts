@@ -25,3 +25,4 @@ export * from './merge.ts';
 export * from './fixes.ts';
 export * from './cleanup.ts';
 export * from './race-compat.ts';
+export * from './add-animations.ts';

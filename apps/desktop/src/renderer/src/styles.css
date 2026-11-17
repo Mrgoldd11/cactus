@@ -2981,3 +2981,10 @@ input.invalid {
   outline: 2px dashed var(--accent);
   outline-offset: 4px;
 }
+
+/* «Add animations» wizard */
+.aa-body { display: flex; flex-direction: column; gap: 6px; padding: 4px 8px; min-height: 0; }
+.aa-file { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.aa-others { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 4px 8px; }
+.aa-names input { min-width: 14em; }
+.aa-clip-cell { min-width: 14em; }

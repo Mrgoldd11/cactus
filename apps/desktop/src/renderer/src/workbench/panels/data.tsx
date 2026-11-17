@@ -19,6 +19,7 @@ import { useFollowed, useWorkbench } from '../context.ts';
 import { useSelectionVersion } from '../selection.ts';
 import { useStore } from '../store.ts';
 import { bulkScope } from '../bulk-scope.ts';
+import { addAnimsRace } from '../anim-requests.ts';
 import { Empty } from './common.tsx';
 
 function CategoriesPanel(): ReactNode {
@@ -69,6 +70,14 @@ function RecordsPanel(): ReactNode {
         open('bulk');
       }}
       onNewRace={node?.type === 'RACE' ? newRace : undefined}
+      onAddAnims={
+        node?.type === 'RACE'
+          ? (race) => {
+              if (race !== undefined) addAnimsRace.set({ race, stamp: Date.now() });
+              open('add-anims');
+            }
+          : undefined
+      }
     />
   );
 }

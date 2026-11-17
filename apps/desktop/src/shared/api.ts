@@ -367,6 +367,32 @@ export interface PublishStartRequest {
 
 export type PublishStartResult = { ok: true } | { ok: false; reason: 'no-window' | 'busy' | 'not-in-mods' | 'bad-request' | 'no-uploader' | 'spawn-failed' };
 
+/** Kinds of files a mod brings from Blender. */
+export type ModAssetKind = 'skeleton' | 'mesh' | 'texture';
+
+/** A file the user picked in the «Open» dialog. */
+export interface PickedModAsset {
+  path: string;
+  name: string;
+  bytes: Uint8Array;
+}
+
+export interface ImportModAssetRequest {
+  game: GameInstallInfo;
+  /** The mod file (saved or the suggested path of a new mod). */
+  modPath: string;
+  /** Folder inside the mod folder: `animations`. */
+  sub: string;
+  /** Path returned by `chooseModAsset`. */
+  source: string;
+  /** A different file of the same name is already there: ask (→ `conflict`), replace it or copy as `name_2`. */
+  onConflict: 'ask' | 'replace' | 'rename';
+}
+
+export type ImportModAssetResult =
+  | { ok: true; status: 'copied' | 'same' | 'replaced'; fileName: string; recordPath: string }
+  | { ok: false; error: 'conflict' | 'not-in-mods' | 'bad-file' | 'io'; existing?: string; message?: string };
+
 export interface KeditApi {
   detectGames(): Promise<GameInstallInfo[]>;
   /** Game folder picker dialog; null — cancelled or there is no game in the folder. */
@@ -407,6 +433,15 @@ export interface KeditApi {
    * null — no heightmap in the game folder.
    */
   readTerrainTile(game: GameInstallInfo, level: number, tx: number, ty: number): Promise<Uint16Array | null>;
+  /**
+   * «Open» dialog for a file exported from Blender (skeleton, model, texture) and its bytes; null — cancelled.
+   * Only a file picked here can then be copied into the mod (`importModAsset`).
+   */
+  chooseModAsset(kind: ModAssetKind): Promise<PickedModAsset | { error: string } | null>;
+  /** Copy a picked file into `<game>/mods/<mod folder>/<sub>/`; never overwrites without `onConflict: 'replace'`. */
+  importModAsset(req: ImportModAssetRequest): Promise<ImportModAssetResult>;
+  /** Skeleton link of each model file (by record path); null — no file or no skeleton. */
+  meshSkeletonNames(game: GameInstallInfo, paths: string[]): Promise<(string | null)[]>;
   /** «Save» dialog and writing a PNG image (icon). Does not write into the game or Workshop folder — `game-folder`. */
   savePngFile(defaultName: string, png: Uint8Array): Promise<SaveTextResult>;
   /** Item icon (field `icon`, path relative to the game folder) as a data URL; null — no file. */
@@ -499,6 +534,9 @@ export const IPC = {
   readWorldDump: 'kedit:read-world-dump',
   readTerrainTile: 'kedit:read-terrain-tile',
   savePngFile: 'kedit:save-png-file',
+  chooseModAsset: 'kedit:choose-mod-asset',
+  importModAsset: 'kedit:import-mod-asset',
+  meshSkeletonNames: 'kedit:mesh-skeleton-names',
   readTranslation: 'kedit:read-translation',
   readGamedataPo: 'kedit:read-gamedata-po',
   listGameLocales: 'kedit:list-game-locales',

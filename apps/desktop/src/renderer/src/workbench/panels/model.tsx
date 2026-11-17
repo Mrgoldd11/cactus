@@ -9,11 +9,13 @@
  */
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { modelOfRecord, uiText, type RecordModel } from '@kenshi-editor/core';
-import { errorText, langOf, useLang } from '../../i18n.ts';
+import { errorText, langOf, useLang, useT } from '../../i18n.ts';
 import type { Lang } from '../../../../shared/api.ts';
 import { shortcut } from '../../keys.ts';
 import { registerPanel, type PanelProps } from '../registry.ts';
 import { useFollowed, useWorkbench } from '../context.ts';
+import { useStore } from '../store.ts';
+import { addAnimsRace, modelClipRequest } from '../anim-requests.ts';
 import { InsideCard } from '../../components/InsideCard.tsx';
 import { ModelViewer, type ViewSide } from '../../three/viewer.ts';
 import { buildModel, disposeModel, type RigNote } from '../../three/build.ts';
@@ -141,8 +143,10 @@ type ViewState = 'empty' | 'none' | 'loading' | 'ready' | 'error';
 function ModelPanel({ def, params }: PanelProps): ReactNode {
   const lang = useLang();
   const s = MODEL_STRINGS[lang];
-  const { project, go } = useWorkbench();
+  const t = useT();
+  const { project, go, open } = useWorkbench();
   const { sid, version } = useFollowed(def, params);
+  const isRace = sid !== undefined && project.ctx.typeName(project.ctx.get(sid)?.type ?? -1) === 'RACE';
   const host = useRef<HTMLDivElement>(null);
   const viewer = useRef<ModelViewer | undefined>(undefined);
   const [interior, setInterior] = useState(false);
@@ -156,6 +160,9 @@ function ModelPanel({ def, params }: PanelProps): ReactNode {
   clipRef.current = clip;
   const [playing, setPlaying] = useState(false);
   const time = useRef(0);
+  /** Stamp of the last applied «play this clip» request (see `modelClipRequest`). */
+  const usedRequest = useRef<number | undefined>(undefined);
+  const clipRequest = useStore(modelClipRequest);
   const slider = useRef<HTMLInputElement>(null);
   const clock = useRef<HTMLSpanElement>(null);
   const [wire, setWire] = useState(false);
@@ -216,13 +223,23 @@ function ModelPanel({ def, params }: PanelProps): ReactNode {
         rigs.current = built.rigs;
         const list = clipList(built.rigs);
         setClips(list);
-        // Keep the chosen clip when the next model has it too (flipping between races or bodies).
-        const keep = list.find((c) => c.name === clipRef.current);
+        // A clip asked for by the «Add animations» wizard wins; otherwise keep the chosen clip when the
+        // next model has it too (flipping between races or bodies).
+        const req = modelClipRequest.get();
+        const asked = req && req.sid === sid && req.stamp !== usedRequest.current ? list.find((c) => c.name === req.clip) : undefined;
+        if (asked) {
+          usedRequest.current = req!.stamp;
+          setClip(asked.name);
+          clipRef.current = asked.name;
+          setPlaying(true);
+          time.current = 0;
+        }
+        const keep = asked ?? list.find((c) => c.name === clipRef.current);
         if (!keep) {
           setClip('');
           setPlaying(false);
         }
-        time.current = keep ? Math.min(time.current, keep.length) : 0;
+        if (!asked) time.current = keep ? Math.min(time.current, keep.length) : 0;
         for (const r of built.rigs) applyPose(r, keep?.name, time.current);
         v.setModel(built.group);
         if (old) disposeModel(old);
@@ -240,6 +257,18 @@ function ModelPanel({ def, params }: PanelProps): ReactNode {
     };
     // modelKey describes the whole model; version — record edits.
   }, [modelKey, sid, version, project]);
+
+  // A request for the model already on screen (nothing to rebuild): pick the clip right away.
+  useEffect(() => {
+    const req = clipRequest;
+    if (!req || req.sid !== sid || req.stamp === usedRequest.current) return;
+    const c = clips.find((x) => x.name === req.clip);
+    if (!c) return;
+    usedRequest.current = req.stamp;
+    time.current = 0;
+    setClip(c.name);
+    setPlaying(true);
+  }, [clipRequest, clips, sid]);
 
   useEffect(() => {
     viewer.current?.highlight(picked, hover);
@@ -348,6 +377,19 @@ function ModelPanel({ def, params }: PanelProps): ReactNode {
         <button className="small" data-testid="model-icon" disabled={state !== 'ready'} onClick={() => void saveIcon()}>
           {s.icon}
         </button>
+        {isRace && (
+          <button
+            className="small"
+            data-testid="model-add-anims"
+            title={t.aaOpenTip}
+            onClick={() => {
+              addAnimsRace.set({ race: sid, stamp: Date.now() });
+              open('add-anims');
+            }}
+          >
+            {t.aaOpen}
+          </button>
+        )}
         {state === 'ready' && info && (
           <span className="muted" data-testid="model-stats">
             {info.model.pieces.length > 1 ? `${info.model.pieces.length} ${s.parts} · ` : ''}

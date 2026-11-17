@@ -310,6 +310,11 @@ class Describer {
         zh: `基于 ${b!} 的新种族 ${a!} + 兼容（更改：${n}）`,
       };
     }
+    const anims = /^анимации («.*»): клипов (\d+), рас (\d+)$/s.exec(label);
+    if (anims) {
+      const [, f, c, r] = anims;
+      return { ru: `Анимации ${f!}: клипов ${c!}, рас ${r!}`, en: `Animations ${f!}: clips ${c!}, races ${r!}`, zh: `动画 ${f!}：片段 ${c!}，种族 ${r!}` };
+    }
     const merge = /^слияние: (.*) \((\d+) записей\)$/s.exec(label);
     if (merge)
       return { ru: `Слияние с «${merge[1]!}»: записей ${merge[2]!}`, en: `Merge from “${merge[1]!}”: ${merge[2]!} records`, zh: `从 “${merge[1]!}” 合并：${merge[2]!} 条记录` };
