@@ -234,11 +234,12 @@ test('schema extension of the opened mod: type name, fields, note in "Mod info",
 
     // The field the extension adds to dialogue lines: a reference list with a description.
     await selectRecord(page, 'Counter line', LINE);
-    await page.getByTestId('tab-refs').click();
+    // Reference lists are on the «Fields» tab, after the fields.
     const group = page.getByTestId('refs').locator(`[data-category="${REF}"]`);
-    await expect(group).toContainText('E2E_COUNTER');
     await expect(group).toContainText('Day counter');
-    await expect(group.locator('.group-title')).toHaveAttribute('title', /the line is chosen when the counter has this value/);
+    const refName = group.locator('.ref-field .field-name');
+    await expect(refName).toHaveAttribute('title', /E2E_COUNTER/);
+    await expect(refName).toHaveAttribute('title', /the line is chosen when the counter has this value/);
 
     // Saving without edits writes the same bytes.
     const same = join(saved, 'same.mod');
@@ -302,7 +303,6 @@ test('WorldStates example of FCS Extended: type 900 is VARIABLE, dialogue fields
 
     // Dialogue lines get the reference lists of the extension, with descriptions.
     await createRecord(page, 'DIALOGUE_LINE', 'Line with a variable');
-    await page.getByTestId('tab-refs').click();
     for (const name of ['variable equals', 'variable less than', 'variable greater than', 'set variable', 'add to variable']) {
       await expect(page.getByTestId(`ref-add-${name}`)).toHaveAttribute('title', /VARIABLE/);
     }

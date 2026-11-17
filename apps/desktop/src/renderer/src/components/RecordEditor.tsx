@@ -1,6 +1,7 @@
 /**
- * Record editor: header (name, id, type, status, layers) and tabs — fields by the fcs.def schema,
- * references with record choice, back references, «where in game», per-field difference from vanilla.
+ * Record editor: header (name, id, type, status, layers) and tabs — fields by the fcs.def schema
+ * with the reference lists below them (as in FCS) and a description bar of the selected field,
+ * back references, «where in game», per-field difference from vanilla.
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import {
@@ -12,6 +13,7 @@ import {
   defaultValue,
   encodeText,
   enumLabel,
+  fieldHelp,
   fieldRows,
   formatFieldValue,
   formatFloat,
@@ -22,6 +24,8 @@ import {
   refGroups,
   refLabel,
   type EnumDef,
+  type FieldDef,
+  type FieldHelp,
   type FieldChange,
   type FieldRow,
   type GameRecord,
@@ -48,7 +52,7 @@ interface Props {
   onReport: (err: string | undefined) => void;
 }
 
-type Tab = 'fields' | 'refs' | 'back' | 'graph' | 'talk' | 'where' | 'diff';
+type Tab = 'fields' | 'back' | 'graph' | 'talk' | 'where' | 'diff';
 
 export function RecordEditor({ project, version, sid, onGo, onReport }: Props): ReactNode {
   const t = useT();
@@ -65,7 +69,6 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
     const layers = report.touches.map((x) => x.layer).filter((l) => l !== ctx.modName && !isVanillaLayer(l));
     return { layers, conflicts: recordConflicts(report) };
   }, [ctx, sid, version]);
-  const refCount = groups.reduce((n, g) => n + g.rows.filter((r) => r.state !== 'removed').length, 0);
 
   if (!rec) {
     return (
@@ -147,16 +150,14 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
       </div>
       <div className="tabs">
         <TabButton tab="fields" cur={tab} set={setTab} label={t.tabFields} />
-        <TabButton tab="refs" cur={tab} set={setTab} label={`${t.tabRefs} (${refCount})`} />
         <TabButton tab="back" cur={tab} set={setTab} label={`${t.tabBackRefs} (${backRefs.length})`} />
         {hasGraph && <TabButton tab="graph" cur={tab} set={setTab} label={t.tabGraph} />}
         {hasTalk && <TabButton tab="talk" cur={tab} set={setTab} label={t.tabTalk} />}
         <TabButton tab="where" cur={tab} set={setTab} label={t.tabWhere} />
         <TabButton tab="diff" cur={tab} set={setTab} label={t.tabDiff} marked={status !== 'base'} />
       </div>
-      <div className="tab-body">
-        {tab === 'fields' && <FieldsTab ctx={ctx} rec={rec} sid={sid} version={version} disabled={deleted} edit={edit} />}
-        {tab === 'refs' && <RefsTab project={project} sid={sid} groups={groups} disabled={deleted} edit={edit} onGo={onGo} />}
+      <div className={`tab-body ${tab === 'fields' ? 'fields-body' : ''}`}>
+        {tab === 'fields' && <FieldsTab project={project} rec={rec} sid={sid} version={version} groups={groups} disabled={deleted} edit={edit} onGo={onGo} />}
         {tab === 'back' && <BackRefsTab project={project} sid={sid} entries={backRefs} onGo={onGo} />}
         {tab === 'graph' && <DialogueGraphTab project={project} sid={sid} version={version} onGo={onGo} />}
         {tab === 'talk' && <TalkTab project={project} sid={sid} version={version} onGo={onGo} />}
@@ -220,20 +221,57 @@ function parseValue(row: FieldRow, text: string): ScalarValue | string {
   }
 }
 
-function FieldsTab({ ctx, rec, sid, version, disabled, edit }: { ctx: ModContext; rec: GameRecord; sid: string; version: number; disabled: boolean; edit: (fn: () => void) => void }): ReactNode {
+/** The selected line of the «Fields» tab: a field or a reference list. */
+interface Selection {
+  kind: 'field' | 'ref';
+  key: string;
+}
+
+interface FieldsTabProps {
+  project: Project;
+  rec: GameRecord;
+  sid: string;
+  version: number;
+  groups: RefGroup[];
+  disabled: boolean;
+  edit: (fn: () => void) => void;
+  onGo: (sid: string) => void;
+}
+
+/** Fields by fcs.def groups, then the reference lists (as in FCS), and the description bar of the selected line. */
+function FieldsTab({ project, rec, sid, version, groups, disabled, edit, onGo }: FieldsTabProps): ReactNode {
   const t = useT();
+  const lang = useLang();
+  const ctx = project.ctx;
+  const typeName = ctx.typeName(rec.type);
   const [showHidden, setShowHidden] = useState(false);
   const [filter, setFilter] = useState('');
+  const [selected, setSelected] = useState<Selection | undefined>();
+  const [picker, setPicker] = useState<RefGroup | undefined>();
   const rows = useMemo(() => fieldRows(ctx, sid), [ctx, sid, version]);
-  const f = filter.toLowerCase();
-  const shown = rows.filter((r) => (showHidden || !r.hidden) && (!f || r.key.toLowerCase().includes(f)));
-  const groups: { category: string; rows: FieldRow[] }[] = [];
+  const helps = useMemo(() => {
+    const m = new Map<string, FieldHelp>();
+    for (const r of rows) m.set(`field:${r.key}`, fieldHelp(typeName, r.def?.name ?? r.key, lang));
+    for (const g of groups) m.set(`ref:${g.category}`, fieldHelp(typeName, g.category, lang));
+    return m;
+  }, [rows, groups, typeName, lang]);
+  const helpOf = (kind: Selection['kind'], key: string): FieldHelp => helps.get(`${kind}:${key}`) ?? {};
+  const withLabels = [...helps.values()].some((h) => h.label !== undefined);
+  const f = filter.trim().toLowerCase();
+  const matches = (kind: Selection['kind'], key: string): boolean => !f || key.toLowerCase().includes(f) || (helpOf(kind, key).label?.toLowerCase().includes(f) ?? false);
+  const shown = rows.filter((r) => (showHidden || !r.hidden) && matches('field', r.key));
+  const shownRefs = groups.filter((g) => matches('ref', g.category));
+  const fieldGroups: { category: string; rows: FieldRow[] }[] = [];
   for (const r of shown) {
-    let g = groups.find((x) => x.category === r.category);
-    if (!g) groups.push((g = { category: r.category, rows: [] }));
+    let g = fieldGroups.find((x) => x.category === r.category);
+    if (!g) fieldGroups.push((g = { category: r.category, rows: [] }));
     g.rows.push(r);
   }
   const hiddenCount = rows.filter((r) => r.hidden).length;
+  const isSelected = (kind: Selection['kind'], key: string): boolean => selected?.kind === kind && selected.key === key;
+  const select = (kind: Selection['kind'], key: string): void => {
+    if (!isSelected(kind, key)) setSelected({ kind, key });
+  };
 
   const set = (row: FieldRow, v: ScalarValue): void => {
     edit(() => {
@@ -249,61 +287,114 @@ function FieldsTab({ ctx, rec, sid, version, disabled, edit }: { ctx: ModContext
   };
 
   return (
-    <div className="fields" data-testid="fields">
-      <div className="fields-tools">
-        <input
-          placeholder={t.field}
-          value={filter}
-          data-testid="field-filter"
-          onChange={(e) => {
-            setFilter(e.target.value);
-          }}
-        />
-        {hiddenCount > 0 && (
-          <label className="muted">
-            <input
-              type="checkbox"
-              checked={showHidden}
-              onChange={(e) => {
-                setShowHidden(e.target.checked);
-              }}
-            />{' '}
-            {t.showHidden} ({hiddenCount})
-          </label>
+    <div className={`fields ${withLabels ? 'with-labels' : ''}`} data-testid="fields">
+      <div className="fields-scroll">
+        <div className="fields-tools">
+          <input
+            placeholder={t.field}
+            value={filter}
+            data-testid="field-filter"
+            onChange={(e) => {
+              setFilter(e.target.value);
+            }}
+          />
+          {hiddenCount > 0 && (
+            <label className="muted">
+              <input
+                type="checkbox"
+                checked={showHidden}
+                onChange={(e) => {
+                  setShowHidden(e.target.checked);
+                }}
+              />{' '}
+              {t.showHidden} ({hiddenCount})
+            </label>
+          )}
+        </div>
+        <div className="field-grid field-header">
+          <span>{t.field}</span>
+          {withLabels && <span />}
+          <span>{t.value}</span>
+          <span>{t.vanillaValue}</span>
+          <span />
+        </div>
+        {fieldGroups.map((g) => (
+          <div key={g.category} className="field-group">
+            {g.category && <div className="group-title">{g.category}</div>}
+            {g.rows.map((row) => (
+              <FieldLine
+                key={`${row.dict}:${row.key}`}
+                ctx={ctx}
+                rec={rec}
+                row={row}
+                help={helpOf('field', row.key)}
+                withLabels={withLabels}
+                selected={isSelected('field', row.key)}
+                onSelect={() => {
+                  select('field', row.key);
+                }}
+                disabled={disabled}
+                t={t}
+                onSet={(v) => {
+                  set(row, v);
+                }}
+                onText={(text) => {
+                  setText(row, text);
+                }}
+                onReset={() => {
+                  edit(() => {
+                    ctx.resetField(sid, row.dict, row.key);
+                  });
+                }}
+              />
+            ))}
+          </div>
+        ))}
+        {shownRefs.length > 0 && (
+          <div className="field-group ref-fields" data-testid="refs">
+            <div className="group-title">{t.tabRefs}</div>
+            {shownRefs.map((g) => (
+              <RefField
+                key={g.category}
+                ctx={ctx}
+                sid={sid}
+                group={g}
+                help={helpOf('ref', g.category)}
+                withLabels={withLabels}
+                selected={isSelected('ref', g.category)}
+                onSelect={() => {
+                  select('ref', g.category);
+                }}
+                disabled={disabled}
+                edit={edit}
+                onGo={onGo}
+                onPick={() => {
+                  setPicker(g);
+                }}
+              />
+            ))}
+          </div>
         )}
       </div>
-      <div className="field-grid field-header">
-        <span>{t.field}</span>
-        <span>{t.value}</span>
-        <span>{t.vanillaValue}</span>
-        <span />
-      </div>
-      {groups.map((g) => (
-        <div key={g.category} className="field-group">
-          {g.category && <div className="group-title">{g.category}</div>}
-          {g.rows.map((row) => (
-            <FieldLine
-              key={`${row.dict}:${row.key}`}
-              ctx={ctx}
-              rec={rec}
-              row={row}
-              disabled={disabled}
-              t={t}
-              onSet={(v) => {
-                set(row, v);
-              }}
-              onText={(text) => {
-                setText(row, text);
-              }}
-              onReset={() => {
-                edit(() => {
-                  ctx.resetField(sid, row.dict, row.key);
-                });
-              }}
-            />
-          ))}
-        </div>
-      ))}
+      <FieldHelpBar selected={selected} rows={rows} groups={groups} help={selected ? helpOf(selected.kind, selected.key) : {}} />
+      {picker && (
+        <RecordPicker
+          project={project}
+          title={`${t.pickRecord}: ${picker.category}`}
+          targetType={picker.targetType}
+          exclude={new Set(picker.rows.filter((r) => r.state !== 'removed').map((r) => r.ref.target))}
+          onPick={(target) => {
+            const cat = picker.category;
+            setPicker(undefined);
+            edit(() => {
+              ctx.addReference(sid, cat, target);
+            });
+          }}
+          onClose={() => {
+            setPicker(undefined);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -322,6 +413,10 @@ interface FieldLineProps {
   ctx: ModContext;
   rec: GameRecord;
   row: FieldRow;
+  help: FieldHelp;
+  withLabels: boolean;
+  selected: boolean;
+  onSelect: () => void;
   disabled: boolean;
   t: Strings;
   onSet: (v: ScalarValue) => void;
@@ -329,12 +424,17 @@ interface FieldLineProps {
   onReset: () => void;
 }
 
-function FieldLine({ ctx, rec, row, disabled, t, onSet, onText, onReset }: FieldLineProps): ReactNode {
+function FieldLine({ ctx, rec, row, help, withLabels, selected, onSelect, disabled, t, onSet, onText, onReset }: FieldLineProps): ReactNode {
   const lang = useLang();
   const shownValue = row.value ?? (row.def ? defaultValue(ctx.schema, row.def) : undefined);
   const canReset = row.state === 'changed' || row.state === 'added' || row.state === 'removed';
   return (
-    <div className={`field-grid field-row fs-${row.state} ${row.hidden ? 'hidden-field' : ''}`} data-field={row.key}>
+    <div
+      className={`field-grid field-row fs-${row.state} ${row.hidden ? 'hidden-field' : ''} ${selected ? 'selected' : ''}`}
+      data-field={row.key}
+      onMouseDown={onSelect}
+      onFocusCapture={onSelect}
+    >
       <span className="field-name" title={fieldTitle(row, t)}>
         {row.key}
         {(row.def?.inferred === true || !row.def) && (
@@ -348,8 +448,13 @@ function FieldLine({ ctx, rec, row, disabled, t, onSet, onText, onReset }: Field
           </span>
         )}
       </span>
+      {withLabels && (
+        <span className="field-label" title={help.label}>
+          {help.label ?? ''}
+        </span>
+      )}
       <span className="field-value">
-        <FieldInput ctx={ctx} rec={rec} row={row} value={shownValue} disabled={disabled} onSet={onSet} onText={onText} />
+        <FieldInput ctx={ctx} rec={rec} row={row} value={shownValue} placeholder={help.empty} disabled={disabled} onSet={onSet} onText={onText} />
       </span>
       <span className="field-lower muted" title={row.lower !== undefined ? displayValue(ctx, rec, row, row.lower, lang) : undefined}>
         {row.lower !== undefined ? displayValue(ctx, rec, row, row.lower, lang) : ''}
@@ -361,6 +466,60 @@ function FieldLine({ ctx, rec, row, disabled, t, onSet, onText, onReset }: Field
           </button>
         )}
       </span>
+    </div>
+  );
+}
+
+/** Technical line of the description bar: the fcs.def kind of the field (type codes are fine here). */
+function fieldKindText(def: FieldDef | undefined, fallback: string): string {
+  if (!def) return fallback;
+  if (def.kind === 'reference' || def.kind === 'instance') return `${def.kind} → ${def.targetType ?? '?'}`;
+  if (def.kind === 'enum' && def.enumName !== undefined) return `enum ${def.enumName}`;
+  return def.kind;
+}
+
+/** FCS «Object view»-like bar under the fields: what the selected field or reference list means. */
+function FieldHelpBar({ selected, rows, groups, help }: { selected: Selection | undefined; rows: FieldRow[]; groups: RefGroup[]; help: FieldHelp }): ReactNode {
+  const t = useT();
+  const row = selected?.kind === 'field' ? rows.find((r) => r.key === selected.key) : undefined;
+  const group = selected?.kind === 'ref' ? groups.find((g) => g.category === selected.key) : undefined;
+  if (!selected || (!row && !group)) {
+    return (
+      <div className="field-help muted" data-testid="field-help">
+        {t.fieldHelpNone}
+      </div>
+    );
+  }
+  const def = row ? row.def : group?.def;
+  const original = def?.description?.trim();
+  const text = help.description ?? original;
+  const notes: string[] = [];
+  if (row && (row.def?.inferred === true || !row.def)) notes.push(t.inferredHint);
+  if (row?.def?.builtin === true) notes.push(t.builtinHint);
+  if (row?.hidden === true) notes.push(t.hiddenByCondition);
+  return (
+    <div className="field-help" data-testid="field-help" data-help-field={selected.key}>
+      <div className="fh-title">
+        <b>{selected.key}</b>
+        {help.label !== undefined && <span> — {help.label}</span>}
+      </div>
+      {text ? (
+        <div className="fh-text" data-testid="field-help-text">
+          {text}
+        </div>
+      ) : (
+        <div className="muted">{t.fieldNoDescription}</div>
+      )}
+      {help.empty !== undefined && <div className="fh-empty">{help.empty}</div>}
+      {notes.map((n) => (
+        <div key={n} className="muted fh-note">
+          {n}
+        </div>
+      ))}
+      <div className="fh-src muted">
+        fcs.def · {fieldKindText(def, row?.dict ?? 'reference')}
+        {help.description !== undefined && original ? ` · ${original}` : ''}
+      </div>
     </div>
   );
 }
@@ -384,7 +543,7 @@ function colorHex(v: number): string {
   return `#${((v >>> 0) & 0xffffff).toString(16).padStart(6, '0')}`;
 }
 
-function FieldInput({ ctx, rec, row, value, disabled, onSet, onText }: { ctx: ModContext; rec: GameRecord; row: FieldRow; value: ScalarValue | undefined; disabled: boolean; onSet: (v: ScalarValue) => void; onText: (text: string) => void }): ReactNode {
+function FieldInput({ ctx, rec, row, value, placeholder, disabled, onSet, onText }: { ctx: ModContext; rec: GameRecord; row: FieldRow; value: ScalarValue | undefined; placeholder?: string | undefined; disabled: boolean; onSet: (v: ScalarValue) => void; onText: (text: string) => void }): ReactNode {
   const lang = useLang();
   const testId = `field-${row.key}`;
   if (row.dict === 'bools') {
@@ -422,6 +581,7 @@ function FieldInput({ ctx, rec, row, value, disabled, onSet, onText }: { ctx: Mo
       testId={testId}
       disabled={disabled}
       multiline={row.def?.multiline === true && row.dict === 'strings'}
+      placeholder={placeholder}
       className={row.value === undefined ? 'placeholder-value' : undefined}
       onCommit={onText}
     />
@@ -448,92 +608,66 @@ function FieldInput({ ctx, rec, row, value, disabled, onSet, onText }: { ctx: Mo
 
 // ---------------------------------------------------------------- references
 
-function RefsTab({ project, sid, groups, disabled, edit, onGo }: { project: Project; sid: string; groups: RefGroup[]; disabled: boolean; edit: (fn: () => void) => void; onGo: (sid: string) => void }): ReactNode {
-  const t = useT();
-  const ctx = project.ctx;
-  const [picker, setPicker] = useState<RefGroup | undefined>();
-  const filled = groups.filter((g) => g.rows.length > 0);
-  const empty = groups.filter((g) => g.rows.length === 0);
+interface RefFieldProps {
+  ctx: ModContext;
+  sid: string;
+  group: RefGroup;
+  help: FieldHelp;
+  withLabels: boolean;
+  selected: boolean;
+  onSelect: () => void;
+  disabled: boolean;
+  edit: (fn: () => void) => void;
+  onGo: (sid: string) => void;
+  onPick: () => void;
+}
 
+/** One reference list among the fields: a line like a field (what «empty» means, «Choose…»), then its entries. */
+function RefField({ ctx, sid, group, help, withLabels, selected, onSelect, disabled, edit, onGo, onPick }: RefFieldProps): ReactNode {
+  const t = useT();
+  const live = group.rows.filter((r) => r.state !== 'removed').length;
+  const tip = `${group.def?.description ?? ''}${group.targetType !== undefined ? `\n→ ${group.targetType}` : ''}`.trim();
+  const empty = help.empty ?? t.refEmpty;
   return (
-    <div className="refs" data-testid="refs">
-      {filled.length === 0 && <p className="muted">{t.noRefs}</p>}
-      {filled.map((g) => (
-        <div key={g.category} className="ref-group" data-category={g.category}>
-          <div className="group-title" title={g.def?.description}>
-            <span>{g.category}</span>
-            {g.targetType !== undefined && <span className="muted"> → {g.targetType}</span>}
-            <span className="muted"> ({g.rows.filter((r) => r.state !== 'removed').length})</span>
-            <span className="grow" />
-            {!disabled && (
-              <button
-                className="small"
-                data-testid={`ref-add-${g.category}`}
-                onClick={() => {
-                  setPicker(g);
-                }}
-              >
-                + {t.add}
-              </button>
-            )}
-          </div>
+    <div className="ref-group" data-category={group.category}>
+      <div className={`field-grid field-row ref-field ${selected ? 'selected' : ''}`} data-ref={group.category} onMouseDown={onSelect} onFocusCapture={onSelect}>
+        <span className="field-name" title={tip}>
+          {group.category}
+        </span>
+        {withLabels && (
+          <span className="field-label" title={help.label}>
+            {help.label ?? ''}
+          </span>
+        )}
+        <span className="field-value ref-summary">
+          {live === 0 ? (
+            <span className="ref-empty" title={empty} data-testid={`ref-empty-${group.category}`}>
+              {empty}
+            </span>
+          ) : (
+            <span className="muted">{t.refCount(live)}</span>
+          )}
+          {!disabled && (
+            <button className="small" data-testid={`ref-add-${group.category}`} title={tip || t.refPickTip} onClick={onPick}>
+              + {t.refPick}
+            </button>
+          )}
+        </span>
+        <span />
+      </div>
+      {group.rows.length > 0 && (
+        <div className="ref-list">
           <div className="ref-grid ref-header">
-            <span>{t.name}</span>
+            <span />
             {[0, 1, 2].map((i) => (
-              <span key={i}>{g.valueLabels[i] ?? ''}</span>
+              <span key={i}>{group.valueLabels[i] ?? ''}</span>
             ))}
             <span />
           </div>
-          {g.rows.map((row) => (
-            <RefLine
-              key={`${row.ref.target}:${row.state}`}
-              ctx={ctx}
-              sid={sid}
-              group={g}
-              row={row}
-              disabled={disabled}
-              edit={edit}
-              onGo={onGo}
-              t={t}
-            />
+          {group.rows.map((row) => (
+            <RefLine key={`${row.ref.target}:${row.state}`} ctx={ctx} sid={sid} group={group} row={row} disabled={disabled} edit={edit} onGo={onGo} t={t} />
           ))}
         </div>
-      ))}
-      {empty.length > 0 && !disabled && (
-        <div className="empty-cats">
-          <span className="muted">{t.add}:</span>
-          {empty.map((g) => (
-            <button
-              key={g.category}
-              className="chip"
-              title={`${g.def?.description ?? ''}${g.targetType !== undefined ? `\n→ ${g.targetType}` : ''}`}
-              data-testid={`ref-add-${g.category}`}
-              onClick={() => {
-                setPicker(g);
-              }}
-            >
-              + {g.category}
-            </button>
-          ))}
-        </div>
-      )}
-      {picker && (
-        <RecordPicker
-          project={project}
-          title={`${t.pickRecord}: ${picker.category}`}
-          targetType={picker.targetType}
-          exclude={new Set(picker.rows.filter((r) => r.state !== 'removed').map((r) => r.ref.target))}
-          onPick={(target) => {
-            const cat = picker.category;
-            setPicker(undefined);
-            edit(() => {
-              ctx.addReference(sid, cat, target);
-            });
-          }}
-          onClose={() => {
-            setPicker(undefined);
-          }}
-        />
       )}
     </div>
   );

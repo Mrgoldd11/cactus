@@ -177,7 +177,7 @@ try {
       await setSize(s);
       await preset('data');
       await select('katana', KATANA);
-      for (const tab of ['fields', 'refs', 'back', 'where', 'diff']) {
+      for (const tab of ['fields', 'back', 'where', 'diff']) {
         await shot(`10-tab-${tab}`, async () => {
           await page.getByTestId(`tab-${tab}`).click();
         }, tab === 'where' ? 2500 : 500);

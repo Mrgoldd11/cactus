@@ -789,12 +789,86 @@ tr.fs-removed td:first-child {
   text-decoration: line-through;
   color: var(--deleted);
 }
-.empty-cats {
+/* «Fields» tab: the scrolling fields and reference lists, the description bar fixed below (as in FCS). */
+.tab-body.fields-body {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+.fields {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.fields-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 10px 12px;
+}
+.fields.with-labels .field-grid {
+  grid-template-columns: minmax(120px, 1fr) minmax(100px, 0.9fr) minmax(150px, 1.4fr) minmax(56px, 0.55fr) 28px;
+}
+.field-label {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.field-row.selected,
+.field-row.selected:hover {
+  background: var(--sel);
+}
+.ref-summary {
+  /* The vanilla column is empty for a list: the «empty» text gets its room. */
+  grid-column: span 2;
+  display: flex;
+  gap: 6px;
   align-items: center;
-  margin-top: 10px;
+  min-width: 0;
+}
+.ref-summary > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ref-empty {
+  color: var(--muted);
+  font-style: italic;
+  border: 1px dashed var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+.ref-list {
+  margin: 0 0 4px 18px;
+}
+.field-help {
+  flex: none;
+  max-height: 34%;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  background: var(--bg2);
+  padding: 6px 12px 8px;
+  font-size: 12.5px;
+}
+.field-help .fh-title {
+  margin-bottom: 2px;
+}
+.field-help .fh-text {
+  white-space: pre-wrap;
+}
+.field-help .fh-empty {
+  margin-top: 3px;
+  font-style: italic;
+}
+.field-help .fh-src {
+  font-size: 11px;
+  margin-top: 4px;
 }
 .diff td.mono {
   word-break: break-all;

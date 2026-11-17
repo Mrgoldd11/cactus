@@ -39,8 +39,8 @@ async function shot(name: string, fn: () => Promise<void> = () => Promise.resolv
     await page.screenshot({ path: join(outDir, `${name}.png`) });
     // What a user sees as entry points: toolbar buttons and open panel tabs.
     notes[name] = await page.evaluate(() => ({
-      tabs: [...document.querySelectorAll('.dv-tab')].map((e) => e.textContent?.trim()),
-      listButtons: [...document.querySelectorAll('.list-toolbar button, .list-actions button')].map((e) => e.textContent?.trim()),
+      tabs: [...document.querySelectorAll('.dv-tab')].map((e) => e.textContent.trim()),
+      listButtons: [...document.querySelectorAll('.list-toolbar button, .list-actions button')].map((e) => e.textContent.trim()),
     }));
     console.log(`ok ${name}`);
   } catch (e) {
@@ -82,7 +82,7 @@ try {
   await preset('data');
   await shot('02-new-mod-empty');
   await shot('03-katana-fields', () => select('katana', KATANA));
-  for (const tab of ['refs', 'back', 'where', 'diff']) await shot(`04-tab-${tab}`, () => page.getByTestId(`tab-${tab}`).click(), tab === 'where' ? 2500 : 600);
+  for (const tab of ['back', 'where', 'diff']) await shot(`04-tab-${tab}`, () => page.getByTestId(`tab-${tab}`).click(), tab === 'where' ? 2500 : 600);
   await page.getByTestId('tab-fields').click();
   await shot('05-mod-menu', () => page.getByTestId('mod-menu').click());
   await esc();

@@ -7,3 +7,4 @@ export * from './infer.ts';
 export * from './builtin-enums.ts';
 export * from './dotnet-regex.ts';
 export * from './extensions.ts';
+export * from './field-help.ts';

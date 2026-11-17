@@ -1,5 +1,6 @@
 /**
- * "Before" screenshots for the UI mockup: a new book (ITEM) in a new mod, Russian UI, 1400×850.
+ * Screenshots of the record inspector on a new book (ITEM) in a new mod, Russian UI, 1400×850:
+ * fields with their Russian names and the description bar, the reference lists among the fields.
  *
  *   node apps/desktop/scripts/ux-shots-book.ts [out-dir]
  */
@@ -46,11 +47,11 @@ try {
   await shot('50-book-new-modal');
   await page.getByTestId('new-record-name').fill('Моя книга');
   await page.getByTestId('new-record-create').click();
+  await page.locator('[data-field="icon"] .field-name').click();
   await shot('51-book-fields', 1200);
-  await page.locator('.record-editor .panel-scroll, .record-editor').first().evaluate((e) => { e.scrollTop = 400; }).catch(() => undefined);
-  await shot('52-book-fields-scrolled');
-  await page.getByTestId('tab-refs').click();
-  await shot('53-book-refs');
+  await page.getByTestId('refs').scrollIntoViewIfNeeded();
+  await page.locator('[data-ref="races"] .field-name').click();
+  await shot('52-book-refs');
   await page.getByTestId('tab-where').click();
   await shot('54-book-where', 2500);
 } finally {

@@ -248,16 +248,23 @@ test('scenario: katana copy, name and damage, into the trader stock, save to out
     await name.fill('Tester Katana');
     await name.press('Enter');
     await expect(name).toHaveValue('Tester Katana');
+    // Reference lists sit among the fields; an empty one says what «empty» means.
+    await expect(page.getByTestId('ref-empty-races')).toHaveText('пусто — все расы');
 
     await page.getByTestId('field-filter').fill('cut damage');
     const cut = page.getByTestId(`field-${CUT}`);
     await cut.fill('1.6');
     await cut.press('Enter');
     await expect(cut).toHaveValue('1.6');
+    // The Russian name next to the field, the description of the selected field at the bottom.
+    await expect(fieldRow(page, CUT).locator('.field-label')).toHaveText('режущий урон');
+    await expect(page.getByTestId('field-help')).toHaveAttribute('data-help-field', CUT);
+    await expect(page.getByTestId('field-help-text')).toContainText('навык атаки');
     await page.screenshot({ path: join(shots, '04-new-weapon.png') });
 
     await selectRecord(page, 'weapon vendor', WEAPON_VENDOR);
-    await page.getByTestId('tab-refs').click();
+    // The filter applies to the reference lists too: clear it to see «weapons».
+    await page.getByTestId('field-filter').fill('');
     await page.getByTestId('ref-add-weapons').first().click();
     await expect(page.getByTestId('record-picker')).toBeVisible();
     await page.getByTestId('picker-search').fill('tester katana');
