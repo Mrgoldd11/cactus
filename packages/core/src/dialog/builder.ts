@@ -16,6 +16,8 @@ import { itemTypeId } from '../format/item-types.ts';
 import type { GameRecord, Reference } from '../format/types.ts';
 import type { ModContext } from '../model/context.ts';
 import type { StableIds } from '../model/stable-ids.ts';
+import { packageRefEvents } from '../model/enums.ts';
+import { PACKAGE_EVENT_SKIP } from '../schema/builtin-enums.ts';
 import { characterFactions, squadIndex, type SquadIndex } from './talk.ts';
 
 /** Who speaks (TalkerEnum). */
@@ -208,7 +210,14 @@ export class DialogBuilder {
     for (const p of pkgs)
       this.ctx.editRecord(p, (d) => {
         const list = d.refs.get('dialogs') ?? [];
-        if (!list.some((x) => x.target === dialog && x.v0 === event)) list.push(ref(dialog, event));
+        const same = list.filter((x) => x.target === dialog);
+        if (!same.some((x) => packageRefEvents(x).includes(event))) {
+          // One reference per target survives the mod diff, and the game reads v0, v1 and v2 as events:
+          // put the event into a free slot (0 or 100) of the existing reference.
+          const slot = (['v0', 'v1', 'v2'] as const).find((k) => same[0] !== undefined && PACKAGE_EVENT_SKIP.includes(same[0][k]));
+          if (same[0] && slot) same[0][slot] = event;
+          else if (!same[0]) list.push(ref(dialog, event));
+        }
         d.refs.set('dialogs', list);
       });
     return [...pkgs];

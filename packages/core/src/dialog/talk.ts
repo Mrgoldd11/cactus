@@ -4,7 +4,8 @@
  *
  * Where the game takes candidates from (from vanilla data and checks with the Vanilla Talk mod):
  * - `CHARACTER.dialogue`: event 1 only;
- * - `CHARACTER.dialogue package` → `DIALOGUE_PACKAGE.dialogs` (v0 of the reference = event),
+ * - `CHARACTER.dialogue package` → `DIALOGUE_PACKAGE.dialogs` (each of v0, v1, v2 of the reference is an
+ *   event, except 0 and 100: `packageRefEvents`, read from the exe),
  *   with packages from `inheritsFrom`;
  * - the character's squads (SQUAD_TEMPLATE `leader`, `squad`, `squad2`, `choosefrom list`): for the leader
  *   `dialog leader`, for everyone `dialog squad`;
@@ -32,7 +33,7 @@ import {
   type ChooseEnv,
   type ScorePart,
 } from '../model/dialogue-score.ts';
-import { formatEnumValue, refValueEnum } from '../model/enums.ts';
+import { formatEnumValue, packageRefEvents, refValueEnum } from '../model/enums.ts';
 import { uiText, UiTextError, type UiText } from '../ui-text.ts';
 
 /** Event "the player talked to me" (EV_PLAYER_TALK_TO_ME). */
@@ -58,7 +59,7 @@ export interface TalkSource {
 /** Character → squads it is in (and whether it is the leader there). */
 export type SquadIndex = ReadonlyMap<string, readonly { squad: string; leader: boolean }[]>;
 
-const refs = (r: GameRecord | undefined, cat: string): readonly { target: string; v0: number }[] => r?.refs.get(cat) ?? [];
+const refs = (r: GameRecord | undefined, cat: string): readonly { target: string; v0: number; v1: number; v2: number }[] => r?.refs.get(cat) ?? [];
 
 export function squadIndex(ctx: ModContext): SquadIndex {
   const idx = new Map<string, { squad: string; leader: boolean }[]>();
@@ -84,13 +85,13 @@ export function characterFactions(ctx: ModContext, c: GameRecord, sq: SquadIndex
   return [...out];
 }
 
-/** Package dialogues with event numbers, including `inheritsFrom`. */
+/** Package dialogues with event numbers (one entry per event of the reference), including `inheritsFrom`. */
 export function packageDialogs(ctx: ModContext, pkg: string, seen = new Set<string>()): { event: number; dialog: string; pkg: string }[] {
   if (seen.has(pkg)) return [];
   seen.add(pkg);
   const p = ctx.get(pkg);
   if (!p) return [];
-  const out = refs(p, 'dialogs').map((r) => ({ event: r.v0, dialog: r.target, pkg }));
+  const out = refs(p, 'dialogs').flatMap((r) => packageRefEvents(r).map((event) => ({ event, dialog: r.target, pkg })));
   for (const r of refs(p, 'inheritsFrom')) out.push(...packageDialogs(ctx, r.target, seen));
   return out;
 }

@@ -435,7 +435,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
         'Conversation simulator: which dialogues a character has for an event (1 is the player speaking, the default), where each comes from (character, its package, squad, faction; source layer), scores, conditions, actions (arrest, attack, trade, hire) and a verdict: which one the game picks, which fires only under conditions, which never plays. Then the start of the winning conversation with its text and the player choices. The choice follows the rule from the game code (scores, order, equal draw, chances). Use play to continue step by step.',
       inputSchema: {
         id: z.string().describe('Id or name of a character (CHARACTER)'),
-        event: z.number().int().min(0).optional().describe('Event (DIALOGUE_PACKAGE dialogs v0); 1 is a conversation on click'),
+        event: z.number().int().min(0).optional().describe('Event (any of v0, v1, v2 of a DIALOGUE_PACKAGE dialogs reference; the game reads all three); 1 is a conversation on click'),
       },
       annotations: { ...READ, title: 'Talk to a character' },
     },

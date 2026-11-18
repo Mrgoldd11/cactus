@@ -1,11 +1,11 @@
 /**
  * Names of enum values: enum fields (from fcs.def and built into FCS), `DIALOG_ACTION.tag`,
- * reference values (the event in `DIALOGUE_PACKAGE.dialogs`). Common base for CLI, MCP and the editor.
+ * reference values (the events in `DIALOGUE_PACKAGE.dialogs`). Common base for CLI, MCP and the editor.
  */
 import { itemTypeName } from '../format/item-types.ts';
 import type { GameRecord, Reference } from '../format/types.ts';
 import { decodeText } from '../text.ts';
-import { quote } from '../ui-text.ts';
+import { quote, uiText } from '../ui-text.ts';
 import {
   BUILTIN_ENUM_LABELS,
   BUILTIN_ENUM_LABELS_I18N,
@@ -14,6 +14,7 @@ import {
   BUILTIN_REF_VALUE_ENUMS,
   BUILTIN_REF_VALUE_LABELS,
   CONDITION_TAG_ENUMS,
+  PACKAGE_EVENT_SKIP,
 } from '../schema/builtin-enums.ts';
 import type { EnumDef, EnumValue } from '../schema/fcs-enums.ts';
 import { findField, type GameSchema } from '../schema/game-schema.ts';
@@ -68,9 +69,19 @@ export function refValueEnum(schema: GameSchema | undefined, typeName: string, c
   return name !== undefined ? getEnum(schema, name) : undefined;
 }
 
-/** Labels of reference values v0..v2 (`event`, `value`), if known. */
-export function refValueLabels(typeName: string, category: string): readonly string[] | undefined {
-  return BUILTIN_REF_VALUE_LABELS[`${typeName}.${category}`];
+/** Labels of reference values v0..v2 (`event`, `value`) in the interface language, if known. */
+export function refValueLabels(typeName: string, category: string, lang = 'en'): string[] | undefined {
+  return BUILTIN_REF_VALUE_LABELS[`${typeName}.${category}`]?.map((t) => uiText(t, lang));
+}
+
+/**
+ * Events of a `DIALOGUE_PACKAGE.dialogs` reference as the game reads them: every one of v0, v1, v2
+ * except 0 (EV_NONE) and 100, without repeats, in slot order.
+ */
+export function packageRefEvents(ref: Pick<Reference, 'v0' | 'v1' | 'v2'>): number[] {
+  const out: number[] = [];
+  for (const v of [ref.v0, ref.v1, ref.v2]) if (!PACKAGE_EVENT_SKIP.includes(v) && !out.includes(v)) out.push(v);
+  return out;
 }
 
 /** "Not in" of an unknown enum value, per interface language. */
@@ -155,10 +166,19 @@ export function describeDialogAction(ctx: ModContext, ref: Reference, category: 
   return parts.join(' ');
 }
 
-/** Label of reference values for display: `event EV_LAUNCH_ATTACK "launching an attack" (16)`. */
+/**
+ * Label of reference values for display: `event EV_LAUNCH_ATTACK "launching an attack" (16)`.
+ * Slots after the first are shown only when set: `event EV_X (3), event 2 EV_Y (23)`.
+ */
 export function describeRefValues(schema: GameSchema | undefined, typeName: string, category: string, ref: Reference, lang = 'en'): string | undefined {
-  const def = refValueEnum(schema, typeName, category, 0);
-  if (!def) return undefined;
-  const label = refValueLabels(typeName, category)?.[0] ?? 'v0';
-  return `${label} ${formatEnumValue(def, ref.v0, lang)}`;
+  if (!refValueEnum(schema, typeName, category, 0)) return undefined;
+  const labels = refValueLabels(typeName, category, lang);
+  const values = [ref.v0, ref.v1, ref.v2];
+  const parts: string[] = [];
+  values.forEach((v, i) => {
+    const def = refValueEnum(schema, typeName, category, i);
+    if (!def || (i > 0 && v === 0)) return;
+    parts.push(`${labels?.[i] ?? `v${i}`} ${formatEnumValue(def, v, lang)}`);
+  });
+  return parts.join(', ');
 }

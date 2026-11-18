@@ -59,6 +59,7 @@ type Tab = 'fields' | 'back' | 'graph' | 'talk' | 'where' | 'diff';
 
 export function RecordEditor({ project, version, sid, onGo, onReport, card }: Props): ReactNode {
   const t = useT();
+  const lang = useLang();
   const ctx = project.ctx;
   const [chosenTab, setTab] = useState<Tab>('fields');
   const rec = project.record(sid);
@@ -66,7 +67,7 @@ export function RecordEditor({ project, version, sid, onGo, onReport, card }: Pr
   const origin = ctx.origin(sid);
   const deleted = status === 'deleted';
   const backRefs = useMemo(() => ctx.referencesTo(sid), [ctx, sid, version]);
-  const groups = useMemo(() => refGroups(ctx, sid), [ctx, sid, version]);
+  const groups = useMemo(() => refGroups(ctx, sid, lang), [ctx, sid, version, lang]);
   const inGame = useInGame(project, sid, version);
   const others = useMemo(() => {
     const report = touchedBy(contextLayers(ctx), sid);

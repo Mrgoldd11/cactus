@@ -300,7 +300,7 @@ export interface RefGroup {
 }
 
 /** Reference groups of the record: schema categories (including empty ones), then categories from the data. */
-export function refGroups(ctx: ModContext, stringId: string): RefGroup[] {
+export function refGroups(ctx: ModContext, stringId: string, lang = 'en'): RefGroup[] {
   const rec = ctx.get(stringId) ?? ctx.lower(stringId);
   if (!rec) return [];
   const lower = ctx.lower(stringId);
@@ -314,7 +314,7 @@ export function refGroups(ctx: ModContext, stringId: string): RefGroup[] {
   return cats.map((category) => {
     const def = type?.fields.get(category);
     const defaults = def?.refDefaults;
-    const named = refValueLabels(typeName, category);
+    const named = refValueLabels(typeName, category, lang);
     const count = Math.max(defaults?.length ?? 0, named?.length ?? 0, 1);
     const valueLabels = Array.from({ length: Math.min(count, 3) }, (_, i) => named?.[i] ?? `v${i}`);
     const valueEnums = valueLabels.map((_, i) => refValueEnum(ctx.schema, typeName, category, i));

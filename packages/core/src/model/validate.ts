@@ -11,10 +11,11 @@
  * a lower layer already defines; a reference list longer than the schema limit (`SINGLE`).
  */
 import { itemTypeName } from '../format/item-types.ts';
-import { FileType, type GameRecord } from '../format/types.ts';
+import { FileType, type GameRecord, type Reference } from '../format/types.ts';
 import { DICT_FOR_KIND, findField, type GameSchema, type TypeSchema } from '../schema/game-schema.ts';
 import { withInferredFields } from '../schema/infer.ts';
 import type { ModContext } from './context.ts';
+import { packageRefEvents } from './enums.ts';
 import { isRemovalMarker, isRemovedRef, SCALAR_DICTS, scalarMap } from './record-ops.ts';
 import { isVanillaLayer } from '../vanilla.ts';
 import { decodeText } from '../text.ts';
@@ -217,18 +218,21 @@ function checkActionOverrides(ctx: ModContext, issues: ValidationIssue[]): void 
     const t = itemTypeName(delta.type);
     if (t !== 'DIALOGUE_PACKAGE' && t !== 'CHARACTER') continue;
     const cat = t === 'CHARACTER' ? 'dialogue' : 'dialogs';
-    const before = new Set((ctx.lower(delta.stringId)?.refs.get(cat) ?? []).map((r) => `${r.target}|${t === 'CHARACTER' ? 0 : r.v0}`));
-    const added = (delta.refs.get(cat) ?? []).filter((r) => !isRemovedRef(r) && !before.has(`${r.target}|${t === 'CHARACTER' ? 0 : r.v0}`));
+    // (dialogue, event) pairs: `CHARACTER.dialogue` is always talk; a package reference has up to three events.
+    const pairs = (list: readonly Reference[]): { dialog: string; event: number }[] =>
+      list.filter((r) => !isRemovedRef(r)).flatMap((r) => (t === 'CHARACTER' ? [EVENT_TALK] : packageRefEvents(r)).map((event) => ({ dialog: r.target, event })));
+    const before = new Set(pairs(ctx.lower(delta.stringId)?.refs.get(cat) ?? []).map((p) => `${p.dialog}|${p.event}`));
+    const added = pairs(delta.refs.get(cat) ?? []).filter((p) => !before.has(`${p.dialog}|${p.event}`));
     if (!added.length) continue;
     const rec = ctx.get(delta.stringId);
     if (!rec) continue;
     for (const a of added) {
       if (t === 'DIALOGUE_PACKAGE') {
-        const rivals = packageDialogs(ctx, delta.stringId).filter((d) => d.event === a.v0).map((d) => d.dialog);
-        check(delta.stringId, cat, { dialog: a.target, event: a.v0 }, rivals);
+        const rivals = packageDialogs(ctx, delta.stringId).filter((d) => d.event === a.event).map((d) => d.dialog);
+        check(delta.stringId, cat, a, rivals);
       } else {
         sq ??= squadIndex(ctx);
-        check(delta.stringId, cat, { dialog: a.target, event: EVENT_TALK }, talkSources(ctx, rec, EVENT_TALK, sq).map((x) => x.dialog));
+        check(delta.stringId, cat, a, talkSources(ctx, rec, EVENT_TALK, sq).map((x) => x.dialog));
       }
     }
   }

@@ -59,8 +59,10 @@ export interface DialogueGraphNode {
   effects: string[];
   /** Other condition references (`target race: Shek`, ...). */
   filters: string[];
-  /** Package event, if the node is a package dialogue. */
+  /** Package event (the first of `events`), if the node is a package dialogue. */
   event?: number;
+  /** All package events of the reference (v0..v2, see `packageRefEvents`). */
+  events?: number[];
   eventLabel?: string;
   depth: number;
   missing?: boolean;
@@ -180,8 +182,10 @@ export function buildDialogueGraph(ctx: ModContext, stringId: string, options: D
       if (talker) node.speakerLabel = shortEnumLabel(talker, n.speaker, lang);
     }
     if (n.event !== undefined) {
+      const evs = n.events ?? [n.event];
       node.event = n.event;
-      if (eventDef) node.eventLabel = formatEnumValue(eventDef, n.event, lang);
+      node.events = evs;
+      if (eventDef) node.eventLabel = evs.map((e) => formatEnumValue(eventDef, e, lang)).join(', ');
     }
     const issue = (kind: DialogueIssueKind, texts: UiText, by?: string): void => {
       const i: DialogueIssue = { kind, node: n.stringId, text: texts.en, texts, ...(by !== undefined ? { by } : {}) };

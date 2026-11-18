@@ -5,7 +5,7 @@
 import { decodeText } from '../text.ts';
 import type { GameRecord } from '../format/types.ts';
 import type { ModContext } from './context.ts';
-import { describeDialogAction, formatEnumValue, getEnum, refValueEnum } from './enums.ts';
+import { describeDialogAction, formatEnumValue, getEnum, packageRefEvents, refValueEnum } from './enums.ts';
 import { formatFieldValue, formatRecord, refLabel } from './present.ts';
 import { SCALAR_DICTS, scalarMap } from './record-ops.ts';
 
@@ -28,8 +28,13 @@ export interface DialogueNode {
   /** text0, text1, ... */
   texts: string[];
   speaker?: number;
-  /** Package event (v0 of the `dialogs` reference of DIALOGUE_PACKAGE), if the node is a package dialogue. */
+  /** Package event (the first of `events`), if the node is a package dialogue. */
   event?: number;
+  /**
+   * All package events of the `dialogs` reference (v0, v1, v2 without 0 and 100, `packageRefEvents`);
+   * `[v0]` when none of them is an event.
+   */
+  events?: number[];
   /** DIALOGUE without lines (`lines` empty): says nothing in the game. */
   noLines?: boolean;
   conditions: DialogueAction[];
@@ -77,7 +82,7 @@ export function buildDialogueTree(ctx: ModContext, stringId: string, options: Di
   const maxNodes = options.maxNodes ?? Infinity;
   const lang = options.lang ?? 'en';
   let count = 0;
-  const visit = (sid: string, depth: number, event?: number): DialogueNode => {
+  const visit = (sid: string, depth: number, events?: number[]): DialogueNode => {
     const rec = ctx.get(sid);
     const node: DialogueNode = {
       stringId: sid,
@@ -90,7 +95,10 @@ export function buildDialogueTree(ctx: ModContext, stringId: string, options: Di
       fields: [],
       children: [],
     };
-    if (event !== undefined) node.event = event;
+    if (events?.length) {
+      node.event = events[0]!;
+      node.events = events;
+    }
     if (!rec) {
       node.missing = true;
       return node;
@@ -116,9 +124,13 @@ export function buildDialogueTree(ctx: ModContext, stringId: string, options: Di
     }
     if (node.type === 'DIALOGUE' && (rec.refs.get('lines') ?? []).length === 0) node.noLines = true;
     const eventEnum = refValueEnum(ctx.schema, node.type, 'dialogs', 0) !== undefined;
-    const children = TREE_CATEGORIES.flatMap((c) => (rec.refs.get(c) ?? []).map((r) => ({ target: r.target, event: c === 'dialogs' && eventEnum ? r.v0 : undefined })));
+    const refEvents = (r: { v0: number; v1: number; v2: number }): number[] => {
+      const evs = packageRefEvents(r);
+      return evs.length ? evs : [r.v0];
+    };
+    const children = TREE_CATEGORIES.flatMap((c) => (rec.refs.get(c) ?? []).map((r) => ({ target: r.target, events: c === 'dialogs' && eventEnum ? refEvents(r) : undefined })));
     if (children.length > 0 && (depth >= maxDepth || count >= maxNodes)) node.truncated = true;
-    else for (const c of children) node.children.push(visit(c.target, depth + 1, c.event));
+    else for (const c of children) node.children.push(visit(c.target, depth + 1, c.events));
     return node;
   };
   return visit(stringId, 0);
@@ -138,9 +150,9 @@ const TREE_WORDS: Record<string, { event: string; missing: string; above: string
   zh: { event: '事件', missing: '<没有记录', above: '（已在上方）', noLines: '没有台词的对话（lines 为空）——游戏中什么也不会说', unexpanded: '（未展开）' },
 };
 
-function eventLabel(ctx: ModContext, event: number, lang: string): string {
+function eventLabel(ctx: ModContext, events: readonly number[], lang: string): string {
   const def = refValueEnum(ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0);
-  return `${(TREE_WORDS[lang] ?? TREE_WORDS.en!).event} ${def ? formatEnumValue(def, event, lang) : String(event)}`;
+  return `${(TREE_WORDS[lang] ?? TREE_WORDS.en!).event} ${events.map((e) => (def ? formatEnumValue(def, e, lang) : String(e))).join(', ')}`;
 }
 
 /** The tree as text, indented by two spaces per level. */
@@ -150,7 +162,8 @@ export function formatDialogueTree(ctx: ModContext, root: DialogueNode, options:
   const w = TREE_WORDS[lang] ?? TREE_WORDS.en!;
   const walk = (n: DialogueNode, depth: number): void => {
     const pad = '  '.repeat(depth);
-    const ev = n.event !== undefined ? `[${eventLabel(ctx, n.event, lang)}] ` : '';
+    const evs = n.events ?? (n.event !== undefined ? [n.event] : []);
+    const ev = evs.length ? `[${eventLabel(ctx, evs, lang)}] ` : '';
     if (n.missing) {
       out.push(`${pad}${ev}${w.missing} ${n.stringId}>`);
       return;
