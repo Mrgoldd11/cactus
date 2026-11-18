@@ -16,7 +16,7 @@ import { WhereTab } from '../../components/WhereTab.tsx';
 import { AiPanel } from '../../components/AiPanel.tsx';
 import { IssueFixer } from '../../components/IssueFixer.tsx';
 import { registerPanel, type PanelProps } from '../registry.ts';
-import { useFollowed, useWorkbench } from '../context.ts';
+import { useFollowed, usePanelShows, useWorkbench } from '../context.ts';
 import { useSelectionVersion } from '../selection.ts';
 import { useStore } from '../store.ts';
 import { bulkScope } from '../bulk-scope.ts';
@@ -75,12 +75,15 @@ function RecordsPanel(): ReactNode {
 
 function InspectorPanel({ def, params }: PanelProps): ReactNode {
   const { project, go, report } = useWorkbench();
-  const { sid, version } = useFollowed(def, params);
+  const { sid, item, version } = useFollowed(def, params);
   const t = useT();
+  // The central «Dialogue graph» already shows this record (or the dialogue of this line):
+  // a second graph in the inspector tab would only repeat it.
+  const graphElsewhere = usePanelShows('graph', [sid, item?.kind === 'line' ? item.dialog : undefined]);
   if (sid === undefined) return <div className="record-editor empty muted">{t.noSelection}</div>;
   const rec = project.record(sid);
   const card = rec && project.ctx.typeName(rec.type) === 'RACE' ? <RaceCard project={project} sid={sid} version={version} /> : undefined;
-  return <RecordEditor key="editor" project={project} version={version} sid={sid} onGo={go} onReport={report} card={card} />;
+  return <RecordEditor key="editor" project={project} version={version} sid={sid} onGo={go} onReport={report} card={card} graphElsewhere={graphElsewhere} />;
 }
 
 function WherePanel({ def, params }: PanelProps): ReactNode {

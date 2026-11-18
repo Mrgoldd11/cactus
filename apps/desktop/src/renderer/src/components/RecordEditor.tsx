@@ -53,11 +53,13 @@ interface Props {
   onReport: (err: string | undefined) => void;
   /** Card of the record type (the race card), shown between the header and the tabs. */
   card?: ReactNode;
+  /** The window already shows this record's dialogue graph in its own panel: no «Graph» tab here. */
+  graphElsewhere?: boolean;
 }
 
 type Tab = 'fields' | 'back' | 'graph' | 'talk' | 'where' | 'diff';
 
-export function RecordEditor({ project, version, sid, onGo, onReport, card }: Props): ReactNode {
+export function RecordEditor({ project, version, sid, onGo, onReport, card, graphElsewhere = false }: Props): ReactNode {
   const t = useT();
   const lang = useLang();
   const ctx = project.ctx;
@@ -83,7 +85,7 @@ export function RecordEditor({ project, version, sid, onGo, onReport, card }: Pr
     );
   }
   const localized = ctx.localizedName(sid);
-  const hasGraph = DIALOGUE_GRAPH_TYPES.has(ctx.typeName(rec.type));
+  const hasGraph = DIALOGUE_GRAPH_TYPES.has(ctx.typeName(rec.type)) && !graphElsewhere;
   const hasTalk = ctx.typeName(rec.type) === 'CHARACTER';
   const tab: Tab = (chosenTab === 'graph' && !hasGraph) || (chosenTab === 'talk' && !hasTalk) ? 'fields' : chosenTab;
   const edit = (fn: () => void): void => {

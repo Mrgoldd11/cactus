@@ -66,6 +66,8 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
   const aiPending = aiChangesets.filter((c) => c.status === 'pending').length;
   const apiRef = useRef<DockviewApi | undefined>(undefined);
   const [, setLayoutTick] = useState(0);
+  // For panels: the same layout tick, as a store (they are outside this component's render).
+  const layout = useMemo(() => new ValueStore(0), []);
   // The saved layout is read before the workspace is first shown.
   const [workspace, setWorkspace] = useState<WorkspaceSettings | undefined | null>(null);
   const [preset, setPreset] = useState<PresetId>('data');
@@ -140,6 +142,8 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
       status: setStatus,
       open,
       hasPanel: (panelId) => apiRef.current?.panels.some((p) => p.api.component === panelId) ?? false,
+      panelParams: (panelId) => (apiRef.current?.panels ?? []).filter((p) => p.api.component === panelId).map((p) => (p.params ?? {}) as PanelParams),
+      layout,
       newRecord: () => {
         setModal('new');
       },
@@ -156,7 +160,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
           setStatus({ text: () => msg, kind: 'error' });
         }),
     }),
-    [project, selection, go, report, open, category, onReplace],
+    [project, selection, go, report, open, category, onReplace, layout],
   );
 
   // Records that no longer exist (creation undone) are removed from the selection.
@@ -448,9 +452,11 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
           onApi={(api) => {
             apiRef.current = api;
             setLayoutTick((n) => n + 1);
+            layout.set(layout.get() + 1);
           }}
           onChange={() => {
             setLayoutTick((n) => n + 1);
+            layout.set(layout.get() + 1);
           }}
         />
       )}

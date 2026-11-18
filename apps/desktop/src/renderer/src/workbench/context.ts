@@ -5,10 +5,10 @@
 import { createContext, useContext, type RefObject } from 'react';
 import type { Strings } from '../i18n.ts';
 import type { Project } from '../project.ts';
-import type { PanelDef, PanelParams } from './registry.ts';
+import { panelDef, type PanelDef, type PanelParams } from './registry.ts';
 import { useSelectionVersion, type Selection, type SelectionService } from './selection.ts';
 import { useProjectVersion } from '../hooks.ts';
-import type { ValueStore } from './store.ts';
+import { useStore, type ValueStore } from './store.ts';
 
 export interface StatusMessage {
   /** The text is built at display time — the message is translated when the language changes. */
@@ -28,6 +28,10 @@ export interface Workbench {
   open: (panelId: string, params?: PanelParams) => void;
   /** Whether a panel of this kind is open anywhere. */
   hasPanel: (panelId: string) => boolean;
+  /** Parameters of every open panel of this kind (one entry per instance). */
+  panelParams: (panelId: string) => PanelParams[];
+  /** Layout version: changes when panels open, close, move or get pinned to another record. */
+  layout: ValueStore<number>;
   /** Record creation window. */
   newRecord: () => void;
   /** «New race based on…» window; `sample` — the preselected sample race. */
@@ -59,6 +63,10 @@ export function accepts(project: Project, def: PanelDef, s: Selection): boolean 
   return rec !== undefined && shows.types.includes(project.ctx.typeName(rec.type));
 }
 
+function selectionSid(s: Selection | undefined): string | undefined {
+  return s === undefined ? undefined : s.kind === 'scene' ? s.sid : s.sid;
+}
+
 export interface Followed {
   /** The record the panel shows. */
   sid: string | undefined;
@@ -79,6 +87,21 @@ export function useFollowed(def: PanelDef, params: PanelParams): Followed {
   const version = useProjectVersion(project);
   if (params.sid !== undefined) return { sid: params.sid, item: { kind: 'record', sid: params.sid }, pinned: true, version };
   const item = selection.latest((s) => accepts(project, def, s));
-  const sid = item === undefined ? undefined : item.kind === 'scene' ? item.sid : item.sid;
-  return { sid, item, pinned: false, version };
+  return { sid: selectionSid(item), item, pinned: false, version };
+}
+
+/**
+ * Whether an open panel of this kind shows one of these records: pinned to it, or following
+ * a selection that is it. Re-renders when panels open, close or get re-pinned, and on selection changes.
+ */
+export function usePanelShows(panelId: string, sids: readonly (string | undefined)[]): boolean {
+  const { project, selection, layout, panelParams } = useWorkbench();
+  useStore(layout);
+  useSelectionVersion(selection);
+  const def = panelDef(panelId);
+  if (!def) return false;
+  return panelParams(panelId).some((p) => {
+    const shown = p.sid ?? selectionSid(selection.latest((s) => accepts(project, def, s)));
+    return shown !== undefined && sids.includes(shown);
+  });
 }
