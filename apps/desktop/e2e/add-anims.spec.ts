@@ -125,11 +125,11 @@ test('add animations: bone check, copy into the mod folder, records in one undo 
     await page.getByTestId('create-mod').click();
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
 
-    // The button is offered only in the races category.
-    await expect(page.getByTestId('list-add-anims')).toHaveCount(0);
+    // The wizard is opened from the race card of the inspector.
     await page.getByTestId('cat-Races').click();
+    await expect(page.getByTestId('list-add-anims')).toHaveCount(0);
     await page.locator(`[data-testid="record-list"] [data-sid="${GREENLANDER}"]`).click();
-    await page.getByTestId('list-add-anims').click();
+    await page.getByTestId('race-card-anims-btn').click();
     const panel = page.getByTestId('add-anims-panel');
     await expect(panel).toBeVisible();
     await expect(panel.getByTestId('aa-race')).toHaveValue(GREENLANDER);
@@ -178,7 +178,8 @@ test('add animations: bone check, copy into the mod folder, records in one undo 
 
     // Another file of the same name: asked first, kept under a new name on request.
     await page.locator(`[data-testid="record-list"] [data-sid="${GREENLANDER}"]`).click();
-    await page.getByTestId('list-add-anims').click();
+    await page.locator('.dv-tab', { hasText: /Inspector|Инспектор/ }).first().click();
+    await page.getByTestId('race-card-anims-btn').click();
     await expect(panel).toBeVisible();
     await pickFile(other);
     await expect(panel.getByTestId('aa-male')).toHaveAttribute('data-clips', '1');

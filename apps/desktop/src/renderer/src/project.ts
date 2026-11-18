@@ -499,6 +499,13 @@ export class Project {
  * New context with other dependencies or context mods; mod edits are carried over
  * (the undo history is not). Whatever is not given is taken from the previous project.
  */
+/** A saved mod in `<game>/mods/` (not a Workshop download): what the game loads and what may be published. */
+export function publishable(project: Project): boolean {
+  if (project.path === undefined || project.provenance?.inWorkshop === true) return false;
+  const norm = (x: string): string => x.replace(/\\/g, '/').toLowerCase();
+  return norm(project.path).startsWith(`${norm(project.bundle.game.kenshi).replace(/\/$/, '')}/mods/`);
+}
+
 export async function reloadProject(p: Project, change: { dependencies?: string[]; contextMods?: string[] }): Promise<Project> {
   if (change.dependencies) p.ctx.setModInfo({ dependencies: change.dependencies });
   const mod = p.ctx.buildModFile();

@@ -11,6 +11,7 @@ import { useAiChangesets, useLiveStatus } from '../../live.ts';
 import { CategoryTree } from '../../components/CategoryTree.tsx';
 import { RecordList } from '../../components/RecordList.tsx';
 import { RecordEditor } from '../../components/RecordEditor.tsx';
+import { RaceCard } from '../../components/RaceCard.tsx';
 import { WhereTab } from '../../components/WhereTab.tsx';
 import { AiPanel } from '../../components/AiPanel.tsx';
 import { IssueFixer } from '../../components/IssueFixer.tsx';
@@ -19,7 +20,6 @@ import { useFollowed, useWorkbench } from '../context.ts';
 import { useSelectionVersion } from '../selection.ts';
 import { useStore } from '../store.ts';
 import { bulkScope } from '../bulk-scope.ts';
-import { addAnimsRace } from '../anim-requests.ts';
 import { Empty } from './common.tsx';
 
 function CategoriesPanel(): ReactNode {
@@ -41,7 +41,7 @@ function CategoriesPanel(): ReactNode {
 }
 
 function RecordsPanel(): ReactNode {
-  const { project, category, selection, go, report, newRecord, newRace, searchRef, open } = useWorkbench();
+  const { project, category, selection, go, report, newRecord, searchRef, open } = useWorkbench();
   const version = useProjectVersion(project);
   useSelectionVersion(selection);
   const nodeId = useStore(category);
@@ -69,15 +69,6 @@ function RecordsPanel(): ReactNode {
         bulkScope.set({ ids: sids, stamp: Date.now() });
         open('bulk');
       }}
-      onNewRace={node?.type === 'RACE' ? newRace : undefined}
-      onAddAnims={
-        node?.type === 'RACE'
-          ? (race) => {
-              if (race !== undefined) addAnimsRace.set({ race, stamp: Date.now() });
-              open('add-anims');
-            }
-          : undefined
-      }
     />
   );
 }
@@ -87,7 +78,9 @@ function InspectorPanel({ def, params }: PanelProps): ReactNode {
   const { sid, version } = useFollowed(def, params);
   const t = useT();
   if (sid === undefined) return <div className="record-editor empty muted">{t.noSelection}</div>;
-  return <RecordEditor key="editor" project={project} version={version} sid={sid} onGo={go} onReport={report} />;
+  const rec = project.record(sid);
+  const card = rec && project.ctx.typeName(rec.type) === 'RACE' ? <RaceCard project={project} sid={sid} version={version} /> : undefined;
+  return <RecordEditor key="editor" project={project} version={version} sid={sid} onGo={go} onReport={report} card={card} />;
 }
 
 function WherePanel({ def, params }: PanelProps): ReactNode {

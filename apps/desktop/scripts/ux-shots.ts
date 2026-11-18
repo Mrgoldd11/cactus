@@ -86,16 +86,19 @@ try {
   await page.getByTestId('tab-fields').click();
   await shot('05-mod-menu', () => page.getByTestId('mod-menu').click());
   await esc();
+  await shot('05b-create-menu', () => page.getByTestId('create-menu').click());
+  await esc();
   await shot('06-window-menu', () => page.getByTestId('window-menu').click());
   await esc();
 
-  // Races: the list toolbar grows race-only buttons.
+  // Races: race actions live on the race card of the inspector.
   await page.getByTestId('search').first().fill('');
   await page.getByTestId('cat-Races').click();
   await shot('10-races-list', () => page.locator(`[data-testid="record-list"] [data-sid="${GREENLANDER}"]`).click());
   await shot('11-race-model', () => openPanel('model'), 4000);
   await shot('12-new-race-modal', async () => {
-    await page.getByTestId('list-new-race').click();
+    await page.locator('.dv-tab', { hasText: 'Инспектор' }).first().click();
+    await page.getByTestId('race-card-new-from').click();
     await page.getByTestId('new-race-name').fill('Мохолюды');
   });
   await shot('13-race-compat', async () => {
@@ -113,7 +116,8 @@ try {
   }, 1500);
   await shot('16-add-anims', async () => {
     await page.locator('[data-testid="record-list"] .list-row.selected').first().click();
-    await page.getByTestId('list-add-anims').click();
+    await page.locator('.dv-tab', { hasText: 'Инспектор' }).first().click();
+    await page.getByTestId('race-card-anims-btn').click();
     await page.getByTestId('add-anims-panel').waitFor();
   }, 1500);
   await shot('17-tabs-piled');
@@ -121,6 +125,8 @@ try {
   await shot('19-race-inspector', async () => {
     await page.locator('.dv-tab', { hasText: 'Инспектор' }).first().click();
   });
+  await shot('19b-race-card-folded', () => page.getByTestId('race-card-fold').click());
+  await page.getByTestId('race-card-fold').click();
 
   // Multi-selection and bulk edit.
   await preset('data');

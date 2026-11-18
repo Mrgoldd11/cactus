@@ -1,6 +1,7 @@
 /**
- * «Mod» menu of the editor toolbar: rarely used mod-level actions (mod info, dependencies,
- * backups, publish) grouped in one dropdown so the toolbar fits one row. Built like the «Window» menu.
+ * Dropdown menus of the editor toolbar, built like the «Window» menu. By default the «Mod» menu:
+ * mod-level actions (mod info, dependencies, backups, publish) grouped so the toolbar fits one row;
+ * with `testId` and `label` the same dropdown serves the «Create» menu.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useT } from '../i18n.ts';
@@ -19,9 +20,13 @@ interface Props {
   /** Extra content on the menu button itself (e.g. the FCS Extended badge). */
   badge?: ReactNode;
   title?: string;
+  /** Test id of the menu button; the list gets `<testId>-list`. Default — the «Mod» menu. */
+  testId?: string;
+  /** Text of the menu button. Default — «Mod». */
+  label?: ReactNode;
 }
 
-export function ModMenu({ items, badge, title }: Props): ReactNode {
+export function ModMenu({ items, badge, title, testId = 'mod-menu', label }: Props): ReactNode {
   const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -44,7 +49,7 @@ export function ModMenu({ items, badge, title }: Props): ReactNode {
   return (
     <div className="menu-wrap" ref={ref}>
       <button
-        data-testid="mod-menu"
+        data-testid={testId}
         className={open ? 'active' : ''}
         title={title}
         aria-haspopup="menu"
@@ -53,12 +58,12 @@ export function ModMenu({ items, badge, title }: Props): ReactNode {
           setOpen((o) => !o);
         }}
       >
-        {t.modMenu}
+        {label ?? t.modMenu}
         {badge}
         {' ▾'}
       </button>
       {open && (
-        <div className="menu" role="menu" data-testid="mod-menu-list">
+        <div className="menu" role="menu" data-testid={`${testId}-list`}>
           {items.map((it) => (
             <button
               key={it.testId}

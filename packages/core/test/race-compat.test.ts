@@ -18,7 +18,9 @@ import {
   ModContext,
   planRaceCompat,
   raceCompatPreview,
+  raceCardState,
   raceCompatSituation,
+  guessRaceSample,
   raceSkeletonWarning,
   readDataFile,
   writeDataFile,
@@ -241,5 +243,35 @@ describe('race compatibility', () => {
 
     // Places to add the new race to → no explanation needed.
     expect(raceCompatSituation(planRaceCompat(ctx, copy, 'gl'))).toBeUndefined();
+  });
+  it('race card: the sample, compatibility and own animations come from the data', () => {
+    const ctx = make();
+    // A vanilla race: no sample, nothing to set up.
+    expect(raceCardState(ctx, 'gl')).toEqual({ own: false, ownAnimations: 0 });
+
+    // A fresh copy: the sample is the race it copies, compatibility still to do.
+    const copy = createRaceFrom(ctx, 'gl', 'Mossfolk');
+    expect(guessRaceSample(ctx, copy)).toBe('gl');
+    const fresh = raceCardState(ctx, copy);
+    expect(fresh.sample).toBe('gl');
+    expect(fresh.compat!.todo).toBeGreaterThan(0);
+    expect(fresh.compat!.already).toBe(0);
+    applyBulk(ctx, raceCompatPreview(planRaceCompat(ctx, copy, 'gl')));
+    const after = raceCardState(ctx, copy);
+    expect(after.compat!.todo).toBe(0);
+    expect(after.compat!.already).toBeGreaterThan(0);
+
+    // An empty race matches nothing; after the wizard it stands next to the sample in its lists.
+    const empty = ctx.createRecord(itemTypeId('RACE')!, 'Blank');
+    expect(guessRaceSample(ctx, empty)).toBeUndefined();
+    expect(raceCardState(ctx, empty)).toEqual({ own: true, ownAnimations: 0 });
+    applyBulk(ctx, raceCompatPreview(planRaceCompat(ctx, empty, 'gl')));
+    expect(guessRaceSample(ctx, empty)).toBe('gl');
+
+    // Own animations: only animation files the mod created count.
+    expect(raceCardState(ctx, copy).ownAnimations).toBe(0);
+    const anim = ctx.createRecord(itemTypeId('ANIMATION_FILE')!, 'My anims');
+    ctx.addReference(copy, 'animation files', anim);
+    expect(raceCardState(ctx, copy).ownAnimations).toBe(1);
   });
 });

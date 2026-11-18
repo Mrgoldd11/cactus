@@ -51,10 +51,9 @@ test('race compatibility wizard: new race like Greenlander, one undo, saved diff
     await expect(page.getByTestId('record-name')).toHaveValue('E2E Lizardfolk');
     const race = (await page.getByTestId('record-sid').textContent())!.trim();
 
-    // The wizard is opened from the bulk edits panel.
-    await page.getByTestId('window-menu').click();
-    await page.getByTestId('window-panel-bulk').click();
-    await page.getByTestId('bulk-race-compat').click();
+    // The wizard is opened from the race card: the empty race has no sample yet.
+    await expect(page.getByTestId('race-card-sample')).toHaveAttribute('data-done', '0');
+    await page.getByTestId('race-card-compat-btn').click();
     const panel = page.getByTestId('race-compat-panel');
     await expect(panel).toBeVisible();
     // Defaults: the mod's own race works like the Greenlander.

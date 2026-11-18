@@ -32,6 +32,8 @@ export interface Workbench {
   newRecord: () => void;
   /** «New race based on…» window; `sample` — the preselected sample race. */
   newRace: (sample?: string) => void;
+  /** Save the mod (as Ctrl+S); `saveAs` asks for a place. */
+  save: (saveAs: boolean) => Promise<void>;
   searchRef: RefObject<HTMLInputElement | null>;
   /** Category in the tree — filter of the record list. */
   category: ValueStore<string>;

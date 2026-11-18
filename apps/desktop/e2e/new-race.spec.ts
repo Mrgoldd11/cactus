@@ -1,8 +1,8 @@
 /**
- * E2E: «New race based on…» on the real game data. Races category → the Greenlander is the
- * suggested sample → the name is required and must differ from the sample → «Create» makes a copy
- * (one undo step) and opens the «Race compatibility» wizard with the new race and the sample.
- * The «Mod» menu opens the same window.
+ * E2E: «New race based on…» on the real game data. The race card of the Greenlander → the Greenlander
+ * is the suggested sample → the name is required and must differ from the sample → «Create» makes a
+ * copy (one undo step) and opens the «Race compatibility» wizard with the new race and the sample.
+ * The «Create» menu opens the same window.
  */
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -42,11 +42,11 @@ test('new race based on a sample: name checks, copy, wizard opened with the pair
     await page.getByTestId('create-mod').click();
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
 
-    // The button is offered only in the races category.
-    await expect(page.getByTestId('list-new-race')).toHaveCount(0);
+    // Race actions live on the race card of the inspector, not in the record list.
     await page.getByTestId('cat-Races').click();
+    await expect(page.getByTestId('list-new-race')).toHaveCount(0);
     await page.locator(`[data-testid="record-list"] [data-sid="${GREENLANDER}"]`).click();
-    await page.getByTestId('list-new-race').click();
+    await page.getByTestId('race-card-new-from').click();
 
     const modal = page.getByTestId('new-race-modal');
     await expect(modal).toBeVisible();
@@ -104,8 +104,8 @@ test('new race based on a sample: name checks, copy, wizard opened with the pair
     await expect(page.locator(`[data-testid="record-list"] [data-sid="${race}"]`)).toHaveCount(0);
     await expect(page.getByTestId('redo')).toBeEnabled();
 
-    // The «Mod» menu opens the same window (the Greenlander is the default sample there).
-    await page.getByTestId('mod-menu').click();
+    // The «Create» menu opens the same window (the Greenlander is the default sample there).
+    await page.getByTestId('create-menu').click();
     await page.getByTestId('new-race-btn').click();
     await expect(modal).toBeVisible();
     await expect(modal.getByTestId('new-race-sample')).toHaveValue(GREENLANDER);

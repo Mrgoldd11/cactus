@@ -26,4 +26,5 @@ export * from './fixes.ts';
 export * from './cleanup.ts';
 export * from './race-compat.ts';
 export * from './new-record.ts';
+export * from './race-card.ts';
 export * from './add-animations.ts';

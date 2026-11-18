@@ -89,9 +89,12 @@ function RaceCompatPanel(): ReactNode {
     const list = (project.idsByType().get('RACE') ?? []).filter((s) => project.status(s) !== 'deleted');
     return [...list].sort((x, y) => raceLabel(project, x).localeCompare(raceLabel(project, y)));
   }, [project, version]);
-  // A pair handed over by «New race based on…» wins over the defaults (each hand-over once).
+  // A pair handed over by «New race based on…» or the race card wins over the defaults (each hand-over once).
   const pair = useStore(raceCompatPair);
-  const usable = pair !== undefined && races.includes(pair.race) && races.includes(pair.sample) ? pair : undefined;
+  const usable =
+    pair !== undefined && races.includes(pair.race) && (pair.sample === undefined || races.includes(pair.sample))
+      ? { ...pair, sample: pair.sample ?? defaultSample(project, races, pair.race) }
+      : undefined;
   const usedStamp = useRef(usable?.stamp);
   const [chosenRace, setRace] = useState(() => usable?.race ?? defaultRace(project, races));
   const [chosenSample, setSample] = useState(() => usable?.sample ?? defaultSample(project, races, defaultRace(project, races)));

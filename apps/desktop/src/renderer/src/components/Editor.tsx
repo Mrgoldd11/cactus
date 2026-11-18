@@ -9,7 +9,7 @@ import type { Lang, Settings, WorkspaceSettings } from '../../../shared/api.ts';
 import { errorText, useT } from '../i18n.ts';
 import { isTypingIn, shortcut } from '../keys.ts';
 import { useProjectVersion, tryEdit } from '../hooks.ts';
-import { MOD_CHANGES_ID, reloadProject, reloadWithDependencies, restoreProject, type Project } from '../project.ts';
+import { MOD_CHANGES_ID, publishable, reloadProject, reloadWithDependencies, restoreProject, type Project } from '../project.ts';
 import { LangSwitch } from '../App.tsx';
 import { BackupsModal, SettingsModal, formatClock, formatTime } from './BackupModals.tsx';
 import { DependenciesModal, ModInfoModal, NewRecordModal } from './Modals.tsx';
@@ -43,13 +43,6 @@ interface Props {
 }
 
 type ModalKind = 'deps' | 'info' | 'new' | 'race' | 'backups' | 'settings' | 'publish';
-
-/** A saved mod in `<game>/mods/` (not a Workshop download) — what may be published. */
-function publishable(project: Project): boolean {
-  if (project.path === undefined || project.provenance?.inWorkshop === true) return false;
-  const norm = (x: string): string => x.replace(/\\/g, '/').toLowerCase();
-  return norm(project.path).startsWith(`${norm(project.bundle.game.kenshi).replace(/\/$/, '')}/mods/`);
-}
 
 function blurActive(): void {
   if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -137,6 +130,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
     if (api) openPanel(api, tRef.current, panelId, params, params?.sid !== undefined ? panelId : undefined);
   }, []);
 
+  const saveRef = useRef<(saveAs: boolean) => Promise<void>>(() => Promise.resolve());
   const wb = useMemo<WorkbenchValue>(
     () => ({
       project,
@@ -153,6 +147,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
         setRaceSample(sample);
         setModal('race');
       },
+      save: (saveAs) => saveRef.current(saveAs),
       searchRef,
       category,
       reload: (change) =>
@@ -214,6 +209,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
     else if (r.workshop === true) setStatus({ text: (s) => s.saveWorkshop, kind: 'error' });
     else setStatus({ text: (s) => `${s.saveFailed}: ${r.error ?? ''}`, kind: 'error' });
   };
+  saveRef.current = save;
   const copyForEditing = async (): Promise<void> => {
     blurActive();
     const r = await project.copyForEditing();
@@ -243,6 +239,9 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
     if (sc === 'ctrl+s' || sc === 'ctrl+shift+s') {
       e.preventDefault();
       void save(e.shiftKey);
+    } else if (sc === 'ctrl+n') {
+      e.preventDefault();
+      setModal('new');
     } else if (sc === 'ctrl+f') {
       e.preventDefault();
       if (!searchRef.current) open('records');
@@ -313,6 +312,32 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
         </button>
         <span className="sep" />
         <ModMenu
+          testId="create-menu"
+          label={t.crMenu}
+          title={t.crMenuTip}
+          items={[
+            {
+              testId: 'create-new-record',
+              label: t.crNewRecord,
+              title: t.crNewRecordTip,
+              onClick: () => {
+                setModal('new');
+              },
+            },
+            {
+              testId: 'new-race-btn',
+              label: t.nrOpen,
+              title: t.nrOpenTip,
+              onClick: () => {
+                setRaceSample(undefined);
+                setModal('race');
+              },
+            },
+            { testId: 'new-item-soon', label: t.crNewItem, disabledHint: t.crSoon, onClick: () => undefined },
+            { testId: 'new-creature-soon', label: t.crNewCreature, disabledHint: t.crSoon, onClick: () => undefined },
+          ]}
+        />
+        <ModMenu
           title={extensionCount > 0 ? t.extBadgeTip : undefined}
           badge={
             extensionCount > 0 && (
@@ -328,15 +353,6 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
               title: extensionCount > 0 ? t.extBadgeTip : undefined,
               onClick: () => {
                 setModal('info');
-              },
-            },
-            {
-              testId: 'new-race-btn',
-              label: t.nrOpen,
-              title: t.nrOpenTip,
-              onClick: () => {
-                setRaceSample(undefined);
-                setModal('race');
               },
             },
             {
@@ -367,17 +383,18 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
         />
         <button
           data-testid="validate"
+          title={t.checkBtnTip}
           onClick={() => {
             open('diagnostics');
             window.dispatchEvent(new Event(RESCAN_EVENT));
           }}
         >
-          {t.panel_diagnostics}
+          {t.checkBtn}
         </button>
-        <span className="sep" />
-        <WindowMenu api={apiRef.current} preset={preset} onPreset={choosePreset} onOpen={open} />
-        <LayoutSwitch api={apiRef.current} preset={preset} onPreset={choosePreset} />
         <span className="grow" />
+        <LayoutSwitch api={apiRef.current} preset={preset} onPreset={choosePreset} />
+        <WindowMenu api={apiRef.current} preset={preset} onPreset={choosePreset} onOpen={open} />
+        <span className="sep" />
         <button
           data-testid="live-status"
           className={`live-btn${liveStatus.clients.length > 0 ? ' connected' : ''}${aiOpen ? ' active' : ''}`}

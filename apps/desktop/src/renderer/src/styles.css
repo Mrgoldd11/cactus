@@ -3041,7 +3041,7 @@ input.invalid {
   overflow: auto;
   margin: 4px 0;
   padding-left: 18px;
-  font-family: var(--mono, monospace);
+  font-family: monospace;
   font-size: 12px;
 }
 .publish-detail {
@@ -3141,4 +3141,97 @@ input.invalid {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 6px;
+}
+
+/* Race card of the inspector (RaceCard.tsx): between the header and the tabs, folds into one line. */
+.race-card {
+  display: flex;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.race-card.folded {
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+}
+.race-card .grow {
+  flex: 1;
+}
+.race-card-marks {
+  font-family: monospace;
+  letter-spacing: 1px;
+}
+.race-card-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.race-card-thumb {
+  flex: none;
+  width: 84px;
+  padding: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.race-card-thumb img,
+.race-card-noimg {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}
+.race-card-noimg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--muted);
+}
+.race-card-caption {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.race-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.race-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.race-card-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.race-card-steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.race-card-mark {
+  width: 1em;
+  text-align: center;
+}
+.race-card-steps li.done .race-card-mark {
+  color: var(--new);
+}
+.race-card-text {
+  flex: 1;
+  min-width: 0;
+}
+.race-card-actions {
+  display: flex;
+  gap: 6px;
 }

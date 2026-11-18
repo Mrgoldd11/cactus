@@ -96,7 +96,7 @@ function kindLabel(t: Strings, k: BulkKind): string {
 function BulkPanel(): ReactNode {
   const t = useT();
   const lang = useLang();
-  const { project, go, report, open } = useWorkbench();
+  const { project, go, report } = useWorkbench();
   const version = useProjectVersion(project);
   const ctx = project.ctx;
   const byType = project.idsByType();
@@ -386,9 +386,6 @@ function BulkPanel(): ReactNode {
         <label title={t.bulkModOnlyTip}>
           <input type="checkbox" checked={modOnly} onChange={(e) => { setModOnly(e.target.checked); }} data-testid="bulk-mod-only" /> {t.bulkModOnly}
         </label>
-        <button onClick={() => { open('race-compat'); }} title={t.rcOpenTip} data-testid="bulk-race-compat">
-          {t.rcOpen}
-        </button>
       </div>
       {scope && (
         <div className="mods-panel-bar bulk-scope" data-testid="bulk-scope">

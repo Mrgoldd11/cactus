@@ -51,11 +51,13 @@ interface Props {
   sid: string;
   onGo: (sid: string) => void;
   onReport: (err: string | undefined) => void;
+  /** Card of the record type (the race card), shown between the header and the tabs. */
+  card?: ReactNode;
 }
 
 type Tab = 'fields' | 'back' | 'graph' | 'talk' | 'where' | 'diff';
 
-export function RecordEditor({ project, version, sid, onGo, onReport }: Props): ReactNode {
+export function RecordEditor({ project, version, sid, onGo, onReport, card }: Props): ReactNode {
   const t = useT();
   const ctx = project.ctx;
   const [chosenTab, setTab] = useState<Tab>('fields');
@@ -156,6 +158,7 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
           </div>
         )}
       </div>
+      {!deleted && card}
       <div className="tabs">
         <TabButton tab="fields" cur={tab} set={setTab} label={t.tabFields} />
         <TabButton tab="back" cur={tab} set={setTab} label={`${t.tabBackRefs} (${backRefs.length})`} />
