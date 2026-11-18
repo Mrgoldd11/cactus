@@ -8,3 +8,4 @@ export * from './building-state.ts';
 export * from './town-border.ts';
 export * from './features.ts';
 export * from './game-dump.ts';
+export * from './ways.ts';

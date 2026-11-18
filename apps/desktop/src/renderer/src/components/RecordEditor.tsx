@@ -40,6 +40,7 @@ import type { Project } from '../project.ts';
 import { CommitInput } from './widgets.tsx';
 import { RecordPicker } from './RecordPicker.tsx';
 import { WhereTab } from './WhereTab.tsx';
+import { InGameLine, useInGame } from './WaysIntoGame.tsx';
 import { DIALOGUE_GRAPH_TYPES, DialogueGraphTab } from './DialogueGraphTab.tsx';
 import { TalkTab } from './TalkTab.tsx';
 import { conflictFieldLabel } from '../workbench/panels/conflicts.tsx';
@@ -64,6 +65,7 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
   const deleted = status === 'deleted';
   const backRefs = useMemo(() => ctx.referencesTo(sid), [ctx, sid, version]);
   const groups = useMemo(() => refGroups(ctx, sid), [ctx, sid, version]);
+  const inGame = useInGame(project, sid, version);
   const others = useMemo(() => {
     const report = touchedBy(contextLayers(ctx), sid);
     const layers = report.touches.map((x) => x.layer).filter((l) => l !== ctx.modName && !isVanillaLayer(l));
@@ -118,6 +120,12 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
             </span>
           )}
         </div>
+        <InGameLine
+          state={inGame}
+          onOpen={() => {
+            setTab('where');
+          }}
+        />
         {others.layers.length > 0 && (
           <div className="record-others muted" data-testid="record-others">
             {t.alsoChangedBy}: {others.layers.join(', ')}
@@ -153,7 +161,7 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
         <TabButton tab="back" cur={tab} set={setTab} label={`${t.tabBackRefs} (${backRefs.length})`} />
         {hasGraph && <TabButton tab="graph" cur={tab} set={setTab} label={t.tabGraph} />}
         {hasTalk && <TabButton tab="talk" cur={tab} set={setTab} label={t.tabTalk} />}
-        <TabButton tab="where" cur={tab} set={setTab} label={t.tabWhere} />
+        <TabButton tab="where" cur={tab} set={setTab} label={inGame.state === 'nowhere' ? `${t.tabWhere} ⚠` : t.tabWhere} />
         <TabButton tab="diff" cur={tab} set={setTab} label={t.tabDiff} marked={status !== 'base'} />
       </div>
       <div className={`tab-body ${tab === 'fields' ? 'fields-body' : ''}`}>
@@ -161,7 +169,7 @@ export function RecordEditor({ project, version, sid, onGo, onReport }: Props): 
         {tab === 'back' && <BackRefsTab project={project} sid={sid} entries={backRefs} onGo={onGo} />}
         {tab === 'graph' && <DialogueGraphTab project={project} sid={sid} version={version} onGo={onGo} />}
         {tab === 'talk' && <TalkTab project={project} sid={sid} version={version} onGo={onGo} />}
-        {tab === 'where' && <WhereTab project={project} sid={sid} version={version} onGo={onGo} />}
+        {tab === 'where' && <WhereTab project={project} sid={sid} version={version} onGo={onGo} onReport={onReport} />}
         {tab === 'diff' && <DiffTab ctx={ctx} sid={sid} version={version} onGo={onGo} />}
       </div>
     </div>

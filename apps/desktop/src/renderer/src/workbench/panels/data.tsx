@@ -91,12 +91,12 @@ function InspectorPanel({ def, params }: PanelProps): ReactNode {
 }
 
 function WherePanel({ def, params }: PanelProps): ReactNode {
-  const { project, go } = useWorkbench();
+  const { project, go, report } = useWorkbench();
   const { sid, version } = useFollowed(def, params);
   if (sid === undefined || !project.record(sid)) return <Empty />;
   return (
     <div className="panel-scroll">
-      <WhereTab project={project} sid={sid} version={version} onGo={go} />
+      <WhereTab project={project} sid={sid} version={version} onGo={go} onReport={report} />
     </div>
   );
 }

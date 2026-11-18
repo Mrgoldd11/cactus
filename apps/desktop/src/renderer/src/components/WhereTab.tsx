@@ -9,6 +9,7 @@ import {
   displayName,
   formatPosition,
   whereInGame,
+  waysIntoGame,
   type WhereFact,
   type WherePlace,
   type WhereRecordInfo,
@@ -19,18 +20,22 @@ import {
 import { errorText, inLang, useLang, useT } from '../i18n.ts';
 import type { Project } from '../project.ts';
 import { ShowInGame } from './GameLink.tsx';
+import { SampleBlock, WaysList, useAddToLists } from './WaysIntoGame.tsx';
 
 interface Props {
   project: Project;
   sid: string;
   version: number;
   onGo: (sid: string) => void;
+  /** Result of edits (adding the record to a list): an error text or undefined. */
+  onReport: (err: string | undefined) => void;
 }
 
 const PAGE = 25;
 
-export function WhereTab({ project, sid, version, onGo }: Props): ReactNode {
+export function WhereTab({ project, sid, version, onGo, onReport }: Props): ReactNode {
   const t = useT();
+  const add = useAddToLists(project, sid, onReport);
   const [world, setWorld] = useState<WorldIndex | undefined>();
   const [worldError, setWorldError] = useState<string | undefined>();
   const [shown, setShown] = useState(PAGE);
@@ -93,7 +98,13 @@ export function WhereTab({ project, sid, version, onGo }: Props): ReactNode {
           <div className="muted small">{t.whereHint}</div>
         </div>
       </div>
-      {res.facts.length === 0 && <p className="muted">{t.whereNothing}</p>}
+      {res.facts.length === 0 && (
+        <div className="where-nowhere" data-testid="where-nowhere">
+          <p className="warn">{t.wyNothing}</p>
+          <WaysList project={project} sid={sid} version={version} add={add} />
+          <SampleBlock project={project} sid={sid} version={version} add={add} onGo={onGo} always />
+        </div>
+      )}
       {res.facts.slice(0, shown).map((f, i) => (
         <FactView key={`${f.role}:${f.holder?.id ?? i}`} fact={f} onGo={onGo} />
       ))}
@@ -107,7 +118,24 @@ export function WhereTab({ project, sid, version, onGo }: Props): ReactNode {
           {t.whereMore} ({res.facts.length - shown})
         </button>
       )}
+      {res.facts.length > 0 && <SampleBlock project={project} sid={sid} version={version} add={add} onGo={onGo} always={false} />}
+      {res.facts.length > 0 && <WaysDetails project={project} sid={sid} version={version} add={add} />}
     </div>
+  );
+}
+
+/** Ways into the game under the places, folded: the record is already there. */
+function WaysDetails(props: Parameters<typeof WaysList>[0]): ReactNode {
+  const t = useT();
+  const ctx = props.project.ctx;
+  const rec = ctx.get(props.sid);
+  const n = useMemo(() => (rec ? waysIntoGame(ctx.schema, ctx.typeName(rec.type)).length : 0), [ctx, rec]);
+  if (n === 0) return null;
+  return (
+    <details className="where-ways" data-testid="where-ways">
+      <summary className="muted">{t.wyTitle(n)}</summary>
+      <WaysList {...props} />
+    </details>
   );
 }
 

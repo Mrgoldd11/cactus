@@ -3075,3 +3075,70 @@ input.invalid {
 .aa-others { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 4px 8px; }
 .aa-names input { min-width: 14em; }
 .aa-clip-cell { min-width: 14em; }
+
+/* «In game: …» line of the inspector header and the ways into the game (WaysIntoGame.tsx). */
+.in-game {
+  font-size: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 2px;
+}
+.in-game-brief {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.in-game-open {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.where-nowhere > p.warn {
+  margin: 6px 0;
+}
+.ways {
+  list-style: none;
+  margin: 4px 0 10px;
+  padding: 0;
+}
+.way {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.way .grow {
+  flex: 1;
+  min-width: 0;
+}
+.way-icon {
+  width: 18px;
+  text-align: center;
+}
+.way-title {
+  font-weight: 600;
+}
+.way.generic .way-title {
+  font-weight: normal;
+}
+.where-ways {
+  margin-top: 10px;
+}
+.where-like {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg2);
+}
+.where-like-facts {
+  margin: 4px 0;
+  padding-left: 16px;
+}
+.where-like-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}

@@ -333,6 +333,31 @@ class Describer {
       const sample = src ? this.recordName(src) : same(` ${from!}`);
       return { ru: `Новая запись${name.ru} по образцу${sample.ru}`, en: `New record${name.en} based on${sample.en}`, zh: `基于${sample.zh} 的新记录${name.zh}` };
     }
+    // ways.ts addToListsLabel: «в игру: SID → LIST (field)» / «в игру: SID → мест N как у SAMPLE»
+    // Ids may have spaces («12-My Mod.mod»); field names have no brackets.
+    const intoMany = /^в игру: (.+?) → мест (\d+)(?: как у (.+))?$/s.exec(label);
+    const intoOne = intoMany ? null : /^в игру: (.+?) → (.+) \(([^()]+)\)$/s.exec(label);
+    if (intoOne || intoMany) {
+      const nameOf = (sid: string): Pair => {
+        const r = this.ctx.get(sid) ?? this.ctx.lower(sid);
+        return r ? this.recordName(r) : same(` ${sid}`);
+      };
+      const rec = nameOf((intoOne ?? intoMany)![1]!);
+      if (intoOne) {
+        const list = nameOf(intoOne[2]!);
+        const f = intoOne[3]!;
+        return { ru: `В игру:${rec.ru} → в${list.ru} (${f})`, en: `Into the game:${rec.en} → to${list.en} (${f})`, zh: `进入游戏：${rec.zh} → ${list.zh}（${f}）` };
+      }
+      const n = intoMany![2]!;
+      const from = intoMany![3];
+      if (from === undefined) return { ru: `В игру:${rec.ru} → мест: ${n}`, en: `Into the game:${rec.en} → places: ${n}`, zh: `进入游戏：${rec.zh} → 位置：${n}` };
+      const s = nameOf(from);
+      return {
+        ru: `В игру:${rec.ru} → туда же, где${s.ru} (мест: ${n})`,
+        en: `Into the game:${rec.en} → same places as${s.en} (places: ${n})`,
+        zh: `进入游戏：${rec.zh} → 与${s.zh} 相同的位置（${n}）`,
+      };
+    }
     const anims = /^анимации («.*»): клипов (\d+), рас (\d+)$/s.exec(label);
     if (anims) {
       const [, f, c, r] = anims;

@@ -16,6 +16,7 @@ import { raceEn, raceRu, raceZh } from './i18n-race.ts';
 import { animsEn, animsRu, animsZh } from './i18n-anims.ts';
 import { fieldsEn, fieldsRu, fieldsZh } from './i18n-fields.ts';
 import { newRecEn, newRecRu, newRecZh } from './i18n-new-record.ts';
+import { waysEn, waysRu, waysZh } from './i18n-ways.ts';
 import { zh1 } from './i18n-zh-1.ts';
 import { zh2 } from './i18n-zh-2.ts';
 import { specialZh } from './i18n-zh-special.ts';
@@ -627,6 +628,7 @@ const en = {
   ...animsEn,
   ...fieldsEn,
   ...newRecEn,
+  ...waysEn,
 };
 
 export type Strings = typeof en;
@@ -1228,9 +1230,10 @@ const ru: Strings = {
   ...animsRu,
   ...fieldsRu,
   ...newRecRu,
+  ...waysRu,
 };
 
-const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh, ...searchZh, ...fixesZh, ...publishZh, ...raceZh, ...animsZh, ...fieldsZh, ...newRecZh };
+const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh, ...searchZh, ...fixesZh, ...publishZh, ...raceZh, ...animsZh, ...fieldsZh, ...newRecZh, ...waysZh };
 
 export const STRINGS: Record<Lang, Strings> = { en, ru, zh };
 

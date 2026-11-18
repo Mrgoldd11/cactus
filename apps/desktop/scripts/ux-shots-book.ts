@@ -1,6 +1,8 @@
 /**
  * Screenshots of the record inspector on a new book (ITEM) in a new mod, Russian UI, 1400×850:
- * fields with their Russian names and the description bar, the reference lists among the fields.
+ * fields with their Russian names and the description bar, the reference lists among the fields,
+ * the «In game» line and «Where in game» with the ways into the game and «Like the sample»
+ * (sample: Book of Grace), then the book added to the sample's list.
  *
  *   node apps/desktop/scripts/ux-shots-book.ts [out-dir]
  */
@@ -45,6 +47,10 @@ try {
   await page.waitForTimeout(500);
   await page.getByTestId('new-record').click();
   await shot('50-book-new-modal');
+  await page.getByTestId('new-record-sample').click();
+  const picker = page.getByTestId('record-picker');
+  await picker.getByTestId('picker-search').fill('50383-Dialogue.mod');
+  await picker.getByTestId('picker-list').locator('[data-sid="50383-Dialogue.mod"]').dblclick();
   await page.getByTestId('new-record-name').fill('Моя книга');
   await page.getByTestId('new-record-create').click();
   await page.locator('[data-field="icon"] .field-name').click();
@@ -52,8 +58,12 @@ try {
   await page.getByTestId('refs').scrollIntoViewIfNeeded();
   await page.locator('[data-ref="races"] .field-name').click();
   await shot('52-book-refs');
-  await page.getByTestId('tab-where').click();
-  await shot('54-book-where', 2500);
+  await page.locator('[data-testid="in-game"][data-state="nowhere"]').waitFor({ timeout: 120_000 });
+  await page.getByTestId('in-game-open').click();
+  await shot('54-book-where', 1500);
+  await page.getByTestId('where-same').filter({ hasText: 'holy church' }).click();
+  await page.locator('[data-testid="in-game"][data-state="in"]').waitFor();
+  await shot('55-book-where-added', 1500);
 } finally {
   await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) w.destroy(); }).catch(() => undefined);
   await app.close().catch(() => undefined);
