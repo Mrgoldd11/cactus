@@ -8,7 +8,6 @@ import { useMemo, useState, type ReactNode } from 'react';
 import {
   buildDialogueGraph,
   dialogueScore,
-  enumLabel,
   EVENT_TALK,
   getEnum,
   PLAY_NPC,
@@ -31,6 +30,7 @@ import type { Project } from '../project.ts';
 import { lineCaption, useTranslation } from './LineInspector.tsx';
 import { partsText } from './TalkTab.tsx';
 import { AsInGame } from './GameLink.tsx';
+import { EventSelect } from './EventUi.tsx';
 
 interface Props {
   project: Project;
@@ -55,7 +55,6 @@ function conditionsOf(ctx: ModContext, sid: string, tr: TranslationIndex | undef
 
 export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }: Props): ReactNode {
   const t = useT();
-  const lang = useLang();
   const ctx = project.ctx;
   const tr = useTranslation(project);
   const [event, setEvent] = useState(EVENT_TALK);
@@ -73,7 +72,6 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
   }, [ctx, sid, event, mode, assume, answers, prefer, version]);
 
   const evDef = useMemo(() => refValueEnum(ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0), [ctx]);
-  const events = evDef?.values ?? [];
   const characters = useMemo(() => {
     const out: { sid: string; label: string }[] = [];
     for (const r of ctx.records()) {
@@ -127,23 +125,21 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
         </label>
         <label>
           {t.talkEvent}{' '}
-          <select
-            className="pl-event"
-            data-testid="pl-event"
-            value={event}
-            onChange={(e) => {
-              setEvent(Number(e.target.value));
-              setAnswers([]);
-              setPrefer(new Map());
-            }}
-          >
-            {!events.some((v) => v.value === event) && <option value={event}>{event}</option>}
-            {events.map((v) => (
-              <option key={v.value} value={v.value} title={v.description}>
-                {v.value} — {enumLabel(evDef!, v, lang) ?? v.name}
-              </option>
-            ))}
-          </select>
+          {evDef ? (
+            <EventSelect
+              def={evDef}
+              value={event}
+              testId="pl-event"
+              className="pl-event"
+              onChange={(n) => {
+                setEvent(n);
+                setAnswers([]);
+                setPrefer(new Map());
+              }}
+            />
+          ) : (
+            <span data-testid="pl-event">{event}</span>
+          )}
         </label>
         <label title={t.plModeHint}>
           {t.plMode}{' '}

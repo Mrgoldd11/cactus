@@ -13,17 +13,21 @@ import {
   defaultValue,
   encodeText,
   enumLabel,
+  EVENT_ENUM,
+  packageRefEvents,
   fieldHelp,
   fieldRows,
   formatFieldValue,
   formatFloat,
   formatRefValues,
+  describeRefValues,
   formatScalar,
   isRemovedRef,
   modRecordDiff,
   refGroups,
   refLabel,
   type EnumDef,
+  type Reference,
   type FieldDef,
   type FieldHelp,
   type FieldChange,
@@ -41,6 +45,7 @@ import { CommitInput } from './widgets.tsx';
 import { RecordPicker } from './RecordPicker.tsx';
 import { WhereTab } from './WhereTab.tsx';
 import { InGameLine, useInGame } from './WaysIntoGame.tsx';
+import { EventSelect, eventText, eventTip, PlaysWhen } from './EventUi.tsx';
 import { DIALOGUE_GRAPH_TYPES, DialogueGraphTab } from './DialogueGraphTab.tsx';
 import { TalkTab } from './TalkTab.tsx';
 import { conflictFieldLabel } from '../workbench/panels/conflicts.tsx';
@@ -131,6 +136,7 @@ export function RecordEditor({ project, version, sid, onGo, onReport, card, grap
             setTab('where');
           }}
         />
+        <PlaysWhen ctx={ctx} sid={sid} type={ctx.typeName(rec.type)} version={version} onGo={onGo} />
         {others.layers.length > 0 && (
           <div className="record-others muted" data-testid="record-others">
             {t.alsoChangedBy}: {others.layers.join(', ')}
@@ -541,8 +547,7 @@ function FieldHelpBar({ selected, rows, groups, help }: { selected: Selection | 
 function enumOptions(e: EnumDef, value: number | undefined, lang: string): ReactNode[] {
   const opts = e.values.map((v) => (
     <option key={v.value} value={v.value} title={v.description}>
-      {v.name}
-      {v.label !== undefined ? ` — ${enumLabel(e, v, lang) ?? v.label}` : ''}
+      {e.name === EVENT_ENUM ? eventText(e, v.value, lang) : `${v.name}${v.label !== undefined ? ` — ${enumLabel(e, v, lang) ?? v.label}` : ''}`}
     </option>
   ));
   if (value !== undefined && !e.values.some((v) => v.value === value)) opts.unshift(
@@ -671,7 +676,7 @@ function RefField({ ctx, sid, group, help, withLabels, selected, onSelect, disab
       </div>
       {group.rows.length > 0 && (
         <div className="ref-list">
-          <div className="ref-grid ref-header">
+          <div className={`ref-grid ref-header${group.valueEnums[0]?.name === EVENT_ENUM ? ' ref-ev' : ''}`}>
             <span />
             {[0, 1, 2].map((i) => (
               <span key={i}>{group.valueLabels[i] ?? ''}</span>
@@ -692,6 +697,9 @@ function RefLine({ ctx, sid, group, row, disabled, edit, onGo, t }: { ctx: ModCo
   const r = row.ref;
   const values = [r.v0, r.v1, r.v2];
   const removed = row.state === 'removed';
+  // Package events: the full names go into a caption under the row (the pickers are narrow).
+  const evDef = group.valueEnums[0]?.name === EVENT_ENUM ? group.valueEnums[0] : undefined;
+  const evs = evDef ? packageRefEvents(r) : [];
   const setValue = (i: number, v: number): void => {
     const next = [...values];
     next[i] = v;
@@ -701,7 +709,7 @@ function RefLine({ ctx, sid, group, row, disabled, edit, onGo, t }: { ctx: ModCo
   };
   const missing = row.targetName === undefined;
   return (
-    <div className={`ref-grid ref-row rs-${row.state}`} data-target={r.target}>
+    <div className={`ref-grid ref-row rs-${row.state}${evDef ? ' ref-ev' : ''}`} data-target={r.target}>
       <span className="ref-target">
         <button
           className={`link st-${row.targetStatus ?? 'base'} ${missing ? 'error' : ''}`}
@@ -720,6 +728,21 @@ function RefLine({ ctx, sid, group, row, disabled, edit, onGo, t }: { ctx: ModCo
         const v = values[i]!;
         const lowerV = row.lower ? [row.lower.v0, row.lower.v1, row.lower.v2][i] : undefined;
         const title = lowerV !== undefined && lowerV !== v ? `${t.vanillaValue}: ${lowerV}` : undefined;
+        if (e?.name === EVENT_ENUM) {
+          return (
+            <span key={i} title={title}>
+              <EventSelect
+                def={e}
+                value={v}
+                disabled={disabled || removed}
+                testId={`ref-ev${i}-${r.target}`}
+                onChange={(n) => {
+                  setValue(i, n);
+                }}
+              />
+            </span>
+          );
+        }
         if (e) {
           return (
             <span key={i} title={title}>
@@ -781,6 +804,19 @@ function RefLine({ ctx, sid, group, row, disabled, edit, onGo, t }: { ctx: ModCo
           </button>
         )}
       </span>
+      {evDef && (
+        <span className={`ref-ev-caption${evs.length === 0 ? ' warn' : ''}`} data-testid={`ref-events-${r.target}`}>
+          {evs.length === 0
+            ? t.pwNoEvents
+            : evs.map((e, k) => (
+                <span key={e} title={eventTip(evDef, e, lang, t.pwTarget, t.pwNoTarget)}>
+                  {k > 0 ? ' · ' : ''}
+                  {k > 0 ? <span className="muted">+ </span> : null}
+                  {eventText(evDef, e, lang)}
+                </span>
+              ))}
+        </span>
+      )}
     </div>
   );
 }
@@ -822,7 +858,9 @@ function BackRefsTab({ project, sid, entries, onGo }: { project: Project; sid: s
                 </td>
                 <td>{src?.type}</td>
                 <td>{e.category}</td>
-                <td className="mono">{e.ref ? formatRefValues(e.ref, lang) : ''}</td>
+                <td className="mono" data-testid="backref-values">
+                  {e.ref ? (refValuesText(project.ctx, e.source, e.category, e.ref, lang) ?? formatRefValues(e.ref, lang)) : ''}
+                </td>
               </tr>
             );
           })}
@@ -834,6 +872,12 @@ function BackRefsTab({ project, sid, entries, onGo }: { project: Project; sid: s
 }
 
 // ---------------------------------------------------------------- difference from vanilla
+
+/** Reference values with their meaning (package events: «Acid rain · EV_ACID_RAIN (62)»), if known. */
+function refValuesText(ctx: ModContext, source: string, category: string, ref: Reference, lang: string): string | undefined {
+  const src = ctx.get(source) ?? ctx.lower(source);
+  return src ? describeRefValues(ctx.schema, ctx.typeName(src.type), category, ref, lang) : undefined;
+}
 
 function changeCells(ctx: ModContext, rec: GameRecord, c: FieldChange, lang: string): [string, string, string] {
   switch (c.kind) {
@@ -849,7 +893,7 @@ function changeCells(ctx: ModContext, rec: GameRecord, c: FieldChange, lang: str
     }
     case 'ref': {
       const target = c.target.replace(/#\d+$/, '');
-      const fmt = (r: typeof c.before): string => (!r || isRemovedRef(r) ? '—' : formatRefValues(r));
+      const fmt = (r: typeof c.before): string => (!r || isRemovedRef(r) ? '—' : (refValuesText(ctx, rec.stringId, c.category, r, lang) ?? formatRefValues(r)));
       return [`${c.category} → ${refLabel(ctx, target, lang)}`, fmt(c.before), fmt(c.after)];
     }
     case 'refOrder':

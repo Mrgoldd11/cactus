@@ -7,7 +7,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   EVENT_TALK,
-  enumLabel,
   quote,
   refValueEnum,
   simulateTalk,
@@ -19,6 +18,7 @@ import {
 import { errorText, type Strings, useLang, useT } from '../i18n.ts';
 import { recordName, useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
+import { EventSelect } from './EventUi.tsx';
 
 interface Props {
   project: Project;
@@ -28,7 +28,6 @@ interface Props {
 }
 
 export function TalkTab({ project, sid, version, onGo }: Props): ReactNode {
-  const lang = useLang();
   const t = useT();
   const [event, setEvent] = useState(EVENT_TALK);
   const translation = useGameTexts(project);
@@ -43,27 +42,17 @@ export function TalkTab({ project, sid, version, onGo }: Props): ReactNode {
   }, [project, sid, event, version, translation]);
 
   const evDef = useMemo(() => refValueEnum(project.ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0), [project]);
-  const events = evDef?.values ?? [];
 
   return (
     <div className="talk" data-testid="talk" data-sid={sid}>
       <div className="talk-bar">
         <label>
           {t.talkEvent}{' '}
-          <select
-            data-testid="talk-event"
-            value={event}
-            onChange={(e) => {
-              setEvent(Number(e.target.value));
-            }}
-          >
-            {!events.some((v) => v.value === event) && <option value={event}>{event}</option>}
-            {events.map((v) => (
-              <option key={v.value} value={v.value} title={v.description}>
-                {v.value} — {(evDef && enumLabel(evDef, v, lang)) ?? v.name}
-              </option>
-            ))}
-          </select>
+          {evDef ? (
+            <EventSelect def={evDef} value={event} testId="talk-event" onChange={setEvent} />
+          ) : (
+            <span data-testid="talk-event">{event}</span>
+          )}
         </label>
         <span className="muted small">
           {translation === null ? t.dgLoadingTr : translation === undefined ? t.dgNoTr : ''}

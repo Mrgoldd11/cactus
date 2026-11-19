@@ -3,7 +3,7 @@
  * a link to the record), position, time, pause and the dialogue trace log.
  */
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import type { GameState } from '@kenshi-editor/core';
+import { formatEnumValue, getEnum, type GameState } from '@kenshi-editor/core';
 import { langOf, useLang } from '../../i18n.ts';
 import { GAME_STRINGS, gameRequest, gameState, replyError, setGameTrace, useGameLink, useGameT, useGameTrace } from '../../game.ts';
 import { ShowInGame, TraceView } from '../../components/GameLink.tsx';
@@ -116,8 +116,11 @@ function GamePanel(): ReactNode {
 
 function TraceSection({ onGo }: { onGo: (sid: string) => void }): ReactNode {
   const g = useGameT();
+  const lang = useLang();
   const trace = useGameTrace();
   const last = trace.records.slice(-15).reverse();
+  const evDef = getEnum(undefined, 'EventTriggerEnum');
+  const evName = (e: number): string => (evDef ? formatEnumValue(evDef, e, lang) : String(e));
   return (
     <div className="game-trace-section">
       <div className="game-row">
@@ -129,7 +132,7 @@ function TraceSection({ onGo }: { onGo: (sid: string) => void }): ReactNode {
       {last.map((r) => (
         <div key={r.seq} className="game-trace-item">
           <div>
-            #{r.seq} · {g.event} {r.event} · {g.speaker}: {r.speaker?.name ?? '—'} → {r.target?.name ?? '—'} ·{' '}
+            #{r.seq} · {g.event} {evName(r.event)} · {g.speaker}: {r.speaker?.name ?? '—'} → {r.target?.name ?? '—'} ·{' '}
             {r.chosen ? `${g.chosen}: ${r.chosen.dialogueName || r.chosen.dialogue}` : g.nothing}
           </div>
           <TraceView rec={r} onGo={onGo} />

@@ -760,6 +760,71 @@ tr.fs-removed td:first-child {
   align-items: center;
   padding: 1px 4px;
 }
+/* Package events: wider pickers with a search field, full names in a caption under the row. */
+/* Package events: the target and ✕ on the first line, the three event pickers under it. */
+.ref-grid.ref-ev {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 28px;
+  row-gap: 2px;
+}
+.ref-header.ref-ev > :first-child {
+  display: none;
+}
+.ref-row.ref-ev > .ref-target {
+  grid-column: 1 / 4;
+  grid-row: 1;
+}
+.ref-row.ref-ev > :nth-child(5) {
+  grid-column: 4;
+  grid-row: 1;
+}
+.ref-ev-caption {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  padding: 0 0 3px 10px;
+  color: var(--text);
+}
+.ev-select {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+}
+.ev-select .ev-search {
+  flex: 0 0 4.5em;
+  min-width: 0;
+}
+.ev-select .ev-search:focus {
+  flex-basis: 9em;
+}
+.ev-select select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ref-row .ev-select input,
+.ref-row .ev-select select {
+  width: auto;
+}
+.plays-when {
+  margin-top: 4px;
+  font-size: 13px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 6px;
+}
+.plays-when .pw-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.plays-when .pw-row {
+  margin: 0 0 1px;
+}
+/* One line in the header: the full explanation is in the tooltip. */
+.plays-when .pw-tip {
+  grid-column: 2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .ref-header {
   color: var(--muted);
   font-size: 12px;

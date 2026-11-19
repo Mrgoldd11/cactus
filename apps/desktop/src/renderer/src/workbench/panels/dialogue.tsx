@@ -4,7 +4,7 @@
  * the line inspector shows the latest one.
  */
 import { useMemo, useState, type ReactNode } from 'react';
-import { EVENT_TALK, enumLabel, refValueEnum, simulateTalk, squadIndex, talkSources } from '@kenshi-editor/core';
+import { EVENT_TALK, formatEnumValue, refValueEnum, simulateTalk, squadIndex, talkSources } from '@kenshi-editor/core';
 import { DialogueGraphTab } from '../../components/DialogueGraphTab.tsx';
 import { LineInspector } from '../../components/LineInspector.tsx';
 import { ConversationPlayer, TalkExample } from '../../components/ConversationPlayer.tsx';
@@ -78,10 +78,7 @@ function CharacterGraph({ character, version }: { character: string; version: nu
   const cur = list.find((d) => d.dialog === picked) ?? list[0]!;
   const at = list.indexOf(cur);
   const evDef = refValueEnum(project.ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0);
-  const evName = (event: number): string => {
-    const v = evDef?.values.find((x) => x.value === event);
-    return (v && evDef && enumLabel(evDef, v, lang)) ?? String(event);
-  };
+  const evName = (event: number): string => (evDef ? formatEnumValue(evDef, event, lang) : String(event));
   return (
     <div className="dg-char" data-testid="graph-character" data-sid={character}>
       <div className="dg-char-bar">

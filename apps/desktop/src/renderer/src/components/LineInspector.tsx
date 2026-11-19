@@ -55,6 +55,7 @@ import { useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
 import { tryEdit } from '../hooks.ts';
 import { CommitInput } from './widgets.tsx';
+import { PlaysWhen } from './EventUi.tsx';
 
 interface Props {
   project: Project;
@@ -228,6 +229,7 @@ export function LineInspector({ project, sid, parent, version, onGo, onSelect, o
           ↗ {t.panel_inspector}
         </button>
       </div>
+      <PlaysWhen ctx={ctx} sid={sid} type={type} version={version} onGo={onGo} />
       <div className="ln-actions">
         {lower && (
           <button className={`small${asInGame ? ' active' : ''}`} data-testid="ln-as-in-game" onClick={() => { setAsInGame(!asInGame); }}>

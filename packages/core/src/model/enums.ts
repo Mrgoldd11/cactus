@@ -16,6 +16,7 @@ import {
   CONDITION_TAG_ENUMS,
   PACKAGE_EVENT_SKIP,
 } from '../schema/builtin-enums.ts';
+import { eventHelp } from '../schema/event-help.ts';
 import type { EnumDef, EnumValue } from '../schema/fcs-enums.ts';
 import { findField, type GameSchema } from '../schema/game-schema.ts';
 import type { ModContext } from './context.ts';
@@ -87,18 +88,29 @@ export function packageRefEvents(ref: Pick<Reference, 'v0' | 'v1' | 'v2'>): numb
 /** "Not in" of an unknown enum value, per interface language. */
 const NOT_IN: Record<string, string> = { en: 'not in', ru: 'нет в', zh: '不在' };
 
+/** Enum of package dialogue events (`DIALOGUE_PACKAGE.dialogs` v0..v2). */
+export const EVENT_ENUM = 'EventTriggerEnum';
+
 /** Short label of a value in the interface language (built-in enums only); Russian is the stored one. */
 export function enumLabel(def: EnumDef, v: EnumValue, lang = 'en'): string | undefined {
+  if (def.name === EVENT_ENUM) {
+    const help = eventHelp(v.name);
+    if (help) return uiText(help.label, lang);
+  }
   if (v.label === undefined) return undefined;
   if (lang === 'ru') return v.label;
   return BUILTIN_ENUM_LABELS_I18N[lang]?.[def.name]?.[v.name] ?? BUILTIN_ENUM_LABELS_I18N.en![def.name]?.[v.name] ?? v.label;
 }
 
-/** `DR_ONCE_ONLY "once only" (5)`; an unknown value gives `5 (not in DialogRepetitionEnum)`. */
+/**
+ * `DR_ONCE_ONLY "once only" (5)`; an unknown value gives `5 (not in DialogRepetitionEnum)`.
+ * Events read the other way round, the human name first: `Acid rain · EV_ACID_RAIN (62)`.
+ */
 export function formatEnumValue(def: EnumDef, value: number, lang = 'en'): string {
   const v = enumValue(def, value);
   if (!v) return `${value} (${NOT_IN[lang] ?? NOT_IN.en!} ${def.name})`;
   const label = enumLabel(def, v, lang);
+  if (def.name === EVENT_ENUM && label !== undefined) return `${label} · ${v.name} (${value})`;
   return `${v.name}${label !== undefined ? ` ${quote(label, lang)}` : ''} (${value})`;
 }
 
@@ -120,8 +132,21 @@ export function parseEnumValue(def: EnumDef, input: string | number): number | u
   const hit =
     def.values.find((v) => v.name === s) ??
     def.values.find((v) => v.name.toLowerCase() === lower || v.name.toLowerCase().replace(/^[a-z]+_/, '') === lower) ??
-    def.values.find((v) => v.label?.toLowerCase() === lower);
+    def.values.find((v) => v.label?.toLowerCase() === lower) ??
+    (def.name === EVENT_ENUM ? def.values.find((v) => Object.values(eventHelp(v.name)?.label ?? {}).some((l) => l?.toLowerCase() === lower)) : undefined);
   return hit?.value;
+}
+
+/**
+ * Whether an enum value matches a search: the number, the name (`EV_ACID_RAIN`, `acid_rain`,
+ * `acid rain`) or the label in the interface language or in English. Every word must match.
+ */
+export function enumValueMatches(def: EnumDef, v: EnumValue, query: string, lang = 'en'): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (/^\d+$/.test(q)) return String(v.value) === q;
+  const hay = [v.name, v.name.replace(/_/g, ' '), enumLabel(def, v, lang) ?? '', enumLabel(def, v, 'en') ?? '', v.label ?? ''].join(' | ').toLowerCase();
+  return q.split(/\s+/).every((w) => hay.includes(w));
 }
 
 const ACTION_WORDS: Record<string, { action: string; condition: string }> = {

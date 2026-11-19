@@ -119,10 +119,10 @@ describe('package dialogue events: v0, v1, v2', () => {
     // A reference without events keeps its v0 (EV_NONE) so the dead entry stays visible.
     expect(tree.children.find((n) => n.stringId === 'NONE')!.events).toEqual([0]);
     const text = formatDialogueTree(ctx, tree, { lang: 'ru' }).join('\n');
-    expect(text).toContain('[событие EV_LOST_ARM (71), EV_LOST_LEG (70), EV_BURNING (69)]');
+    expect(text).toContain('[событие Отрубили руку · EV_LOST_ARM (71), Отрубили ногу · EV_LOST_LEG (70), Горит · EV_BURNING (69)]');
     const g = buildDialogueGraph(ctx, 'PK').nodes.find((n) => n.id === 'HEAL')!;
     expect(g.events).toEqual([21, 24]);
-    expect(g.eventLabel).toBe('EV_BEING_HEALED_FINISHED (21), EV_GET_UP_FIGHT “got up in a fight” (24)');
+    expect(g.eventLabel).toMatch(/^[^·]+ · EV_BEING_HEALED_FINISHED \(21\), [^·]+ · EV_GET_UP_FIGHT \(24\)$/);
   });
 
   it('record editor: three event columns, labels in the interface language', () => {
@@ -135,8 +135,8 @@ describe('package dialogue events: v0, v1, v2', () => {
   });
 
   it('describeRefValues lists the set slots', () => {
-    expect(describeRefValues(undefined, 'DIALOGUE_PACKAGE', 'dialogs', ref('S', 3, 23), 'en')).toBe('event EV_I_SEE_NEUTRAL_SQUAD “sees a neutral squad” (3), event 2 EV_GET_UP_PEACE “got up after a fight” (23)');
-    expect(describeRefValues(undefined, 'DIALOGUE_PACKAGE', 'dialogs', ref('S', 1), 'ru')).toBe('событие EV_PLAYER_TALK_TO_ME «разговор» (1)');
+    expect(describeRefValues(undefined, 'DIALOGUE_PACKAGE', 'dialogs', ref('S', 3, 23), 'en')).toBe('event Sees a neutral squad · EV_I_SEE_NEUTRAL_SQUAD (3), event 2 Got up, the fight is over · EV_GET_UP_PEACE (23)');
+    expect(describeRefValues(undefined, 'DIALOGUE_PACKAGE', 'dialogs', ref('S', 1), 'ru')).toBe('событие Игрок заговорил · EV_PLAYER_TALK_TO_ME (1)');
   });
 
   it('the builder reuses the reference: an event already in v1/v2 is kept, a new one goes into a free slot', () => {
