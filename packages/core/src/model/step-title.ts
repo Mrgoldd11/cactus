@@ -12,6 +12,7 @@ import type { Changeset, ModContext } from './context.ts';
 import type { RecordDiff } from './diff.ts';
 import { changesetDiff, formatScalar } from './present.ts';
 import { mapUi, uiText, type UiText } from '../ui-text.ts';
+import { formatEnumValue, refValueEnum } from './enums.ts';
 
 export interface StepTitle {
   /** The title in the interface languages; non-English titles quote line texts in the data language. */
@@ -332,6 +333,21 @@ class Describer {
       const src = this.ctx.get(from!) ?? this.ctx.lower(from!);
       const sample = src ? this.recordName(src) : same(` ${from!}`);
       return { ru: `Новая запись${name.ru} по образцу${sample.ru}`, en: `New record${name.en} based on${sample.en}`, zh: `基于${sample.zh} 的新记录${name.zh}` };
+    }
+    // event-dialogue.ts eventDialogueLabel: «диалог на событие: «NAME» → PKG (событие N)» / «в пакет: …»
+    const onEvent = /^(диалог на событие|в пакет): «(.*)» → (.+) \(событие (\d+)\)$/s.exec(label);
+    if (onEvent) {
+      const [, kind, a, pkgSid, n] = onEvent;
+      // A package made by the same step is labelled by its holder: take the added package then.
+      const named = this.ctx.get(pkgSid!);
+      const made = this.added().find((d) => d.after !== undefined && itemTypeName(d.after.type) === 'DIALOGUE_PACKAGE')?.after;
+      const pkgRec = named && itemTypeName(named.type) === 'DIALOGUE_PACKAGE' ? named : (made ?? named);
+      const pkg = pkgRec ? this.recordName(pkgRec) : same(` ${pkgSid!}`);
+      const def = refValueEnum(this.ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0);
+      const ev = (lang: string): string => (def ? formatEnumValue(def, Number(n), lang) : n!);
+      if (kind === 'в пакет')
+        return { ru: `Диалог «${a!}» в пакет${pkg.ru}: ${ev('ru')}`, en: `Dialogue “${a!}” into package${pkg.en}: ${ev('en')}`, zh: `对话“${a!}”加入对话包${pkg.zh}：${ev('zh')}` };
+      return { ru: `Диалог на событие «${a!}» → пакет${pkg.ru}: ${ev('ru')}`, en: `Dialogue on event “${a!}” → package${pkg.en}: ${ev('en')}`, zh: `事件对话“${a!}” → 对话包${pkg.zh}：${ev('zh')}` };
     }
     // ways.ts addToListsLabel: «в игру: SID → LIST (field)» / «в игру: SID → мест N как у SAMPLE»
     // Ids may have spaces («12-My Mod.mod»); field names have no brackets.

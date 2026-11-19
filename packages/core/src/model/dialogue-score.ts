@@ -46,7 +46,7 @@ export function hasConditions(rec: GameRecord): boolean {
 }
 
 /** DialogConditionEnum.DC_HAS_TAG: for such a condition the game gives another +1. */
-const DC_HAS_TAG = 23;
+export const DC_HAS_TAG = 23;
 /** Initial "best" in `_chooseDialog`: records with a lower score are never picked. */
 export const CHOOSE_MIN_SCORE = -999;
 /** Speakers that are always present in a click conversation: me, target, target-player. */

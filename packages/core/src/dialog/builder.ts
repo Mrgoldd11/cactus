@@ -37,6 +37,8 @@ export type DialogWhen =
   | { noTargetRace: readonly string[] }
   /** The speaker is in one of these factions. */
   | { myFaction: readonly string[] }
+  /** The speaker is of one of these races (OR). */
+  | { myRace: readonly string[] }
   /** The speaker is one of these characters. */
   | { isChar: readonly string[] };
 
@@ -70,6 +72,22 @@ export interface CreateFields {
 }
 
 const ref = (target: string, v0 = 0, v1 = 0, v2 = 0): Reference => ({ target, v0, v1, v2 });
+
+/** Append `dialog` to the package under `event` (into a free slot of an existing reference to it). */
+export function addDialogToPackage(ctx: ModContext, pkg: string, dialog: string, event: number): void {
+  ctx.editRecord(pkg, (d) => {
+    const list = d.refs.get('dialogs') ?? [];
+    const same = list.filter((x) => x.target === dialog);
+    if (!same.some((x) => packageRefEvents(x).includes(event))) {
+      // One reference per target survives the mod diff, and the game reads v0, v1 and v2 as events:
+      // put the event into a free slot (0 or 100) of the existing reference.
+      const slot = (['v0', 'v1', 'v2'] as const).find((k) => same[0] !== undefined && PACKAGE_EVENT_SKIP.includes(same[0][k]));
+      if (same[0] && slot) same[0][slot] = event;
+      else if (!same[0]) list.push(ref(dialog, event));
+    }
+    d.refs.set('dialogs', list);
+  });
+}
 
 /** Where to attach character events: own package → squad packages → default faction package. */
 export function attachPackages(ctx: ModContext, c: GameRecord, sq: SquadIndex): { via: 'own' | 'squad' | 'faction'; pkgs: string[] } {
@@ -145,6 +163,7 @@ export class DialogBuilder {
       else if ('targetRace' in w) for (const r of w.targetRace) push('target race', ref(this.need(r)));
       else if ('noTargetRace' in w) for (const r of w.noTargetRace) push('no target race', ref(this.need(r)));
       else if ('myFaction' in w) for (const f of w.myFaction) push('my faction', ref(this.need(f)));
+      else if ('myRace' in w) for (const r of w.myRace) push('my race', ref(this.need(r)));
       else for (const c of w.isChar) push('is character', ref(this.need(c)));
     });
     return out;
@@ -207,19 +226,7 @@ export class DialogBuilder {
       if (!list.length) this.noPackage.add(c);
       for (const p of list) pkgs.add(p);
     }
-    for (const p of pkgs)
-      this.ctx.editRecord(p, (d) => {
-        const list = d.refs.get('dialogs') ?? [];
-        const same = list.filter((x) => x.target === dialog);
-        if (!same.some((x) => packageRefEvents(x).includes(event))) {
-          // One reference per target survives the mod diff, and the game reads v0, v1 and v2 as events:
-          // put the event into a free slot (0 or 100) of the existing reference.
-          const slot = (['v0', 'v1', 'v2'] as const).find((k) => same[0] !== undefined && PACKAGE_EVENT_SKIP.includes(same[0][k]));
-          if (same[0] && slot) same[0][slot] = event;
-          else if (!same[0]) list.push(ref(dialog, event));
-        }
-        d.refs.set('dialogs', list);
-      });
+    for (const p of pkgs) addDialogToPackage(this.ctx, p, dialog, event);
     return [...pkgs];
   }
 }
