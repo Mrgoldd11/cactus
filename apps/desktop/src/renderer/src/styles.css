@@ -4136,3 +4136,57 @@ code.pk-code {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* «▶ Play» strip under the dialogue graph (UI review G7): who says what, then the conversation. */
+.dg-view-switch .dg-play {
+  margin-left: auto;
+}
+.dg-view-switch .dg-play.active {
+  background: var(--sel);
+  border-color: var(--accent);
+}
+.dg-views > .play-strip {
+  flex: none;
+  max-height: 45%;
+  overflow: auto;
+  border-top: 2px solid var(--accent);
+  background: var(--bg2);
+  padding: 6px 10px;
+}
+.play-strip .player {
+  margin-bottom: 0;
+}
+.ps-title {
+  white-space: nowrap;
+}
+.ps-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  border-left: 3px solid var(--accent);
+  background: var(--bg3);
+}
+.ps-tie {
+  color: #e0c070;
+}
+.ps-summary button {
+  margin-left: auto;
+}
+.pl-key {
+  text-align: right;
+  font-weight: 600;
+}
+.ed-like {
+  padding: 4px 8px;
+  border-left: 3px solid var(--accent);
+}
+/* The line the played conversation is at. */
+.dg-node.dg-playing {
+  box-shadow: 0 0 0 3px var(--new), 0 0 14px rgba(111, 207, 111, 0.55);
+}
+.dt-row.dt-playing {
+  background: rgba(111, 207, 111, 0.2);
+  box-shadow: inset 3px 0 0 var(--new);
+}

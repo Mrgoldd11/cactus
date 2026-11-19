@@ -701,11 +701,12 @@ test('conversation player: which dialogue is picked and why, answers, as if, exa
     // Clicking a line opens its dialogue in the graph and the line itself in the line inspector.
     await first.getByTestId('pl-said').getByRole('button').click();
     await expect(page.getByTestId('dialogue-graph')).toHaveAttribute('data-sid', '48721-Dialogue.mod');
-    // The player opened by «▶ Play» shares the right column with the line inspector (G1).
     await page.locator('.dv-tab', { hasText: 'Реплика диалога' }).click();
     await expect(page.getByTestId('line-inspector')).toHaveAttribute('data-sid', '48722-Dialogue.mod');
-    await page.locator('.dv-tab', { hasText: 'Проигрыватель разговора' }).click();
+    // The player is the «▶ Play» strip under the graph (G7): it stays on the barman, the said line is lit.
     await expect(player).toHaveAttribute('data-sid', '50638-rebirth.mod');
+    await expect(page.getByTestId('graph-character-dialog')).toHaveValue('48721-Dialogue.mod');
+    await expect(page.locator('[data-testid="dg-node"][data-id="48722-Dialogue.mod"]')).toHaveAttribute('data-playing', 'true');
     await page.screenshot({ path: join(shots, '18c-player-line.png') });
 
     // «How the game picks a dialogue»: the rule and an example on this character.

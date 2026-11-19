@@ -1,5 +1,6 @@
 /**
- * Dialogue panels: dialogue graph (with editing), line inspector, conversation player.
+ * Dialogue panels: dialogue graph (with editing and the «▶ Play» strip under it), line inspector,
+ * conversation player (the same strip on its own, for a character).
  * Lines selected in the graph or inspector are a selection of kind «line»: the graph does not jump after them,
  * the line inspector shows the latest one.
  */
@@ -7,7 +8,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { EVENT_TALK, formatEnumValue, refValueEnum, simulateTalk, squadIndex, talkSources } from '@kenshi-editor/core';
 import { DialogueGraphTab } from '../../components/DialogueGraphTab.tsx';
 import { LineInspector } from '../../components/LineInspector.tsx';
-import { ConversationPlayer, TalkExample } from '../../components/ConversationPlayer.tsx';
+import { TalkExample } from '../../components/ConversationPlayer.tsx';
+import { PlayStrip } from '../../components/PlayStrip.tsx';
 import { TalkRulesBody, TalkTab } from '../../components/TalkTab.tsx';
 import { useLang, useT } from '../../i18n.ts';
 import { recordName } from '../../data-names.ts';
@@ -73,6 +75,8 @@ function CharacterGraph({ character, version }: { character: string; version: nu
   const lang = useLang();
   const list = useMemo(() => characterDialogs(project, character), [project, character, version]);
   const [picked, setPicked] = useState<string | undefined>(undefined);
+  const selectLine = useSelectLine(undefined);
+  const selectPlayed = useSelectPlayed();
   const who = recordName(project.ctx, character);
   if (!list.length) return <Empty text={t.dgCharNone(who)} />;
   const cur = list.find((d) => d.dialog === picked) ?? list[0]!;
@@ -101,16 +105,70 @@ function CharacterGraph({ character, version }: { character: string; version: nu
           {t.dgCharCount(at + 1, list.length)}
         </span>
       </div>
-      <Graph sid={cur.dialog} version={version} />
+      <Graph
+        sid={cur.dialog}
+        version={version}
+        playWith={{
+          character,
+          event: cur.event,
+          // A line of the conversation: the switcher goes to its dialogue, the strip keeps playing.
+          onSelectLine: (line, dialog) => {
+            if (dialog === undefined || !list.some((d) => d.dialog === dialog)) {
+              selectPlayed(line, dialog);
+              return;
+            }
+            setPicked(dialog);
+            selectLine(line);
+          },
+        }}
+      />
     </div>
   );
 }
 
-/** The dialogue graph of one dialogue (or package / line). */
-function Graph({ sid, version }: { sid: string; version: number }): ReactNode {
-  const { project, go, report, selection, open, hasPanel } = useWorkbench();
+/** A line from the conversation: its dialogue goes to the graph, the line itself to the line inspector. */
+function useSelectPlayed(): (line: string, dialog?: string) => void {
+  const { selection } = useWorkbench();
+  return (line, dialog) => {
+    if (dialog !== undefined) selection.select({ kind: 'record', sid: dialog }, { history: false });
+    selection.select({ kind: 'line', sid: line, ...(dialog !== undefined ? { dialog } : {}) }, { history: false });
+  };
+}
+
+/** A character graph plays the character; its own line handler keeps the character graph on screen. */
+interface PlayWith {
+  character: string;
+  event: number;
+  onSelectLine: (line: string, dialog?: string) => void;
+}
+
+/**
+ * The dialogue graph of one dialogue (or package / line) with the «▶ Play» strip under it. The strip
+ * stays open while the panel follows other records; `playWith` — a character graph plays the character.
+ */
+function Graph({ sid, version, playWith }: { sid: string; version: number; playWith?: PlayWith }): ReactNode {
+  const { project, go, report, selection, open, hasPanel, newEventDialogue } = useWorkbench();
   const select = useSelectLine(sid);
+  const selectPlayed = useSelectPlayed();
   const line = selection.latest((s) => s.kind === 'line');
+  const [playOpen, setPlayOpen] = useState(false);
+  // The strip stays on the record it was opened on while the graph walks to other dialogues.
+  const [playFrom, setPlayFrom] = useState(sid);
+  const [playing, setPlaying] = useState<string | undefined>();
+  const strip = (
+    <PlayStrip
+      key={playWith ? playWith.character : playFrom}
+      project={project}
+      sid={playFrom}
+      version={version}
+      onGo={go}
+      onSelectLine={playWith?.onSelectLine ?? selectPlayed}
+      {...(playWith ? { character: playWith.character, event: playWith.event, sample: sid } : {})}
+      onClose={() => { setPlayOpen(false); }}
+      onPlaying={setPlaying}
+      onLike={newEventDialogue}
+    />
+  );
   return (
     <DialogueGraphTab
       key={sid}
@@ -123,7 +181,13 @@ function Graph({ sid, version }: { sid: string; version: number }): ReactNode {
       onReport={report}
       onShowLine={() => { open('line'); }}
       isLineOpen={() => hasPanel('line')}
-      onPlay={() => { open('player'); }}
+      onPlay={() => {
+        if (!playOpen) setPlayFrom(sid);
+        setPlayOpen(!playOpen);
+      }}
+      playOpen={playOpen}
+      strip={strip}
+      playing={playOpen ? playing : undefined}
     />
   );
 }
@@ -138,19 +202,16 @@ function LinePanel({ def, params }: PanelProps): ReactNode {
   return <LineInspector project={project} sid={sid} {...(parent !== undefined ? { parent } : {})} version={version} onGo={go} onSelect={select} onReport={report} />;
 }
 
+/** The «▶ Play» strip of a character on its own (the census opens it), with the talk summary. */
 function PlayerPanel({ def, params }: PanelProps): ReactNode {
-  const { project, go, selection } = useWorkbench();
+  const { project, go, newEventDialogue } = useWorkbench();
   const t = useT();
   const { sid, version } = useFollowed(def, params);
+  const selectLine = useSelectPlayed();
   if (sid === undefined) return <Empty types={def.shows?.types} />;
-  // A line from the conversation: its dialogue goes to the graph, the line itself to the line inspector.
-  const selectLine = (line: string, dialog?: string): void => {
-    if (dialog !== undefined) selection.select({ kind: 'record', sid: dialog }, { history: false });
-    selection.select({ kind: 'line', sid: line, ...(dialog !== undefined ? { dialog } : {}) }, { history: false });
-  };
   return (
     <div className="panel-scroll panel-pad">
-      <ConversationPlayer key={sid} project={project} sid={sid} version={version} onGo={go} onSelectLine={selectLine} />
+      <PlayStrip key={sid} project={project} sid={sid} character={sid} version={version} onGo={go} onSelectLine={selectLine} onLike={newEventDialogue} />
       <details className="pl-summary" open>
         <summary>{t.plSummary}</summary>
         <TalkTab project={project} sid={sid} version={version} onGo={go} />

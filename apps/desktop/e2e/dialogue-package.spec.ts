@@ -111,7 +111,7 @@ test('package panel: events of Drifter squad, search, dialogue → graph, player
     const character = (await holder.getAttribute('data-sid'))!;
     await holder.click();
     await expect(page.getByTestId('player')).toHaveCount(0);
-    await graph.getByTestId('dg-play').click();
+    await page.locator('[data-panel="graph"]').getByTestId('dg-play').click();
     await expect(page.getByTestId('player')).toHaveAttribute('data-sid', character, { timeout: 60_000 });
     await page.screenshot({ path: join(shots, '93-player-by-button.png') });
   } finally {

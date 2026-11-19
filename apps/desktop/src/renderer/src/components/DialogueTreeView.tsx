@@ -48,6 +48,8 @@ export interface TreeProps {
   onReport?: (err: string | undefined) => void;
   /** Open (or show) the «Line» panel. */
   onShowLine?: () => void;
+  /** The line the «▶ Play» strip is at: highlighted, unfolded and scrolled into view. */
+  playing?: string | undefined;
 }
 
 /** Same rules as the graph: bigger dialogues open with deep branches folded. */
@@ -75,7 +77,7 @@ interface LineTransition {
   kinds: TransitionKind[];
 }
 
-export function DialogueTreeView({ project, sid, version, onGo, selected, onSelect, onReport, onShowLine }: TreeProps): ReactNode {
+export function DialogueTreeView({ project, sid, version, onGo, selected, onSelect, onReport, onShowLine, playing }: TreeProps): ReactNode {
   const t = useT();
   const lang = useLang();
   const ctx = project.ctx;
@@ -187,6 +189,13 @@ export function DialogueTreeView({ project, sid, version, onGo, selected, onSele
     reveal(selected);
     scrollTo(selected);
   }, [selected, byId]);
+
+  // The played conversation moved on — unfold and scroll to its line.
+  useEffect(() => {
+    if (playing === undefined || !byId.has(playing)) return;
+    reveal(playing);
+    scrollTo(playing);
+  }, [playing, byId]);
 
   useEffect(() => {
     const id = pendingScroll.current;
@@ -392,9 +401,10 @@ export function DialogueTreeView({ project, sid, version, onGo, selected, onSele
     return (
       <div
         key={`r${i}`}
-        className={`dt-row dt-${kind}${sel === r.id ? ' dt-sel' : ''}${matchSet.has(r.id) ? ' dt-matched' : ''}`}
+        className={`dt-row dt-${kind}${sel === r.id ? ' dt-sel' : ''}${matchSet.has(r.id) ? ' dt-matched' : ''}${playing === r.id ? ' dt-playing' : ''}`}
         data-testid="dt-row"
         data-id={r.id}
+        data-playing={playing === r.id ? 'true' : undefined}
         data-kind={lk}
         data-depth={r.depth}
         data-status={status}

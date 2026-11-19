@@ -4,13 +4,17 @@
  * race); the lines and the dialogue conditions. Under them the «what happens with the score» line
  * from the core (`eventDialogueScore`): the bonus, the strongest rival and the tie. The caller
  * creates the dialogue (`createEventDialogue`, one undo step).
+ * «Make one like it…» of the «▶ Play» strip (G7) opens it filled from a sample dialogue
+ * (`eventDialogueLike`): race, conditions, the line chain, the repetition limit and «monologue».
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import {
   CONDITION_HELP,
   conditionPhrase,
+  dialogPickItems,
   EVENT_TALK,
   eventDialogueBaseName,
+  eventDialogueLike,
   eventDialogueProblem,
   eventDialogueScore,
   eventDialogueTarget,
@@ -52,6 +56,8 @@ export interface EventDialoguePreset {
   event?: number;
   /** A package, character, squad or faction to start with (other records are ignored). */
   who?: string;
+  /** A DIALOGUE to copy: race, conditions, lines, repetition limit and «monologue» («Make one like it…»). */
+  like?: string;
 }
 
 /** A DC_ condition (who / comparison / value) or a reference category with its target record. */
@@ -74,6 +80,29 @@ function kindOf(project: Project, sid: string | undefined): EventDialogueKind | 
   return KINDS.find((k) => KIND_TYPE[k] === type);
 }
 
+/** The window's rows for the sample's conditions; what the rows cannot show (world states) stays as is. */
+function likeConds(items: readonly DialogPickItem[], when: readonly DialogWhen[]): { rows: CondRow[]; extra: DialogWhen[] } {
+  const rows: CondRow[] = [];
+  const extra: DialogWhen[] = [];
+  for (const w of when) {
+    if ('cond' in w && w.tag === undefined) {
+      const item = items.find((i) => i.source === 'enum' && i.value === w.cond);
+      if (item) {
+        rows.push({ item, who: w.who, cmp: w.cmp ?? 0, v: w.v });
+        continue;
+      }
+    } else if ('ref' in w) {
+      const item = items.find((i) => i.source === 'ref' && i.category === w.ref);
+      if (item) {
+        for (const target of w.targets) rows.push({ item, target });
+        continue;
+      }
+    }
+    extra.push(w);
+  }
+  return { rows, extra };
+}
+
 function condWhen(row: CondRow): DialogWhen {
   if ('target' in row) return { ref: row.item.category ?? '', targets: [row.target] };
   return { cond: row.item.value ?? 0, who: row.who, v: row.v, cmp: row.cmp };
@@ -86,6 +115,11 @@ export function EventDialogueModal({ project, preset, onCreate, onClose }: Props
   const evDef = useMemo(() => eventEnum(ctx), [ctx]);
   const repDef = useMemo(() => fieldEnum(ctx.schema, 'DIALOGUE', 'repetition limit'), [ctx]);
   const presetKind = kindOf(project, preset.who);
+  // «Make one like it…»: the sample, read once when the window opens.
+  const [like] = useState(() => {
+    const d = preset.like !== undefined ? eventDialogueLike(ctx, preset.like) : undefined;
+    return d ? { ...d, ...likeConds(dialogPickItems(ctx, 'DIALOGUE', 'condition', lang), d.when) } : undefined;
+  });
 
   const [event, setEvent] = useState(preset.event ?? 0);
   const [kind, setKind] = useState<EventDialogueKind>(presetKind ?? 'package');
@@ -93,12 +127,12 @@ export function EventDialogueModal({ project, preset, onCreate, onClose }: Props
   const [field, setField] = useState<string | undefined>();
   const [fieldPkg, setFieldPkg] = useState<string | undefined>();
   const [own, setOwn] = useState(false);
-  const [raceOn, setRaceOn] = useState(false);
-  const [race, setRace] = useState<string | undefined>();
-  const [lines, setLines] = useState<LineDraft[]>([{ speaker: 0, texts: [''] }]);
-  const [mono, setMono] = useState<boolean | undefined>();
-  const [conds, setConds] = useState<CondRow[]>([]);
-  const [rep, setRep] = useState<number | undefined>();
+  const [raceOn, setRaceOn] = useState(like?.race !== undefined);
+  const [race, setRace] = useState<string | undefined>(like?.race);
+  const [lines, setLines] = useState<LineDraft[]>(() => like?.lines.map((l) => ({ speaker: l.speaker, texts: [...l.texts] })) ?? [{ speaker: 0, texts: [''] }]);
+  const [mono, setMono] = useState<boolean | undefined>(like?.monologue);
+  const [conds, setConds] = useState<CondRow[]>(like?.rows ?? []);
+  const [rep, setRep] = useState<number | undefined>(like?.rep);
   const [name, setName] = useState<string | undefined>();
   const [bonus, setBonus] = useState<number | undefined>();
   const [condPick, setCondPick] = useState(false);
@@ -121,7 +155,7 @@ export function EventDialogueModal({ project, preset, onCreate, onClose }: Props
   const holderRaw = whoSid !== undefined ? ctx.name(whoSid) || whoSid : '';
   const raceSid = raceOn ? race : undefined;
   const autoName = freeRecordName(ctx, 'DIALOGUE', eventDialogueBaseName(raceSid !== undefined ? `${holderRaw} ${ctx.name(raceSid)}` : holderRaw, eventCode, event));
-  const when = useMemo(() => conds.map(condWhen), [conds]);
+  const when = useMemo(() => [...conds.map(condWhen), ...(like?.extra ?? [])], [conds, like]);
   const monologue = mono ?? event !== EVENT_TALK;
 
   // The spec without the repetition limit and the bonus: they default from the score.
@@ -235,6 +269,12 @@ export function EventDialogueModal({ project, preset, onCreate, onClose }: Props
         }
       >
         <div className="ed-form">
+          {like && preset.like !== undefined && (
+            <div className="hint ed-like" data-testid="ed-like" data-sid={preset.like}>
+              {t.psLikeFrom(recordName(ctx, preset.like))}
+              {like.extra.length > 0 && ` ${t.psLikeExtra(like.extra.length)}`}
+            </div>
+          )}
           <section className="ed-step">
             <h4>
               <span className="ed-num">1</span> {t.edStepEvent}

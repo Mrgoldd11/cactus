@@ -46,7 +46,7 @@ export const packageEn = {
   pkNoBusy: 'No dialogues of its own. Switch to «All» or «+ inherited».',
   pkUnknownEvent: (n: number): string => `event ${n}`,
   dgPlay: 'Play',
-  dgPlayHint: 'Open the conversation player below. Pick a character to play its conversation.',
+  dgPlayHint: 'Who says what on the event: every candidate dialogue by points, which one the game picks and why; then the conversation step by step. The current line is highlighted in the graph and the tree.',
   dgMinimap: 'Minimap',
   dgMinimapHint: 'Show or hide the minimap',
 };
@@ -90,7 +90,7 @@ export const packageRu: typeof packageEn = {
   pkNoBusy: 'Своих диалогов нет. Переключитесь на «Все» или «+ наследуемые».',
   pkUnknownEvent: (n) => `событие ${n}`,
   dgPlay: 'Проиграть',
-  dgPlayHint: 'Открыть внизу проигрыватель разговора. Выберите персонажа, чтобы проиграть его разговор.',
+  dgPlayHint: 'Кто что скажет на событие: все диалоги-кандидаты по очкам, какой игра выберет и почему; затем разговор шаг за шагом. Текущая реплика подсвечена в графе и в дереве.',
   dgMinimap: 'Мини-карта',
   dgMinimapHint: 'Показать или спрятать мини-карту',
 };
@@ -133,7 +133,7 @@ export const packageZh: typeof packageEn = {
   pkNoBusy: '没有自有对话。请切换到「全部」或「+ 继承的」。',
   pkUnknownEvent: (n) => `事件 ${n}`,
   dgPlay: '播放',
-  dgPlayHint: '在下方打开对话播放器。选择一个角色来播放其对话。',
+  dgPlayHint: '事件中谁说什么：所有候选对话按分数排列，游戏选择哪一个及原因；然后逐步播放对话。当前台词在图和树中高亮显示。',
   dgMinimap: '小地图',
   dgMinimapHint: '显示或隐藏小地图',
 };

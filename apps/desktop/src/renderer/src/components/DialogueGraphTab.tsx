@@ -87,8 +87,14 @@ interface Props {
   onShowLine?: () => void;
   /** Whether the «Line» panel is open (the «Open line» button is highlighted if not). */
   isLineOpen?: () => boolean;
-  /** Open the conversation player (the «▶ Play» button is shown only with it). */
+  /** Open or close the «▶ Play» strip (the button is shown only with it). */
   onPlay?: () => void;
+  /** The strip is open (the button is pressed). */
+  playOpen?: boolean;
+  /** The «▶ Play» strip, shown under the graph or the tree. */
+  strip?: ReactNode;
+  /** The line the played conversation is at: highlighted, unfolded and brought into view. */
+  playing?: string | undefined;
 }
 
 /** Text lines on a node before «full text ▾». */
@@ -146,6 +152,8 @@ type LineData = {
   end: boolean;
   /** The only selected node: the toolbar is shown above it. */
   tools: boolean;
+  /** The «▶ Play» strip is at this line. */
+  playing: boolean;
   matched: boolean;
   editable: boolean;
   /** Text is edited right in the node; `raw` — the record's current first text. */
@@ -197,6 +205,11 @@ export function DialogueGraphTab(props: Props): ReactNode {
         <button role="tab" className={`small${view === 'tree' ? ' active' : ''}`} aria-selected={view === 'tree'} data-testid="dg-view-tree" onClick={() => { setView('tree'); }}>
           {t.dtViewTree}
         </button>
+        {props.onPlay && (
+          <button className={`small dg-play${props.playOpen ? ' active' : ''}`} data-testid="dg-play" aria-pressed={props.playOpen === true} title={t.dgPlayHint} onClick={props.onPlay}>
+            ▶ {t.dgPlay}
+          </button>
+        )}
       </div>
       <div className="dg-view-body">
         {view === 'tree' ? (
@@ -208,6 +221,7 @@ export function DialogueGraphTab(props: Props): ReactNode {
           </ReactFlowProvider>
         )}
       </div>
+      {props.playOpen && props.strip}
     </div>
   );
 }
@@ -247,7 +261,7 @@ export function deepFolds(graph: DialogueGraph): Set<string> {
   return dialogueDeepFolds(graph, FOLD_DEPTH);
 }
 
-function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, onShowLine, isLineOpen, onPlay }: Props): ReactNode {
+function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, onShowLine, isLineOpen, playing }: Props): ReactNode {
   const t = useT();
   const [minimap, setMinimapState] = useState(() => localStorage.getItem(MINIMAP_KEY) === '1');
   const setMinimap = (on: boolean): void => {
@@ -605,6 +619,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
           full: fullTexts.has(n.id),
           end: (checksByNode.get(n.id) ?? []).some((c) => c.kind === 'end') || (isLineKind && !outgoing.has(n.id)),
           tools: editable && selNodes.size === 1 && selNodes.has(n.id) && n.id !== editing,
+          playing: n.id === playing,
           actions,
         },
         selected: selNodes.has(n.id),
@@ -652,7 +667,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     const all: GraphNode[] = [...nodes, ...portals.nodes];
     const allPos = new Map([...pos, ...portals.placed]);
     return { nodes: all, edges: [...edges, ...portals.edges], pos: allPos };
-  }, [graph, folding, moved, checksByNode, matchSet, selNodes, selEdges, editing, tree, version, views, variants, fullTexts, heights, outgoing, transitions, translation, lang, t]);
+  }, [graph, folding, moved, checksByNode, matchSet, selNodes, selEdges, editing, tree, version, views, variants, fullTexts, heights, outgoing, transitions, translation, lang, t, playing]);
 
   // Initial view at a readable zoom: the whole graph if it fits, otherwise the root at the left edge.
   const startView = useRef<(inst: ReactFlowInstance<GraphNode>) => void>(() => undefined);
@@ -677,6 +692,12 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     clicked.current = selected;
     focusRef.current(selected);
   }, [selected, nodes]);
+
+  // The played conversation moved on — bring its line into view (unfolding its branch if needed).
+  useEffect(() => {
+    if (playing === undefined || !byId.has(playing)) return;
+    focusRef.current(playing);
+  }, [playing]);
 
   // A node from a folded branch is shown now — pan to it.
   useEffect(() => {
@@ -963,11 +984,6 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
         <button className={`small${minimap ? ' active' : ''}`} data-testid="dg-minimap" aria-pressed={minimap} title={t.dgMinimapHint} onClick={() => { setMinimap(!minimap); }}>
           ▣ {t.dgMinimap}
         </button>
-        {onPlay && (
-          <button className="small" data-testid="dg-play" title={t.dgPlayHint} onClick={onPlay}>
-            ▶ {t.dgPlay}
-          </button>
-        )}
         {selInGraph && onShowLine && (
           <button className={`small${lineOpen ? '' : ' primary dg-call'}`} data-testid="dg-open-line" title={t.dgOpenLineHint} onClick={() => { showLine(); }}>
             ❝ {t.dgOpenLine}
@@ -1185,9 +1201,10 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
   };
   return (
     <div
-      className={`dg-node dg-${kind}${worst}${st}${selected ? ' dg-selected' : ''}${data.matched ? ' dg-matched' : ''}${data.editing ? ' dg-editing' : ''}`}
+      className={`dg-node dg-${kind}${worst}${st}${selected ? ' dg-selected' : ''}${data.matched ? ' dg-matched' : ''}${data.editing ? ' dg-editing' : ''}${data.playing ? ' dg-playing' : ''}`}
       data-testid="dg-node"
       data-id={n.id}
+      data-playing={data.playing ? 'true' : undefined}
       data-kind={lk}
       data-status={data.status}
     >

@@ -3,14 +3,17 @@
  * why; then step by step — the NPC line, player answers as buttons. «What if»: for any record with
  * conditions you can mark whether they hold — the game's choice is recomputed at once.
  * The selection rule comes from the game code (`playConversation` in the core, on `chooseOdds`).
+ * It lives in the «▶ Play» strip under the dialogue graph (`PlayStrip.tsx`, UI review G7): the strip
+ * fixes the event and the speaker, adds the candidate summary and highlights the current line.
  */
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   buildDialogueGraph,
   dialogueScore,
   EVENT_TALK,
   getEnum,
   PLAY_NPC,
+  playCandidates,
   playConversation,
   playStartList,
   plainName,
@@ -23,6 +26,7 @@ import {
   type PlayOption,
   type PlayResult,
   type PlayStep,
+  type TalkSource,
   type TranslationIndex,
 } from '@kenshi-editor/core';
 import { errorText, type Strings, useLang, useT } from '../i18n.ts';
@@ -38,6 +42,33 @@ interface Props {
   version: number;
   onGo: (sid: string) => void;
   onSelectLine: (sid: string, dialog?: string) => void;
+  /** Fixed event (the strip picks it; the player's own event select is hidden). */
+  event?: number;
+  /** First event of the player's own event select. */
+  initialEvent?: number;
+  /** Start list instead of the character's: a package played without a particular character. */
+  start?: ReadonlyMap<string, TalkSource[]>;
+  /** Who is shown as the NPC speaker (default: the name of `sid`). */
+  speakerName?: string;
+  /** Hide the character input (the strip picks the speaker). */
+  noCharacter?: boolean;
+  /** Controls at the start and at the end of the player's bar. */
+  lead?: ReactNode;
+  tail?: ReactNode;
+  /** Under the bar: the strip's summary of the candidates. */
+  aside?: (r: PlayResult) => ReactNode;
+  /** The line the conversation is at: the last line said, or the last answer given after it. */
+  onPlaying?: (line: string | undefined) => void;
+}
+
+/** Where the conversation is: the last NPC line said or the last answer given (not «NPC goes on»). */
+export function playingLine(r: PlayResult): string | undefined {
+  let cur: string | undefined;
+  for (const s of r.steps) {
+    if (s.said !== undefined) cur = s.said;
+    if (s.answered !== undefined && s.answered !== PLAY_NPC) cur = s.answered;
+  }
+  return cur;
 }
 
 const pct = (p: number): string => `${String(Math.round(p * 100))}%`;
@@ -53,11 +84,13 @@ function conditionsOf(ctx: ModContext, sid: string, tr: TranslationIndex | undef
   return out;
 }
 
-export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }: Props): ReactNode {
+export function ConversationPlayer(props: Props): ReactNode {
+  const { project, sid, version, onGo, onSelectLine, start } = props;
   const t = useT();
   const ctx = project.ctx;
   const tr = useTranslation(project);
-  const [event, setEvent] = useState(EVENT_TALK);
+  const [ownEvent, setEvent] = useState(props.initialEvent ?? EVENT_TALK);
+  const event = props.event ?? ownEvent;
   const [mode, setMode] = useState<PlayMode>('met');
   const [assume, setAssume] = useState<ReadonlyMap<string, boolean>>(new Map());
   const [answers, setAnswers] = useState<readonly string[]>([]);
@@ -65,11 +98,25 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
 
   const result = useMemo((): PlayResult | string => {
     try {
-      return playConversation(ctx, sid, { event, mode, assume, answers, prefer });
+      return playConversation(ctx, sid, { event, mode, assume, answers, prefer, ...(start ? { start } : {}) });
     } catch (e) {
       return errorText(e);
     }
-  }, [ctx, sid, event, mode, assume, answers, prefer, version]);
+  }, [ctx, sid, event, mode, assume, answers, prefer, start, version]);
+
+  // Report the current line to the strip (and «none» when the player goes away).
+  const playing = typeof result === 'string' ? undefined : playingLine(result);
+  const onPlaying = useRef(props.onPlaying);
+  onPlaying.current = props.onPlaying;
+  useEffect(() => {
+    onPlaying.current?.(playing);
+  }, [playing]);
+  useEffect(
+    () => () => {
+      onPlaying.current?.(undefined);
+    },
+    [],
+  );
 
   const evDef = useMemo(() => refValueEnum(ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0), [ctx]);
   const characters = useMemo(() => {
@@ -102,45 +149,50 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
   return (
     <div className="player" data-testid="player" data-sid={sid}>
       <div className="talk-bar">
-        <label>
-          {t.plCharacter}{' '}
-          <input
-            className="pl-character"
-            data-testid="pl-character"
-            list="pl-characters"
-            placeholder={name(sid)}
-            onChange={(e) => {
-              const m = /— (\S+)$/.exec(e.target.value);
-              if (m?.[1] !== undefined && ctx.get(m[1])) {
-                onGo(m[1]);
-                e.target.value = '';
-              }
-            }}
-          />
-          <datalist id="pl-characters">
-            {characters.map((c) => (
-              <option key={c.sid} value={c.label} />
-            ))}
-          </datalist>
-        </label>
-        <label>
-          {t.talkEvent}{' '}
-          {evDef ? (
-            <EventSelect
-              def={evDef}
-              value={event}
-              testId="pl-event"
-              className="pl-event"
-              onChange={(n) => {
-                setEvent(n);
-                setAnswers([]);
-                setPrefer(new Map());
+        {props.lead}
+        {!props.noCharacter && (
+          <label>
+            {t.plCharacter}{' '}
+            <input
+              className="pl-character"
+              data-testid="pl-character"
+              list="pl-characters"
+              placeholder={name(sid)}
+              onChange={(e) => {
+                const m = /— (\S+)$/.exec(e.target.value);
+                if (m?.[1] !== undefined && ctx.get(m[1])) {
+                  onGo(m[1]);
+                  e.target.value = '';
+                }
               }}
             />
-          ) : (
-            <span data-testid="pl-event">{event}</span>
-          )}
-        </label>
+            <datalist id="pl-characters">
+              {characters.map((c) => (
+                <option key={c.sid} value={c.label} />
+              ))}
+            </datalist>
+          </label>
+        )}
+        {props.event === undefined && (
+          <label>
+            {t.talkEvent}{' '}
+            {evDef ? (
+              <EventSelect
+                def={evDef}
+                value={event}
+                testId="pl-event"
+                className="pl-event"
+                onChange={(n) => {
+                  setEvent(n);
+                  setAnswers([]);
+                  setPrefer(new Map());
+                }}
+              />
+            ) : (
+              <span data-testid="pl-event">{event}</span>
+            )}
+          </label>
+        )}
         <label title={t.plModeHint}>
           {t.plMode}{' '}
           <select
@@ -164,14 +216,18 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
         <button className="small" data-testid="pl-restart" onClick={() => { setAnswers([]); setPrefer(new Map()); }}>
           ⟲ {t.plRestart}
         </button>
+        {props.tail}
       </div>
-      <AsInGame
-        sid={sid}
-        event={event}
-        editorChoice={typeof result === 'string' ? undefined : result.steps[0]?.path[0]?.node}
-        onGo={onGo}
-        name={name}
-      />
+      {!start && (
+        <AsInGame
+          sid={sid}
+          event={event}
+          editorChoice={typeof result === 'string' ? undefined : result.steps[0]?.path[0]?.node}
+          onGo={onGo}
+          name={name}
+        />
+      )}
+      {typeof result !== 'string' && props.aside?.(result)}
       {typeof result === 'string' ? (
         <p className="error">{result}</p>
       ) : (
@@ -184,7 +240,7 @@ export function ConversationPlayer({ project, sid, version, onGo, onSelectLine }
               t={t}
               step={s}
               index={i}
-              npcName={name(sid)}
+              npcName={props.speakerName ?? name(sid)}
               dialog={result.steps[0]?.path[0]?.node}
               last={i === result.steps.length - 1}
               waiting={result.waiting}
@@ -341,16 +397,27 @@ function AsIf(p: StepProps & { sid: string; passes: boolean }): ReactNode {
 function Choice(p: StepProps & { title: string; options: readonly PlayOption[]; keyOf: string; isDialog: boolean }): ReactNode {
   const { t, ctx, tr } = p;
   const lang = useLang();
+  // Dialogues go in the game's order (the sort key: own points + the best first line), with the key shown.
+  const ranked = useMemo(() => (p.isDialog ? playCandidates(ctx, p.options) : undefined), [ctx, p.options, p.isDialog]);
+  const options = ranked ? ranked.rows.map((r) => p.options.find((o) => o.sid === r.sid)!) : p.options;
   return (
     <div className="pl-choice">
       <div className="small pl-choice-title">{p.title}</div>
       <table className="table pl-table">
         <tbody>
-          {p.options.map((o) => {
+          {options.map((o) => {
             const rec = ctx.get(o.sid);
             const parts = rec ? dialogueScore(ctx, rec).parts : [];
+            const row = ranked?.rows.find((r) => r.sid === o.sid);
             return (
-              <tr key={o.sid} className={`pl-opt pl-${o.why}`} data-testid="pl-option" data-sid={o.sid} data-why={o.why}>
+              <tr
+                key={o.sid}
+                className={`pl-opt pl-${o.why}`}
+                data-testid="pl-option"
+                data-sid={o.sid}
+                data-why={o.why}
+                {...(row ? { 'data-key': row.key, 'data-place': row.place } : {})}
+              >
                 <td className="pl-mark">{o.why === 'chosen' || o.why === 'chosen-random' ? '▶' : ''}</td>
                 <td>
                   <button
@@ -366,9 +433,15 @@ function Choice(p: StepProps & { title: string; options: readonly PlayOption[]; 
                     <span className="muted small"> · {[...new Set(o.sources.map((s) => t[`talkVia_${s.via}`]))].join(', ')}</span>
                   )}
                 </td>
-                <td className="mono small" title={partsText(parts, t)}>
-                  {o.score}
-                </td>
+                {row ? (
+                  <td className="mono small pl-key" data-testid="pl-key" title={`${t.psKeyTip(row.place, row.own, row.line)}\n${partsText(parts, t)}`}>
+                    {row.key}
+                  </td>
+                ) : (
+                  <td className="mono small" title={partsText(parts, t)}>
+                    {o.score}
+                  </td>
+                )}
                 <td className="small" data-testid="pl-why">
                   {whyText(o, t)}
                   {o.why === 'random' && (
