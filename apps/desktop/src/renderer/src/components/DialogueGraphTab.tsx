@@ -46,6 +46,7 @@ import {
   deleteGraphItems,
   dialogueChecks,
   dialogueLineViews,
+  dialogueTransitions,
   duplicateLines,
   insertLineBetween,
   lineParents,
@@ -67,6 +68,7 @@ import type { Project } from '../project.ts';
 import { tryEdit } from '../hooks.ts';
 import { isTypingIn, shortcut } from '../keys.ts';
 import { layoutDialogue, NODE_WIDTH, type Placed } from '../dialogue-layout.ts';
+import { isPortalId, isTransitionEdge, PortalCard, portalElements, type PortalNode } from './DialoguePortals.tsx';
 
 interface Props {
   project: Project;
@@ -149,6 +151,8 @@ type LineData = {
   actions: { current: Actions };
 };
 type LineNode = Node<LineData, 'line'>;
+/** Graph nodes: lines and the portals to other dialogues (G3). */
+type GraphNode = LineNode | PortalNode;
 
 interface Menu {
   /** Menu position on the canvas (from the top-left corner). */
@@ -285,6 +289,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   }, [checks]);
   const byId = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph]);
   const views = useMemo(() => dialogueLineViews(ctx, graph, lang), [ctx, graph, lang, version]);
+  const transitions = useMemo(() => dialogueTransitions(ctx, graph), [ctx, graph, version]);
   const deep = useMemo(() => deepFolds(graph), [graph]);
   const collapsed = collapsedState ?? (graph.nodes.length > FOLD_MIN_NODES ? deep : EMPTY);
   /** Change the folded branches (starting from the first-time folding). */
@@ -608,11 +613,37 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
       interactionWidth: 14,
       ...(e.back ? { animated: true } : {}),
     }));
-    return { nodes, edges, pos };
-  }, [graph, folding, moved, checksByNode, matchSet, selNodes, selEdges, editing, tree, version, views, variants, fullTexts, heights, outgoing]);
+    // Portals to other dialogues and the transition arrows (G3).
+    const visibleFor = (line: string): string | undefined => {
+      let cur: string | undefined = line;
+      const seen = new Set<string>();
+      while (cur !== undefined && hidden.has(cur) && !seen.has(cur)) {
+        seen.add(cur);
+        cur = tree.parent.get(cur);
+      }
+      return cur !== undefined && pos.has(cur) ? cur : undefined;
+    };
+    const portals = portalElements({
+      ctx,
+      lang,
+      translation,
+      transitions,
+      root: graph.root,
+      pos,
+      nodeWidth: NODE_WIDTH,
+      heights,
+      moved,
+      visibleFor,
+      // Short arrow label: one verb per kind, both unlock kinds read as «unlocks»; the portal chips list them all.
+      kindWords: (kinds) => [...new Set(kinds.map((k) => t.dpKind(k === 'unlock but keep me' ? 'unlocks' : k)))].join(' · '),
+    });
+    const all: GraphNode[] = [...nodes, ...portals.nodes];
+    const allPos = new Map([...pos, ...portals.placed]);
+    return { nodes: all, edges: [...edges, ...portals.edges], pos: allPos };
+  }, [graph, folding, moved, checksByNode, matchSet, selNodes, selEdges, editing, tree, version, views, variants, fullTexts, heights, outgoing, transitions, translation, lang, t]);
 
   // Initial view at a readable zoom: the whole graph if it fits, otherwise the root at the left edge.
-  const startView = useRef<(inst: ReactFlowInstance<LineNode>) => void>(() => undefined);
+  const startView = useRef<(inst: ReactFlowInstance<GraphNode>) => void>(() => undefined);
   startView.current = (inst) => {
     const el = canvasRef.current;
     void inst.setViewport(initialViewport(pos, graph.root, el?.clientWidth ?? 800, el?.clientHeight ?? 600));
@@ -691,7 +722,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     report(p ? inLang(p, lang) : tryEdit(() => { linkLine(ctx, from, to); }));
   };
 
-  const onNodesChange = (changes: NodeChange<LineNode>[]): void => {
+  const onNodesChange = (changes: NodeChange<GraphNode>[]): void => {
     const dims = changes.filter((c) => c.type === 'dimensions' && c.dimensions);
     if (dims.length > 0)
       setHeights((m) => {
@@ -981,6 +1012,12 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
           onConnect={onConnect}
           isValidConnection={(c) => linkProblem(ctx, c.source, c.target) === undefined}
           onNodeClick={(_, n) => {
+            if (n.type === 'portal') {
+              // A portal opens the other dialogue.
+              setLinkFrom(undefined);
+              if (n.data.dialogue !== undefined) onGo(n.data.dialogue);
+              return;
+            }
             if (linkFrom !== undefined) finishLink(n.id);
             else pick(n.id);
           }}
@@ -988,6 +1025,10 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
             if (isLine(n.id)) startEdit(n.id);
           }}
           onNodeContextMenu={(e, n) => {
+            if (isPortalId(n.id)) {
+              e.preventDefault();
+              return;
+            }
             if (!selNodes.has(n.id)) {
               selectOnly(n.id);
               pick(n.id);
@@ -995,6 +1036,10 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
             openMenu(e, { kind: 'node', id: n.id });
           }}
           onEdgeContextMenu={(e, ed) => {
+            if (isTransitionEdge(ed.id)) {
+              e.preventDefault();
+              return;
+            }
             if (!selEdges.has(ed.id)) {
               setSelNodes(new Set());
               setSelEdges(new Set([ed.id]));
@@ -1025,7 +1070,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
         >
           <Background gap={24} />
           <Controls showInteractive={false} />
-          {minimap && <MiniMap pannable zoomable nodeColor={(n) => MINIMAP_COLORS[(n.data as LineData).view?.kind ?? 'npc'] ?? '#5d6168'} />}
+          {minimap && <MiniMap pannable zoomable nodeColor={(n) => (n.type === 'portal' ? '#7a5ea6' : (MINIMAP_COLORS[(n.data as LineData).view?.kind ?? 'npc'] ?? '#5d6168'))} />}
         </ReactFlow>
         {linkFrom !== undefined && (
           <div className="dg-banner" data-testid="dg-link-mode">
@@ -1369,11 +1414,11 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
   );
 });
 
-const NODE_TYPES = { line: LineCard };
+const NODE_TYPES = { line: LineCard, portal: PortalCard };
 
 const MARGIN = 24;
 
-/** View when the graph opens (zoom `INITIAL_ZOOM`) for a `width`×`height` canvas. */
+/** View when the graph opens (zoom `INITIAL_ZOOM`) for a `width`×`height` canvas; too wide — the leftmost card (an entry portal or the root) at the left edge. */
 export function initialViewport(pos: ReadonlyMap<string, Placed>, root: string, width: number, height: number): { x: number; y: number; zoom: number } {
   const z = INITIAL_ZOOM;
   let minX = Infinity;
@@ -1389,7 +1434,7 @@ export function initialViewport(pos: ReadonlyMap<string, Placed>, root: string, 
   if (!Number.isFinite(minX)) return { x: MARGIN, y: MARGIN, zoom: z };
   const w = (maxX - minX) * z;
   const h = (maxY - minY) * z;
-  const x = w + 2 * MARGIN <= width ? (width - w) / 2 - minX * z : MARGIN - (pos.get(root)?.x ?? minX) * z;
+  const x = w + 2 * MARGIN <= width ? (width - w) / 2 - minX * z : MARGIN - minX * z;
   let y: number;
   if (h + 2 * MARGIN <= height) y = (height - h) / 2 - minY * z;
   else {

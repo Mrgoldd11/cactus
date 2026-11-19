@@ -1425,6 +1425,91 @@ tr.fs-removed td:first-child {
   stroke: var(--accent);
   stroke-width: 3;
 }
+/* Transitions between dialogues (UI review G3): portals and their arrows. */
+.dg-canvas .react-flow__edge.dg-edge-portal path {
+  stroke: #b48ae6;
+  stroke-dasharray: 6 4;
+  stroke-width: 1.5;
+}
+.dg-canvas .react-flow__edge.dg-edge-portal .react-flow__edge-textbg {
+  fill: #2b2238;
+}
+.dg-canvas .react-flow__edge.dg-edge-portal .react-flow__edge-text,
+.dg-edge-portal-label {
+  fill: #d6bdf7;
+  font-size: 11px;
+}
+.dg-node.dg-portal {
+  border: 1px dashed #b48ae6;
+  border-left: 4px solid #b48ae6;
+  background: #261f31;
+  cursor: pointer;
+}
+.dg-node.dg-portal:hover {
+  background: #2f263d;
+}
+.dg-portal-hd {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dg-portal-tag {
+  background: #3b2a52;
+  color: #d6bdf7;
+  border-radius: 3px;
+  padding: 0 5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.dg-portal-name {
+  font-weight: 600;
+  margin-top: 2px;
+}
+.dg-portal-ev {
+  font-size: 11px;
+}
+.dg-portal-line {
+  margin-top: 5px;
+  padding-top: 4px;
+  border-top: 1px solid #3b2a52;
+}
+.dg-portal-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dg-portal-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+.dg-portal-kind {
+  background: #3b2a52;
+  color: #d6bdf7;
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 11px;
+}
+.dg-portal-kind .dg-code {
+  opacity: 0.75;
+}
+.dg-portal-more-lines {
+  font-size: 11px;
+  margin-top: 3px;
+}
+.dg-portal-open {
+  margin-top: 4px;
+  font-size: 11px;
+  text-align: right;
+}
+.dg-portal-more {
+  color: #d6bdf7;
+  cursor: default;
+}
 .dg-tools {
   display: flex;
   gap: 6px;
@@ -3762,6 +3847,27 @@ code.pk-code {
 }
 .pk-from {
   flex: 0 0 auto;
+}
+/* Transitions between dialogues (G3): «← unlocked by» / «→ unlocks» under the dialogue name. */
+.pk-dl {
+  flex-wrap: wrap;
+}
+.pk-unlocked-by,
+.pk-unlocks {
+  flex: 1 0 100%;
+  font-size: 11px;
+  color: #d6bdf7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pk-unlocked-by.none {
+  color: var(--warning, #d39b45);
+}
+.pk-link-name {
+  font-size: 11px;
+  color: #d6bdf7;
+  padding: 0;
 }
 .pk-empty {
   padding: 6px 4px;

@@ -6,9 +6,12 @@
  * A click on a dialogue selects it, so the graph shows it.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { ModContext } from '@kenshi-editor/core';
 import {
   EVENT_GROUP_LABELS,
   EVENT_UNUSED_LABEL,
+  dialogueUnlockers,
+  dialogueUnlocks,
   eventHelp,
   filterPackageEvents,
   heldPackage,
@@ -234,33 +237,91 @@ function EventRow({ project, row, groupHead, open, current, onToggle, onDialog }
       </div>
       {open &&
         row.own.map((d) => (
-          <DialogRow key={`o:${d}`} name={recordName(ctx, d)} sid={d} sel={d === current} onOpen={onDialog} />
+          <DialogRow key={`o:${d}`} ctx={ctx} name={recordName(ctx, d)} sid={d} sel={d === current} onOpen={onDialog} />
         ))}
       {open &&
         row.inherited.map((d) => (
-          <DialogRow key={`i:${d.dialog}`} name={recordName(ctx, d.dialog)} sid={d.dialog} sel={d.dialog === current} from={recordName(ctx, d.pkg)} onOpen={onDialog} />
+          <DialogRow key={`i:${d.dialog}`} ctx={ctx} name={recordName(ctx, d.dialog)} sid={d.dialog} sel={d.dialog === current} from={recordName(ctx, d.pkg)} onOpen={onDialog} />
         ))}
     </>
   );
 }
 
-function DialogRow({ name, sid, sel, from, onOpen }: { name: string; sid: string; sel: boolean; from?: string; onOpen: (sid: string) => void }): ReactNode {
+/** Dialogue names for a «← unlocked by» / «→ unlocks» note: clickable, the full list in the tooltip. */
+const SHOWN_LINKS = 2;
+
+function LinkNames({ ctx, sids, onOpen }: { ctx: ModContext; sids: readonly string[]; onOpen: (sid: string) => void }): ReactNode {
   const t = useT();
+  const shown = sids.slice(0, SHOWN_LINKS);
+  return (
+    <>
+      {shown.map((d, i) => (
+        <span key={d}>
+          {i > 0 ? ', ' : ' '}
+          <button
+            className="link pk-link-name"
+            data-testid="pk-link"
+            data-sid={d}
+            title={`${t.pkOpenGraph}\n${d}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(d);
+            }}
+          >
+            «{recordName(ctx, d)}»
+          </button>
+        </span>
+      ))}
+      {sids.length > shown.length && ` ${t.pkMore(sids.length - shown.length)}`}
+    </>
+  );
+}
+
+function DialogRow({ ctx, name, sid, sel, from, onOpen }: { ctx: ModContext; name: string; sid: string; sel: boolean; from?: string; onOpen: (sid: string) => void }): ReactNode {
+  const t = useT();
+  const locked = ctx.get(sid)?.bools.get('locked') === true;
+  // Transitions between dialogues (G3): who unlocks a locked dialogue, what this one unlocks.
+  const unlockers = locked ? dialogueUnlockers(ctx, sid) : [];
+  const unlocks = dialogueUnlocks(ctx, sid);
+  const names = (list: readonly string[]): string => list.map((d) => `«${recordName(ctx, d)}» ${d}`).join('\n');
   return (
     <div
-      className={`pk-dl${sel ? ' sel' : ''}${from !== undefined ? ' inherited' : ''}`}
+      className={`pk-dl${sel ? ' sel' : ''}${from !== undefined ? ' inherited' : ''}${locked ? ' locked' : ''}`}
       data-testid="pk-dialog"
       data-sid={sid}
       title={`${t.pkOpenGraph}\n${sid}`}
       onClick={() => { onOpen(sid); }}
     >
-      <span className="pk-dl-name">{name}</span>
+      <span className="pk-dl-name">
+        {locked && (
+          <span className="pk-lock" data-testid="pk-locked" title={t.pkLockedTip}>
+            🔒{' '}
+          </span>
+        )}
+        {name}
+      </span>
       {from !== undefined && <span className="pk-from muted small">{t.pkFrom(from)}</span>}
+      {locked && unlockers.length > 0 && (
+        <span className="pk-unlocked-by" data-testid="pk-unlocked-by" title={t.pkUnlockedByTip(names(unlockers))}>
+          {t.pkUnlockedBy}
+          <LinkNames ctx={ctx} sids={unlockers} onOpen={onOpen} />
+        </span>
+      )}
+      {locked && unlockers.length === 0 && (
+        <span className="pk-unlocked-by none" data-testid="pk-nobody-unlocks" title={t.pkNobodyUnlocksTip}>
+          {t.pkNobodyUnlocks}
+        </span>
+      )}
+      {unlocks.length > 0 && (
+        <span className="pk-unlocks" data-testid="pk-unlocks" title={t.pkUnlocksTip(names(unlocks))}>
+          {t.pkUnlocks}
+          <LinkNames ctx={ctx} sids={unlocks} onOpen={onOpen} />
+        </span>
+      )}
     </div>
   );
 }
 
-/** «characters: Drifter, Adventurer with skill and 9 more · field dialogue package». */
 function Holders({ project, overview }: { project: Project; overview: PackageOverview }): ReactNode {
   const { go } = useWorkbench();
   const t = useT();
