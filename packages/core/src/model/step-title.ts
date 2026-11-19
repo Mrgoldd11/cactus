@@ -325,6 +325,13 @@ class Describer {
         zh: `基于 ${bt} 的新种族 ${a!} + 兼容（更改：${n}）`,
       };
     }
+    const creature = /^новое существо («.*») на основе («.*?»)$/s.exec(label);
+    if (creature) {
+      const [, a, b] = creature;
+      const tr = this.translatedByName('ANIMAL_CHARACTER', b!.slice(1, -1));
+      const bt = tr !== undefined ? `«${tr}»` : b!;
+      return { ru: `Новое существо ${a!} на основе ${bt}`, en: `New creature ${a!} based on ${b!}`, zh: `基于 ${bt} 的新生物 ${a!}` };
+    }
     const newRec = /^новая запись «(.*)» по образцу (.+)$/s.exec(label);
     if (newRec) {
       const [, a, from] = newRec;
