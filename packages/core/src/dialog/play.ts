@@ -107,6 +107,11 @@ export interface PlayInput {
   squads?: SquadIndex;
   /** Step limit (loops in dialogues). */
   limit?: number;
+  /**
+   * Ready start list (dialogue → sources) instead of the character's dialogues on the event, e.g. a
+   * package on an event (`packagePlayStart`); the `character` argument then only names the result.
+   */
+  start?: ReadonlyMap<string, TalkSource[]>;
 }
 
 export interface PlayResult {
@@ -210,7 +215,7 @@ export function playConversation(ctx: ModContext, character: string, input: Play
   const prefer = input.prefer ?? new Map<string, string>();
   const given = input.answers ?? [];
   const limit = input.limit ?? 40;
-  const start = playStartList(ctx, character, event, input.squads);
+  const start = input.start ?? playStartList(ctx, character, event, input.squads);
   const steps: PlayStep[] = [];
   let next = 0;
   let from = '';
