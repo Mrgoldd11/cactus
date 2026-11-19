@@ -3894,7 +3894,15 @@ code.pk-code {
   border-color: var(--accent);
 }
 .dg-view-body {
+  display: flex;
+  flex-direction: column;
   flex: 1;
+  min-height: 0;
+}
+.dg-view-body > .dg,
+.dg-view-body > .dt {
+  flex: 1;
+  height: auto;
   min-height: 0;
 }
 .dt {
@@ -3949,7 +3957,7 @@ code.pk-code {
   outline: 1px dashed #c9a94a;
   outline-offset: 1px;
 }
-.dt-head {
+.dt-who {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 4px;

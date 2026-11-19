@@ -402,7 +402,7 @@ export function DialogueTreeView({ project, sid, version, onGo, selected, onSele
         onDoubleClick={() => { if (isLine(r.id)) startEdit(r.id); }}
       >
         <div className="dt-line" style={indent}>
-          <span className="dt-head">
+          <span className="dt-who">
             {r.kids > 0 ? (
               <button
                 className="link dt-tw"
