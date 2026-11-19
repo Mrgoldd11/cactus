@@ -340,3 +340,16 @@ function RefRow({
     </div>
   );
 }
+
+/** A titled block of the line panel. */
+export function Section({ title, children, extra }: { title: string; children: ReactNode; extra?: ReactNode }): ReactNode {
+  return (
+    <div className="ln-section">
+      <div className="ln-section-title">
+        <span>{title}</span>
+        {extra}
+      </div>
+      {children}
+    </div>
+  );
+}

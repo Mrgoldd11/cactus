@@ -64,7 +64,9 @@ import { CommitInput } from './widgets.tsx';
 import { PlaysWhen } from './EventUi.tsx';
 import { DialogValueSelect, dialogOptionText, dialogOptionTip, PhraseLine } from './DialogHelpUi.tsx';
 import { RecordPicker } from './RecordPicker.tsx';
-import { DescPane, DescribeProvider, DialogPicker, pickUsage, RefRows, useDescribe, type FieldDesc, type RefTargetAsk } from './LinePanelParts.tsx';
+import { DialogueActs, DialogueName, WhenAllowed } from './DialogueHeadParts.tsx';
+import type { EventDialoguePreset } from './EventDialogueModal.tsx';
+import { DescPane, DescribeProvider, DialogPicker, pickUsage, RefRows, Section, useDescribe, type FieldDesc, type RefTargetAsk } from './LinePanelParts.tsx';
 
 interface Props {
   project: Project;
@@ -76,6 +78,8 @@ interface Props {
   /** Select a line (in the graph and here). */
   onSelect: (sid: string, parent?: string) => void;
   onReport: (err: string | undefined) => void;
+  /** «One more like it…» on a DIALOGUE: opens the new event dialogue window with this preset. */
+  onLike?: (preset: EventDialoguePreset) => void;
 }
 
 /** Line choice fields: [dictionary, key, enum]. */
@@ -185,7 +189,7 @@ function NumberInput({ value, onCommit, testId, int }: { value: number; onCommit
   );
 }
 
-export function LineInspector({ project, sid, parent, version, onGo, onSelect, onReport }: Props): ReactNode {
+export function LineInspector({ project, sid, parent, version, onGo, onSelect, onReport, onLike }: Props): ReactNode {
   const t = useT();
   const lang = useLang();
   const ctx = project.ctx;
@@ -310,13 +314,21 @@ export function LineInspector({ project, sid, parent, version, onGo, onSelect, o
           <Texts ctx={ctx} sid={sid} rec={rec} lower={lower} tr={tr} t={t} edit={edit} />
         </>
       )}
+      {rec && type === 'DIALOGUE' && (
+        <>
+          <DialogueActs ctx={ctx} sid={sid} rec={rec} t={t} edit={edit} version={version} {...(onLike ? { onLike } : {})} />
+          <DialogueName ctx={ctx} sid={sid} rec={rec} t={t} edit={edit} />
+          <WhenAllowed ctx={ctx} sid={sid} rec={rec} t={t} edit={edit} />
+        </>
+      )}
       {rec && (
         <>
           <Conditions ctx={ctx} sid={sid} rec={rec} t={t} edit={edit} onGo={onGo} onAddTarget={pickTarget} />
           <Effects ctx={ctx} sid={sid} rec={rec} t={t} edit={edit} onGo={onGo} onAddTarget={pickTarget} />
-          {isLine && (
-            <Section title={t.lnChoose}>
+          {(isLine || type === 'DIALOGUE') && (
+            <Section title={isLine ? t.lnChoose : t.dhChoose}>
               <ChooseFields ctx={ctx} sid={sid} rec={rec} lower={lower} t={t} edit={edit} />
+              {!isLine && <div className="small muted" data-testid="dh-score-tip">{t.dhScoreTip}</div>}
             </Section>
           )}
           <Filters ctx={ctx} rec={rec} t={t} onGo={onGo} />
@@ -395,18 +407,6 @@ export function LineInspector({ project, sid, parent, version, onGo, onSelect, o
     )}
     </div>
     </DescribeProvider>
-  );
-}
-
-function Section({ title, children, extra }: { title: string; children: ReactNode; extra?: ReactNode }): ReactNode {
-  return (
-    <div className="ln-section">
-      <div className="ln-section-title">
-        <span>{title}</span>
-        {extra}
-      </div>
-      {children}
-    </div>
   );
 }
 

@@ -198,7 +198,7 @@ function Graph({ sid, version, playWith }: { sid: string; version: number; playW
 }
 
 function LinePanel({ def, params }: PanelProps): ReactNode {
-  const { project, go: goRecord, report, reveal } = useWorkbench();
+  const { project, go: goRecord, report, reveal, newEventDialogue } = useWorkbench();
   // «↗ Inspector» and other links of the panel select the record and bring the inspector to the front.
   const go = (s: string): void => {
     goRecord(s);
@@ -209,7 +209,7 @@ function LinePanel({ def, params }: PanelProps): ReactNode {
   const select = useSelectLine(dialog);
   if (sid === undefined || !project.record(sid)) return <Empty types={def.shows?.types} />;
   const parent = item?.kind === 'line' ? item.parent : undefined;
-  return <LineInspector project={project} sid={sid} {...(parent !== undefined ? { parent } : {})} version={version} onGo={go} onSelect={select} onReport={report} />;
+  return <LineInspector project={project} sid={sid} {...(parent !== undefined ? { parent } : {})} version={version} onGo={go} onSelect={select} onReport={report} onLike={newEventDialogue} />;
 }
 
 /** The «▶ Play» strip of a character on its own (the census opens it), with the talk summary. */
