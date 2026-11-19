@@ -39,10 +39,16 @@ describe('interior floors', () => {
     expect(objectFloor(obj('x', -5), floors)).toBe(0);
   });
 
-  it('cut: just under the next floor, none on the top floor', () => {
+  it('cut: half a storey over the floor, under the next floor, also on the top floor', () => {
+    // Metal Wallhouse: floors at 6 and 58, the ceiling of the upper floor at 90.
     const floors = [{ floor: 0, level: 6 }, { floor: 1, level: 58 }];
-    expect(floorCut(floors, 0)).toBe(56);
-    expect(floorCut(floors, 1)).toBeUndefined();
+    expect(floorCut(floors, 0)).toBe(32);
+    expect(floorCut(floors, 1)).toBe(84);
+    expect(floorCut(floors, 1)! < 90).toBe(true);
+    // One floor: 40 over it; a low mezzanine: never over the next floor.
+    expect(floorCut([{ floor: 0, level: 94 }], 0)).toBe(134);
+    expect(floorCut([{ floor: 0, level: 0 }, { floor: 1, level: 14 }], 0)).toBe(12);
+    expect(floorCut(floors, 5)).toBeUndefined();
   });
 
   it('strays: a compact layout has none', () => {

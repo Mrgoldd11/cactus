@@ -244,12 +244,19 @@ export function objectFloor(o: Pick<InteriorObject, 'floor' | 'position'>, floor
 }
 
 /**
- * Cut height for looking at `floor` from above: just under the next floor, so its slab and
- * everything over it is cut away. undefined — the top floor (nothing to cut, roofs are hidden).
+ * Cut height for looking at `floor` from above: half a storey over its level (walls up to the waist
+ * of a person, the room seen like a plan), never over the next floor. The storey is the median gap
+ * between floor levels; with one floor — `single` (Metal Wallhouse: storey 52, ceiling of the top
+ * floor 32 over it, so a fixed height would leave the ceiling on). undefined — no such floor.
  */
-export function floorCut(floors: readonly InteriorFloor[], floor: number): number | undefined {
+export function floorCut(floors: readonly InteriorFloor[], floor: number, single = 40): number | undefined {
+  const here = floors.find((f) => f.floor === floor);
+  if (!here) return undefined;
+  const gaps = floors.slice(1).map((f, i) => f.level - floors[i]!.level).filter((g) => g > 5).sort((a, b) => a - b);
+  const storey = gaps.length > 0 ? gaps[Math.floor(gaps.length / 2)]! : single * 2;
+  const cut = here.level + Math.min(Math.max(storey / 2, 20), single);
   const next = floors.find((f) => f.floor > floor);
-  return next ? next.level - 2 : undefined;
+  return next ? Math.min(next.level - 2, cut) : cut;
 }
 
 /** State template: the same object in any layout (this one first). */
