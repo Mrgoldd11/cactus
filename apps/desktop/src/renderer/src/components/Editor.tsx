@@ -4,7 +4,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { DockviewApi } from 'dockview-react';
-import { createRaceFrom, createRecordIn } from '@kenshi-editor/core';
+import { createEventDialogue, createRaceFrom, createRecordIn, type EventDialogueResult } from '@kenshi-editor/core';
 import type { Lang, Settings, WorkspaceSettings } from '../../../shared/api.ts';
 import { errorText, useT } from '../i18n.ts';
 import { isTypingIn, shortcut } from '../keys.ts';
@@ -14,6 +14,7 @@ import { LangSwitch } from '../App.tsx';
 import { BackupsModal, SettingsModal, formatClock, formatTime } from './BackupModals.tsx';
 import { DependenciesModal, ModInfoModal, NewRecordModal } from './Modals.tsx';
 import { NewRaceModal } from './NewRaceModal.tsx';
+import { EventDialogueModal, type EventDialoguePreset } from './EventDialogueModal.tsx';
 import { PublishModal } from './PublishModal.tsx';
 import { ModMenu } from './ModMenu.tsx';
 import { RESCAN_EVENT } from './IssueFixer.tsx';
@@ -42,7 +43,7 @@ interface Props {
   onSettings: (patch: Partial<Settings>) => void;
 }
 
-type ModalKind = 'deps' | 'info' | 'new' | 'race' | 'backups' | 'settings' | 'publish';
+type ModalKind = 'deps' | 'info' | 'new' | 'race' | 'event-dialogue' | 'backups' | 'settings' | 'publish';
 
 function blurActive(): void {
   if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -60,6 +61,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
   const [status, setStatus] = useState<StatusMessage | undefined>();
   const [modal, setModal] = useState<ModalKind | undefined>();
   const [raceSample, setRaceSample] = useState<string | undefined>();
+  const [eventPreset, setEventPreset] = useState<EventDialoguePreset>({});
   const searchRef = useRef<HTMLInputElement>(null);
   const aiChangesets = useAiChangesets();
   const liveStatus = useLiveStatus();
@@ -150,6 +152,10 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
       newRace: (sample) => {
         setRaceSample(sample);
         setModal('race');
+      },
+      newEventDialogue: (preset) => {
+        setEventPreset(preset ?? {});
+        setModal('event-dialogue');
       },
       save: (saveAs) => saveRef.current(saveAs),
       searchRef,
@@ -335,6 +341,15 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
               onClick: () => {
                 setRaceSample(undefined);
                 setModal('race');
+              },
+            },
+            {
+              testId: 'new-event-dialogue',
+              label: t.edOpen,
+              title: t.edOpenTip,
+              onClick: () => {
+                setEventPreset(selectedSid !== undefined ? { who: selectedSid } : {});
+                setModal('event-dialogue');
               },
             },
             { testId: 'new-item-soon', label: t.crNewItem, disabledHint: t.crSoon, onClick: () => undefined },
@@ -545,6 +560,27 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
               raceCompatPair.set({ race: sid, sample, stamp: Date.now() });
               open('race-compat');
             }
+          }}
+          onClose={() => {
+            setModal(undefined);
+          }}
+        />
+      )}
+      {modal === 'event-dialogue' && (
+        <EventDialogueModal
+          project={project}
+          preset={eventPreset}
+          onCreate={(spec) => {
+            let res: EventDialogueResult | undefined;
+            const err = tryEdit(() => {
+              res = createEventDialogue(ctx, spec);
+            });
+            report(err);
+            if (!res) return;
+            setModal(undefined);
+            const made = res;
+            go(made.dialog);
+            setStatus({ text: (s) => s.edDone(project.entry(made.dialog)?.name ?? made.dialog, project.entry(made.pkg)?.name ?? made.pkg), kind: 'info' });
           }}
           onClose={() => {
             setModal(undefined);

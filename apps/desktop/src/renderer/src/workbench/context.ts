@@ -5,6 +5,7 @@
 import { createContext, useContext, type RefObject } from 'react';
 import type { Strings } from '../i18n.ts';
 import type { Project } from '../project.ts';
+import type { EventDialoguePreset } from '../components/EventDialogueModal.tsx';
 import { panelDef, type PanelDef, type PanelParams } from './registry.ts';
 import { useSelectionVersion, type Selection, type SelectionService } from './selection.ts';
 import { useProjectVersion } from '../hooks.ts';
@@ -36,6 +37,8 @@ export interface Workbench {
   newRecord: () => void;
   /** «New race based on…» window; `sample` — the preselected sample race. */
   newRace: (sample?: string) => void;
+  /** «New dialogue on event» window with a preselected event and package / holder. */
+  newEventDialogue: (preset?: EventDialoguePreset) => void;
   /** Save the mod (as Ctrl+S); `saveAs` asks for a place. */
   save: (saveAs: boolean) => Promise<void>;
   searchRef: RefObject<HTMLInputElement | null>;

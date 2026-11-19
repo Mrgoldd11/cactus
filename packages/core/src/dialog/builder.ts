@@ -40,7 +40,9 @@ export type DialogWhen =
   /** The speaker is of one of these races (OR). */
   | { myRace: readonly string[] }
   /** The speaker is one of these characters. */
-  | { isChar: readonly string[] };
+  | { isChar: readonly string[] }
+  /** Any reference category of a dialogue (`my race`, `target has item`, …) with its target records. */
+  | { ref: string; targets: readonly string[] };
 
 export interface LineOptions {
   when?: readonly DialogWhen[];
@@ -164,6 +166,7 @@ export class DialogBuilder {
       else if ('noTargetRace' in w) for (const r of w.noTargetRace) push('no target race', ref(this.need(r)));
       else if ('myFaction' in w) for (const f of w.myFaction) push('my faction', ref(this.need(f)));
       else if ('myRace' in w) for (const r of w.myRace) push('my race', ref(this.need(r)));
+      else if ('ref' in w) for (const r of w.targets) push(w.ref, ref(this.need(r)));
       else for (const c of w.isChar) push('is character', ref(this.need(c)));
     });
     return out;

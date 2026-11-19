@@ -101,7 +101,7 @@ function PackagePanel({ def, params }: PanelProps): ReactNode {
 }
 
 function PackageBody({ project, pkg, version, onChoose }: { project: Project; pkg: string; version: number; onChoose: (sid: string) => void }): ReactNode {
-  const { selection, go } = useWorkbench();
+  const { selection, go, newEventDialogue } = useWorkbench();
   const t = useT();
   const lang = useLang();
   const ctx = project.ctx;
@@ -172,11 +172,12 @@ function PackageBody({ project, pkg, version, onChoose }: { project: Project; pk
             current={current}
             onToggle={() => { toggle(row.event.event); }}
             onDialog={go}
+            onAdd={() => { newEventDialogue({ event: row.event.event, who: pkg }); }}
           />
         ))}
       </div>
       <div className="pk-foot">
-        <button className="small" disabled title={t.pkAddSoon} data-testid="pk-new-dialog">
+        <button className="small" title={t.edOpenTip} data-testid="pk-new-dialog" onClick={() => { newEventDialogue({ who: pkg }); }}>
           {t.pkNewDialog}
         </button>
       </div>
@@ -192,9 +193,11 @@ interface EventRowProps {
   current: string | undefined;
   onToggle: () => void;
   onDialog: (sid: string) => void;
+  /** «+»: a new dialogue on this event in this package. */
+  onAdd: () => void;
 }
 
-function EventRow({ project, row, groupHead, open, current, onToggle, onDialog }: EventRowProps): ReactNode {
+function EventRow({ project, row, groupHead, open, current, onToggle, onDialog, onAdd }: EventRowProps): ReactNode {
   const t = useT();
   const lang = useLang();
   const ctx = project.ctx;
@@ -228,9 +231,8 @@ function EventRow({ project, row, groupHead, open, current, onToggle, onDialog }
         <button
           className="pk-plus"
           data-testid="pk-add"
-          disabled
-          title={t.pkAddSoon}
-          onClick={(e) => { e.stopPropagation(); }}
+          title={t.pkAddTip}
+          onClick={(e) => { e.stopPropagation(); onAdd(); }}
         >
           +
         </button>

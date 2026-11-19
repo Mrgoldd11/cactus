@@ -225,6 +225,7 @@ function whenCounts(when: readonly DialogWhen[]): { cats: Map<string, number>; c
     else if ('noTargetRace' in w) bump('no target race', w.noTargetRace.length);
     else if ('myFaction' in w) bump('my faction', w.myFaction.length);
     else if ('myRace' in w) bump('my race', w.myRace.length);
+    else if ('ref' in w) bump(w.ref, w.targets.length);
     else bump('is character', w.isChar.length);
   }
   return { cats, conds, tags };

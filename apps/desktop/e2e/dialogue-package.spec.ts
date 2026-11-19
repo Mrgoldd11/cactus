@@ -69,11 +69,11 @@ test('package panel: events of Drifter squad, search, dialogue → graph, player
     await expect(panel.getByTestId('pk-holders')).toContainText('персонажи:');
     await expect(panel.getByTestId('pk-holders')).toContainText('dialogue package');
     await expect(panel.getByTestId('pk-event')).toHaveCount(18);
-    // Events show their translation next to the code, the «+» waits for G6.
+    // Events show their translation next to the code; «+» opens the «New dialogue on event» window (G6).
     const talk = panel.locator('[data-testid="pk-event"][data-event="1"]');
     await expect(talk).toContainText('EV_PLAYER_TALK_TO_ME (1)');
     await expect(talk).toContainText('Игрок заговорил');
-    await expect(talk.getByTestId('pk-add')).toBeDisabled();
+    await expect(talk.getByTestId('pk-add')).toBeEnabled();
     await page.screenshot({ path: join(shots, '90-package-panel.png') });
 
     // Search: translation, code and number find the same event.

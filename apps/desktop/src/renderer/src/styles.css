@@ -4028,3 +4028,111 @@ code.pk-code {
   padding: 2px 0;
   color: #d6bdf7;
 }
+
+/* «New dialogue on event» window (G6). */
+.ed-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ed-form .hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+.ed-step {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  background: var(--bg);
+}
+.ed-step h4 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ed-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+}
+.ed-row,
+.ed-kinds {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ed-row .grow {
+  flex: 1;
+}
+.ed-row textarea {
+  flex: 1;
+  min-height: 34px;
+  resize: vertical;
+}
+.ed-line {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+}
+.ed-conds {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+.ed-conds .ed-cond {
+  align-self: stretch;
+  padding: 2px 6px;
+  background: var(--bg3);
+  border-radius: 3px;
+}
+.ed-conds .lp-pick {
+  align-self: stretch;
+}
+.ed-num-input {
+  width: 64px;
+}
+.ed-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 6px 10px;
+  align-items: center;
+}
+.ed-warn {
+  color: var(--changed);
+}
+.ed-score {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ed-score-first {
+  border-left-color: var(--new);
+}
+.ed-score-tie {
+  border-left-color: var(--changed);
+}
+.ed-score-shadowed {
+  border-left-color: var(--deleted);
+}
+.ed-will {
+  font-size: 12px;
+  color: var(--muted);
+}

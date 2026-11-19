@@ -171,6 +171,10 @@ describe('createEventDialogue', () => {
     expect(s).toMatchObject({ best: 2, bestDialog: strong.dialog, base: 1, autoBonus: 2, key: 3, outcome: 'first' });
     // The target speaking the first line gives +1 to the key.
     expect(eventDialogueScore(ctx, { event: 62, who, name: 'n', lines: [{ speaker: 1, texts: ['Hi'] }] }).base).toBe(1);
+    // Any reference category: `target race` scores 2 and is written as a reference.
+    const tr = { event: 62, who, name: 'tr', lines, when: [{ ref: 'target race', targets: ['SHEK'] }] };
+    expect(eventDialogueScore(ctx, tr).base).toBe(2);
+    expect(ctx.get(createEventDialogue(ctx, tr).dialog)!.refs.get('target race')!.map((r) => r.target)).toEqual(['SHEK']);
     // A holder without a package yet: no rivals in it.
     expect(eventDialogueScore(ctx, { event: 62, who: { kind: 'holder', sid: 'BEEP', field: 'dialogue package' }, name: 'n', lines }).outcome).toBe('alone');
   });
