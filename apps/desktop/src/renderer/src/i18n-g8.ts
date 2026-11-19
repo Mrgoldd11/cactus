@@ -40,6 +40,15 @@ export const g8En = {
   dhDesc_monologue: 'No player replies: every line is said by the characters themselves. On by default.',
   dhChoose: 'How the game picks it',
   dhScoreTip: 'Among dialogues on the same event whose conditions hold, the game takes the one with the highest score: score bonus, +1 per condition, +2 for locked, race, faction, town, item… The breakdown is in brackets.',
+  dnAddCond: '+ if',
+  dnAddCondTip: 'Add a condition: the whole list of DC_ conditions and reference conditions, searchable',
+  dnAddEffect: '+ →',
+  dnAddEffectTip: 'Add an effect («then …»): the whole list of DA_ actions and reference effects, searchable',
+  dnPhraseRemove: 'Remove this condition or effect (Ctrl+Z brings it back)',
+  pkAll: (n: number): string => `All conditions (${n})`,
+  pkAllEffects: (n: number): string => `All effects (${n})`,
+  pkFound: (n: number): string => `found ${n}`,
+  pkAllTip: 'Below the common ones: every condition the game knows, by group. Type to search in your language, in English or by code.',
 };
 
 export const g8Ru: typeof g8En = {
@@ -74,6 +83,15 @@ export const g8Ru: typeof g8En = {
   dhDesc_monologue: 'Ответов игрока нет: каждую реплику говорит сам персонаж. По умолчанию включено.',
   dhChoose: 'Как игра выбирает',
   dhScoreTip: 'Из диалогов на одно событие, у которых выполнены условия, игра берёт тот, у кого больше очков: бонус очков, +1 за каждое условие, +2 за запертость, расу, фракцию, город, предмет… Разбивка — в скобках.',
+  dnAddCond: '+ если',
+  dnAddCondTip: 'Добавить условие: весь список условий DC_ и ссылочных условий, с поиском',
+  dnAddEffect: '+ →',
+  dnAddEffectTip: 'Добавить эффект («затем …»): весь список действий DA_ и ссылочных эффектов, с поиском',
+  dnPhraseRemove: 'Убрать это условие или эффект (Ctrl+Z вернёт)',
+  pkAll: (n: number): string => `Все условия (${n})`,
+  pkAllEffects: (n: number): string => `Все эффекты (${n})`,
+  pkFound: (n: number): string => `найдено ${n}`,
+  pkAllTip: 'Под частыми — все условия, которые знает игра, по группам. Поиск по-русски, по-английски и по коду.',
 };
 
 export const g8Zh: typeof g8En = {
@@ -108,4 +126,13 @@ export const g8Zh: typeof g8En = {
   dhDesc_monologue: '没有玩家回复：每句台词都由角色自己说。默认开启。',
   dhChoose: '游戏如何选择',
   dhScoreTip: '在同一事件上条件满足的对话中，游戏选分数最高的：分数加成、每个条件 +1、锁定、种族、派系、城镇、物品 +2… 括号内为明细。',
+  dnAddCond: '+ 如果',
+  dnAddCondTip: '添加条件：全部 DC_ 条件和引用条件，可搜索',
+  dnAddEffect: '+ →',
+  dnAddEffectTip: '添加效果（「然后……」）：全部 DA_ 动作和引用效果，可搜索',
+  dnPhraseRemove: '移除此条件或效果（Ctrl+Z 可恢复）',
+  pkAll: (n: number): string => `全部条件（${n}）`,
+  pkAllEffects: (n: number): string => `全部效果（${n}）`,
+  pkFound: (n: number): string => `找到 ${n} 项`,
+  pkAllTip: '常用项下面是游戏认识的全部条件，按组排列。可用中文、英文或代码搜索。',
 };

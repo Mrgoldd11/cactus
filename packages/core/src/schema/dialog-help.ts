@@ -95,6 +95,17 @@ export interface DialogPhrase {
   text: string;
   short: string;
   code: string;
+  /** Where the phrase comes from on its record, for removing it (see `removePhrase`); plain fields have none. */
+  source?: PhraseSource;
+}
+
+/**
+ * Source of a phrase: a DIALOG_ACTION reference (`category` is `conditions` / `effects`, `target` the
+ * DIALOG_ACTION) or a whole reference category (`my race`, `give item`…, no `target`).
+ */
+export interface PhraseSource {
+  category: string;
+  target?: string;
 }
 
 const LEAD: Readonly<Record<'line' | 'dialogue' | 'effect', UiText>> = {

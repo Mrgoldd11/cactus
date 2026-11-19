@@ -22,6 +22,7 @@ import type { GameRecord, Reference } from '../format/types.ts';
 import { EditError, type ModContext } from '../model/context.ts';
 import { isRemovalMarker, isRemovedRef } from '../model/record-ops.ts';
 import { LINE_REF_HELP } from '../schema/line-ref-help.ts';
+import type { PhraseSource } from '../schema/dialog-help.ts';
 
 /** Reference categories to DIALOG_ACTION that belong to a line. */
 export const OWNED_ACTION_CATEGORIES = ['conditions', 'effects'] as const;
@@ -498,6 +499,23 @@ export function removeLineRef(ctx: ModContext, owner: string, category: string, 
   ctx.transaction(effect ? 'убрать действие' : 'убрать условие', () => {
     ctx.removeReference(owner, category, target);
   });
+}
+
+/** Remove a whole reference condition or effect (all targets of `category`) of a line or dialogue. One undo step. */
+export function clearLineRef(ctx: ModContext, owner: string, category: string): void {
+  const o = need(ctx, owner, OWNER_TYPES, DIALOGUE_OR_LINE);
+  const targets = [...new Set((o.refs.get(category) ?? []).map((r) => r.target))];
+  if (targets.length === 0) return;
+  const effect = LINE_REF_HELP[category]?.kind === 'effect';
+  ctx.transaction(effect ? 'убрать действие' : 'убрать условие', () => {
+    for (const t of targets) ctx.removeReference(owner, category, t);
+  });
+}
+
+/** Remove what a graph phrase shows (its `source`): one DIALOG_ACTION or a whole reference category. One undo step. */
+export function removePhrase(ctx: ModContext, owner: string, source: PhraseSource): void {
+  if (source.target !== undefined && (source.category === 'conditions' || source.category === 'effects')) removeAction(ctx, owner, source.category, source.target);
+  else clearLineRef(ctx, owner, source.category);
 }
 
 /** Change the value (v0) of one target of a reference condition or effect, keeping v1/v2. One undo step. */

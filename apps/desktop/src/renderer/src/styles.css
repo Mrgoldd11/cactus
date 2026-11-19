@@ -4275,3 +4275,31 @@ code.pk-code {
 .dh-hang > .warn {
   grid-column: 1 / -1;
 }
+
+/* G8: «+ if» / «+ →» list next to a graph node; «×» on a phrase row shows on hover. */
+.dg-pick-pop {
+  position: absolute;
+  z-index: 20;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  border-radius: 4px;
+}
+.dg-ln .dg-ln-x {
+  flex: none;
+  visibility: hidden;
+  padding: 0 3px;
+  color: var(--muted);
+}
+.dg-ln:hover .dg-ln-x {
+  visibility: visible;
+}
+.dg-ln .dg-ln-x:hover {
+  color: var(--error);
+}
+/* G8: «All conditions (N)» divider under the common ones. */
+.lp-pick-all {
+  margin: 4px 0 2px;
+  padding: 3px 4px 2px;
+  border-top: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 12px;
+}

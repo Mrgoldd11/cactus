@@ -143,8 +143,15 @@ export function DialogPicker({ ctx, ownerType, kind, onPick, onClose }: { ctx: M
         }}
       />
       <div className="lp-pick-list" data-testid="ln-pick-list">
-        {groups.map((g) => (
+        {groups.map((g, gi) => (
           <div key={g.key} className="lp-pick-group" data-testid="ln-pick-group" data-group={g.key}>
+            {g.key !== 'common' && (gi === 0 || groups[gi - 1]!.key === 'common') && (
+              // Divider: the whole list (every DC_ / DA_ value and reference category) starts here.
+              <div className="lp-pick-all" data-testid="ln-pick-all" data-count={items.length} title={t.pkAllTip}>
+                {kind === 'condition' ? t.pkAll(items.length) : t.pkAllEffects(items.length)}
+                {query.trim() !== '' && <span className="muted"> · {t.pkFound(flat.length)}</span>}
+              </div>
+            )}
             <div className="lp-pick-gtitle">{g.label}</div>
             {g.items.map((i) => {
               const idx = n++;

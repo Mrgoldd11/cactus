@@ -3,7 +3,7 @@
  * reference conditions in one list, search by translation, English and code, adding into the right field.
  */
 import { describe, expect, it } from 'vitest';
-import { addDialogPick, dialogPickGroups, dialogPickItems, dialogPickUsage, itemTypeId, removeLineRef, setLineRefValue } from '../src/index.ts';
+import { addDialogPick, dialogPickGroups, dialogPickItems, dialogPickUsage, itemTypeId, recordPhrases, removeLineRef, removePhrase, setLineRefValue } from '../src/index.ts';
 import { hasGame, loadModContext, resolveGamePaths } from '../src/node/index.ts';
 
 const paths = resolveGamePaths();
@@ -85,5 +85,40 @@ describe.skipIf(!hasGame(paths))('dialog picker: vanilla', () => {
     expect(() => {
       setLineRefValue(ctx, LINE, 'change relations', faction, 1);
     }).toThrow();
+  });
+
+  it('the whole list: every DC_ value and every reference condition, «раб» / «slave» / «DC_IS_SLAVE» alike', () => {
+    const items = dialogPickItems(ctx, 'DIALOGUE', 'condition', 'ru', usage);
+    const dc = items.filter((i) => i.source === 'enum').length;
+    const refs = items.filter((i) => i.source === 'ref').length;
+    expect(dc).toBeGreaterThanOrEqual(79);
+    expect(refs).toBeGreaterThanOrEqual(13);
+    for (const q of ['раб', 'slave', 'DC_IS_SLAVE']) {
+      const found = dialogPickGroups(items, 'condition', q, 'ru').flatMap((g) => g.items.map((i) => i.code));
+      expect(found, q).toContain('DC_IS_SLAVE');
+    }
+  });
+
+  it('graph «×»: a phrase knows its source; removing it is one undo step', () => {
+    const slave = dialogPickItems(ctx, 'DIALOGUE_LINE', 'condition', 'en', usage).find((i) => i.code === 'DC_IS_SLAVE')!;
+    const action = addDialogPick(ctx, LINE, slave);
+    const race = [...ctx.records()].filter((r) => r.type === itemTypeId('RACE')).slice(0, 2).map((r) => r.stringId);
+    const myRace = dialogPickItems(ctx, 'DIALOGUE_LINE', 'condition', 'en', usage).find((i) => i.key === 'ref:my race')!;
+    for (const r of race) addDialogPick(ctx, LINE, myRace, r);
+    const phrases = recordPhrases(ctx, ctx.get(LINE)!).conditions;
+    const act = phrases.find((p) => p.source?.target === action)!;
+    expect(act.source).toEqual({ category: 'conditions', target: action });
+    const cat = phrases.find((p) => p.source?.category === 'my race')!;
+    expect(cat.source).toEqual({ category: 'my race' });
+    // One DIALOG_ACTION.
+    removePhrase(ctx, LINE, act.source!);
+    expect(ctx.get(LINE)!.refs.get('conditions')!.map((r) => r.target)).not.toContain(action);
+    ctx.undo();
+    expect(ctx.get(LINE)!.refs.get('conditions')!.map((r) => r.target)).toContain(action);
+    // A whole reference category: all its targets at once, one undo.
+    removePhrase(ctx, LINE, cat.source!);
+    expect(ctx.get(LINE)!.refs.get('my race') ?? []).toHaveLength(0);
+    ctx.undo();
+    expect(ctx.get(LINE)!.refs.get('my race')!.map((r) => r.target)).toEqual(expect.arrayContaining(race));
   });
 });

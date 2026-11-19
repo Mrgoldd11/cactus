@@ -41,7 +41,9 @@ import {
 import '@xyflow/react/dist/style.css';
 import {
   quote,
+  addDialogPick,
   addLine,
+  addLineRef,
   buildDialogueGraph,
   deleteGraphItems,
   dialogueChecks,
@@ -55,9 +57,13 @@ import {
   linkLine,
   linkProblem,
   removedLinks,
+  removePhrase,
   revertLine,
   setLineTexts,
   type DialogCheck,
+  type DialogPickItem,
+  type DialogPickKind,
+  type PhraseSource,
   type DialogueGraph,
   type DialogueGraphNode,
   type LineLink,
@@ -73,6 +79,8 @@ import { InlineText } from './DialogueInlineText.tsx';
 import { DialogueTreeView } from './DialogueTreeView.tsx';
 import { isPortalId, isTransitionEdge, PORTAL_WIDTH, PortalCard, portalElements, type PortalNode } from './DialoguePortals.tsx';
 import { isWhenId, WhenCard, whenElements, type WhenNode } from './DialogueWhenNodes.tsx';
+import { DialogPicker, type RefTargetAsk } from './LinePanelParts.tsx';
+import { RecordPicker } from './RecordPicker.tsx';
 
 interface Props {
   project: Project;
@@ -129,7 +137,15 @@ interface Actions {
   variant: (sid: string, i: number) => void;
   /** Show the whole text or clamp it again. */
   full: (sid: string) => void;
+  /** «+ if» / «+ →»: the condition or effect list next to the node of `anchor`. */
+  pick: (sid: string, kind: DialogPickKind, anchor: HTMLElement) => void;
+  /** «×» on a phrase row: remove what it shows. */
+  unphrase: (sid: string, source: PhraseSource) => void;
 }
+
+/** Width of the «+ if» / «+ →» list next to a node. */
+const PICK_WIDTH = 360;
+const PICK_HEIGHT = 470;
 
 interface Hidden {
   all: number;
@@ -299,6 +315,8 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   const [menu, setMenu] = useState<Menu | undefined>(undefined);
   const [linkFrom, setLinkFrom] = useState<string | undefined>(undefined);
   const [ask, setAsk] = useState<Ask | undefined>(undefined);
+  const [picking, setPicking] = useState<{ id: string; kind: DialogPickKind; x: number; y: number } | undefined>(undefined);
+  const [askRef, setAskRef] = useState<{ id: string; ask: RefTargetAsk } | undefined>(undefined);
   const [, setTick] = useState(0);
   const [query, setQuery] = useState('');
   const [hit, setHit] = useState(0);
@@ -556,9 +574,25 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   };
 
   const noop = (): void => undefined;
-  const actions = useRef<Actions>({ go: onGo, add: noop, toggle: noop, commit: noop, cancel: noop, menu: noop, variant: noop, full: noop });
+  const actions = useRef<Actions>({ go: onGo, add: noop, toggle: noop, commit: noop, cancel: noop, menu: noop, variant: noop, full: noop, pick: noop, unphrase: noop });
   actions.current = {
     go: onGo,
+    pick: (id, kind, anchor) => {
+      const r = canvasRef.current?.getBoundingClientRect();
+      const nr = (anchor.closest('.dg-node') ?? anchor).getBoundingClientRect();
+      if (!r) return;
+      setMenu(undefined);
+      // Right of the node; left of it when there is no room on the right.
+      let x = nr.right - r.left + 8;
+      if (x + PICK_WIDTH > r.width - 4) x = Math.max(4, nr.left - r.left - PICK_WIDTH - 8);
+      // The list with its description is about PICK_HEIGHT tall: keep it inside the canvas.
+      const y = Math.max(4, Math.min(nr.top - r.top, r.height - PICK_HEIGHT));
+      setPicking({ id, kind, x, y });
+    },
+    unphrase: (id, source) => {
+      report(tryEdit(() => { removePhrase(ctx, id, source); }));
+      refocus();
+    },
     add: (id, speaker) => { add(id, speaker); },
     menu: (id, e) => {
       selectOnly(id);
@@ -1150,6 +1184,44 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
             {menuItems(menu)}
           </div>
         )}
+        {picking && (
+          <div className="dg-pick-pop nodrag nowheel" data-testid="dg-pick-pop" style={{ left: picking.x, top: picking.y, width: PICK_WIDTH }}>
+            <DialogPicker
+              ctx={ctx}
+              ownerType={byId.get(picking.id)?.type ?? 'DIALOGUE_LINE'}
+              kind={picking.kind}
+              onClose={() => {
+                setPicking(undefined);
+                refocus();
+              }}
+              onPick={(item: DialogPickItem) => {
+                const id = picking.id;
+                setPicking(undefined);
+                if (item.source === 'ref') setAskRef({ id, ask: { category: item.category ?? item.code, targetType: item.targetType, label: item.label } });
+                else {
+                  report(tryEdit(() => void addDialogPick(ctx, id, item)));
+                  refocus();
+                }
+              }}
+            />
+          </div>
+        )}
+        {askRef && (
+          <RecordPicker
+            project={project}
+            title={t.lpPickTarget.replace('{name}', askRef.ask.label).replace('{type}', askRef.ask.targetType ?? '')}
+            targetType={askRef.ask.targetType}
+            exclude={new Set((ctx.get(askRef.id)?.refs.get(askRef.ask.category) ?? []).map((r) => r.target))}
+            onClose={() => {
+              setAskRef(undefined);
+            }}
+            onPick={(target) => {
+              const { id, ask: a } = askRef;
+              setAskRef(undefined);
+              report(tryEdit(() => { addLineRef(ctx, id, a.category, target); }));
+            }}
+          />
+        )}
         {ask && (
           <div className="dg-ask-shade">
             <div
@@ -1222,7 +1294,7 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
   const conds: Phrase[] = phrased ? v.conditions : [...n.conditions, ...n.filters].map(plain);
   const effects: Phrase[] = phrased ? v.effects : n.effects.map(plain);
   const phrase = (p: Phrase, key: string, cls: string, k: string): ReactNode => (
-    <div key={key} className={`dg-ln ${cls}`} title={p.text}>
+    <div key={key} className={`dg-ln ${cls}`} title={p.text} data-testid="dg-phrase">
       <span className="dg-k">{k}</span>
       <span className="dg-v">
         {p.short}
@@ -1233,8 +1305,25 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
           </>
         )}
       </span>
+      {data.editable && p.source && (
+        <button
+          className="link small nodrag dg-ln-x"
+          data-testid="dg-phrase-x"
+          title={t.dnPhraseRemove}
+          onClick={(e) => {
+            stop(e);
+            data.actions.current.unphrase(n.id, p.source!);
+          }}
+        >
+          ×
+        </button>
+      )}
     </div>
   );
+  const pick = (kind: DialogPickKind) => (e: ReactMouseEvent<HTMLElement>): void => {
+    stop(e);
+    data.actions.current.pick(n.id, kind, e.currentTarget);
+  };
   const add = (speaker: number) => (e: ReactMouseEvent): void => {
     stop(e);
     data.actions.current.add(n.id, speaker);
@@ -1261,6 +1350,12 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
           </button>
           <button className="small" data-testid="dg-add-inter" title={t.dnAddInterTip} onClick={add(INTERJECTOR)}>
             {t.dnAddInter}
+          </button>
+          <button className="small" data-testid="dg-add-cond" title={t.dnAddCondTip} onClick={pick('condition')}>
+            {t.dnAddCond}
+          </button>
+          <button className="small" data-testid="dg-add-effect" title={t.dnAddEffectTip} onClick={pick('effect')}>
+            {t.dnAddEffect}
           </button>
           <button
             className="small"

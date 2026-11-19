@@ -71,7 +71,7 @@ export function lineRefPhrases(
       const refs = rec.refs.get(category) ?? [];
       if (refs.length === 0) continue;
       const names = refs.map((r) => targetName(ctx, r, help.value !== undefined));
-      out.push({ category, kind, phrase: lineRefPhrase(category, names, lang, on) });
+      out.push({ category, kind, phrase: { ...lineRefPhrase(category, names, lang, on), source: { category } } });
     }
   }
   return out;
@@ -95,10 +95,11 @@ export function recordPhrases(
 ): { conditions: DialogPhrase[]; effects: DialogPhrase[] } {
   const action = (category: string): DialogPhrase[] =>
     (rec.refs.get(category) ?? []).map((r) => {
+      const source = { category, target: r.target };
       const p = dialogActionPhrase(ctx, r, category, lang, on);
-      if (p) return p;
+      if (p) return { ...p, source };
       const code = describeDialogAction(ctx, r, category, lang) ?? r.target;
-      return { text: code, short: code, code };
+      return { text: code, short: code, code, source };
     });
   const refs = lineRefPhrases(ctx, rec, lang, on);
   const conditions = [...action('conditions'), ...refs.filter((x) => x.kind === 'condition').map((x) => x.phrase)];
