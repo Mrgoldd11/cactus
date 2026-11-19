@@ -34,12 +34,7 @@ function width(api: DockviewApi, id: string, w: number): void {
   api.getPanel(id)?.group.api.setSize({ width: w });
 }
 
-function height(api: DockviewApi, id: string, h: number): void {
-  api.getPanel(id)?.group.api.setSize({ height: h });
-}
-
 const right = (referencePanel: string): Position => ({ referencePanel, direction: 'right' });
-const below = (referencePanel: string): Position => ({ referencePanel, direction: 'below' });
 const within = (referencePanel: string): Position => ({ referencePanel, direction: 'within' });
 
 /** Apply a layout (everything before is removed). */
@@ -52,17 +47,18 @@ export function applyPreset(api: DockviewApi, preset: PresetId, t: Strings): voi
     width(api, 'categories', 240);
     width(api, 'records', Math.max(380, Math.round(api.width * 0.36)));
   } else if (preset === 'dialogue') {
-    add(api, t, 'records');
-    add(api, t, 'categories', within('records'), { inactive: true });
-    add(api, t, 'graph', right('records'));
+    // G1: the package (events and their dialogues) on the left, the graph at full height in the centre;
+    // the player opens only by the graph's «▶ Play» button.
+    add(api, t, 'package');
+    add(api, t, 'records', within('package'), { inactive: true });
+    add(api, t, 'categories', within('package'), { inactive: true });
+    add(api, t, 'graph', right('package'));
     add(api, t, 'line', right('graph'));
     add(api, t, 'inspector', within('line'), { inactive: true });
-    add(api, t, 'player', below('graph'));
-    add(api, t, 'howto', within('player'), { inactive: true });
-    add(api, t, 'diagnostics', within('player'), { inactive: true });
-    width(api, 'records', 320);
+    add(api, t, 'howto', within('line'), { inactive: true });
+    add(api, t, 'diagnostics', within('line'), { inactive: true });
+    width(api, 'package', 340);
     width(api, 'line', 400);
-    height(api, 'player', Math.round(api.height * 0.38));
   } else {
     // «World»: record list on the left, map in the centre, the selected object and its model on the right.
     add(api, t, 'records');

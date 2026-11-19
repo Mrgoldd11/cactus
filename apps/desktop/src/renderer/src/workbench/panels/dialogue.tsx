@@ -123,6 +123,7 @@ function Graph({ sid, version }: { sid: string; version: number }): ReactNode {
       onReport={report}
       onShowLine={() => { open('line'); }}
       isLineOpen={() => hasPanel('line')}
+      onPlay={() => { open('player'); }}
     />
   );
 }

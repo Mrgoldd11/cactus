@@ -387,9 +387,12 @@ test('dialogue graph: lines in Russian, player choice, loops; a line the game wi
     // Line texts come from the game translation.
     await expect(graph.locator('.dg-text').first()).toHaveText(/[а-яё]/i);
     await expect(graph.locator('.react-flow__edge.dg-edge-back').first()).toBeAttached();
+    // The minimap is off until asked (G1), the button shows it.
+    await expect(graph.locator('.react-flow__minimap')).toHaveCount(0);
+    await graph.getByTestId('dg-minimap').click();
     await expect(graph.locator('.react-flow__minimap-node')).toHaveCount(18);
-    // Initial view: readable zoom, root visible.
-    await expect(graph.locator('.react-flow__viewport')).toHaveAttribute('style', /scale\(0\.85\)/);
+    // Initial view: 100% zoom, root visible.
+    await expect(graph.locator('.react-flow__viewport')).toHaveAttribute('style', /scale\(1\)/);
     await expect(graph.locator('[data-testid="dg-node"][data-id="5464-gamedata.base"]')).toBeInViewport();
     await page.screenshot({ path: join(shots, '12-dialogue-graph.png') });
 
@@ -644,9 +647,12 @@ test('conversation player: which dialogue is picked and why, answers, as if, exa
     await waitEditor(page);
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-dialogue').click();
+    await page.locator('.dv-tab', { hasText: 'Записи' }).click();
     // Swampers barman.
     await page.getByTestId('search').fill('50638-rebirth.mod');
     await page.getByTestId('record-list').locator('[data-sid="50638-rebirth.mod"]').click();
+    // G1: the player is not in the layout, it opens by the graph's «▶ Play».
+    await page.locator('[data-panel="graph"]').getByTestId('dg-play').click();
     const player = page.getByTestId('player');
     await expect(player).toHaveAttribute('data-sid', '50638-rebirth.mod');
     const first = player.getByTestId('pl-step').first();
@@ -695,7 +701,10 @@ test('conversation player: which dialogue is picked and why, answers, as if, exa
     // Clicking a line opens its dialogue in the graph and the line itself in the line inspector.
     await first.getByTestId('pl-said').getByRole('button').click();
     await expect(page.getByTestId('dialogue-graph')).toHaveAttribute('data-sid', '48721-Dialogue.mod');
+    // The player opened by «▶ Play» shares the right column with the line inspector (G1).
+    await page.locator('.dv-tab', { hasText: 'Реплика диалога' }).click();
     await expect(page.getByTestId('line-inspector')).toHaveAttribute('data-sid', '48722-Dialogue.mod');
+    await page.locator('.dv-tab', { hasText: 'Проигрыватель разговора' }).click();
     await expect(player).toHaveAttribute('data-sid', '50638-rebirth.mod');
     await page.screenshot({ path: join(shots, '18c-player-line.png') });
 
@@ -720,6 +729,7 @@ test('vanilla dialogue: new answer, link by dragging, undo/redo, save, kedit val
     await waitEditor(page);
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-dialogue').click();
+    await page.locator('.dv-tab', { hasText: 'Записи' }).click();
     // «Grim talks to new ally»: 5 nodes. Grim last line is «Grow me some hemp, got it?».
     await page.getByTestId('search').fill('61857-Dialogue.mod');
     await page.getByTestId('record-list').locator('[data-sid="61857-Dialogue.mod"]').click();
@@ -801,6 +811,7 @@ test('dialogue graph: right-click menu, text right in the node, F2, Ctrl+D, Dele
     await waitEditor(page);
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-dialogue').click();
+    await page.locator('.dv-tab', { hasText: 'Записи' }).click();
     await page.getByTestId('search').fill('61857-Dialogue.mod');
     await page.getByTestId('record-list').locator('[data-sid="61857-Dialogue.mod"]').click();
     const graph = page.getByTestId('dialogue-graph');
@@ -1037,6 +1048,7 @@ test('keys on the Russian layout: Ctrl+Z/Y/Shift+Z/D/S by physical key, field ed
     await waitEditor(page);
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-dialogue').click();
+    await page.locator('.dv-tab', { hasText: 'Записи' }).click();
     await page.getByTestId('search').fill('61857-Dialogue.mod');
     await page.getByTestId('record-list').locator('[data-sid="61857-Dialogue.mod"]').click();
     const graph = page.getByTestId('dialogue-graph');

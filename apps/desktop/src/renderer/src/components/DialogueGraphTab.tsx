@@ -77,10 +77,14 @@ interface Props {
   onShowLine?: () => void;
   /** Whether the «Line» panel is open (the «Open line» button is highlighted if not). */
   isLineOpen?: () => boolean;
+  /** Open the conversation player (the «▶ Play» button is shown only with it). */
+  onPlay?: () => void;
 }
 
 const MAX_TEXTS = 2;
-const INITIAL_ZOOM = 0.85;
+const INITIAL_ZOOM = 1;
+/** Whether the minimap is shown (off by default: the graph gets the whole canvas). */
+const MINIMAP_KEY = 'kedit.graph.minimap';
 const MENU_WIDTH = 240;
 
 interface Actions {
@@ -158,8 +162,13 @@ function hiddenBy(graph: DialogueGraph, collapsed: ReadonlySet<string>): { hidde
   return { hidden, count };
 }
 
-function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, onShowLine, isLineOpen }: Props): ReactNode {
+function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, onShowLine, isLineOpen, onPlay }: Props): ReactNode {
   const t = useT();
+  const [minimap, setMinimapState] = useState(() => localStorage.getItem(MINIMAP_KEY) === '1');
+  const setMinimap = (on: boolean): void => {
+    localStorage.setItem(MINIMAP_KEY, on ? '1' : '0');
+    setMinimapState(on);
+  };
   const lang = useLang();
   const ctx = project.ctx;
   const translation = useGameTexts(project);
@@ -744,6 +753,14 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
             ◎ {t.dgFocus}
           </button>
         )}
+        <button className={`small${minimap ? ' active' : ''}`} data-testid="dg-minimap" aria-pressed={minimap} title={t.dgMinimapHint} onClick={() => { setMinimap(!minimap); }}>
+          ▣ {t.dgMinimap}
+        </button>
+        {onPlay && (
+          <button className="small" data-testid="dg-play" title={t.dgPlayHint} onClick={onPlay}>
+            ▶ {t.dgPlay}
+          </button>
+        )}
         {selInGraph && onShowLine && (
           <button className={`small${lineOpen ? '' : ' primary dg-call'}`} data-testid="dg-open-line" title={t.dgOpenLineHint} onClick={() => { showLine(); }}>
             ❝ {t.dgOpenLine}
@@ -844,7 +861,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
         >
           <Background gap={24} />
           <Controls showInteractive={false} />
-          <MiniMap pannable zoomable nodeColor={(n) => ((n.data as LineData).node.choice ? '#4b6f9e' : '#5d6168')} />
+          {minimap && <MiniMap pannable zoomable nodeColor={(n) => ((n.data as LineData).node.choice ? '#4b6f9e' : '#5d6168')} />}
         </ReactFlow>
         {linkFrom !== undefined && (
           <div className="dg-banner" data-testid="dg-link-mode">

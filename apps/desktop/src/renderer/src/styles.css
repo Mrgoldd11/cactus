@@ -3316,3 +3316,165 @@ input.invalid {
 .dh-select {
   max-width: 100%;
 }
+
+/* G1: «Package» panel of the dialogue layout — a package as a list of events. */
+.pk-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+.pk-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pk-pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  text-align: left;
+  font-weight: 600;
+}
+.pk-pick-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pk-caret {
+  color: var(--muted);
+  font-size: 10px;
+}
+.pk-holders {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.4;
+}
+.pk-holders button.link {
+  padding: 0;
+}
+.pk-code {
+  margin-left: 6px;
+  color: var(--muted);
+  font-family: Consolas, monospace;
+  font-size: 11px;
+}
+code.pk-code {
+  margin-left: 0;
+}
+.pk-inherits summary {
+  cursor: pointer;
+}
+.pk-inherits ul {
+  margin: 2px 0 0 16px;
+  padding: 0;
+}
+.pk-stats {
+  margin-top: 2px;
+}
+.pk-search {
+  width: 100%;
+  box-sizing: border-box;
+}
+.pk-seg {
+  display: flex;
+}
+.pk-seg button {
+  flex: 1 1 auto;
+  border-radius: 0;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+.pk-seg button + button {
+  border-left: none;
+}
+.pk-seg button:first-child {
+  border-radius: 4px 0 0 4px;
+}
+.pk-seg button:last-child {
+  border-radius: 0 4px 4px 0;
+}
+.pk-seg button.active {
+  background: var(--sel);
+  border-color: var(--accent);
+}
+.pk-list {
+  display: flex;
+  flex-direction: column;
+}
+.pk-grp {
+  margin: 8px 0 2px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pk-ev {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.pk-ev:hover {
+  background: var(--bg3);
+}
+.pk-ev.empty {
+  color: var(--muted);
+}
+.pk-tw {
+  width: 10px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.pk-ev-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pk-n {
+  font-variant-numeric: tabular-nums;
+  min-width: 20px;
+  text-align: right;
+}
+.pk-plus {
+  padding: 0 6px;
+  line-height: 16px;
+  font-size: 12px;
+}
+.pk-dl {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 4px 2px 22px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.pk-dl:hover {
+  background: var(--bg3);
+}
+.pk-dl.sel {
+  background: var(--sel);
+}
+.pk-dl.inherited .pk-dl-name {
+  color: var(--muted);
+}
+.pk-dl-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pk-from {
+  flex: 0 0 auto;
+}
+.pk-empty {
+  padding: 6px 4px;
+}
+.pk-foot {
+  margin-top: 6px;
+}

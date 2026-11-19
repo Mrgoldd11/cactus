@@ -141,8 +141,11 @@ test('game link: icon, Show in game, Game panel, How it was in game', async () =
     // Player: «as it was in the game» next to the editor calculation.
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-dialogue').click();
+    await page.locator('.dv-tab', { hasText: 'Записи' }).click();
     await page.getByTestId('search').fill(BARMAN);
     await page.getByTestId('record-list').locator(`[data-sid="${BARMAN}"]`).click();
+    // G1: the player is not in the layout, it opens by the graph's «▶ Play».
+    await page.locator('[data-panel="graph"]').getByTestId('dg-play').click();
     const player = page.getByTestId('player');
     await expect(player).toHaveAttribute('data-sid', BARMAN);
     const asIn = player.getByTestId('as-in-game');

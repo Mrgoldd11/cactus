@@ -57,6 +57,7 @@ test('conditions: phrases with codes, «translation · CODE» pickers, search by
     // A line: the condition reads as a sentence, the code stays next to it.
     await page.getByTestId('window-menu').click();
     await page.getByTestId('window-preset-dialogue').click();
+    await page.locator('.dv-tab', { hasText: 'Записи' }).click();
     await page.getByTestId('search').fill(HONEST_LINE);
     await page.getByTestId('record-list').locator(`[data-sid="${HONEST_LINE}"]`).click();
     await expect(page.getByTestId('line-inspector')).toHaveAttribute('data-sid', HONEST_LINE, { timeout: 30_000 });

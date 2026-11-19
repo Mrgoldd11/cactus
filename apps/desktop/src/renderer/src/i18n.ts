@@ -18,6 +18,7 @@ import { fieldsEn, fieldsRu, fieldsZh } from './i18n-fields.ts';
 import { newRecEn, newRecRu, newRecZh } from './i18n-new-record.ts';
 import { waysEn, waysRu, waysZh } from './i18n-ways.ts';
 import { eventsEn, eventsRu, eventsZh } from './i18n-events.ts';
+import { packageEn, packageRu, packageZh } from './i18n-package.ts';
 import { dialogHelpEn, dialogHelpRu, dialogHelpZh } from './i18n-dialog-help.ts';
 import { cardEn, cardRu, cardZh } from './i18n-card.ts';
 import { zh1 } from './i18n-zh-1.ts';
@@ -634,6 +635,7 @@ const en = {
   ...waysEn,
   ...cardEn,
   ...eventsEn,
+  ...packageEn,
   ...dialogHelpEn,
 };
 
@@ -1239,10 +1241,11 @@ const ru: Strings = {
   ...waysRu,
   ...cardRu,
   ...eventsRu,
+  ...packageRu,
   ...dialogHelpRu,
 };
 
-const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh, ...searchZh, ...fixesZh, ...publishZh, ...raceZh, ...animsZh, ...fieldsZh, ...newRecZh, ...waysZh, ...cardZh, ...eventsZh, ...dialogHelpZh };
+const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh, ...searchZh, ...fixesZh, ...publishZh, ...raceZh, ...animsZh, ...fieldsZh, ...newRecZh, ...waysZh, ...cardZh, ...eventsZh, ...packageZh, ...dialogHelpZh };
 
 export const STRINGS: Record<Lang, Strings> = { en, ru, zh };
 

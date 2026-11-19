@@ -48,6 +48,8 @@ function groupOfTab(page: Page, title: string | RegExp) {
 }
 
 async function pick(page: Page, sid: string): Promise<void> {
+  // In the «Dialogues» layout the records are a tab behind «Package» (G1).
+  await tab(page, 'Записи').first().click();
   await page.getByTestId('search').fill(sid);
   await page.getByTestId('record-list').locator(`[data-sid="${sid}"]`).click();
 }
