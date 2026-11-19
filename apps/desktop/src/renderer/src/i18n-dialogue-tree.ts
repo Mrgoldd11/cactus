@@ -1,0 +1,96 @@
+/** Strings of the «Tree (as in FCS)» dialogue view (UI review G5), merged into `i18n.ts`. */
+
+function ruPlural(n: number, one: string, few: string, many: string): string {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
+export const dialogueTreeEn = {
+  dtViewGraph: 'Graph',
+  dtViewTree: 'Tree (as in FCS)',
+  dtViewTip: 'The same dialogue as a graph or as the FCS tree. The choice is remembered.',
+  dtColLine: 'Line',
+  dtColConds: 'Conditions',
+  dtColEffects: 'Effects',
+  dtColProps: 'Properties',
+  dtAddTip: 'Adds under the selected row (under the dialogue if nothing is selected).',
+  dtUp: '↑',
+  dtDown: '↓',
+  dtUpTip: 'Move the selected line up in its branch (as in FCS)',
+  dtDownTip: 'Move the selected line down in its branch (as in FCS)',
+  dtFoldAll: 'Fold all',
+  dtFoldAllTip: 'Fold every branch down to the NPC lines of the dialogue',
+  dtMoreVariants: (n: number): string => `+${n} variant${n === 1 ? '' : 's'}`,
+  dtLessVariants: 'one variant',
+  dtVariantsTip: 'Text variants: the game says one of them at random.',
+  dtLoop: (text: string): string => `↩ back to ${text}`,
+  dtShared: (text: string): string => `↪ goes to ${text} (shown in another branch)`,
+  dtLinkTip: 'Click to select that line',
+  dtTransitions: 'Transitions to other dialogues',
+  dtEntry: (name: string): string => `← Entry from ${name}`,
+  dtExit: (name: string): string => `→ Exit to ${name}`,
+  dtLines: (n: number): string => `${n} line${n === 1 ? '' : 's'}`,
+  dtTo: (name: string): string => `→ ${name}`,
+  dtHint: 'Click — select · double-click or F2 — edit text · ↑↓ — rows · ←→ — fold · Del — delete. The same line panel is on the right.',
+};
+
+export const dialogueTreeRu: typeof dialogueTreeEn = {
+  dtViewGraph: 'Граф',
+  dtViewTree: 'Дерево (как в FCS)',
+  dtViewTip: 'Тот же диалог графом или деревом, как в FCS. Выбор запоминается.',
+  dtColLine: 'Реплика',
+  dtColConds: 'Условия',
+  dtColEffects: 'Эффекты',
+  dtColProps: 'Свойства',
+  dtAddTip: 'Добавляет под выбранную строку (под диалог, если ничего не выбрано).',
+  dtUp: '↑',
+  dtDown: '↓',
+  dtUpTip: 'Поднять выбранную реплику в её ветке (как в FCS)',
+  dtDownTip: 'Опустить выбранную реплику в её ветке (как в FCS)',
+  dtFoldAll: 'Свернуть всё',
+  dtFoldAllTip: 'Свернуть все ветки до реплик NPC диалога',
+  dtMoreVariants: (n: number): string => `+${n} ${ruPlural(n, 'вариант', 'варианта', 'вариантов')}`,
+  dtLessVariants: 'один вариант',
+  dtVariantsTip: 'Варианты текста: игра говорит один из них наугад.',
+  dtLoop: (text: string): string => `↩ назад к ${text}`,
+  dtShared: (text: string): string => `↪ переход к ${text} (стоит в другой ветке)`,
+  dtLinkTip: 'Щёлкните, чтобы выбрать эту реплику',
+  dtTransitions: 'Переходы в другие диалоги',
+  dtEntry: (name: string): string => `← Вход из ${name}`,
+  dtExit: (name: string): string => `→ Выход в ${name}`,
+  dtLines: (n: number): string => `${n} ${ruPlural(n, 'реплика', 'реплики', 'реплик')}`,
+  dtTo: (name: string): string => `→ ${name}`,
+  dtHint: 'Щелчок — выбрать · двойной щелчок или F2 — править текст · ↑↓ — строки · ←→ — свернуть · Del — удалить. Справа та же панель реплики.',
+};
+
+export const dialogueTreeZh: typeof dialogueTreeEn = {
+  dtViewGraph: '图',
+  dtViewTree: '树（同 FCS）',
+  dtViewTip: '同一个对话，以图或 FCS 树的形式显示。会记住选择。',
+  dtColLine: '台词',
+  dtColConds: '条件',
+  dtColEffects: '效果',
+  dtColProps: '属性',
+  dtAddTip: '添加到所选行下（未选择时添加到对话下）。',
+  dtUp: '↑',
+  dtDown: '↓',
+  dtUpTip: '在分支中上移所选台词（同 FCS）',
+  dtDownTip: '在分支中下移所选台词（同 FCS）',
+  dtFoldAll: '全部折叠',
+  dtFoldAllTip: '把所有分支折叠到对话的 NPC 台词',
+  dtMoreVariants: (n: number): string => `+${n} 个变体`,
+  dtLessVariants: '一个变体',
+  dtVariantsTip: '文本变体：游戏随机说出其中一个。',
+  dtLoop: (text: string): string => `↩ 回到 ${text}`,
+  dtShared: (text: string): string => `↪ 转到 ${text}（在另一分支中）`,
+  dtLinkTip: '点击选择该台词',
+  dtTransitions: '通往其他对话的转换',
+  dtEntry: (name: string): string => `← 来自 ${name} 的入口`,
+  dtExit: (name: string): string => `→ 通往 ${name} 的出口`,
+  dtLines: (n: number): string => `${n} 句台词`,
+  dtTo: (name: string): string => `→ ${name}`,
+  dtHint: '单击 — 选择 · 双击或 F2 — 编辑文本 · ↑↓ — 行 · ←→ — 折叠 · Del — 删除。右侧是同一个台词面板。',
+};

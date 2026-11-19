@@ -32,3 +32,4 @@ export * from './dialog-phrase.ts';
 export * from './dialogue-line-view.ts';
 export * from './dialog-picker.ts';
 export * from './dialogue-transitions.ts';
+export * from './dialogue-tree-rows.ts';

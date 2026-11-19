@@ -3875,3 +3875,148 @@ code.pk-code {
 .pk-foot {
   margin-top: 6px;
 }
+
+/* Tree view (UI review G5): «Graph | Tree» switch, rows like a script with columns. */
+.dg-views {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 420px;
+}
+.dg-view-switch {
+  display: flex;
+  gap: 2px;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.dg-view-switch button.active {
+  background: var(--sel);
+  border-color: var(--accent);
+}
+.dg-view-body {
+  flex: 1;
+  min-height: 0;
+}
+.dt {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  outline: none;
+}
+.dt > .dt-tools {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.dt-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+}
+.dt-th,
+.dt-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 200px 180px 120px;
+  gap: 8px;
+}
+.dt-th {
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.dt-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.dt-row {
+  padding: 3px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  cursor: default;
+}
+.dt-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.dt-row.dt-sel {
+  background: var(--sel);
+}
+.dt-row.dt-matched .dt-text {
+  outline: 1px dashed #c9a94a;
+  outline-offset: 1px;
+}
+.dt-head {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.dt-tw {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+}
+.dt-texts,
+.dt-row .dt-line > .dg-warn,
+.dt-edit {
+  margin-left: 18px;
+}
+.dt-text {
+  white-space: pre-wrap;
+}
+.dt-npc .dt-text,
+.dt-inter .dt-text {
+  color: #f0d9b0;
+}
+.dt-choice .dt-text {
+  color: #a9d0f5;
+}
+.dt-variant {
+  opacity: 0.85;
+}
+.dt-name {
+  font-weight: 600;
+}
+.dt-col {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.dt-conds {
+  color: #e9d7a8;
+}
+.dt-effects {
+  color: #a8e6a8;
+}
+.dt-props {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-content: flex-start;
+}
+.dt-ph + .dt-ph {
+  margin-top: 2px;
+}
+.dt-tr-ph {
+  color: #d6bdf7;
+}
+.dt-link {
+  opacity: 0.8;
+  font-size: 12px;
+}
+.dt-trs {
+  margin: 10px 8px;
+  padding-top: 6px;
+  border-top: 1px dashed #b48ae6;
+}
+.dt-tr {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 2px 0;
+  color: #d6bdf7;
+}

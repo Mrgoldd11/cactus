@@ -45,6 +45,7 @@ import {
   buildDialogueGraph,
   deleteGraphItems,
   dialogueChecks,
+  dialogueDeepFolds,
   dialogueLineViews,
   dialogueTransitions,
   duplicateLines,
@@ -68,6 +69,8 @@ import type { Project } from '../project.ts';
 import { tryEdit } from '../hooks.ts';
 import { isTypingIn, shortcut } from '../keys.ts';
 import { layoutDialogue, NODE_WIDTH, type Placed } from '../dialogue-layout.ts';
+import { InlineText } from './DialogueInlineText.tsx';
+import { DialogueTreeView } from './DialogueTreeView.tsx';
 import { isPortalId, isTransitionEdge, PortalCard, portalElements, type PortalNode } from './DialoguePortals.tsx';
 
 interface Props {
@@ -174,12 +177,38 @@ const EMPTY: ReadonlySet<string> = new Set();
 /** Copied lines (Ctrl+C / «Copy») — shared by all graphs of the window. */
 let clipboard: string[] = [];
 
+/** «Graph | Tree» choice (UI review G5), remembered for all dialogues. */
+const VIEW_KEY = 'kedit.graph.view';
+type View = 'graph' | 'tree';
+
 export function DialogueGraphTab(props: Props): ReactNode {
+  const t = useT();
+  const [view, setViewState] = useState<View>(() => (localStorage.getItem(VIEW_KEY) === 'tree' ? 'tree' : 'graph'));
+  const setView = (v: View): void => {
+    localStorage.setItem(VIEW_KEY, v);
+    setViewState(v);
+  };
   return (
-    // New provider for each record — the initial view starts over.
-    <ReactFlowProvider key={props.sid}>
-      <GraphView {...props} />
-    </ReactFlowProvider>
+    <div className="dg-views" data-view={view}>
+      <div className="dg-view-switch" role="tablist" title={t.dtViewTip}>
+        <button role="tab" className={`small${view === 'graph' ? ' active' : ''}`} aria-selected={view === 'graph'} data-testid="dg-view-graph" onClick={() => { setView('graph'); }}>
+          {t.dtViewGraph}
+        </button>
+        <button role="tab" className={`small${view === 'tree' ? ' active' : ''}`} aria-selected={view === 'tree'} data-testid="dg-view-tree" onClick={() => { setView('tree'); }}>
+          {t.dtViewTree}
+        </button>
+      </div>
+      <div className="dg-view-body">
+        {view === 'tree' ? (
+          <DialogueTreeView key={props.sid} {...props} />
+        ) : (
+          // New provider for each record — the initial view starts over.
+          <ReactFlowProvider key={props.sid}>
+            <GraphView {...props} />
+          </ReactFlowProvider>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -215,24 +244,7 @@ function hiddenBy(graph: DialogueGraph, collapsed: ReadonlySet<string>): { hidde
 
 /** Lines whose children are folded at first: `FOLD_DEPTH` deep from the nearest dialogue, the outermost ones. */
 export function deepFolds(graph: DialogueGraph): Set<string> {
-  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
-  const kids = treeKids(graph);
-  const out = new Set<string>();
-  const seen = new Set<string>();
-  const walk = (id: string, d: number): void => {
-    if (seen.has(id)) return;
-    seen.add(id);
-    const n = byId.get(id);
-    const depth = n && n.type !== 'DIALOGUE_LINE' ? 0 : d;
-    const ks = kids.get(id) ?? [];
-    if (depth >= FOLD_DEPTH && ks.length > 0) {
-      out.add(id);
-      return;
-    }
-    for (const k of ks) walk(k, depth + 1);
-  };
-  walk(graph.root, 0);
-  return out;
+  return dialogueDeepFolds(graph, FOLD_DEPTH);
 }
 
 function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, onShowLine, isLineOpen, onPlay }: Props): ReactNode {
@@ -1122,54 +1134,6 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   );
 }
 
-/** Editing text right in the node: Enter — save, Shift+Enter — new line, Esc — cancel. */
-function InlineText({ sid, value, actions }: { sid: string; value: string; actions: { current: Actions } }): ReactNode {
-  const t = useT();
-  const [text, setText] = useState(value);
-  const ref = useRef<HTMLTextAreaElement>(null);
-  const done = useRef(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.focus({ preventScroll: true });
-    el.select();
-  }, []);
-  const finish = (save: boolean): void => {
-    if (done.current) return;
-    done.current = true;
-    if (save) actions.current.commit(sid, text);
-    else actions.current.cancel();
-  };
-  return (
-    <>
-      <textarea
-        ref={ref}
-        className="dg-edit nodrag nowheel nopan"
-        data-testid="dg-edit"
-        rows={Math.min(6, Math.max(2, text.split('\n').length))}
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-        }}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            finish(true);
-          } else if (e.key === 'Escape') {
-            e.preventDefault();
-            finish(false);
-          }
-        }}
-        onBlur={() => {
-          finish(true);
-        }}
-      />
-      <div className="dg-edit-hint muted small">{t.dgEditHint}</div>
-    </>
-  );
-}
-
 type Phrase = LineView['conditions'][number];
 
 const MINIMAP_COLORS: Readonly<Record<string, string>> = { npc: '#8a6a35', player: '#4b6f9e', inter: '#3f7a52', head: '#7d6a3a', missing: '#5d6168' };
@@ -1347,7 +1311,7 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
         </button>
       </div>
       {data.editing ? (
-        <InlineText sid={n.id} value={data.raw ?? ''} actions={data.actions} />
+        <InlineText value={data.raw ?? ''} onCommit={(text) => { data.actions.current.commit(n.id, text); }} onCancel={() => { data.actions.current.cancel(); }} />
       ) : shown !== undefined ? (
         <>
           <div className={`dg-text${data.full ? '' : ' dg-clamp'}`} title={text?.localized !== undefined ? text.en : ''}>
