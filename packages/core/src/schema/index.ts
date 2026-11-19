@@ -9,3 +9,4 @@ export * from './dotnet-regex.ts';
 export * from './extensions.ts';
 export * from './field-help.ts';
 export * from './event-help.ts';
+export * from './dialog-help.ts';

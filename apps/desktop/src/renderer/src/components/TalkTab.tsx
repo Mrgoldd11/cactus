@@ -19,6 +19,7 @@ import { errorText, type Strings, useLang, useT } from '../i18n.ts';
 import { recordName, useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
 import { EventSelect } from './EventUi.tsx';
+import { PhraseContext, PhraseLine, useRecordPhrases } from './DialogHelpUi.tsx';
 
 interface Props {
   project: Project;
@@ -62,7 +63,9 @@ export function TalkTab({ project, sid, version, onGo }: Props): ReactNode {
       {typeof result === 'string' ? (
         <p className="error">{result}</p>
       ) : (
-        <TalkBody sim={result} nameOf={(id) => recordName(project.ctx, id)} onGo={onGo} />
+        <PhraseContext.Provider value={project.ctx}>
+          <TalkBody sim={result} nameOf={(id) => recordName(project.ctx, id)} onGo={onGo} />
+        </PhraseContext.Provider>
       )}
     </div>
   );
@@ -189,6 +192,7 @@ function CandidateRow({
   const withWhom = c.with?.length ? `; ${t.talkWith} ${names(c.with)}` : '';
   const byWhom = c.verdict === 'shadowed' && c.by !== undefined ? ` ${names([c.by])}` : '';
   const parts = partsText(c.scoreParts, t);
+  const phrases = useRecordPhrases(c.dialog, 'dialogue', true);
   return (
     <tr className={`talk-row tv-${c.verdict}`} data-testid="talk-candidate" data-dialog={c.dialog} data-verdict={c.verdict}>
       <td className="talk-verdict">
@@ -228,6 +232,13 @@ function CandidateRow({
       <td className="talk-conds">
         {c.conditions.length === 0 ? (
           <span className="muted">{t.talkNoConditions}</span>
+        ) : phrases ? (
+          <>
+            {phrases.conditions.map((p, i) => (
+              <PhraseLine key={i} phrase={p} kind="cond" mark testId="talk-cond-phrase" />
+            ))}
+            {c.conditions.includes('unique') && <div className="dg-cond mono">? unique</div>}
+          </>
         ) : (
           c.conditions.map((x, i) => (
             <div key={i} className="dg-cond mono">
@@ -265,6 +276,7 @@ function LineView({ l, onGo }: { l: TalkLine; onGo: (sid: string) => void }): Re
   const t = useT();
   const lang = useLang();
   const first = l.texts[0];
+  const phrases = useRecordPhrases(l.id, 'line', false);
   return (
     <span className="talk-line" data-testid="talk-line" data-id={l.id}>
       <span className={`dg-chip ${l.choice ? 'choice' : 'npc'}`}>{l.choice ? t.dgPlayer : (l.speakerLabel ?? t.dgNpc)}</span>{' '}
@@ -300,18 +312,22 @@ function LineView({ l, onGo }: { l: TalkLine; onGo: (sid: string) => void }): Re
         </span>
       ) : null}
       {l.chance !== undefined && l.chance < 100 ? <span className="muted mono small"> {l.chance}%</span> : null}
-      {l.conditions.map((x, i) => (
-        <span key={`c${i}`} className="dg-cond mono small">
-          {' '}
-          ? {x}
-        </span>
-      ))}
-      {l.effects.map((x, i) => (
-        <span key={`e${i}`} className="dg-effect mono small">
-          {' '}
-          ! {x}
-        </span>
-      ))}
+      {phrases
+        ? phrases.conditions.map((p, i) => <PhraseLine key={`c${i}`} phrase={p} kind="cond" mark inline />)
+        : l.conditions.map((x, i) => (
+            <span key={`c${i}`} className="dg-cond mono small">
+              {' '}
+              ? {x}
+            </span>
+          ))}
+      {phrases
+        ? phrases.effects.map((p, i) => <PhraseLine key={`e${i}`} phrase={p} kind="effect" mark inline />)
+        : l.effects.map((x, i) => (
+            <span key={`e${i}`} className="dg-effect mono small">
+              {' '}
+              ! {x}
+            </span>
+          ))}
       {l.shadowedBy !== undefined && <span className="dg-warn small"> ⚠ {t.dgIssue_shadowed}</span>}
     </span>
   );

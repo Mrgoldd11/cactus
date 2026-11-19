@@ -3300,3 +3300,19 @@ input.invalid {
   display: flex;
   gap: 6px;
 }
+
+/* Dialogue conditions and effects in plain words (DialogHelpUi.tsx) */
+.dh-phrase {
+  font-family: inherit;
+}
+.dh-phrase .dh-code {
+  opacity: 0.6;
+  font-size: 10px;
+  margin-left: 4px;
+}
+.ln-action .dh-phrase {
+  flex-basis: 100%;
+}
+.dh-select {
+  max-width: 100%;
+}

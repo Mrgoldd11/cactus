@@ -17,7 +17,9 @@ import {
   decodeText,
   deleteLine,
   describeDialogAction,
+  dialogActionPhrase,
   dialogEnumUsage,
+  dialogValueHelp,
   dialogueScore,
   duplicateLine,
   effectOf,
@@ -27,12 +29,13 @@ import {
   lineParents,
   lineTexts,
   linkLine,
+  LINE_REF_HELP,
   linksChanged,
   moveCopies,
   moveLine,
-  enumLabel,
   removeAction,
   removedLinks,
+  recordPhrases,
   revertLine,
   revertLinks,
   setLineTexts,
@@ -40,6 +43,7 @@ import {
   shortEnumLabel,
   translatedText,
   unlinkLine,
+  uiText,
   updateCondition,
   updateEffect,
   type DialogEnumUsage,
@@ -56,6 +60,7 @@ import type { Project } from '../project.ts';
 import { tryEdit } from '../hooks.ts';
 import { CommitInput } from './widgets.tsx';
 import { PlaysWhen } from './EventUi.tsx';
+import { DialogValueSelect, dialogOptionText, dialogOptionTip, PhraseLine } from './DialogHelpUi.tsx';
 
 interface Props {
   project: Project;
@@ -129,10 +134,8 @@ function EnumSelect({ def, value, onChange, usage, testId }: { def: EnumDef; val
   const values = def.values.filter((v) => !v.name.endsWith('_END') || v.value === value);
   const used = usage ? values.filter((v) => usage.has(v.value) || v.value === value) : values;
   const unused = usage ? values.filter((v) => !usage.has(v.value) && v.value !== value) : [];
-  const label = (v: EnumValue): string => {
-    const l = enumLabel(def, v, lang);
-    return l !== undefined ? `${v.name} — ${l}` : v.name;
-  };
+  const label = (v: EnumValue): string => dialogOptionText(def, v, lang);
+  const tip = (v: EnumValue): string | undefined => dialogOptionTip(dialogValueHelp(def.name, v.name), lang);
   return (
     <select
       className="ln-select"
@@ -147,7 +150,7 @@ function EnumSelect({ def, value, onChange, usage, testId }: { def: EnumDef; val
         <>
           <optgroup label={t.lnUsedInGame}>
             {used.map((v) => (
-              <option key={v.value} value={v.value}>
+              <option key={v.value} value={v.value} title={tip(v)}>
                 {label(v)}
               </option>
             ))}
@@ -155,7 +158,7 @@ function EnumSelect({ def, value, onChange, usage, testId }: { def: EnumDef; val
           {unused.length > 0 && (
             <optgroup label={t.lnUnusedInGame}>
               {unused.map((v) => (
-                <option key={v.value} value={v.value}>
+                <option key={v.value} value={v.value} title={tip(v)}>
                   {label(v)} ⚠
                 </option>
               ))}
@@ -164,7 +167,7 @@ function EnumSelect({ def, value, onChange, usage, testId }: { def: EnumDef; val
         </>
       ) : (
         values.map((v) => (
-          <option key={v.value} value={v.value}>
+          <option key={v.value} value={v.value} title={tip(v)}>
             {label(v)}
           </option>
         ))
@@ -465,6 +468,8 @@ function ChooseFields({ ctx, sid, rec, lower, t, edit }: Part & { lower: GameRec
 
 function Conditions({ ctx, sid, rec, t, edit }: Part): ReactNode {
   const refs = rec.refs.get('conditions') ?? [];
+  const lang = useLang();
+  const on = ctx.typeName(rec.type) === 'DIALOGUE' ? 'dialogue' : 'line';
   const usage = enumUsage(ctx).conditions;
   const condDef = getEnum(ctx.schema, 'DialogConditionEnum')!;
   const talker = getEnum(ctx.schema, 'TalkerEnum')!;
@@ -485,16 +490,18 @@ function Conditions({ ctx, sid, rec, t, edit }: Part): ReactNode {
         const a = ctx.get(r.target);
         if (!c || !a) return <ReadOnlyRef key={r.target} ctx={ctx} r={r} cat="conditions" />;
         const tagDef = fieldEnum(ctx.schema, 'DIALOG_ACTION', 'tag', a);
+        const phrase = dialogActionPhrase(ctx, r, 'conditions', lang, on);
         return (
           <div key={r.target} className="ln-action" data-testid="ln-cond">
             <EnumSelect def={talker} value={c.who} onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { who: v })); }} />
-            <EnumSelect def={condDef} value={c.cond} usage={usage} testId="ln-cond-name" onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { cond: v })); }} />
+            <DialogValueSelect def={condDef} value={c.cond} usage={usage} testId="ln-cond-name" onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { cond: v })); }} />
             {tagDef && <EnumSelect def={tagDef} value={c.tag ?? -1} onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { tag: v })); }} />}
             <EnumSelect def={cmpDef} value={c.cmp} onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { cmp: v })); }} />
             <NumberInput value={c.value} int testId="ln-cond-value" onCommit={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { value: v })); }} />
             <button className="small" title={t.lnRemove} onClick={() => { edit(() => { removeAction(ctx, sid, 'conditions', r.target); }); }}>
               ✕
             </button>
+            {phrase && <PhraseLine phrase={phrase} kind="cond" testId="ln-cond-phrase" />}
           </div>
         );
       })}
@@ -504,6 +511,7 @@ function Conditions({ ctx, sid, rec, t, edit }: Part): ReactNode {
 
 function Effects({ ctx, sid, rec, t, edit }: Part): ReactNode {
   const refs = rec.refs.get('effects') ?? [];
+  const lang = useLang();
   const usage = enumUsage(ctx).actions;
   const def = getEnum(ctx.schema, 'DialogActionEnum')!;
   const common = [...usage.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 1;
@@ -521,15 +529,17 @@ function Effects({ ctx, sid, rec, t, edit }: Part): ReactNode {
         const e = effectOf(ctx, r);
         if (!e) return <ReadOnlyRef key={r.target} ctx={ctx} r={r} cat="effects" />;
         const vals = e.values ?? [0, 0, 0];
+        const phrase = dialogActionPhrase(ctx, r, 'effects', lang);
         return (
           <div key={r.target} className="ln-action" data-testid="ln-effect">
-            <EnumSelect def={def} value={e.action} usage={usage} testId="ln-effect-name" onChange={(v) => { edit(() => void updateEffect(ctx, sid, r.target, { action: v })); }} />
+            <DialogValueSelect def={def} value={e.action} usage={usage} testId="ln-effect-name" onChange={(v) => { edit(() => void updateEffect(ctx, sid, r.target, { action: v })); }} />
             {[0, 1, 2].map((k) => (
               <NumberInput key={k} value={vals[k] ?? 0} onCommit={(v) => { edit(() => void updateEffect(ctx, sid, r.target, { values: vals.map((x, j) => (j === k ? v : x)) })); }} />
             ))}
             <button className="small" title={t.lnRemove} onClick={() => { edit(() => { removeAction(ctx, sid, 'effects', r.target); }); }}>
               ✕
             </button>
+            {phrase && <PhraseLine phrase={phrase} kind="effect" testId="ln-effect-phrase" />}
           </div>
         );
       })}
@@ -539,6 +549,8 @@ function Effects({ ctx, sid, rec, t, edit }: Part): ReactNode {
 
 function ReadOnlyRef({ ctx, r, cat }: { ctx: ModContext; r: Reference; cat: string }): ReactNode {
   const lang = useLang();
+  const phrase = dialogActionPhrase(ctx, r, cat, lang);
+  if (phrase) return <PhraseLine phrase={phrase} kind={cat === 'effects' ? 'effect' : 'cond'} />;
   return <div className="dg-cond mono">{describeDialogAction(ctx, r, cat, lang) ?? r.target}</div>;
 }
 
@@ -546,6 +558,7 @@ function ReadOnlyRef({ ctx, r, cat }: { ctx: ModContext; r: Reference; cat: stri
 const OWN_CATEGORIES: ReadonlySet<string> = new Set(['lines', 'conditions', 'effects', 'dialogs']);
 
 function Filters({ ctx, rec, t, onGo }: { ctx: ModContext; rec: GameRecord; t: Strings; onGo: (sid: string) => void }): ReactNode {
+  const lang = useLang();
   const items = [...rec.refs.entries()].filter(([c, l]) => !OWN_CATEGORIES.has(c) && l.length > 0);
   if (items.length === 0) return null;
   return (
@@ -555,7 +568,10 @@ function Filters({ ctx, rec, t, onGo }: { ctx: ModContext; rec: GameRecord; t: S
         {items.flatMap(([c, l]) =>
           l.map((r) => (
             <li key={`${c}:${r.target}`}>
-              <span className="mono small">{c}:</span>{' '}
+              <span className="small" title={LINE_REF_HELP[c] ? uiText(LINE_REF_HELP[c].desc, lang) : undefined}>
+                {LINE_REF_HELP[c] ? `${uiText(LINE_REF_HELP[c].label, lang)} · ` : ''}
+                <span className="mono">{c}</span>:
+              </span>{' '}
               <button className="link" onClick={() => { onGo(r.target); }}>
                 {ctx.localizedName(r.target) ?? ctx.name(r.target) ?? r.target}
               </button>
@@ -667,6 +683,7 @@ function InGame({ ctx, rec, tr, t }: { ctx: ModContext; rec: GameRecord; tr: Tra
   const lang = useLang();
   const talker = getEnum(ctx.schema, 'TalkerEnum')!;
   const isLine = ctx.typeName(rec.type) === 'DIALOGUE_LINE';
+  const phrases = recordPhrases(ctx, rec, lang, isLine ? 'line' : 'dialogue');
   return (
     <div className="ln-ingame" data-testid="ln-ingame">
       <div className="ln-section-title">{t.lnInGameTitle}</div>
@@ -681,15 +698,11 @@ function InGame({ ctx, rec, tr, t }: { ctx: ModContext; rec: GameRecord; tr: Tra
             {quote(translatedText(tr, rec.stringId, `text${i}`, x) ?? x, lang)}
           </div>
         ))}
-      {(rec.refs.get('conditions') ?? []).map((r) => (
-        <div key={r.target} className="dg-cond mono">
-          ? {describeDialogAction(ctx, r, 'conditions', lang) ?? r.target}
-        </div>
+      {phrases.conditions.map((p, i) => (
+        <PhraseLine key={`c${i}`} phrase={p} kind="cond" mark testId="ln-ingame-cond" />
       ))}
-      {(rec.refs.get('effects') ?? []).map((r) => (
-        <div key={r.target} className="dg-effect mono">
-          ! {describeDialogAction(ctx, r, 'effects', lang) ?? r.target}
-        </div>
+      {phrases.effects.map((p, i) => (
+        <PhraseLine key={`e${i}`} phrase={p} kind="effect" mark testId="ln-ingame-effect" />
       ))}
       <ol className="ln-next">
         {(rec.refs.get('lines') ?? []).map((r) => (
