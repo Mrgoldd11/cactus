@@ -13,9 +13,13 @@ import {
   interiorLayouts,
   layoutObjects,
   layoutUsage,
+  interiorFloors,
   moveInterior,
+  objectFloor,
   placeInterior,
   removeInterior,
+  strayObjects,
+  type FloorPiece,
   type InteriorLayout,
   type InteriorObject,
   type WorldEdits,
@@ -86,6 +90,14 @@ const en = {
   copied: 'State copied from',
   help: 'Left mouse — rotate view, middle/right — pan, wheel — zoom, click — select, G/R — move/rotate, Del — remove, F — show, Esc — deselect, Ctrl+Z / Ctrl+Y — undo / redo of world edits',
   loadingModels: 'models…',
+  shownFloor: 'Floor',
+  allFloors: 'whole building',
+  floorN: (n: number): string => `floor ${n}`,
+  floorTip: 'Floor to look at: upper floors, roofs and their objects are hidden, walls are cut above the floor. «Whole building» — everything, outer walls see-through.',
+  gameFloor: 'in the file: floornum',
+  hiddenFloor: 'on an upper floor — click to show that floor',
+  stray: 'far away',
+  strayTip: 'Stands far from the building (world coordinates in the layout?) — the game puts it there too, so it is not seen inside.',
 };
 type InteriorStrings = typeof en;
 const ru: InteriorStrings = {
@@ -144,6 +156,14 @@ const ru: InteriorStrings = {
   copied: 'Состояние скопировано с',
   help: 'Левая кнопка — вращать вид, средняя/правая — сдвигать, колесо — ближе/дальше, клик — выбрать, G/R — сдвиг/поворот, Del — удалить, F — показать, Esc — снять выбор, Ctrl+Z / Ctrl+Y — отмена / повтор правок мира',
   loadingModels: 'модели…',
+  shownFloor: 'Этаж',
+  allFloors: 'всё здание',
+  floorN: (n: number): string => `этаж ${n}`,
+  floorTip: 'Какой этаж смотреть: верхние этажи, крыши и их предметы скрыты, стены срезаны над полом. «Всё здание» — всё сразу, наружные стены прозрачные.',
+  gameFloor: 'в файле: floornum',
+  hiddenFloor: 'на верхнем этаже — щелчок покажет этот этаж',
+  stray: 'далеко',
+  strayTip: 'Стоит далеко от здания (в раскладке мировые координаты?) — игра тоже ставит его туда, внутри его не видно.',
 };
 const zh: InteriorStrings = {
   panel: '建筑内部',
@@ -201,6 +221,14 @@ const zh: InteriorStrings = {
   copied: '状态复制自',
   help: '鼠标左键——旋转视角，中键/右键——平移，滚轮——缩放，点击——选择，G/R——移动/旋转，Del——移除，F——定位，Esc——取消选择，Ctrl+Z / Ctrl+Y——撤销 / 重做世界修改',
   loadingModels: '模型…',
+  shownFloor: '楼层',
+  allFloors: '整栋建筑',
+  floorN: (n: number): string => `${n} 层`,
+  floorTip: '要查看的楼层：隐藏上层、屋顶及其物体，墙壁在地板上方截断。「整栋建筑」——全部显示，外墙半透明。',
+  gameFloor: '文件中：floornum',
+  hiddenFloor: '在上层——点击显示该楼层',
+  stray: '很远',
+  strayTip: '离建筑很远（布局里是世界坐标？）——游戏也把它放在那里，在室内看不到。',
 };
 const INTERIOR_STRINGS: Record<Lang, InteriorStrings> = { en, ru, zh };
 
@@ -283,6 +311,13 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
   const [note, setNote] = useState<string | undefined>();
   const [tick, setTick] = useState(0);
   const [loadingModels, setLoadingModels] = useState(0);
+  /** Shell parts of the building (for the floor heights). */
+  const [shellPieces, setShellPieces] = useState<FloorPiece[]>([]);
+  /** Floor chosen by the user: game number, 'all' — whole building, undefined — the lowest one. */
+  const [floorPick, setFloorPick] = useState<number | 'all' | undefined>();
+  /** e2e: a shown object to click in 3D (`key@x,y`). */
+  const [probe, setProbe] = useState('');
+  const list = useRef<HTMLDivElement>(null);
   const request = useStore(interiorRequest);
   /** New object: select it once the view gets it with the list. */
   const pendingSelect = useRef<string | undefined>(undefined);
@@ -314,7 +349,12 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
       setMessage(undefined);
     };
     v.onEditChange = (e) => { setEdit(e); };
-    v.onLoaded = () => { setLoadingModels(0); };
+    v.onLoaded = () => {
+      setLoadingModels(0);
+      setProbe(v.objectProbe());
+    };
+    v.onShell = (pieces) => { setShellPieces(pieces); };
+    v.onViewChange = () => { setProbe(v.objectProbe()); };
     return () => {
       view.current = undefined;
       v.dispose();
@@ -354,9 +394,17 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
     return new Set(holder ? holder.instances.keys() : []);
   }, [edits, current?.sid, tick]);
 
+  const stray = useMemo(() => strayObjects(objects), [objects]);
+  const floors = useMemo(() => interiorFloors(objects, shellPieces, stray), [objects, shellPieces, stray]);
+  const floorOf = useMemo(() => new Map(objects.map((o) => [o.key, objectFloor(o, floors)])), [objects, floors]);
+  const shownFloor = floorPick === 'all' ? undefined : floors.some((f) => f.floor === floorPick) ? (floorPick as number) : floors[0]?.floor;
+  const floorLabel = (n: number): string => s.floorN(n + 1);
+
   useEffect(() => {
     const v = view.current;
     if (!v) return;
+    setShellPieces([]);
+    setFloorPick(undefined);
     void v.setBuilding(edits && sid && layouts.length > 0 ? sid : undefined);
   }, [sid, edits, layouts.length > 0]);
 
@@ -375,8 +423,21 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
 
   useEffect(() => {
     setNote(undefined);
+    setFloorPick(undefined);
     view.current?.select(undefined);
+    view.current?.resetFrame();
   }, [layout]);
+
+  useEffect(() => {
+    view.current?.setFloorView({ floors, floor: shownFloor, floorOf, stray });
+  }, [floors, shownFloor, floorOf, stray]);
+
+  // Selected in 3D: the list item comes into sight.
+  useEffect(() => {
+    if (selected === undefined || !list.current) return;
+    const el = [...list.current.children].find((c) => (c as HTMLElement).dataset['key'] === selected);
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [selected]);
 
   // Edits: the gizmo writes via core commands.
   useEffect(() => {
@@ -459,6 +520,9 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
       data-layout={current?.sid ?? ''}
       data-objects={objects.length}
       data-loading={loadingModels}
+      data-floors={floors.map((f) => f.floor).join(',')}
+      data-floor={shownFloor ?? 'all'}
+      data-stray={stray.size}
       onKeyDownCapture={onKeyDown}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', flexWrap: 'wrap', position: 'relative' }}>
@@ -537,6 +601,23 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
             />
           </>
         )}
+        {current && floors.length > 0 && (
+          <label title={s.floorTip}>
+            {s.shownFloor}{' '}
+            <select
+              data-testid="interior-floor-pick"
+              value={shownFloor === undefined ? 'all' : String(shownFloor)}
+              onChange={(e) => { setFloorPick(e.target.value === 'all' ? 'all' : Number(e.target.value)); }}
+            >
+              {floors.map((f) => (
+                <option key={f.floor} value={String(f.floor)}>
+                  {floorLabel(f.floor)}
+                </option>
+              ))}
+              <option value="all">{s.allFloors}</option>
+            </select>
+          </label>
+        )}
         <span style={{ flex: 1 }} />
         {loadingModels > 0 && <span className="muted" style={{ fontSize: '0.85em' }}>{s.loadingModels}</span>}
         {current && (
@@ -551,7 +632,7 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
         </div>
       )}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        <div ref={host} data-testid="interior-view" data-gizmo={view.current?.gizmoProbe() ?? ''} style={{ position: 'relative', flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
+        <div ref={host} data-testid="interior-view" data-gizmo={view.current?.gizmoProbe() ?? ''} data-probe={probe} style={{ position: 'relative', flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
           {status && (
             <div className="muted" data-testid="interior-note" style={{ position: 'absolute', left: 0, right: 0, top: '40%', textAlign: 'center', pointerEvents: 'none' }}>
               {status}
@@ -627,10 +708,12 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
                         <NumberField testId="interior-yaw" value={yawDeg(sel.rotation)} onCommit={(v) => { moveTo(sel, [...sel.position], yawQuat(v), true); }} />°
                       </td>
                     </tr>
-                    {sel.floor !== undefined && (
+                    {floorOf.has(sel.key) && (
                       <tr>
                         <td className="muted">{s.floor}</td>
-                        <td data-testid="interior-floor">{sel.floor}</td>
+                        <td data-testid="interior-floor" data-floor={floorOf.get(sel.key)} title={sel.floor !== undefined ? `${s.gameFloor} ${sel.floor}` : undefined}>
+                          {floorOf.get(sel.key)! + 1}
+                        </td>
                       </tr>
                     )}
                     {sel.locked !== undefined && (
@@ -666,26 +749,35 @@ function InteriorPanel({ def, params }: PanelProps): ReactNode {
                 </table>
               </div>
             )}
-            <div data-testid="interior-list">
-              {objects.map((o) => (
-                <div
-                  key={o.key}
-                  className={o.key === selected ? 'menu-item active' : 'menu-item'}
-                  data-key={o.key}
-                  style={{ cursor: 'pointer', padding: '1px 4px', background: o.key === selected ? 'var(--selection, #2f4f6f)' : undefined }}
-                  onClick={() => {
-                    view.current?.select(o.key);
-                    view.current?.focus(o.key);
-                  }}
-                >
-                  {editedKeys.has(o.key) ? '✎ ' : ''}
-                  {name(o.target)}{' '}
-                  <span className="muted">
-                    · {kindName(o)}
-                    {o.floor !== undefined ? ` · ${s.floor.toLowerCase()} ${o.floor}` : ''}
-                  </span>
-                </div>
-              ))}
+            <div data-testid="interior-list" ref={list}>
+              {objects.map((o) => {
+                const f = floorOf.get(o.key) ?? 0;
+                const hidden = shownFloor !== undefined && f > shownFloor;
+                const far = stray.has(o.key);
+                return (
+                  <div
+                    key={o.key}
+                    className={o.key === selected ? 'menu-item active' : 'menu-item'}
+                    data-key={o.key}
+                    data-hidden={hidden ? '1' : undefined}
+                    title={hidden ? s.hiddenFloor : far ? s.strayTip : undefined}
+                    style={{ cursor: 'pointer', padding: '1px 4px', opacity: hidden ? 0.5 : undefined, background: o.key === selected ? 'var(--selection, #2f4f6f)' : undefined }}
+                    onClick={() => {
+                      if (hidden) setFloorPick(f);
+                      view.current?.select(o.key);
+                      view.current?.focus(o.key);
+                    }}
+                  >
+                    {editedKeys.has(o.key) ? '✎ ' : ''}
+                    {name(o.target)}{' '}
+                    <span className="muted">
+                      · {kindName(o)}
+                      {floors.length > 1 ? ` · ${floorLabel(f)}` : ''}
+                    </span>
+                    {far && <span data-testid="interior-stray" style={{ color: "#d9a441" }}> · ⚠ {s.stray}</span>}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
