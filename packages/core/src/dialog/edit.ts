@@ -21,6 +21,7 @@ import { itemTypeId, itemTypeName } from '../format/item-types.ts';
 import type { GameRecord, Reference } from '../format/types.ts';
 import { EditError, type ModContext } from '../model/context.ts';
 import { isRemovalMarker, isRemovedRef } from '../model/record-ops.ts';
+import { LINE_REF_HELP } from '../schema/line-ref-help.ts';
 
 /** Reference categories to DIALOG_ACTION that belong to a line. */
 export const OWNED_ACTION_CATEGORIES = ['conditions', 'effects'] as const;
@@ -464,6 +465,49 @@ export function removeAction(ctx: ModContext, owner: string, cat: ActionCategory
   ctx.transaction(cat === 'conditions' ? 'убрать условие' : 'убрать действие', () => {
     ctx.removeReference(owner, cat, action);
     if (ctx.referencesTo(action).length === 0 && ctx.status(action) === 'new') ctx.deleteRecord(action);
+  });
+}
+
+/**
+ * Add a reference condition or effect to a line or dialogue: a reference category of the schema that
+ * is a condition or effect by itself (`my race` → RACE, `target has item` → ITEM, `give item`,
+ * `unlocks` → DIALOGUE…). The target must be of the type the schema requires. Values default to the
+ * schema ones; an existing reference to the same target gets the new values. One undo step.
+ */
+export function addLineRef(ctx: ModContext, owner: string, category: string, target: string, values?: readonly number[]): void {
+  const o = need(ctx, owner, OWNER_TYPES, DIALOGUE_OR_LINE);
+  const ownerType = ctx.typeName(o.type);
+  const def = ctx.schema?.types.get(ownerType)?.fields.get(category);
+  if (!def || def.kind !== 'reference' || category === 'lines' || (OWNED_ACTION_CATEGORIES as readonly string[]).includes(category))
+    throw new EditError({ en: `${ownerType} has no reference condition or effect «${category}»`, ru: `у ${ownerType} нет ссылочного условия или эффекта «${category}»`, zh: `${ownerType} 没有引用条件或效果「${category}」` });
+  const t = ctx.get(target);
+  if (!t) throw new EditError({ en: `No record ${target}`, ru: `Нет записи ${target}`, zh: `没有记录 ${target}` });
+  const tt = ctx.typeName(t.type);
+  if (def.targetType !== undefined && tt !== def.targetType)
+    throw new EditError({ en: `«${category}» needs ${def.targetType}, not ${tt}`, ru: `«${category}» ждёт ${def.targetType}, а не ${tt}`, zh: `「${category}」需要 ${def.targetType}，而不是 ${tt}` });
+  const effect = LINE_REF_HELP[category]?.kind === 'effect';
+  ctx.transaction(effect ? 'новое действие' : 'новое условие', () => {
+    ctx.addReference(owner, category, target, values ?? ctx.refDefaults(owner, category));
+  });
+}
+
+/** Remove one target from a reference condition or effect of a line or dialogue. One undo step. */
+export function removeLineRef(ctx: ModContext, owner: string, category: string, target: string): void {
+  need(ctx, owner, OWNER_TYPES, DIALOGUE_OR_LINE);
+  const effect = LINE_REF_HELP[category]?.kind === 'effect';
+  ctx.transaction(effect ? 'убрать действие' : 'убрать условие', () => {
+    ctx.removeReference(owner, category, target);
+  });
+}
+
+/** Change the value (v0) of one target of a reference condition or effect, keeping v1/v2. One undo step. */
+export function setLineRefValue(ctx: ModContext, owner: string, category: string, target: string, value: number): void {
+  const o = need(ctx, owner, OWNER_TYPES, DIALOGUE_OR_LINE);
+  const ref = o.refs.get(category)?.find((r) => r.target === target);
+  if (!ref) throw new EditError({ en: `${owner} has no ${category} → ${target}`, ru: `у ${owner} нет ${category} → ${target}`, zh: `${owner} 没有 ${category} → ${target}` });
+  const effect = LINE_REF_HELP[category]?.kind === 'effect';
+  ctx.transaction(effect ? 'действие' : 'условие', () => {
+    ctx.addReference(owner, category, target, [value, ref.v1, ref.v2]);
   });
 }
 

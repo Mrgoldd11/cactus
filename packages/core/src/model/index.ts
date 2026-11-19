@@ -30,3 +30,4 @@ export * from './race-card.ts';
 export * from './add-animations.ts';
 export * from './dialog-phrase.ts';
 export * from './dialogue-line-view.ts';
+export * from './dialog-picker.ts';

@@ -1755,6 +1755,135 @@ button.small.active {
   padding-left: 6px;
 }
 
+/* Line panel (UI review G4): scrolling body, field description fixed at the bottom. */
+.line-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.line-panel > .line-inspector {
+  flex: 1;
+  min-height: 0;
+}
+.lp-desc {
+  flex: none;
+  border-top: 1px solid var(--border);
+  background: var(--bg2);
+  padding: 6px 10px;
+  min-height: 52px;
+  max-height: 34%;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.lp-desc-text {
+  white-space: pre-wrap;
+}
+.lp-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.ln-action.lp-cond {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 3px;
+  padding: 4px 0 5px;
+}
+/* In a column, `flex-basis: 100%` of `.ln-action .dh-phrase` would push the phrase into a second column. */
+.ln-action.lp-cond .dh-phrase {
+  flex-basis: auto;
+}
+.lp-cond .lp-row > .ln-select,
+.lp-cond .lp-row > .dh-select {
+  flex: 1 1 140px;
+}
+.lp-ref-name {
+  font-weight: 600;
+}
+.lp-targets {
+  gap: 4px 10px;
+}
+.lp-target {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+.lp-ref-value {
+  width: 56px;
+}
+.lp-variants {
+  font-weight: normal;
+}
+.lp-variant-n {
+  align-self: flex-start;
+  padding-top: 4px;
+}
+.lp-pick {
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg2);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.lp-pick-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lp-pick .search {
+  width: 100%;
+}
+.lp-pick-list {
+  max-height: 300px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lp-pick-group {
+  display: flex;
+  flex-direction: column;
+}
+.lp-pick-gtitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 2px 4px;
+}
+button.lp-pick-item {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+button.lp-pick-item.sel {
+  background: var(--sel);
+}
+.lp-pick-ref {
+  color: var(--accent);
+}
+.lp-pick-desc {
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 /* Live AI link */
 .panes.with-ai {
   grid-template-columns: 240px minmax(300px, 1fr) minmax(420px, 1.2fr) 340px;

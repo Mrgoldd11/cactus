@@ -21,6 +21,7 @@ import { eventsEn, eventsRu, eventsZh } from './i18n-events.ts';
 import { packageEn, packageRu, packageZh } from './i18n-package.ts';
 import { dialogueNodesEn, dialogueNodesRu, dialogueNodesZh } from './i18n-dialogue-nodes.ts';
 import { dialogHelpEn, dialogHelpRu, dialogHelpZh } from './i18n-dialog-help.ts';
+import { linePanelEn, linePanelRu, linePanelZh } from './i18n-line-panel.ts';
 import { cardEn, cardRu, cardZh } from './i18n-card.ts';
 import { zh1 } from './i18n-zh-1.ts';
 import { zh2 } from './i18n-zh-2.ts';
@@ -639,6 +640,7 @@ const en = {
   ...packageEn,
   ...dialogueNodesEn,
   ...dialogHelpEn,
+  ...linePanelEn,
 };
 
 export type Strings = typeof en;
@@ -1246,9 +1248,10 @@ const ru: Strings = {
   ...packageRu,
   ...dialogueNodesRu,
   ...dialogHelpRu,
+  ...linePanelRu,
 };
 
-const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh, ...searchZh, ...fixesZh, ...publishZh, ...raceZh, ...animsZh, ...fieldsZh, ...newRecZh, ...waysZh, ...cardZh, ...eventsZh, ...packageZh, ...dialogueNodesZh, ...dialogHelpZh };
+const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh, ...searchZh, ...fixesZh, ...publishZh, ...raceZh, ...animsZh, ...fieldsZh, ...newRecZh, ...waysZh, ...cardZh, ...eventsZh, ...packageZh, ...dialogueNodesZh, ...dialogHelpZh, ...linePanelZh };
 
 export const STRINGS: Record<Lang, Strings> = { en, ru, zh };
 
