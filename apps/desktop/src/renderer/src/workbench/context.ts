@@ -29,6 +29,8 @@ export interface Workbench {
   open: (panelId: string, params?: PanelParams) => void;
   /** Whether a panel of this kind is open anywhere. */
   hasPanel: (panelId: string) => boolean;
+  /** Bring an already open panel of this kind to the front if its tab is hidden (opens nothing). */
+  reveal: (panelId: string) => void;
   /** Parameters of every open panel of this kind (one entry per instance). */
   panelParams: (panelId: string) => PanelParams[];
   /** Layout version: changes when panels open, close, move or get pinned to another record. */

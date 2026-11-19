@@ -71,7 +71,8 @@ import { isTypingIn, shortcut } from '../keys.ts';
 import { layoutDialogue, NODE_WIDTH, type Placed } from '../dialogue-layout.ts';
 import { InlineText } from './DialogueInlineText.tsx';
 import { DialogueTreeView } from './DialogueTreeView.tsx';
-import { isPortalId, isTransitionEdge, PortalCard, portalElements, type PortalNode } from './DialoguePortals.tsx';
+import { isPortalId, isTransitionEdge, PORTAL_WIDTH, PortalCard, portalElements, type PortalNode } from './DialoguePortals.tsx';
+import { isWhenId, WhenCard, whenElements, type WhenNode } from './DialogueWhenNodes.tsx';
 
 interface Props {
   project: Project;
@@ -102,6 +103,8 @@ const TEXT_LINES = 3;
 /** Longer texts (or with line breaks) get «full text ▾». */
 const LONG_TEXT = 120;
 const INITIAL_ZOOM = 1;
+/** Lowest start zoom used to fit the «when» chain and the dialogue head into the view. */
+const MIN_START_ZOOM = 0.7;
 /** Whether FCS codes are shown next to the plain words (on by default). */
 const CODES_KEY = 'kedit.graph.codes';
 /** Graphs with more nodes open with deep branches folded. */
@@ -163,7 +166,7 @@ type LineData = {
 };
 type LineNode = Node<LineData, 'line'>;
 /** Graph nodes: lines and the portals to other dialogues (G3). */
-type GraphNode = LineNode | PortalNode;
+type GraphNode = LineNode | PortalNode | WhenNode;
 
 interface Menu {
   /** Menu position on the canvas (from the top-left corner). */
@@ -587,6 +590,8 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     },
   };
 
+  const goRef = useRef(onGo);
+  goRef.current = onGo;
   const { nodes, edges, pos } = useMemo(() => {
     const { hidden, count } = folding;
     const visible: DialogueGraph = { ...graph, nodes: graph.nodes.filter((n) => !hidden.has(n.id)), edges: graph.edges.filter((e) => !hidden.has(e.source) && !hidden.has(e.target)) };
@@ -664,9 +669,38 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
       // Short arrow label: one verb per kind, both unlock kinds read as «unlocks»; the portal chips list them all.
       kindWords: (kinds) => [...new Set(kinds.map((k) => t.dpKind(k === 'unlock but keep me' ? 'unlocks' : k)))].join(' · '),
     });
-    const all: GraphNode[] = [...nodes, ...portals.nodes];
-    const allPos = new Map([...pos, ...portals.placed]);
-    return { nodes: all, edges: [...edges, ...portals.edges], pos: allPos };
+    // A dialogue reads left to right: event → who has it → the dialogue (G8).
+    const rootPos = pos.get(graph.root);
+    const head = byId.get(graph.root);
+    const when =
+      rootPos && head?.type === 'DIALOGUE' && !head.missing
+        ? whenElements({
+            ctx,
+            lang,
+            root: graph.root,
+            rootPos,
+            heights,
+            moved,
+            words: { targetWord: t.pwTarget, noTarget: t.pwNoTarget, nowhere: t.pwNowhere, nowhereTip: t.pwNowhereTip, announcement: t.pwAnnouncement },
+            go: (target) => {
+              goRef.current(target);
+            },
+          })
+        : undefined;
+    if (when) {
+      // Entry portals go under the «who» column, so the chain event → who → dialogue stays one row.
+      let y = when.below;
+      for (const n of portals.nodes) {
+        if (!n.id.startsWith('portal:in:') || moved.has(n.id)) continue;
+        const h = portals.placed.get(n.id)?.height ?? 0;
+        n.position = { x: when.right - PORTAL_WIDTH, y };
+        portals.placed.set(n.id, { x: n.position.x, y, height: h });
+        y += h + 24;
+      }
+    }
+    const all: GraphNode[] = [...nodes, ...portals.nodes, ...(when?.nodes ?? [])];
+    const allPos = new Map([...pos, ...portals.placed, ...(when?.placed ?? [])]);
+    return { nodes: all, edges: [...edges, ...portals.edges, ...(when?.edges ?? [])], pos: allPos };
   }, [graph, folding, moved, checksByNode, matchSet, selNodes, selEdges, editing, tree, version, views, variants, fullTexts, heights, outgoing, transitions, translation, lang, t, playing]);
 
   // Initial view at a readable zoom: the whole graph if it fits, otherwise the root at the left edge.
@@ -1040,6 +1074,12 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
           onConnect={onConnect}
           isValidConnection={(c) => linkProblem(ctx, c.source, c.target) === undefined}
           onNodeClick={(_, n) => {
+            if (n.type === 'when') {
+              // The event / «who» cards stand for the dialogue: select it (the panel shows «Plays when» in full).
+              setLinkFrom(undefined);
+              pick(graph.root);
+              return;
+            }
             if (n.type === 'portal') {
               // A portal opens the other dialogue.
               setLinkFrom(undefined);
@@ -1053,7 +1093,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
             if (isLine(n.id)) startEdit(n.id);
           }}
           onNodeContextMenu={(e, n) => {
-            if (isPortalId(n.id)) {
+            if (isPortalId(n.id) || isWhenId(n.id)) {
               e.preventDefault();
               return;
             }
@@ -1098,7 +1138,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
         >
           <Background gap={24} />
           <Controls showInteractive={false} />
-          {minimap && <MiniMap pannable zoomable nodeColor={(n) => (n.type === 'portal' ? '#7a5ea6' : (MINIMAP_COLORS[(n.data as LineData).view?.kind ?? 'npc'] ?? '#5d6168'))} />}
+          {minimap && <MiniMap pannable zoomable nodeColor={(n) => (n.type === 'portal' ? '#7a5ea6' : n.type === 'when' ? '#4f7a5e' : (MINIMAP_COLORS[(n.data as LineData).view?.kind ?? 'npc'] ?? '#5d6168'))} />}
         </ReactFlow>
         {linkFrom !== undefined && (
           <div className="dg-banner" data-testid="dg-link-mode">
@@ -1395,13 +1435,13 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
   );
 });
 
-const NODE_TYPES = { line: LineCard, portal: PortalCard };
+const NODE_TYPES = { line: LineCard, portal: PortalCard, when: WhenCard };
 
 const MARGIN = 24;
 
-/** View when the graph opens (zoom `INITIAL_ZOOM`) for a `width`×`height` canvas; too wide — the leftmost card (an entry portal or the root) at the left edge. */
+/** View when the graph opens (zoom `INITIAL_ZOOM`, lowered to `MIN_START_ZOOM` so the cards left of the root and the root fit) for a `width`×`height` canvas; too wide — the leftmost card at the left edge. */
 export function initialViewport(pos: ReadonlyMap<string, Placed>, root: string, width: number, height: number): { x: number; y: number; zoom: number } {
-  const z = INITIAL_ZOOM;
+  let z = INITIAL_ZOOM;
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -1412,7 +1452,11 @@ export function initialViewport(pos: ReadonlyMap<string, Placed>, root: string, 
     maxX = Math.max(maxX, p.x + NODE_WIDTH);
     maxY = Math.max(maxY, p.y + p.height);
   }
-  if (!Number.isFinite(minX)) return { x: MARGIN, y: MARGIN, zoom: z };
+  if (!Number.isFinite(minX)) return { x: MARGIN, y: MARGIN, zoom: INITIAL_ZOOM };
+  // Zoom out (down to MIN_START_ZOOM) so that everything left of the root and the root itself fit.
+  const rootPos = pos.get(root);
+  const must = rootPos ? rootPos.x + NODE_WIDTH - minX : 0;
+  if (must > 0 && must * z + 2 * MARGIN > width) z = Math.max(MIN_START_ZOOM, (width - 2 * MARGIN) / must);
   const w = (maxX - minX) * z;
   const h = (maxY - minY) * z;
   const x = w + 2 * MARGIN <= width ? (width - w) / 2 - minX * z : MARGIN - minX * z;

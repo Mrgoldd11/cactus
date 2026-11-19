@@ -144,6 +144,10 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
       status: setStatus,
       open,
       hasPanel: (panelId) => apiRef.current?.panels.some((p) => p.api.component === panelId) ?? false,
+      reveal: (panelId) => {
+        const panels = (apiRef.current?.panels ?? []).filter((p) => p.api.component === panelId);
+        if (panels.length > 0 && !panels.some((p) => p.api.isVisible)) panels[0]!.api.setActive();
+      },
       panelParams: (panelId) => (apiRef.current?.panels ?? []).filter((p) => p.api.component === panelId).map((p) => (p.params ?? {}) as PanelParams),
       layout,
       newRecord: () => {

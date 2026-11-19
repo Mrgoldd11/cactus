@@ -147,8 +147,13 @@ interface PlayWith {
  * stays open while the panel follows other records; `playWith` — a character graph plays the character.
  */
 function Graph({ sid, version, playWith }: { sid: string; version: number; playWith?: PlayWith }): ReactNode {
-  const { project, go, report, selection, open, hasPanel, newEventDialogue } = useWorkbench();
-  const select = useSelectLine(sid);
+  const { project, go, report, selection, open, hasPanel, reveal, newEventDialogue } = useWorkbench();
+  const selectLine = useSelectLine(sid);
+  // A click on a node shows the «Line» panel even if «Inspector» is the front tab next to it.
+  const select = (line: string, parent?: string): void => {
+    selectLine(line, parent);
+    reveal('line');
+  };
   const selectPlayed = useSelectPlayed();
   const line = selection.latest((s) => s.kind === 'line');
   const [playOpen, setPlayOpen] = useState(false);
@@ -193,7 +198,12 @@ function Graph({ sid, version, playWith }: { sid: string; version: number; playW
 }
 
 function LinePanel({ def, params }: PanelProps): ReactNode {
-  const { project, go, report } = useWorkbench();
+  const { project, go: goRecord, report, reveal } = useWorkbench();
+  // «↗ Inspector» and other links of the panel select the record and bring the inspector to the front.
+  const go = (s: string): void => {
+    goRecord(s);
+    reveal('inspector');
+  };
   const { sid, item, version } = useFollowed(def, params);
   const dialog = item?.kind === 'line' ? item.dialog : undefined;
   const select = useSelectLine(dialog);

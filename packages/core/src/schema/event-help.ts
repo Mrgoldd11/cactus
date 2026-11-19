@@ -540,3 +540,40 @@ export const EVENT_HELP: Readonly<Record<string, EventHelp>> = {
 export function eventHelp(name: string): EventHelp | undefined {
   return EVENT_HELP[name];
 }
+
+/** Icon of an event group (a picture next to the event name in the dialogue graph). */
+export const EVENT_GROUP_ICONS: Readonly<Record<EventGroup, string>> = {
+  talk: '💬',
+  see: '👁',
+  fight: '⚔',
+  health: '🩹',
+  captivity: '⛓',
+  crime: '🚨',
+  place: '🧭',
+  life: '🏠',
+  service: '⚙',
+};
+
+/** Icons of single events that differ from their group icon. */
+const EVENT_ICONS: Readonly<Record<string, string>> = {
+  EV_ACID_RAIN: '🌧',
+  EV_ACID_WATER: '💧',
+  EV_ACID_FEET: '🦶',
+  EV_WINDY: '🌬',
+  EV_POISON_GAS: '☠',
+  EV_BURNING: '🔥',
+  EV_LOST_LEG: '🦵',
+  EV_LOST_ARM: '💪',
+  EV_EATING_SOMETHING_SOUNDS: '🍖',
+  EV_EATING_MY_CROPS: '🌾',
+  EV_WORSHIPING_SOMETHING: '🙏',
+  EV_PLAYER_TALK_TO_ME: '💬',
+};
+
+/** Icon of an `EventTriggerEnum` value by name: its own, else its group's, else a generic one. */
+export function eventIcon(name: string): string {
+  const own = EVENT_ICONS[name];
+  if (own !== undefined) return own;
+  const h = EVENT_HELP[name];
+  return h ? EVENT_GROUP_ICONS[h.group] : '⚡';
+}
