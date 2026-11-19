@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Cactus: экран G — редактор диалогов</title>
+<style>
+  :root {
+    --bg: #1e1f22; --bg2: #26282c; --bg3: #2f3237; --border: #3c4047;
+    --text: #d7dae0; --muted: #8a909a; --accent: #4f8cc9; --sel: #2d4a6b;
+    --new: #6fcf6f; --changed: #e5c07b; --deleted: #e06c75;
+    --npc: #d39b45; --pl: #4f8cc9; --ij: #5fb878; --x: #b48ae6; --head: #c9a24f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #141517; color: var(--text); font: 14px/1.5 'Segoe UI', system-ui, sans-serif; }
+  .page { max-width: 1500px; margin: 0 auto; padding: 24px 20px 80px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  h2 { font-size: 18px; margin: 34px 0 8px; }
+  h3 { font-size: 15px; margin: 18px 0 6px; }
+  .lead { color: var(--muted); margin: 0 0 14px; max-width: 980px; }
+  p, li { max-width: 1000px; }
+  nav.top { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; position: sticky; top: 0; background: #141517; padding: 8px 0; z-index: 5; }
+  nav.top a { color: var(--text); text-decoration: none; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg2); font-size: 13px; }
+  nav.top a:hover { border-color: var(--accent); }
+  .toggle { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 8px; width: fit-content; }
+  .toggle button { background: var(--bg2); color: var(--text); border: 0; padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer; border-right: 1px solid var(--border); }
+  .toggle button:last-child { border-right: 0; }
+  .toggle button.on { background: var(--accent); color: #fff; }
+  .toggle button.b4 { color: #f0a0a6; }
+  .toggle button.b4.on { background: #6b2b31; color: #fff; }
+  .frame { width: 100%; aspect-ratio: 1484 / 835; position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); }
+  .frame > img { width: 100%; display: block; }
+  .frame > .view:not(.on) { display: none !important; }
+  .frame > .app { position: absolute; left: 0; top: 0; width: 1484px; height: 835px; transform-origin: 0 0; }
+  .cap { background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; padding: 10px 14px; margin-top: 10px; }
+  .cap:not(.on) { display: none; }
+  .cap b.g { color: var(--new); } .cap b.r { color: var(--deleted); }
+  table.t { border-collapse: collapse; width: 100%; max-width: 1400px; font-size: 13.5px; }
+  table.t th, table.t td { border: 1px solid var(--border); padding: 6px 9px; vertical-align: top; text-align: left; }
+  table.t th { background: var(--bg2); }
+  table.t td.y { color: var(--new); white-space: nowrap; } table.t td.h { color: var(--changed); white-space: nowrap; } table.t td.n { color: var(--deleted); white-space: nowrap; }
+  code { font-family: Consolas, monospace; font-size: 12.5px; color: #b9c0cb; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .box { background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; padding: 10px 14px; }
+  .box h3 { margin-top: 0; }
+  .box.good h3 { color: var(--new); } .box.bad h3 { color: var(--deleted); }
+
+  /* ---------- mocked application ---------- */
+  .app { background: var(--bg); color: var(--text); font: 13px/1.35 'Segoe UI', system-ui, sans-serif; display: flex; flex-direction: column; }
+  .app .tb { height: 38px; display: flex; align-items: center; gap: 6px; padding: 0 6px; border-bottom: 1px solid var(--border); background: var(--bg2); flex: none; }
+  .app .sep { width: 1px; height: 22px; background: var(--border); margin: 0 2px; }
+  .app .grow { flex: 1; }
+  .app .b { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg3); color: var(--text); white-space: nowrap; font-size: 13px; }
+  .app .b.p { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .app .b.on { border-color: var(--accent); background: var(--sel); }
+  .app .b.ghost { background: transparent; }
+  .app .b.sm { height: 22px; padding: 0 7px; font-size: 12px; }
+  .app .b .car { font-size: 9px; opacity: .8; }
+  .app .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; }
+  .app .seg span { padding: 0 10px; height: 24px; display: flex; align-items: center; background: var(--bg3); border-right: 1px solid var(--border); font-size: 12.5px; white-space: nowrap; }
+  .app .seg span:last-child { border-right: 0; }
+  .app .seg span.on { background: var(--sel); color: #fff; }
+  .app .body { flex: 1; display: flex; min-height: 0; }
+  .app .pane { display: flex; flex-direction: column; border-right: 1px solid var(--border); min-width: 0; position: relative; }
+  .app .ptabs { height: 30px; display: flex; align-items: stretch; background: var(--bg2); border-bottom: 1px solid var(--border); flex: none; }
+  .app .ptab { display: flex; align-items: center; gap: 6px; padding: 0 12px; color: var(--muted); border-right: 1px solid var(--border); white-space: nowrap; }
+  .app .ptab.on { color: var(--text); background: var(--bg); box-shadow: inset 0 2px 0 var(--accent); }
+  .app .pbody { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+  .app .status { height: 24px; display: flex; align-items: center; gap: 20px; padding: 0 10px; border-top: 1px solid var(--border); background: var(--bg2); color: var(--muted); font-size: 12px; flex: none; }
+  .app .muted { color: var(--muted); }
+  .app .code { font-family: Consolas, monospace; font-size: 11px; color: #7f8794; }
+  .app .link { color: var(--accent); }
+  .app .badge { font-size: 11px; padding: 0 6px; border-radius: 3px; border: 1px solid var(--new); color: var(--new); }
+  .app .callout { position: absolute; background: #3b3220; border: 1px solid var(--changed); color: #f1dfb6; font-size: 12.5px; padding: 7px 11px; border-radius: 4px; max-width: 300px; z-index: 6; box-shadow: 0 4px 14px #0008; line-height: 1.4; }
+  .app .callout b { color: var(--changed); }
+  .app .hot { outline: 2px solid var(--changed); outline-offset: 2px; border-radius: 3px; }
+
+  /* package panel (left) */
+  .pk { padding: 8px 8px 0; display: flex; flex-direction: column; height: 100%; }
+  .pk .who { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 2px 2px 4px; }
+  .pk .pick { display: flex; align-items: center; gap: 6px; height: 28px; border: 1px solid var(--border); border-radius: 3px; padding: 0 8px; background: var(--bg3); font-weight: 600; }
+  .pk .pick i { margin-left: auto; font-style: normal; font-size: 9px; color: var(--muted); }
+  .pk .holders { font-size: 12px; color: var(--muted); margin: 5px 2px 2px; line-height: 1.4; }
+  .pk .holders a { color: var(--accent); }
+  .pk .search { height: 26px; border: 1px solid var(--border); border-radius: 3px; display: flex; align-items: center; padding: 0 8px; color: var(--muted); margin: 8px 0 6px; }
+  .pk .list { flex: 1; overflow: hidden; margin: 0 -8px; }
+  .pk .grp { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 8px 10px 2px; }
+  .pk .ev { display: flex; align-items: baseline; gap: 6px; padding: 3px 10px 3px 8px; white-space: nowrap; position: relative; }
+  .pk .ev .tw { width: 10px; color: var(--muted); font-size: 10px; flex: none; }
+  .pk .ev .nm { overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+  .pk .ev .nm .code { margin-left: 4px; }
+  .pk .ev .n { color: var(--muted); font-size: 11.5px; flex: none; min-width: 14px; text-align: right; }
+  .pk .ev .plus { color: var(--accent); flex: none; width: 14px; text-align: center; opacity: 0; }
+  .pk .ev.hov { background: #2a2d33; } .pk .ev.hov .plus { opacity: 1; font-weight: 700; outline: 2px solid var(--changed); border-radius: 3px; }
+  .pk .ev.empty { color: #5d626b; }
+  .pk .dl { display: flex; align-items: center; gap: 6px; padding: 2px 10px 2px 34px; white-space: nowrap; }
+  .pk .dl .nm { overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+  .pk .dl.sel { background: var(--sel); box-shadow: inset 3px 0 0 var(--accent); }
+  .pk .dl .ic { color: var(--muted); font-size: 11px; }
+  .pk .dl .xl { color: var(--x); font-size: 11px; }
+  .pk .inh { padding: 8px 10px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); margin-top: 6px; }
+  .pk .foot { display: flex; gap: 6px; padding: 8px 0; border-top: 1px solid var(--border); flex: none; }
+
+  /* graph (center) */
+  .gtb { height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-bottom: 1px solid var(--border); background: var(--bg2); flex: none; }
+  .gtb .crumb { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+  .gtb .crumb .s { color: var(--muted); margin: 0 4px; }
+  .glegend { height: 24px; display: flex; align-items: center; gap: 14px; padding: 0 10px; font-size: 11.5px; color: var(--muted); border-bottom: 1px solid var(--border); flex: none; }
+  .glegend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .canvas { position: absolute; inset: 0; background-color: #1b1c1f; background-image: radial-gradient(#2c2f35 1px, transparent 1px); background-size: 18px 18px; overflow: hidden; }
+  .canvas svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .zoom { position: absolute; left: 10px; bottom: 10px; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 3px; background: var(--bg2); z-index: 2; }
+  .zoom span { width: 26px; height: 24px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+  .zoom span:last-child { border-bottom: 0; font-size: 10px; }
+
+  .gn { position: absolute; background: #25272b; border: 1px solid #454a52; border-radius: 6px; box-shadow: 0 2px 8px #0007; font-size: 13px; z-index: 1; }
+  .gn.npc { border-left: 4px solid var(--npc); }
+  .gn.pl { border-left: 4px solid var(--pl); background: #212a35; }
+  .gn.ij { border-left: 4px solid var(--ij); }
+  .gn.head { border-left: 4px solid var(--head); background: #2a2720; }
+  .gn.portal { border: 1px dashed var(--x); background: #261f31; }
+  .gn.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .gn.newn { box-shadow: 0 0 0 2px #6fcf6f55, 0 2px 8px #0007; }
+  .gn .hd { display: flex; align-items: center; gap: 6px; padding: 5px 8px 3px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .gn .hd .r { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .gn .ord { width: 17px; height: 17px; border-radius: 50%; background: #4a3a1c; color: #f0cf8e; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
+  .wch { font-size: 11px; padding: 0 6px; border-radius: 3px; font-weight: 600; letter-spacing: .02em; }
+  .wch.npc { background: #4a3a1c; color: #f0cf8e; }
+  .wch.pl { background: #1f3550; color: #9fcaf3; }
+  .wch.head { background: #4a4020; color: #f1dc9a; }
+  .wch.ij { background: #1f3f2a; color: #9be0b0; }
+  .wch.x { background: #3b2a52; color: #d6bdf7; }
+  .gn .ttl { padding: 0 10px 2px; font-weight: 600; font-size: 13.5px; }
+  .gn .tx { padding: 1px 10px 6px; line-height: 1.42; color: #e6e8ec; }
+  .gn .tx.v { padding: 0 10px 2px 22px; position: relative; color: #cfd3da; }
+  .gn .tx.v::before { content: '•'; position: absolute; left: 11px; color: var(--muted); }
+  .gn .ln { display: flex; gap: 6px; padding: 1px 10px; font-size: 12px; line-height: 1.4; align-items: baseline; }
+  .gn .ln .k { flex: none; width: 34px; font-weight: 600; }
+  .gn .ln.c .k { color: var(--changed); }
+  .gn .ln.e .k { color: var(--new); }
+  .gn .ln.x .k { color: var(--x); }
+  .gn .ln .v { flex: 1; min-width: 0; }
+  .gn .code { margin-left: 4px; }
+  .gn .ln .code { word-break: break-all; }
+  .gn .chip .code { margin-left: 4px; color: inherit; opacity: .75; }
+  .gn .chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px 10px 6px; }
+  .gn .chip { font-size: 11px; padding: 0 6px; border-radius: 3px; background: #33363c; color: #c3c8d0; white-space: nowrap; }
+  .gn .chip.lock { background: #4a2a2e; color: #f3b5ba; }
+  .gn .chip.x { background: #3b2a52; color: #d6bdf7; }
+  .gn .ans { border-top: 1px solid #3a4452; background: #1e2631; border-radius: 0 0 6px 0; padding-bottom: 3px; }
+  .gn .ans .ah { font-size: 11px; color: #7fa9d4; padding: 4px 10px 1px; }
+  .gn .ar { display: flex; gap: 6px; padding: 3px 18px 3px 10px; position: relative; color: #cfe2f6; line-height: 1.35; }
+  .gn .ar::before { content: '▸'; color: #6b9bd0; flex: none; }
+  .gn .ar.sel { background: var(--sel); }
+  .gn .ar .end, .gn .end { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .gn .ar .sub { display: block; font-size: 11.5px; color: #c9b27a; }
+  .gn .out { position: absolute; right: -6px; top: 50%; margin-top: -5px; width: 10px; height: 10px; border-radius: 50%; background: #6b9bd0; border: 2px solid #1e2631; }
+  .gn .out.n { background: var(--npc); border-color: #25272b; }
+  .gn .add { padding: 2px 10px 4px; font-size: 12px; color: var(--accent); }
+  .gn .foot { padding: 2px 10px 6px; font-size: 11.5px; color: var(--muted); }
+  .gn .tools { position: absolute; top: -30px; right: 0; display: flex; gap: 4px; z-index: 3; }
+  .gn .tools span { background: var(--bg3); border: 1px solid var(--accent); color: var(--text); border-radius: 3px; font-size: 11.5px; padding: 1px 7px; white-space: nowrap; }
+  .gn .endb { margin: 2px 8px 7px; font-size: 11.5px; color: #f3b5ba; background: #3a2226; border-radius: 3px; padding: 1px 6px; width: fit-content; }
+  .gn .tx.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; padding-bottom: 0; }
+  .gn .more { padding: 0 10px 4px; font-size: 11.5px; color: var(--accent); }
+  .elabel { position: absolute; font-size: 11px; padding: 0 5px; border-radius: 3px; background: #1b1c1f; z-index: 1; white-space: nowrap; }
+  .elabel.x { color: var(--x); border: 1px solid #5d4a7a; }
+
+  /* line panel (right) */
+  .rp { height: 100%; display: flex; flex-direction: column; }
+  .rp .sc { flex: 1; overflow: hidden; padding: 8px 12px 0; }
+  .rp .top { display: flex; align-items: center; gap: 6px; }
+  .rp .top .r { margin-left: auto; }
+  .rp .when { font-size: 12.5px; margin: 6px 0; line-height: 1.45; background: #23262b; border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; }
+  .rp .when b { color: #f1dc9a; font-weight: 600; }
+  .rp .when a { color: var(--accent); }
+  .rp .acts { display: flex; gap: 6px; margin: 6px 0 4px; flex-wrap: wrap; }
+  .rp .sec { border-top: 1px solid var(--border); padding: 7px 0 6px; }
+  .rp .sec h4 { margin: 0 0 5px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .rp .sec h4 .r { margin-left: auto; }
+  .rp .hint { font-size: 11.5px; color: var(--muted); margin: 2px 0 4px; line-height: 1.4; }
+  .dd { display: flex; align-items: center; gap: 5px; height: 26px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg); padding: 0 7px; white-space: nowrap; overflow: hidden; min-width: 0; }
+  .dd .code { margin-left: auto; }
+  .dd i { font-style: normal; font-size: 9px; color: var(--muted); margin-left: 4px; flex: none; }
+  .dd.hl { border-color: var(--changed); }
+  .inp { height: 26px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg); padding: 0 7px; display: flex; align-items: center; }
+  .inp.hl { border-color: var(--changed); color: var(--changed); }
+  .cond { border: 1px solid var(--border); border-radius: 4px; padding: 6px; margin-bottom: 6px; background: #222428; }
+  .cond .row { display: grid; grid-template-columns: 92px 1fr; gap: 4px; margin-bottom: 4px; }
+  .cond .row2 { display: grid; grid-template-columns: 1fr 52px 74px 22px; gap: 4px; }
+  .cond .say { font-size: 12px; color: #e9d7a8; margin-top: 5px; }
+  .cond .say.e { color: #a8e6a8; }
+  .x { color: var(--muted); display: flex; align-items: center; justify-content: center; }
+  .txt { border: 1px solid var(--border); border-radius: 3px; background: var(--bg); padding: 5px 7px; font-size: 12.5px; line-height: 1.4; }
+  .txt + .tr { font-size: 11.5px; color: var(--muted); margin: 2px 0 6px; padding-left: 6px; border-left: 2px solid var(--border); }
+  .props { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+  .props label { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+  .props label .code { margin-left: 3px; }
+  .chk { display: flex; align-items: center; gap: 7px; padding: 2px 0; font-size: 12.5px; }
+  .chk .cb { width: 14px; height: 14px; border: 1px solid var(--border); border-radius: 2px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; background: var(--bg); flex: none; }
+  .chk .cb.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chk .code { margin-left: auto; }
+  .next li { margin: 2px 0; font-size: 12.5px; }
+  .desc { flex: none; border-top: 1px solid var(--border); background: var(--bg2); padding: 7px 12px; font-size: 12px; line-height: 1.45; min-height: 74px; }
+  .desc b { color: var(--text); }
+
+  /* tree view */
+  .tree { position: absolute; inset: 0; overflow: hidden; background: var(--bg); }
+  .tree .ttb { display: flex; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); background: var(--bg2); }
+  .tree .th, .tree .tr { display: grid; grid-template-columns: 1fr 190px 160px 100px; align-items: start; }
+  .tree .th { font-size: 11.5px; color: var(--muted); padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  .tree .tr { padding: 3px 8px; border-bottom: 1px solid #2a2c31; font-size: 12.5px; line-height: 1.4; }
+  .tree .tr.sel { background: var(--sel); }
+  .tree .tr > div { padding-right: 8px; min-width: 0; }
+  .tree .t1 { display: flex; gap: 6px; align-items: baseline; }
+  .tree .t1 .tw { color: var(--muted); font-size: 10px; width: 10px; flex: none; }
+  .tree .t1 .q { min-width: 0; }
+  .tree .npcq { color: #f0d9b0; } .tree .plq { color: #a9d0f5; }
+  .tree .cc { color: #e9d7a8; font-size: 12px; } .tree .ee { color: #a8e6a8; font-size: 12px; } .tree .pp { color: var(--muted); font-size: 12px; }
+
+  /* modal */
+  .shade { position: absolute; inset: 0; background: #0009; z-index: 8; display: flex; align-items: center; justify-content: center; }
+  .modal { width: 640px; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 10px 40px #000a; }
+  .modal .mh { padding: 10px 14px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 14px; display: flex; }
+  .modal .mh .r { margin-left: auto; color: var(--muted); font-weight: 400; }
+  .modal .mb { padding: 10px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .modal .lbl { font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .modal .opt { display: flex; gap: 8px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 4px; align-items: flex-start; }
+  .modal .opt.on { border-color: var(--accent); background: #24364a; }
+  .modal .opt .rd { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--muted); flex: none; margin-top: 2px; }
+  .modal .opt.on .rd { border: 4px solid var(--accent); }
+  .modal .opt small { display: block; color: var(--muted); font-size: 11.5px; }
+  .modal .will { font-size: 12px; background: #1f2a22; border: 1px solid #335c3a; border-radius: 4px; padding: 6px 9px; line-height: 1.45; }
+  .modal .mf { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* picker */
+  .picker { position: absolute; z-index: 7; width: 420px; background: var(--bg2); border: 1px solid var(--accent); border-radius: 5px; box-shadow: 0 10px 30px #000b; }
+  .picker .ps { margin: 8px; }
+  .picker .pg { font-size: 11px; color: var(--muted); text-transform: uppercase; padding: 4px 10px 2px; letter-spacing: .04em; }
+  .picker .pi { display: flex; gap: 8px; padding: 4px 10px; align-items: baseline; }
+  .picker .pi.h { background: var(--sel); }
+  .picker .pi .code { margin-left: auto; }
+  .picker .pd { border-top: 1px solid var(--border); padding: 7px 10px; font-size: 12px; color: #c3c8d0; line-height: 1.45; }
+
+  /* play strip */
+  .play { position: absolute; left: 0; right: 0; bottom: 0; height: 150px; background: var(--bg2); border-top: 1px solid var(--border); z-index: 4; display: flex; flex-direction: column; }
+  .play .pt { display: flex; gap: 8px; align-items: center; padding: 5px 10px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  .play .pr { padding: 4px 12px; font-size: 12.5px; display: grid; grid-template-columns: 20px 1fr 200px 80px; gap: 6px; }
+  .play .pr.win { color: var(--new); }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Экран G — редактор диалогов</h1>
+  <p class="lead">Макет, кода нет. Граф остаётся главным видом. Слева появляется пакет со списком событий, справа одна панель выбранной реплики, как в окне Dialogue в FCS, только с переводом рядом с оригинальными именами. Для тех, кто пришёл из FCS, есть вид «Дерево». Примеры взяты из игры: «acid rain» (<code>55630-rebirth.mod</code>) и вербовка «Healed (Recruit)» у пакета «Drifter squad» (<code>3951-gamedata.base</code>). Русские тексты взяты из перевода игры.</p>
+  <nav class="top">
+    <a href="#g">Макет</a>
+    <a href="#answer">Влезает ли FCS в граф</a>
+    <a href="#howto">«NPC говорит X под дождём»</a>
+    <a href="#ab">Почему реплика = узел</a>
+    <a href="#vs">Чем лучше FCS</a>
+    <a href="#layout">Что меняется в раскладке</a>
+    <a href="#steps">Порядок работ (черновик)</a>
+  </nav>
+
+  <h2 id="g">Макет</h2>
+  <div class="toggle" id="tg">
+    <button class="b4" data-v="before">Было: вербовка</button>
+    <button class="b4" data-v="before2">Было: пакет</button>
+    <button class="b4" data-v="before3">Было: реплика с переходом</button>
+    <button data-v="b" class="on">Граф: реплика = узел (выбран)</button>
+    <button data-v="a">Отклонён: ответы в карточке</button>
+    <button data-v="tree">Дерево (как в FCS)</button>
+    <button data-v="pick">Добавить условие</button>
+    <button data-v="rain">Кислотный дождь</button>
+    <button data-v="new1">Создать 1</button>
+    <button data-v="new2">Создать 2</button>
+    <button data-v="new3">Создать 3</button>
+  </div>
+  <div class="frame" id="frame">
+    <img class="view" data-v="before" src="before/85-recruit-graph.png" alt="">
+    <img class="view" data-v="before2" src="before/80-package-graph.png" alt="">
+    <img class="view" data-v="before3" src="before/84-healed-line-interrupt.png" alt="">
+  </div>
+
+  <div class="cap" data-v="before"><b class="r">Сейчас (снимок Cactus, 1400×850).</b> Диалог вербовки «Healed (Recruit)». Графу достаётся окно примерно 670×300: снизу 40% высоты занимает пустой проигрыватель («Выберите запись типа CHARACTER»), половину графа закрывает мини-карта. Узлы мелкие, условия написаны кодом (<code>? я: DC_PERSONALITY_TAG PT_HONORABLE = 1</code>), ответы игрока за краем экрана. Справа условия идут столбиком выпадашек <code>T_ME — я</code> / <code>DC_IS_IMPRISONED</code> / <code>CE_EQUALS — =</code>, по которым не скажешь, что это значит.</div>
+  <div class="cap" data-v="before2"><b class="r">Сейчас: пакет «Drifter squad».</b> Граф пакета — одно дерево на 376 узлов, событий на нём не видно. Чтобы узнать, что отряд говорит на «Его вылечили», надо раскрыть всё и искать.</div>
+  <div class="cap" data-v="before3"><b class="r">Сейчас: реплика «Я тебе обязан/а/».</b> Именно она перехватывает разговор (<code>interrupt</code>) и отпирает вербовку (<code>unlocks</code>). На графе этой связи нет совсем: из узла не выходит стрелка в другой диалог. Узнать о ней можно, только если пролистать панель справа до ссылок.</div>
+  <div class="cap" data-v="a"><b class="r">Отклонён (2026-11-19).</b> Ответы игрока строками внутри карточки NPC. Узлов меньше, но непонятно, где говорит NPC, а где игрок, и какой ответ заканчивает разговор, а какой ведёт дальше. Оставлен для истории.</div>
+  <div class="cap on" data-v="b"><b class="g">Граф: реплика = узел (выбран).</b> <b>Слева</b> пакет: у кого он и какие события в нём заняты; щелчок по диалогу открывает его граф. <b>В центре</b> граф на всю высоту, масштаб 100%, мини-карты нет. Каждая реплика — свой узел, как в FCS: <span style="color:var(--npc)">жёлтая полоса — NPC</span>, <span style="color:var(--pl)">синяя — игрок</span>, зелёная — вставка другого персонажа. Из каждого ответа игрока выходит стрелка к следующей реплике. Если стрелки нет, на узле красная плашка «⏹ конец разговора». На узле видно всё, что влияет на игру: «если …» — условия, «→ …» — эффекты, значки — свойства не по умолчанию, ①② — порядок, в котором игра проверяет реплики NPC. Сиреневый пунктир — вход из другого диалога. Длинный текст на узле занимает 3 строки, «весь текст ▾» раскрывает его, а целиком он виден в панели справа и в виде «Дерево». <b>Справа</b> панель выбранной реплики: под каждым условием и эффектом готовая фраза по-русски, у каждой выпадашки рядом оригинальное имя, внизу описание поля, как в FCS.</div>
+  <div class="cap" data-v="tree"><b>Дерево (как в FCS).</b> Те же данные, переключатель «Граф | Дерево» над графом. Реплики идут отступами, NPC и игрок разного цвета, условия, эффекты и свойства — колонками справа. Кнопки как в FCS: «+ Реплика NPC», «+ Ответ игрока», «+ Вставка» (Add Line / Add Interjection). Выбор строки показывает ту же панель справа. Здесь удобно читать длинный диалог сверху вниз, как сценарий.</div>
+  <div class="cap" data-v="pick"><b>Добавить условие.</b> «+ условие» открывает список с поиском, разбитый на группы. Ищет по-русски, по-английски и по коду: «голод», «starv», «DC_STARV». Внизу пояснение выбранного пункта. Условия, которые в данных хранятся ссылками («моя раса», «фракция собеседника», «есть предмет»), стоят в том же списке: моддеру не нужно знать, где они лежат. Так же устроен список эффектов: «вступает в отряд», «изменить отношения», «дать предмет» и т. п.</div>
+  <div class="cap" data-v="rain"><b>Кислотный дождь.</b> Пакет «player character default», событие «Кислотный дождь · EV_ACID_RAIN (62)». Сразу видно, когда звучит диалог, у кого он есть и что собеседника нет. На узле все три варианта текста («игра говорит один наугад») и значок «раз в 2 ч». Выбран сам диалог, поэтому справа его свойства — галочки, как в шапке окна Dialogue в FCS: «Можно с врагом», «Только раз», «Заперт», «По одному», «Монолог». <b>Находка из данных:</b> все 14 пакетов с кислотным дождём принадлежат персонажам игрока (<code>dialogue package player</code>). Обычные NPC в игре про дождь не говорят. Если дать им такой диалог, игра, может быть, и не вызовет это событие для NPC. Это надо проверить в игре.</div>
+  <div class="cap" data-v="new1"><b>Создать, шаг 1.</b> Наведите мышь на событие в списке и нажмите «+»: «Новый диалог на «Кислотный дождь»». Второй вход — «Создать ▾ → Диалог на событие…» на панели. Тогда событие выбирают в том же окне.</div>
+  <div class="cap" data-v="new2"><b>Создать, шаг 2.</b> Одно окно, а не три страницы: событие уже выбрано, остаётся сказать, кто говорит и что. «Только раса» кладёт диалог в тот же пакет и добавляет условие «моя раса: Шек». Повтор подставлен как у соседнего диалога на это событие. Окно само ставит диалогу бонус очков +1 и пишет почему: условие «моя раса» очков не даёт, и без бонуса шек выбирал бы между новой и старой фразой 50 на 50. Именно такие вещи моддер в FCS узнаёт только опытом. Строка «Будет» перечисляет, что изменится. Всё создаётся одним шагом отмены (ядро для этого уже написано в 7c).</div>
+  <div class="cap" data-v="new3"><b>Создать, шаг 3.</b> Новый диалог отмечен «новый» в списке событий и на графе. Дальше с ним работают как с любым диалогом: условия и эффекты в панели справа, «+ ответ» и «+ реплика» на узле. «▶ Проиграть» открывает внизу полосу «Кто что скажет»: у шека новый диалог набирает 1 очко (бонус), старый — 0, и игра берёт новый. Остальные персонажи говорят прежнее. Уберите бонус, и полоса сразу покажет «ничья, 50 на 50».</div>
+
+  <h2 id="answer">Можно ли весь контекст FCS встроить в граф? Честный ответ</h2>
+  <p><b>Да, кроме описаний полей. Но узел показывает, а правка идёт в панели справа.</b> На узле видно всё, что меняет поведение диалога: событие, у кого пакет, условия, эффекты, свойства со значением не по умолчанию, переходы в другие диалоги, порядок реплик. Выпадашки для правки на узле не стоят. Если поставить в каждый узел выпадашки «кто → условие → сравнение → число» и сетку из восьми свойств, узел вырастет в целую панель, и вернётся то, на что вы жаловались: узлы мелкие и раскиданы. FCS устроен так же: он показывает условия и свойства только выбранной реплики. Мы показываем их коротко на всех узлах сразу, а целиком — у выбранной.</p>
+  <table class="t">
+    <tr><th>Что в FCS</th><th>Где в FCS</th><th>На графе G</th><th>Как выглядит (пример из игры)</th><th>Правка</th></tr>
+    <tr><td>Событие (EV_)</td><td>окно Dialogue Package, список Events</td><td class="y">да</td><td>шапка диалога: «Звучит: Игрок заговорил · EV_PLAYER_TALK_TO_ME (1)»; слева список событий пакета</td><td>список слева: «+», «Привязать готовый…», перетащить на другое событие</td></tr>
+    <tr><td>У кого пакет</td><td>нигде, надо знать самому</td><td class="y">да</td><td>слева вверху: «отряды Drifter, Adventurer with skill и ещё 9», «наследует 5 пакетов»</td><td>выбор пакета вверху слева</td></tr>
+    <tr><td>Условия DC_ (кто → условие → сравнение → число)</td><td>Dialogue → Conditions</td><td class="y">да</td><td>«если: черта «честный» <code>PT_HONORABLE</code>», «если: меня можно нанять <code>DC_IS_RECRUITABLE</code>»</td><td>панель справа, строка из четырёх выпадашек и фраза под ней</td></tr>
+    <tr><td>Условия-ссылки (my race, target faction, has item…)</td><td>отдельная таблица ссылок</td><td class="y">да</td><td>в том же месте: «если: моя раса: Шек <code>my race</code>»</td><td>тот же список «+ условие»</td></tr>
+    <tr><td>Эффекты DA_</td><td>Dialogue → Effects</td><td class="y">да</td><td>«→ вступает в отряд <code>DA_JOIN_SQUAD_WITH_EDIT</code>», «→ даёт 50 катов <code>DA_GIVE_MONEY</code>»</td><td>панель справа, пояснение под выпадашкой</td></tr>
+    <tr><td>Эффекты-ссылки (change relations, give item, AI contract…)</td><td>Effects (выпадашка)</td><td class="y">да</td><td>«→ отношения с «Святая Нация» +10 <code>change relations</code>»</td><td>тот же список «+ эффект»</td></tr>
+    <tr><td>Переходы unlocks / interrupt / locks / crowd trigger</td><td>ссылки реплики, стрелок нет</td><td class="y">да, и это новое</td><td>сиреневая стрелка в другой диалог и узел-вход «← «Я тебе обязан/а/» отпирает этот диалог»</td><td>«+ эффект → отпереть диалог…» или протянуть стрелку</td></tr>
+    <tr><td>Свойства: шанс, повтор, очки, тип собеседника</td><td>сетка свойств</td><td class="h">только не по умолчанию</td><td>значки «30%», «раз в 6 ч», «+5 очков». Если всё по умолчанию, значков нет.</td><td>панель справа, «Как игра выбирает»</td></tr>
+    <tr><td>Галочки диалога: Can talk to enemy, Run once only, locked, one at a time</td><td>Dialogue вверху</td><td class="h">только включённые</td><td>«🔒 заперт», «только раз», «с врагом»</td><td>панель справа (вид «Кислотный дождь»)</td></tr>
+    <tr><td>Тексты text0…N</td><td>дерево, по одному</td><td class="y">да</td><td>первый вариант целиком, «1 из 4 ▾» раскрывает остальные; у коротких монологов видны все</td><td>двойной щелчок на узле или панель</td></tr>
+    <tr><td>Кто говорит (T_ME, T_TARGET, T_INTERJECTOR…)</td><td>speaker</td><td class="y">да</td><td>цвет полосы: NPC — жёлтый, игрок — синий, вставка — зелёный (как зелёные узлы FCS)</td><td>панель справа</td></tr>
+    <tr><td>Порядок реплик</td><td>порядок в дереве</td><td class="y">да</td><td>①② на соседних репликах NPC: «игра проверяет сверху вниз»</td><td>«Что дальше» ↑↓ в панели</td></tr>
+    <tr><td>Описание поля (Selected Item: Description)</td><td>низ окна</td><td class="n">нет</td><td>на узле не помещается, и на всех узлах оно одинаковое</td><td>низ панели справа, как в FCS</td></tr>
+  </table>
+  <p><b>Где граф не спасает.</b> Пакет «Drifter squad» вместе с наследованием — это 27 своих диалогов на 18 событий и сотни реплик. Граф целого пакета нечитаем, это видно на снимке «Было: пакет». Поэтому пакет показан списком событий, а граф — всегда один диалог плюс узлы-входы и выходы в соседние. Ещё одна оговорка: имена условий и эффектов придётся перевести (около 80 условий DC_, 60 эффектов DA_, черты PT_ и т. д.). Это шаг 7f, он делается так же, как 7b с событиями. Пока перевода нет, на узле стоит только код: в <code>fcs.def</code> пояснений к DC_ и DA_ нет, их придётся написать самим. Несколько имён стёрты ещё в исходниках FCS (<code>PT_____</code>, <code>EV_I_________</code>); у таких показываем «имя стёрто» и смысл, если он известен по данным.</p>
+
+  <h2 id="howto">Как сделать: «NPC говорит X под кислотным дождём»</h2>
+  <ol>
+    <li>Раскладка «Диалоги» → слева «Пакет» → выбрать, у кого будет фраза. Например, «player character default»: это все персонажи игрока, ведь в игре про дождь говорят только они.</li>
+    <li>В списке событий найти «Кислотный дождь · EV_ACID_RAIN (62)» (поиск «дожд», «acid» или «62») и нажать «+» в строке (вид «Создать 1»).</li>
+    <li>В окне выбрать «Кто говорит»: все, одна раса, один персонаж, отряд, фракция. Написать текст, при желании несколько вариантов. Нажать «Создать» (вид «Создать 2»).</li>
+    <li>Диалог открывается на графе. При желании добавить условие («если: голодает») или эффект в панели справа (вид «Создать 3»).</li>
+    <li>«▶ Проиграть» показывает, кто что скажет на это событие и почему.</li>
+  </ol>
+  <p>В FCS для того же нужно открыть пакет, найти событие, нажать Add New, затем в окне Dialogue нажать Add Line и вписать текст. Условие «моя раса» добавляется отдельно, через ссылки. Шагов примерно столько же, но в FCS нужно заранее знать, что событие живёт в пакете. В G это видно с первого экрана.</p>
+
+  <h2 id="ab">Почему реплика = узел (решение 2026-11-19)</h2>
+  <p>Было два варианта: «ответы игрока строками внутри карточки NPC» (вид «Отклонён») и «каждая реплика — свой узел». Выбран второй. В нём сразу понятно, где говорит NPC, а где отвечает игрок, и видно, какой ответ заканчивает разговор, а какой ведёт дальше. Он один к одному совпадает с данными и с FCS, и в коде он ближе к нынешнему графу.</p>
+  <div class="two">
+    <div class="box good"><h3>Что делаем, чтобы граф не расползался</h3>
+      <ul>
+        <li>Граф всегда показывает один диалог, а не весь пакет.</li>
+        <li>Длинный текст на узле занимает 3 строки, «весь текст ▾» раскрывает его. Варианты текста — «1 из 4 ▾».</li>
+        <li>Глубокие ветки свёрнуты: «▸ ещё 3 ответа, 9 реплик». Щелчок раскрывает ветку.</li>
+        <li>Раскладка слева направо по колонкам: NPC → игрок → NPC. «Разложить» возвращает порядок.</li>
+      </ul></div>
+    <div class="box"><h3>Когда тексты очень большие — «Дерево (как в FCS)»</h3>
+      <ul>
+        <li>Тот же диалог сверху вниз, как сценарий: отступы, NPC и игрок разного цвета, тексты целиком.</li>
+        <li>Условия, эффекты и свойства — колонками справа.</li>
+        <li>Та же панель реплики справа и те же кнопки: «+ Реплика NPC», «+ Ответ игрока», «+ Вставка».</li>
+        <li>Переключатель «Граф | Дерево» над графом, выбор запоминается.</li>
+      </ul></div>
+  </div>
+
+  <h2 id="vs">Чем это лучше FCS (и что берём у FCS)</h2>
+  <div class="two">
+    <div class="box good"><h3>Лучше, чем в FCS</h3>
+      <ul>
+        <li>Видно, <b>когда</b> звучит диалог и <b>у кого</b> он есть, прямо в шапке графа. В FCS надо помнить, в каком пакете он лежит.</li>
+        <li>Видны <b>переходы между диалогами</b> (отпирает, перехватывает, запирает). В FCS это ссылки без стрелок.</li>
+        <li><b>Человеческие слова рядом с кодами</b>: «черта «честный» <code>PT_HONORABLE</code>». Ищется по-русски, по-английски и по коду.</li>
+        <li>Под условием и эффектом готовая <b>фраза</b>: «Сказать, только если у меня черта «честный»».</li>
+        <li><b>Порядок и выбор игры</b>: ①②, очки, «▶ Проиграть» — кто что скажет и почему.</li>
+        <li><b>Создать на событие</b> одним окном, одним шагом отмены.</li>
+        <li><b>Ошибки на узле</b>: «заперт, и никто его не отпирает», «эта реплика никогда не прозвучит».</li>
+      </ul></div>
+    <div class="box"><h3>Берём у FCS как есть</h3>
+      <ul>
+        <li>Список событий пакета и кнопки «новый на событие» и «привязать готовый».</li>
+        <li>Все поля выбранной реплики на одном экране: кто говорит, условия, эффекты, свойства.</li>
+        <li>Описание выбранного поля внизу.</li>
+        <li>Дерево с отступами, «Add Line», «Add Interjection», галочки диалога.</li>
+        <li>Оригинальные имена EV_/DC_/DA_/T_/DR_/OT_ никуда не прячутся.</li>
+      </ul></div>
+  </div>
+
+  <h2 id="layout">Что меняется в раскладке «Диалоги»</h2>
+  <ul>
+    <li><b>Слева</b> новая вкладка «Пакет», она открыта первой. «Записи» и «Категории» остаются вкладками рядом. Новой колонки нет (правило §7 принципов).</li>
+    <li><b>В центре</b> граф на всю высоту. При открытии масштаб 100% и показан корень. Мини-карта выключена, включается кнопкой. Над графом переключатель «Граф | Дерево», «▶ Проиграть», поиск, «Разложить», «Коды FCS» (прятать или показывать коды на узлах).</li>
+    <li><b>Проигрыватель</b> больше не стоит снизу постоянно. «▶ Проиграть» открывает внизу полосу на нужное время. «Как игра выбирает» и «Диагностика» открываются там же.</li>
+    <li><b>Справа</b> «Реплика» (переделанная). «Инспектор» остаётся вкладкой рядом для сырых полей.</li>
+    <li>Граф пакета (дерево на 376 узлов) заменяет список событий. Граф всегда показывает один диалог.</li>
+  </ul>
+
+  <h2 id="steps">Порядок работ (черновик, уточню после вашего «да»)</h2>
+  <ol>
+    <li><b>G1. Раскладка и панель «Пакет».</b> Список событий с переводом и счётчиком, у кого пакет, наследование, «+» на событии. Граф на всю высоту, проигрыватель по кнопке.</li>
+    <li><b>G2. Новые узлы.</b> Реплика = узел (NPC, игрок, вставка — разным цветом), текст крупно, длинный текст в 3 строки с «весь текст ▾», «если / →», значки свойств, ①②, «⏹ конец разговора», масштаб 100%.</li>
+    <li><b>G3. Переходы между диалогами.</b> unlocks / interrupt / locks / crowd trigger — стрелками, узлы-входы и выходы.</li>
+    <li><b>G4. Панель реплики.</b> Строки условий как в FCS, фраза под строкой, единые списки условий и эффектов (вместе со ссылочными), описание внизу. Опирается на 7f (переводы DC_/DA_/T_/DR_/OT_/PT_).</li>
+    <li><b>G5. Дерево (как в FCS).</b> Переключатель «Граф | Дерево», тот же диалог сверху вниз с полными текстами, колонки условий, эффектов и свойств, «конец» у ответов. Та же панель справа, выделение общее с графом.</li>
+    <li><b>G6. «Новый диалог на событие».</b> Окно поверх готового ядра 7c, входы «+» в списке и «Создать ▾».</li>
+    <li><b>G7. «▶ Проиграть»: кто что скажет на событие</b> (это бывший пункт 7d «Все диалоги на событие»).</li>
+    <li>Порядок: 7f → G1 → G2 → G4 → G3 → G5 → G6 → G7. Подробно — <code>docs/ui-review-2026-11.md</code>, §4 п. 8.</li>
+  </ol>
+</div>
+
+<script>
+/* ---------- shared pieces ---------- */
+const C = (s) => `<span class="code">${s}</span>`;
+const toolbar = () => `
+  <div class="tb">
+    <span class="b">⌂</span><span class="b">Сохранить <span class="car">▼</span></span>
+    <span class="sep"></span><span class="b ghost">↶</span><span class="b ghost">↷</span>
+    <span class="sep"></span><span class="b ghost">←</span><span class="b ghost">→</span>
+    <span class="sep"></span><span class="b" data-k="create">Создать <span class="car">▼</span></span><span class="b">Мод <span class="car">▼</span></span><span class="b">Проверить</span>
+    <span class="grow"></span>
+    <span class="seg"><span>Данные</span><span class="on">Диалоги</span><span>Мир</span></span>
+    <span class="b">Окно <span class="car">▼</span></span><span class="sep"></span>
+    <b style="padding:0 6px">Мой мод.mod</b><span class="b ghost">⚙</span>
+  </div>`;
+const statusBar = (n = 0) => `<div class="status"><span>Записей в моде: ${n}</span><span>${n ? 'Не сохранено' : 'Сохранено'}</span><span>● Игра не подключена</span></div>`;
+
+function ev(name, code, num, n, opts = {}) {
+  const cls = ['ev', n ? '' : 'empty', opts.hov ? 'hov' : ''].join(' ');
+  const tw = opts.open ? '▾' : (n ? '▸' : '');
+  return `<div class="${cls}"><span class="tw">${tw}</span><span class="nm">${name}${C(`${code} (${num})`)}</span><span class="n">${n || ''}</span><span class="plus">+</span></div>`;
+}
+function dl(name, opts = {}) {
+  return `<div class="dl${opts.sel ? ' sel' : ''}"><span class="nm">${name}</span>${opts.badge ? `<span class="badge">${opts.badge}</span>` : ''}${opts.x ? `<span class="xl">${opts.x}</span>` : ''}${opts.ic ? `<span class="ic">${opts.ic}</span>` : ''}</div>`;
+}
+function leftPane(inner, w = 290) {
+  return `<div class="pane" style="width:${w}px"><div class="ptabs"><div class="ptab on">☰ Пакет</div><div class="ptab">Записи</div><div class="ptab">Категории</div></div><div class="pbody">${inner}</div></div>`;
+}
+const drifterPkg = (selRecruit = true) => `
+  <div class="pk">
+    <div class="who">Пакет диалогов · у кого</div>
+    <div class="pick">Drifter squad <i>▼</i></div>
+    <div class="holders">отряды <a>Drifter</a>, <a>Adventurer with skill</a> и ещё 9 · поле ${C('dialog squad')}<br>наследует 5 пакетов ▸ <span class="muted">(npc basic human, …)</span></div>
+    <div class="search">⌕ Событие или диалог…</div>
+    <div class="seg" style="margin-bottom:4px"><span class="on">Занятые 18</span><span>Все 76</span><span>+ наследуемые</span></div>
+    <div class="list">
+      <div class="grp">Разговор</div>
+      ${ev('Игрок заговорил', 'EV_PLAYER_TALK_TO_ME', 1, 3, { open: true })}
+      ${dl('talk drifter', { ic: '🔒' })}
+      ${dl('My saviour (recruit)')}
+      ${dl('Healed (Recruit)', { sel: selRecruit, ic: '🔒', x: '← отпирают' })}
+      <div class="grp">Лечение и раны</div>
+      ${ev('Начал лечить другого', 'EV_HEALING_OTHER_START', 18, 2)}
+      ${ev('Его начали лечить', 'EV_BEING_HEALED_START', 19, 2)}
+      ${ev('Закончил лечить другого', 'EV_HEALING_OTHER_FINISHED', 20, 1)}
+      ${ev('Его вылечили', 'EV_BEING_HEALED_FINISHED', 21, 3, { open: true })}
+      ${dl('Healed (Recruit)', { x: '→ отпирает вербовку' })}
+      ${dl('thanks')}
+      ${dl('Healed Cold')}
+      ${ev('Аптечки кончились', 'EV_FIRSTAID_KIT_EMPTY', 22, 1)}
+      <div class="grp">Бой</div>
+      ${ev('Встал, бой идёт', 'EV_GET_UP_FIGHT', 24, 2)}
+      ${ev('Встал зря, бой проигран', 'EV_GET_UP_UNNECCESSARY_FIGHT', 25, 2)}
+      ${ev('Напал тот, с кем говорил', 'EV_SPEECH_INTERRUPTED_ATTACKED_BY_TARGET', 28, 1)}
+      <div class="grp">Кого видит</div>
+      ${ev('Видит нейтральный отряд', 'EV_I_SEE_NEUTRAL_SQUAD', 3, 2)}
+      ${ev('Видит враждебный отряд', 'EV_______', 5, 1)}
+    </div>
+    <div class="foot"><span class="b sm p">+ Новый диалог…</span><span class="b sm">Привязать готовый…</span></div>
+  </div>`;
+const playerPkg = (o = {}) => `
+  <div class="pk">
+    <div class="who">Пакет диалогов · у кого</div>
+    <div class="pick">player character default <i>▼</i></div>
+    <div class="holders">персонажи игрока: <a>Изгой</a>, <a>Безымянные</a>, <a>Wanderer copy</a> и ещё 3 · поле ${C('dialogue package player')}<br>наследует 1 пакет ▸ <span class="muted">(Player TOUGH Merc)</span></div>
+    <div class="search">⌕ Событие или диалог…</div>
+    <div class="seg" style="margin-bottom:4px"><span class="on">Занятые 13</span><span>Все 76</span><span>+ наследуемые</span></div>
+    <div class="list">
+      <div class="grp">Плен и опасность</div>
+      ${ev('Его сейчас съедят', 'EV_MARKED_FOR_DEATH', 10, 1)}
+      ${ev('Его режут (пытка)', 'EV_SCREAMING_TORTURE', 11, 2)}
+      <div class="grp">Лечение и раны</div>
+      ${ev('Аптечки кончились', 'EV_FIRSTAID_KIT_EMPTY', 22, 2)}
+      <div class="grp">Бой</div>
+      ${ev('Встал, бой кончился', 'EV_GET_UP_PEACE', 23, 1)}
+      ${ev('Встал, бой идёт', 'EV_GET_UP_FIGHT', 24, 1)}
+      ${ev('Встал зря, бой проигран', 'EV_GET_UP_UNNECCESSARY_FIGHT', 25, 2)}
+      ${ev('Забирает только оружие', 'EV_LOOTING_WEAPON_ONLY', 32, 1)}
+      ${ev('Забирает всё', 'EV_LOOTING_EVERYTHING', 33, 1)}
+      <div class="grp">Место и погода</div>
+      ${ev('Едят мой урожай', 'EV_EATING_MY_CROPS', 57, 1)}
+      ${ev('Кислотный дождь', 'EV_ACID_RAIN', 62, o.newDone ? 2 : 1, { open: true, hov: o.hov })}
+      ${dl('acid rain', { sel: o.selOld })}
+      ${o.newDone ? dl('acid rain (Шек)', { sel: true, badge: 'новый' }) : ''}
+      ${ev('Кислотная вода', 'EV_ACID_WATER', 63, 1)}
+      ${ev('Ядовитый газ', 'EV_POISON_GAS', 65, 1)}
+      ${ev('Пыльная буря', 'EV_WINDY', 64, 0)}
+      ${ev('Кислота под ногами', 'EV_ACID_FEET', 61, 0)}
+    </div>
+    <div class="foot"><span class="b sm p">+ Новый диалог…</span><span class="b sm">Привязать готовый…</span></div>
+  </div>`;
+
+function centerPane(inner, o = {}) {
+  return `<div class="pane" style="flex:1">
+    <div class="ptabs"><div class="ptab on">Ψ Граф диалога</div></div>
+    <div class="gtb">
+      <div class="crumb">${o.crumb}</div>
+      <span class="seg"><span class="${o.tree ? '' : 'on'}">Граф</span><span class="${o.tree ? 'on' : ''}">Дерево (как в FCS)</span></span>
+      <span class="b sm${o.playing ? ' on' : ''}">▶ Проиграть</span><span class="b sm">⌕</span><span class="b sm">Разложить</span><span class="b sm on">Коды FCS</span>
+      <span class="muted" style="font-size:12px">100%</span>
+    </div>
+    ${o.tree ? '' : `<div class="glegend"><span><i style="background:var(--npc)"></i>NPC</span><span><i style="background:var(--pl)"></i>игрок</span><span><i style="background:var(--ij)"></i>вставка</span><span><i style="background:var(--x)"></i>переход в другой диалог</span><span>①② — порядок проверки</span><span style="margin-left:auto">${o.count ?? ''}</span></div>`}
+    <div class="pbody">${inner}</div>
+  </div>`;
+}
+const canvas = (nodes, edges) => `<div class="canvas" data-edges='${JSON.stringify(edges)}'><svg></svg>${nodes}<div class="zoom"><span>+</span><span>−</span><span>⛶</span><span>▦</span></div></div>`;
+
+function node(id, cls, x, y, w, html, extra = '') {
+  return `<div class="gn ${cls}" data-node="${id}" style="left:${x}px;top:${y}px;width:${w}px" ${extra}>${html}</div>`;
+}
+const ln = (k, cls, v, code) => `<div class="ln ${cls}"><span class="k">${k}</span><span class="v">${v}${code ? C(code) : ''}</span></div>`;
+const IF = (v, code) => ln('если', 'c', v, code);
+const IFNOT = (v, code) => ln('если', 'c', `<b style="font-weight:600">не</b> ${v}`, code);
+const DO = (v, code) => ln('→', 'e', v, code);
+const ans = (items, add = true) => `<div class="ans"><div class="ah">Игрок отвечает</div>${items.map(([id, t, o = {}]) => `<div class="ar${o.sel ? ' sel' : ''}"><span>${t}${o.sub ? `<span class="sub">${o.sub}</span>` : ''}${o.end ? ` <span class="end">⏹ конец</span>` : ''}</span>${o.end ? '' : `<span class="out" data-out="${id}"></span>`}</div>`).join('')}${add ? '<div class="add">+ ответ</div>' : ''}</div>`;
+
+/* ---------- right panel: selected NPC line 8951 ---------- */
+const rightLine = () => `
+  <div class="rp"><div class="sc">
+    <div class="top"><span class="wch npc">Реплика NPC</span>${C('8951-Dialogue.mod')}<span class="r link" style="font-size:12px">↗ Инспектор</span></div>
+    <div class="when">Звучит, когда: <b>Игрок заговорил</b> ${C('EV_PLAYER_TALK_TO_ME (1)')} · у <a>Drifter</a> и ещё 10 (пакет <a>Drifter squad</a>).<br><span style="color:var(--x)">Диалог заперт: его отпирает «Healed (Recruit)» после лечения.</span></div>
+    <div class="acts"><span class="b sm">Как в игре</span><span class="b sm">Копия</span><span class="b sm" style="color:var(--deleted)">Удалить</span></div>
+    <div class="sec"><h4>Кто говорит</h4><div class="dd">я — тот, у кого пакет ${C('T_ME')}<i>▼</i></div></div>
+    <div class="sec"><h4>Текст <span class="muted" style="font-weight:400;font-size:12px">2 варианта · игра говорит один наугад</span><span class="r b sm">+ вариант</span></h4>
+      <div class="txt">It's rare to meet good folks like you. Where are you headed? Mind if I tag along?…</div>
+      <div class="tr">ru: Редко встретишь таких добрых людей, как ты. Куда направляешься?…</div>
+      <div class="txt muted">2. It's rare to find good people like you around here…</div>
+    </div>
+    <div class="sec"><h4>Условия (1)<span class="r b sm">+ условие</span></h4>
+      <div class="cond">
+        <div class="row"><div class="dd">я ${C('T_ME')}<i>▼</i></div><div class="dd">черта характера ${C('DC_PERSONALITY_TAG')}<i>▼</i></div></div>
+        <div class="row2"><div class="dd">честный ${C('PT_HONORABLE')}<i>▼</i></div><div class="dd">= <i>▼</i></div><div class="dd">есть (1)<i>▼</i></div><span class="x">✕</span></div>
+        <div class="say">Сказать, только если у меня есть черта «честный».</div>
+      </div>
+    </div>
+    <div class="sec"><h4>Эффекты (1)<span class="r b sm">+ эффект</span></h4>
+      <div class="cond">
+        <div class="row2" style="grid-template-columns:1fr 22px"><div class="dd">закрыть этот диалог ${C('DA_LOCK_THIS_DIALOG')}<i>▼</i></div><span class="x">✕</span></div>
+        <div class="say e">После этой реплики диалог «Healed (Recruit)» запирается и больше не начнётся, пока его снова не отопрут.</div>
+      </div>
+    </div>
+    <div class="sec"><h4>Как игра выбирает <span class="muted" style="font-weight:400;font-size:12px">очки: 1 (условие +1)</span></h4>
+      <div class="props">
+        <div><label>Шанс сказать, % ${C('chance temporary')}</label><div class="inp">100</div></div>
+        <div><label>Шанс иметь, % ${C('chance permanent')}</label><div class="inp">100</div></div>
+        <div><label>Повтор ${C('repetition limit')}</label><div class="dd">без ограничений ${C('DR_NO_LIMIT')}<i>▼</i></div></div>
+        <div><label>Бонус очков ${C('score bonus')}</label><div class="inp">0</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="desc"><b>Условие: черта характера</b> ${C('DC_PERSONALITY_TAG')}<br>Есть ли у персонажа черта характера (PT_…): честный, трусливый, жестокий и т. д. «есть (1)» — черта есть, «нет (0)» — черты нет. Игра даёт реплике +1 очко за каждое условие.</div>
+  </div>`;
+function rightPane(inner, w = 360) {
+  return `<div class="pane" style="width:${w}px;border-right:0"><div class="ptabs"><div class="ptab on">❝ Реплика</div><div class="ptab">Инспектор</div></div><div class="pbody">${inner}</div></div>`;
+}
+
+/* ---------- variant A graph ---------- */
+function graphA() {
+  const n = [];
+  n.push(node('P', 'portal', 12, 14, 244, `
+    <div class="hd"><span class="wch x">ВХОД</span>из другого диалога</div>
+    <div class="tx">«Я тебе обязан/а/»<br><span class="muted" style="font-size:12px">в «Healed (Recruit)» · Его вылечили ${C('EV_BEING_HEALED_FINISHED (21)')}</span></div>
+    <div class="chips"><span class="chip x">перехватывает разговор ${C('interrupt')}</span><span class="chip x">отпирает этот ${C('unlocks')}</span></div>
+    <div class="foot link">открыть ↗</div>`));
+  n.push(node('H', 'head', 12, 196, 244, `
+    <div class="hd"><span class="wch head">ДИАЛОГ</span></div>
+    <div class="ttl">Healed (Recruit)</div>
+    <div class="tx" style="font-size:12px">Звучит: <b>Игрок заговорил</b>${C('EV_PLAYER_TALK_TO_ME (1)')}</div>
+    <div class="chips"><span class="chip lock">🔒 заперт</span><span class="chip">шанс 30%</span><span class="chip">раз в 6 ч</span></div>
+    ${IFNOT('я в плену', 'DC_IS_IMPRISONED')}
+    ${IFNOT('собеседник в плену', '')}
+    ${IF('меня можно нанять', 'DC_IS_RECRUITABLE')}
+    <div style="height:6px"></div><span class="out n" data-out="H"></span>`));
+  n.push(node('N1', 'npc sel', 280, 44, 300, `
+    <div class="tools"><span>+ ответ игрока</span><span>+ реплика NPC</span><span>+ вставка</span><span>⋯</span></div>
+    <div class="hd"><span class="ord">1</span><span class="wch npc">NPC · я</span><span class="r">1 из 2 ▾</span></div>
+    <div class="tx">«Редко встретишь таких добрых людей, как ты. Куда направляешься? Не возражаешь, если я присоединюсь? Последние несколько дней меня преследуют сплошные неудачи…»</div>
+    ${IF('черта «честный»', 'PT_HONORABLE')}
+    ${DO('закрыть этот диалог', 'DA_LOCK_THIS_DIALOG')}
+    <div style="height:4px"></div>
+    ${ans([['a1', '«Конечно, пойдём вместе!»'], ['a2', '«Не интересуюсь, прости»']])}`));
+  n.push(node('N2', 'npc', 280, 330, 300, `
+    <div class="hd"><span class="ord">2</span><span class="wch npc">NPC · я</span><span class="r">1 из 2 ▾</span></div>
+    <div class="tx">«Я тебе обяз/анна1/, спасибо»</div>
+    ${IFNOT('черта «холодный, жестокий»', 'PT_COLD_CRUEL')}
+    ${IFNOT('черта «предатель»', 'PT_TRAITOROUS')}
+    ${IFNOT('черта без имени', 'PT_____')}
+    ${DO('закрыть этот диалог', 'DA_LOCK_THIS_DIALOG')}
+    <div style="height:4px"></div>
+    ${ans([['b1', '«Обязан/а мне? Тогда пойдём с нами!»'], ['b2', '«Возможно, ты мог/ла бы заплатить за израсходованную аптечку?»'], ['b3', '«Да не за что»', { end: true }]])}`));
+  n.push(node('C1', 'npc', 612, 14, 212, `
+    <div class="hd"><span class="wch npc">NPC · я</span><span class="r">1 из 4 ▾</span></div>
+    <div class="tx">«Веди»</div>
+    ${DO('вступает в отряд игрока', 'DA_JOIN_SQUAD_WITH_EDIT')}
+    <div class="foot">⏹ конец разговора</div>`));
+  n.push(node('C2', 'npc', 612, 160, 212, `
+    <div class="hd"><span class="wch npc">NPC · я</span></div>
+    <div class="tx">«Может, в следующий раз!»</div>
+    <div class="foot">⏹ конец разговора</div>`));
+  n.push(node('C3', 'npc', 612, 310, 212, `
+    <div class="hd"><span class="wch npc">NPC · я</span></div>
+    <div class="tx">«Вообще, было бы здорово, но всё неоднозначно. Куда ты направляешься?»</div>
+    ${IFNOT('черта без имени', 'PT__')}
+    <div class="ans"><div class="ah">Игрок отвечает</div><div class="ar"><span class="muted">3 ответа, ещё 9 реплик ▸</span></div></div>`));
+  n.push(node('C4', 'npc', 612, 480, 212, `
+    <div class="hd"><span class="wch npc">NPC · я</span></div>
+    <div class="tx">«Вот (50 Катов)»</div>
+    ${DO('даёт собеседнику 50 катов', 'DA_GIVE_MONEY')}
+    ${ans([['d1', '«Спасибо»', { end: true }], ['d2', '«Серьёзно? Это всё, что ты можешь дать?»', { end: true }]], false)}`));
+  const callout = `<div class="callout" style="left:22px;top:470px;max-width:236px"><b>①②</b> Игра проверяет реплики NPC сверху вниз: честный скажет ①, остальные ②. Порядок меняют ↑↓ в панели справа или перетаскиванием.</div>`;
+  return canvas(n.join('') + callout, [['P', 'H', 'x', 'отпирает'], ['H', 'N1'], ['H', 'N2'], ['a1', 'C1'], ['a2', 'C2'], ['b1', 'C3'], ['b2', 'C4']]);
+}
+
+/* ---------- variant B graph (chosen) ---------- */
+function graphB() {
+  const n = [];
+  const END = '<div class="endb">⏹ конец разговора</div>';
+  const pl = (id, x, y, t, o = {}) => node(id, 'pl' + (o.sel ? ' sel' : ''), x, y, 176, `<div class="hd"><span class="wch pl">Игрок</span>${o.r ? `<span class="r">${o.r}</span>` : ''}</div><div class="tx" style="font-size:12.5px">${t}</div>${o.extra ?? ''}${o.end ? END : `<span class="out" data-out="${id}"></span>`}`);
+  n.push(node('P', 'portal', 10, 14, 204, `
+    <div class="hd"><span class="wch x">ВХОД</span>из другого диалога</div>
+    <div class="tx">«Я тебе обязан/а/»<br><span class="muted" style="font-size:11.5px">«Healed (Recruit)» · Его вылечили (21)</span></div>
+    <div class="chips"><span class="chip x">перехватывает ${C('interrupt')}</span><span class="chip x">отпирает ${C('unlocks')}</span></div>`));
+  n.push(node('H', 'head', 10, 176, 204, `
+    <div class="hd"><span class="wch head">ДИАЛОГ</span></div><div class="ttl">Healed (Recruit)</div>
+    <div class="tx" style="font-size:12px">Звучит: <b>Игрок заговорил</b>${C('(1)')}</div>
+    <div class="chips"><span class="chip lock">🔒 заперт</span><span class="chip">шанс 30%</span><span class="chip">раз в 6 ч</span></div>
+    ${IFNOT('я в плену', '')}${IFNOT('собеседник в плену', '')}${IF('меня можно нанять', '')}<div style="height:5px"></div><span class="out n" data-out="H"></span>`));
+  n.push(node('N1', 'npc sel', 234, 44, 236, `
+    <div class="tools"><span>+ ответ игрока</span><span>+ реплика NPC</span><span>+ вставка</span><span>⋯</span></div>
+    <div class="hd"><span class="ord">1</span><span class="wch npc">NPC · я</span><span class="r">1 из 2 ▾</span></div>
+    <div class="tx clamp">«Редко встретишь таких добрых людей, как ты. Куда направляешься? Не возражаешь, если я присоединюсь? Последние несколько дней меня преследуют сплошные неудачи…»</div>
+    <div class="more">весь текст ▾</div>
+    ${IF('черта «честный»', 'PT_HONORABLE')}${DO('закрыть этот диалог', '')}<div style="height:5px"></div><span class="out n" data-out="N1"></span>`));
+  n.push(node('N2', 'npc', 234, 300, 236, `
+    <div class="hd"><span class="ord">2</span><span class="wch npc">NPC · я</span><span class="r">1 из 2 ▾</span></div>
+    <div class="tx">«Я тебе обяз/анна1/, спасибо»</div>
+    ${IFNOT('«холодный, жестокий»', '')}${IFNOT('«предатель»', '')}${IFNOT('черта без имени', 'PT_____')}${DO('закрыть этот диалог', '')}<div style="height:5px"></div><span class="out n" data-out="N2"></span>`));
+  n.push(pl('p1', 492, 14, '«Конечно, пойдём вместе!»'));
+  n.push(pl('p2', 492, 104, '«Не интересуюсь, прости»'));
+  n.push(pl('p3', 492, 238, '«Обязан/а мне? Тогда пойдём с нами!»'));
+  n.push(pl('p4', 492, 336, '«Возможно, ты мог/ла бы заплатить за израсходованную аптечку?»'));
+  n.push(pl('p5', 492, 470, '«Да не за что»', { end: true }));
+  n.push(node('C1', 'npc', 690, 14, 136, `<div class="hd"><span class="wch npc">NPC</span><span class="r">1 из 4</span></div><div class="tx">«Веди»</div>${DO('вступает в отряд', '')}${END}`));
+  n.push(node('C2', 'npc', 690, 140, 136, `<div class="hd"><span class="wch npc">NPC</span></div><div class="tx">«Может, в следующий раз!»</div>${END}`));
+  n.push(node('C3', 'npc', 690, 250, 136, `<div class="hd"><span class="wch npc">NPC</span></div><div class="tx">«Вообще, было бы здорово, но всё неоднозначно…»</div><div class="foot link">▸ ещё 3 ответа, 9 реплик</div>`));
+  n.push(node('C4', 'npc', 690, 400, 136, `<div class="hd"><span class="wch npc">NPC</span></div><div class="tx">«Вот (50 Катов)»</div>${DO('даёт 50 катов', '')}<div class="foot link">▸ ещё 2 ответа</div>`));
+  return canvas(n.join(''), [['P', 'H', 'x', 'отпирает'], ['H', 'N1'], ['H', 'N2'], ['N1', 'p1'], ['N1', 'p2'], ['N2', 'p3'], ['N2', 'p4'], ['N2', 'p5'], ['p1', 'C1'], ['p2', 'C2'], ['p3', 'C3'], ['p4', 'C4']]);
+}
+
+/* ---------- tree view ---------- */
+function treeView() {
+  const r = (lvl, kind, text, cc = '', ee = '', pp = '', o = {}) => {
+    const q = kind === 'pl' ? 'plq' : kind === 'npc' ? 'npcq' : '';
+    const chip = kind === 'pl' ? '<span class="wch pl">игрок</span>' : kind === 'npc' ? '<span class="wch npc">NPC</span>' : '<span class="wch head">ДИАЛОГ</span>';
+    return `<div class="tr${o.sel ? ' sel' : ''}"><div class="t1" style="padding-left:${lvl * 20}px"><span class="tw">${o.tw ?? ''}</span>${chip}<span class="q ${q}">${text}</span></div><div class="cc">${cc}</div><div class="ee">${ee}</div><div class="pp">${pp}</div></div>`;
+  };
+  return `<div class="tree">
+    <div class="ttb"><span class="b sm">+ Реплика NPC</span><span class="b sm">+ Ответ игрока</span><span class="b sm">+ Вставка</span><span class="sep"></span><span class="b sm">↑</span><span class="b sm">↓</span><span class="b sm">Развернуть всё</span><span class="grow"></span><span class="muted" style="font-size:12px">⌕ поиск по тексту</span></div>
+    <div class="th"><div>Реплика</div><div>Условия</div><div>Эффекты</div><div>Свойства</div></div>
+    ${r(0, 'head', '<b>Healed (Recruit)</b> · Звучит: Игрок заговорил <span class="code">EV_PLAYER_TALK_TO_ME (1)</span>', 'не в плену (я, собеседник) · можно нанять', '', '🔒 заперт · 30% · раз в 6 ч', { tw: '▾' })}
+    ${r(1, 'npc', '① «Редко встретишь таких добрых людей, как ты. Куда направляешься?…» <span class="muted">(+1 вариант)</span>', 'черта «честный» <span class="code">PT_HONORABLE</span>', 'закрыть этот диалог', '', { tw: '▾', sel: true })}
+    ${r(2, 'pl', '«Конечно, пойдём вместе!»', '', '', '', { tw: '▾' })}
+    ${r(3, 'npc', '«Веди» <span class="muted">(+3 варианта)</span>', '', 'вступает в отряд <span class="code">DA_JOIN_SQUAD_WITH_EDIT</span>', '')}
+    ${r(2, 'pl', '«Не интересуюсь, прости»', '', '', '', { tw: '▾' })}
+    ${r(3, 'npc', '«Может, в следующий раз!»', '', '', '')}
+    ${r(1, 'npc', '② «Я тебе обяз/анна1/, спасибо» <span class="muted">(+1 вариант)</span>', 'не: «холодный, жестокий», «предатель», PT_____', 'закрыть этот диалог', '', { tw: '▾' })}
+    ${r(2, 'pl', '«Обязан/а мне? Тогда пойдём с нами!»', '', '', '', { tw: '▾' })}
+    ${r(3, 'npc', '«Вообще, было бы здорово, но всё неоднозначно. Куда ты направляешься?»', 'не: PT__', '', '', { tw: '▸' })}
+    ${r(2, 'pl', '«Возможно, ты мог/ла бы заплатить за израсходованную аптечку?»', '', '', '', { tw: '▾' })}
+    ${r(3, 'npc', '«Вот (50 Катов)»', '', 'даёт 50 катов <span class="code">DA_GIVE_MONEY</span>', '', { tw: '▾' })}
+    ${r(4, 'pl', '«Спасибо»', '', '', '⏹ конец')}
+    ${r(4, 'pl', '«Серьёзно? Это всё, что ты можешь дать?»', '', '', '⏹ конец')}
+    ${r(2, 'pl', '«Да не за что»', '', '', '⏹ конец')}
+    <div class="tr" style="color:var(--x)"><div class="t1" style="padding-left:0"><span class="tw"></span>← Этот диалог отпирает «Я тебе обязан/а/» в «Healed (Recruit)» (Его вылечили, 21) — открыть ↗</div><div></div><div></div><div></div></div>
+  </div>`;
+}
+
+/* ---------- acid rain ---------- */
+function graphRain(o = {}) {
+  const n = [];
+  if (!o.isNew) {
+    n.push(node('H', 'head sel', 16, 40, 260, `
+      <div class="hd"><span class="wch head">ДИАЛОГ</span><span class="r">монолог</span></div>
+      <div class="ttl">acid rain</div>
+      <div class="tx" style="font-size:12px">Звучит: <b>Кислотный дождь</b>${C('EV_ACID_RAIN (62)')}<br><span class="muted">собеседника нет — говорит сам с собой</span></div>
+      <div class="foot">условий нет — скажет любой, у кого пакет</div><span class="out n" data-out="H"></span>`));
+    n.push(node('N', 'npc', 318, 40, 330, `
+      <div class="hd"><span class="wch npc">NPC · я</span><span class="r">3 варианта · один наугад</span></div>
+      <div class="tx v">«Этот /GODDAMN/ый дождь жжёт!»</div>
+      <div class="tx v">«Хренов кислотный дождь!»</div>
+      <div class="tx v">«/FUCKING/ый дождь, кожу мне отплавляет!»</div>
+      <div class="chips" style="margin-top:4px"><span class="chip">раз в 2 ч ${C('DR_SHORT_2')}</span></div>
+      <div class="foot">⏹ конец</div>`));
+    n.push(`<div class="gn" style="left:318px;top:250px;width:330px;border-style:dashed;background:transparent;box-shadow:none;color:var(--muted);padding:8px 10px">+ реплика NPC после этой · + вставка (другой персонаж)</div>`);
+    return canvas(n.join(''), [['H', 'N']]);
+  }
+  n.push(node('H', 'head newn', 16, 40, 260, `
+    <div class="hd"><span class="wch head">ДИАЛОГ</span><span class="badge">новый</span><span class="r">монолог</span></div>
+    <div class="ttl">acid rain (Шек)</div>
+    <div class="tx" style="font-size:12px">Звучит: <b>Кислотный дождь</b>${C('EV_ACID_RAIN (62)')}</div>
+    ${IF('моя раса: Шек', 'my race')}<div class="chips"><span class="chip">+1 очко ${C('score bonus')}</span></div><span class="out n" data-out="H"></span>`));
+  n.push(node('N', 'npc newn sel', 318, 40, 330, `
+    <div class="tools"><span>+ ответ игрока</span><span>+ реплика NPC</span><span>+ вставка</span><span>⋯</span></div>
+    <div class="hd"><span class="wch npc">NPC · я</span><span class="badge">новая</span><span class="r">2 варианта · один наугад</span></div>
+    <div class="tx v">«Кислота! Даже шкура шека этого не держит.»</div>
+    <div class="tx v">«Воин не прячется от дождя… но этот жжётся.»</div>
+    <div class="chips" style="margin-top:4px"><span class="chip">раз в 2 ч ${C('DR_SHORT_2')}</span></div>
+    <div class="foot">⏹ конец</div>`));
+  const play = `<div class="play"><div class="pt"><b>▶ Кто что скажет</b> на «Кислотный дождь» <span class="code">EV_ACID_RAIN (62)</span> <span class="muted">· пакет «player character default»</span><span class="grow"></span><span class="b sm">Персонаж: Шек-воин ▼</span><span class="b sm">✕</span></div>
+    <div class="pr muted"><span></span><span>диалог</span><span>почему</span><span>очки</span></div>
+    <div class="pr win"><span>✓</span><span>acid rain (Шек) — «Кислота! Даже шкура шека…»</span><span>раса подходит; бонус очков +1</span><span>1</span></div>
+    <div class="pr"><span>·</span><span>acid rain — «Этот /GODDAMN/ый дождь жжёт!»</span><span>очков меньше — не выбран</span><span>0</span></div>
+    <div class="pr muted"><span></span><span>Без бонуса было бы 0 и 0: ничья, игра выбрала бы наугад. Условие «моя раса» очков не даёт (+2 даёт только «раса собеседника»).</span><span></span><span></span></div>
+    <div class="pr muted"><span></span><span>Для персонажа другой расы останется прежний «acid rain».</span><span></span><span></span></div></div>`;
+  return canvas(n.join('') + play, [['H', 'N']]);
+}
+const rightDialogue = () => `
+  <div class="rp"><div class="sc">
+    <div class="top"><span class="wch head">Диалог</span>${C('55630-rebirth.mod')}<span class="r link" style="font-size:12px">↗ Инспектор</span></div>
+    <div class="when">Звучит, когда: <b>Кислотный дождь</b> ${C('EV_ACID_RAIN (62)')} · у <a>Изгой</a>, <a>Безымянные</a> и ещё 4 (пакет <a>player character default</a>).<br><span class="muted">Идёт кислотный дождь! Собеседника нет.</span></div>
+    <div class="acts"><span class="b sm">Ещё такой же…</span><span class="b sm">Повесить и на другое событие…</span></div>
+    <div class="sec"><h4>Название</h4><div class="inp">acid rain</div></div>
+    <div class="sec"><h4>Когда можно</h4>
+      <div class="chk"><span class="cb"></span>Можно говорить с врагом ${C('for enemies')}</div>
+      <div class="chk"><span class="cb"></span>Только один раз ${C('once only')}</div>
+      <div class="chk"><span class="cb"></span>Заперт, пока не отопрут ${C('locked')}</div>
+      <div class="chk"><span class="cb"></span>По одному: не у всех сразу ${C('one at a time')}</div>
+      <div class="chk"><span class="cb on">✓</span>Монолог: без ответов игрока ${C('monologue')}</div>
+    </div>
+    <div class="sec"><h4>Условия (0)<span class="r b sm">+ условие</span></h4><div class="hint">Условий нет: подходит каждому, у кого есть пакет.</div></div>
+    <div class="sec"><h4>Как игра выбирает <span class="muted" style="font-weight:400;font-size:12px">очки: 0</span></h4>
+      <div class="props">
+        <div><label>Шанс сказать, % ${C('chance temporary')}</label><div class="inp">100</div></div>
+        <div><label>Шанс иметь, % ${C('chance permanent')}</label><div class="inp">100</div></div>
+        <div><label>Повтор ${C('repetition limit')}</label><div class="dd">без ограничений ${C('DR_NO_LIMIT')}<i>▼</i></div></div>
+        <div><label>Только с собеседником ${C('target is type')}</label><div class="dd">любой ${C('OT_NONE')}<i>▼</i></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="desc"><b>Монолог</b> ${C('monologue')}<br>Ответов игрока нет: каждую реплику говорит сам персонаж. По умолчанию включено (в FCS: «no player replies, every line is the speaker»).</div>
+  </div>`;
+const rightNewLine = () => `
+  <div class="rp"><div class="sc">
+    <div class="top"><span class="wch npc">Реплика NPC</span><span class="badge">новая</span>${C('1-Мой мод.mod')}</div>
+    <div class="when">Звучит, когда: <b>Кислотный дождь</b> ${C('EV_ACID_RAIN (62)')} · у персонажей игрока с расой <a>Шек</a> (пакет <a>player character default</a>).</div>
+    <div class="sec"><h4>Кто говорит</h4><div class="dd">я — тот, у кого пакет ${C('T_ME')}<i>▼</i></div></div>
+    <div class="sec"><h4>Текст <span class="muted" style="font-weight:400;font-size:12px">2 варианта</span><span class="r b sm">+ вариант</span></h4>
+      <div class="txt">Кислота! Даже шкура шека этого не держит.</div><div style="height:6px"></div>
+      <div class="txt">Воин не прячется от дождя… но этот жжётся.</div></div>
+    <div class="sec"><h4>Условия (0)<span class="r b sm">+ условие</span></h4><div class="hint">Условие «моя раса: Шек» стоит у диалога, поэтому действует на все его реплики.</div></div>
+    <div class="sec"><h4>Эффекты (0)<span class="r b sm">+ эффект</span></h4></div>
+    <div class="sec"><h4>Как игра выбирает</h4>
+      <div class="props"><div><label>Повтор ${C('repetition limit')}</label><div class="dd hl">раз в 2 ч ${C('DR_SHORT_2')}<i>▼</i></div></div><div><label>Шанс сказать, % ${C('chance temporary')}</label><div class="inp">100</div></div></div>
+      <div class="hint" style="margin-top:6px">Бонус очков +1 стоит у диалога «acid rain (Шек)»: так шек скажет новую фразу, а не прежнюю.</div>
+    </div>
+  </div>
+  <div class="desc"><b>Повтор</b> ${C('repetition limit')}<br>Как часто реплика может звучать снова. «раз в 2 ч» — не чаще раза в два игровых часа. Взято как у соседнего диалога на это событие.</div>
+  </div>`;
+
+/* ---------- picker over the line panel ---------- */
+const picker = () => `<div class="picker" style="right:14px;top:470px">
+  <div class="ps"><div class="inp" style="color:var(--text)">голод<span class="muted" style="margin-left:auto;font-size:11px">ищет по-русски, по-английски и по коду</span></div></div>
+  <div class="pg">Состояние</div>
+  <div class="pi h">голодает ${C('DC_STARVING')}</div>
+  <div class="pg">Предметы</div>
+  <div class="pi">у собеседника есть предмет: еда ${C('target has item type')}</div>
+  <div class="pg">Часто нужные</div>
+  <div class="pi muted">меня можно нанять ${C('DC_IS_RECRUITABLE')}</div>
+  <div class="pi muted">моя раса… ${C('my race')}</div>
+  <div class="pi muted">фракция собеседника… ${C('target faction')}</div>
+  <div class="pd"><b>голодает</b> ${C('DC_STARVING')} — персонаж голодает, сытость на нуле. Обычно ставят «кто: я» и «= да».</div>
+</div>`;
+
+/* ---------- create: modal ---------- */
+const modal = () => `<div class="shade"><div class="modal">
+  <div class="mh">Новый диалог на событие<span class="r">✕</span></div>
+  <div class="mb">
+    <div><div class="lbl">Событие</div><div class="dd">Кислотный дождь ${C('EV_ACID_RAIN (62)')}<i>▼</i></div><div class="hint muted" style="font-size:12px;margin-top:3px">Идёт кислотный дождь! Собеседника нет: персонаж говорит сам с собой. В игре сейчас: 1 диалог в этом пакете.</div></div>
+    <div><div class="lbl">Кто говорит</div>
+      <div class="opt"><span class="rd"></span><div>Все персонажи игрока<small>в пакет «player character default» — 6 персонажей</small></div></div>
+      <div class="opt on"><span class="rd"></span><div style="flex:1">Только раса <span class="dd" style="display:inline-flex;height:22px;margin-left:6px">Шек<i>▼</i></span><small>в тот же пакет, у диалога будет условие «моя раса: Шек»</small></div></div>
+      <div class="opt"><span class="rd"></span><div>Один персонаж, отряд или фракция…<small>в их пакет; если пакета нет — Cactus создаст его</small></div></div>
+    </div>
+    <div><div class="lbl">Что скажет · вариантов 2, игра говорит один наугад</div>
+      <div class="txt">Кислота! Даже шкура шека этого не держит.</div><div style="height:5px"></div>
+      <div class="txt">Воин не прячется от дождя… но этот жжётся.</div>
+      <div style="display:flex;gap:6px;margin-top:6px"><span class="b sm">+ вариант текста</span><span class="b sm">+ ещё реплика после этой</span><span class="grow"></span><span class="muted" style="font-size:12px;align-self:center">Повтор:</span><span class="dd" style="height:22px">раз в 2 ч ${C('DR_SHORT_2')}<i>▼</i></span></div>
+    </div>
+    <div class="will"><b style="color:var(--new)">Будет:</b> новый диалог «acid rain (Шек)» с 1 репликой; в пакете «player character default» ссылка на событие «Кислотный дождь (62)»; у диалога условие «моя раса: Шек» и бонус очков +1 (условие «моя раса» очков не даёт, без бонуса шек выбирал бы между новой и старой фразой 50 на 50). Пакет из игры — мод сохранит только добавление. Отменить — одним Ctrl+Z.</div>
+  </div>
+  <div class="mf"><span class="b">Отмена</span><span class="b p">Создать</span></div>
+</div></div>`;
+
+/* ---------- views ---------- */
+const crumbRecruit = 'Drifter squad<span class="s">›</span>Игрок заговорил <span class="code">EV_PLAYER_TALK_TO_ME (1)</span><span class="s">›</span><b>Healed (Recruit)</b>';
+const crumbRain = (nm) => `player character default<span class="s">›</span>Кислотный дождь <span class="code">EV_ACID_RAIN (62)</span><span class="s">›</span><b>${nm}</b>`;
+const VIEWS = {
+  a: () => leftPane(drifterPkg()) + centerPane(graphA(), { crumb: crumbRecruit, count: 'реплик 24 · видно 9' }) + rightPane(rightLine()),
+  b: () => leftPane(drifterPkg()) + centerPane(graphB(), { crumb: crumbRecruit, count: 'узлов 31 · видно 14' }) + rightPane(rightLine()),
+  tree: () => leftPane(drifterPkg()) + centerPane(treeView(), { crumb: crumbRecruit, tree: true }) + rightPane(rightLine()),
+  pick: () => leftPane(drifterPkg()) + centerPane(graphB(), { crumb: crumbRecruit, count: 'узлов 31' }) + rightPane(rightLine()) + picker(),
+  rain: () => leftPane(playerPkg({ selOld: true })) + centerPane(graphRain(), { crumb: crumbRain('acid rain'), count: 'реплик 1' }) + rightPane(rightDialogue()),
+  new1: () => leftPane(playerPkg({ selOld: true, hov: true })) + centerPane(graphRain(), { crumb: crumbRain('acid rain'), count: 'реплик 1' }) + rightPane(rightDialogue()) + `<div class="callout" style="left:300px;top:575px;width:300px"><b>← 1.</b> Наведите мышь на событие и нажмите <b>+</b> в его строке: «Новый диалог на «Кислотный дождь»». Или «Создать ▾ → Диалог на событие…» на панели сверху.</div>`,
+  new2: () => leftPane(playerPkg({ selOld: true })) + centerPane(graphRain(), { crumb: crumbRain('acid rain'), count: 'реплик 1' }) + rightPane(rightDialogue()) + modal(),
+  new3: () => leftPane(playerPkg({ newDone: true })) + centerPane(graphRain({ isNew: true }), { crumb: crumbRain('acid rain (Шек)'), count: 'реплик 1', playing: true }) + rightPane(rightNewLine()),
+};
+const frame = document.getElementById('frame');
+for (const [v, build] of Object.entries(VIEWS)) {
+  const d = document.createElement('div');
+  d.className = 'app view';
+  d.dataset.v = v;
+  d.innerHTML = toolbar() + `<div class="body">${build()}</div>` + statusBar(v === 'new3' ? 3 : 0);
+  frame.appendChild(d);
+}
+
+/* ---------- edges ---------- */
+function offsetIn(el, root) {
+  let x = 0, y = 0;
+  while (el && el !== root) { x += el.offsetLeft; y += el.offsetTop; el = el.offsetParent; }
+  return { x, y };
+}
+function drawEdges(view) {
+  view.querySelectorAll('.canvas').forEach((cv) => {
+    const svg = cv.querySelector('svg');
+    cv.querySelectorAll('.elabel').forEach((e) => e.remove());
+    const edges = JSON.parse(cv.dataset.edges || '[]');
+    let s = '<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7d8592"/></marker><marker id="ax" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b48ae6"/></marker></defs>';
+    for (const [from, to, kind, label] of edges) {
+      const out = cv.querySelector(`[data-out="${from}"]`) || cv.querySelector(`[data-node="${from}"]`);
+      const tgt = cv.querySelector(`[data-node="${to}"]`);
+      if (!out || !tgt) continue;
+      const o = offsetIn(out, cv), t = offsetIn(tgt, cv);
+      let x1, y1;
+      if (out.classList.contains('out')) { x1 = o.x + out.offsetWidth / 2; y1 = o.y + out.offsetHeight / 2; } else { x1 = o.x + out.offsetWidth; y1 = o.y + 20; }
+      let x2 = t.x - 2, y2 = t.y + 16;
+      let d;
+      if (kind === 'x') { // portal above the head: go down
+        x1 = o.x + 120; y1 = o.y + out.offsetHeight; x2 = t.x + 120; y2 = t.y - 2;
+        d = `M${x1},${y1} C${x1},${y1 + 30} ${x2},${y2 - 30} ${x2},${y2}`;
+      } else {
+        const dx = Math.max(30, (x2 - x1) / 2);
+        d = `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
+      }
+      const col = kind === 'x' ? '#b48ae6' : '#7d8592';
+      s += `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.7" ${kind === 'x' ? 'stroke-dasharray="5 4"' : ''} marker-end="url(#${kind === 'x' ? 'ax' : 'ar'})"/>`;
+      if (label) {
+        const l = document.createElement('div');
+        l.className = 'elabel ' + (kind || '');
+        l.textContent = label;
+        l.style.left = (x1 + 8) + 'px'; l.style.top = ((y1 + y2) / 2 - 9) + 'px';
+        cv.appendChild(l);
+      }
+    }
+    svg.innerHTML = s;
+  });
+}
+
+/* ---------- switching and fitting ---------- */
+function fit() {
+  const k = frame.clientWidth / 1484;
+  frame.querySelectorAll('.app').forEach((a) => { a.style.transform = `scale(${k})`; });
+}
+function show(v) {
+  document.querySelectorAll('#tg button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
+  frame.querySelectorAll('.view').forEach((e) => e.classList.toggle('on', e.dataset.v === v));
+  document.querySelectorAll('.cap').forEach((e) => e.classList.toggle('on', e.dataset.v === v));
+  const cur = frame.querySelector(`.app.view.on`);
+  if (cur) drawEdges(cur);
+  history.replaceState(null, '', '#v=' + v);
+}
+document.getElementById('tg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) show(b.dataset.v); });
+window.addEventListener('resize', fit);
+fit();
+const m = location.hash.match(/v=(\w+)/);
+show(m ? m[1] : 'b');
+</script>
+</body>
+</html>
