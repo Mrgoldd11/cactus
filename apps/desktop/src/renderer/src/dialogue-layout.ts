@@ -1,7 +1,7 @@
 /**
  * Dialogue graph layout from left to right: column — node depth, within a column nodes follow the
  * tree walk order (without back edges), a parent is centred on its children.
- * Node height is estimated by the number of text lines.
+ * Node height is the measured card height when the canvas reported it, otherwise an estimate.
  */
 import type { DialogueGraph, DialogueGraphNode } from '@kenshi-editor/core';
 import { layoutTree, type Placed } from './tree-layout.ts';
@@ -10,19 +10,21 @@ export type { Placed };
 
 export const NODE_WIDTH = 300;
 const COLUMN_GAP = 90;
-const ROW_GAP = 18;
+// Room for the toolbar shown above a selected node.
+const ROW_GAP = 32;
 const CHARS_PER_LINE = 42;
 
-/** Estimated node card height (px). */
-export function nodeHeight(n: DialogueGraphNode, maxTexts: number): number {
+/** Estimated node card height (px): one text shown, clamped to `maxLines` lines. */
+export function nodeHeight(n: DialogueGraphNode, maxLines: number): number {
   let lines = 1;
-  for (const t of n.texts.slice(0, maxTexts)) lines += Math.min(4, Math.ceil(Math.max(1, (t.localized ?? t.en).length) / CHARS_PER_LINE));
-  if (n.texts.length > maxTexts) lines += 1;
+  const first = n.texts[0];
+  if (first) lines += Math.min(maxLines, Math.ceil(Math.max(1, (first.localized ?? first.en).length) / CHARS_PER_LINE));
   lines += n.conditions.length + n.filters.length + n.effects.length + n.issues.length;
   return 28 + lines * 17;
 }
 
-export function layoutDialogue(graph: DialogueGraph, maxTexts: number): Map<string, Placed> {
+/** `measured` — card heights reported by the canvas (override the estimate). */
+export function layoutDialogue(graph: DialogueGraph, maxLines: number, measured?: ReadonlyMap<string, number>): Map<string, Placed> {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const kids = new Map<string, string[]>();
   for (const e of graph.edges) {
@@ -37,6 +39,6 @@ export function layoutDialogue(graph: DialogueGraph, maxTexts: number): Map<stri
     rowGap: ROW_GAP,
     kids: (id) => kids.get(id) ?? [],
     depth: (id) => byId.get(id)!.depth,
-    height: (id) => nodeHeight(byId.get(id)!, maxTexts),
+    height: (id) => measured?.get(id) ?? nodeHeight(byId.get(id)!, maxLines),
   });
 }

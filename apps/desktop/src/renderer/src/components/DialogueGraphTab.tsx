@@ -11,6 +11,9 @@
  *   and paste, Shift+box or Ctrl+click — multi-select, Esc — clear selection;
  * - «+» on a node — new answer or line; drag from a node's right edge to another — link.
  * Everything goes through core commands: one edit — one undo (Ctrl+Z / Ctrl+Y).
+ * A node shows who speaks (yellow stripe — NPC, blue — player, green — interjection), ①② — the order in
+ * which the game tries NPC lines, «if …» / «→ …» phrases with FCS codes, badges for non-default
+ * properties and «conversation ends» where nothing follows; deep branches are folded at first.
  * Marks «new» / «changed», game lines removed from a branch. Checks (broken references, dead ends,
  * locked dialogues, vanilla overrides…) — on nodes and as a list. Text search, collapse branch,
  * show branch only, re-layout, minimap.
@@ -42,6 +45,7 @@ import {
   buildDialogueGraph,
   deleteGraphItems,
   dialogueChecks,
+  dialogueLineViews,
   duplicateLines,
   insertLineBetween,
   lineParents,
@@ -55,6 +59,7 @@ import {
   type DialogueGraph,
   type DialogueGraphNode,
   type LineLink,
+  type LineView,
 } from '@kenshi-editor/core';
 import { inLang, useLang, useT } from '../i18n.ts';
 import { useGameTexts } from '../data-names.ts';
@@ -81,18 +86,41 @@ interface Props {
   onPlay?: () => void;
 }
 
-const MAX_TEXTS = 2;
+/** Text lines on a node before «full text ▾». */
+const TEXT_LINES = 3;
+/** Longer texts (or with line breaks) get «full text ▾». */
+const LONG_TEXT = 120;
 const INITIAL_ZOOM = 1;
+/** Whether FCS codes are shown next to the plain words (on by default). */
+const CODES_KEY = 'kedit.graph.codes';
+/** Graphs with more nodes open with deep branches folded. */
+const FOLD_MIN_NODES = 20;
+/** Lines this deep from the dialogue (NPC line → answer → reply) keep their children folded at first. */
+const FOLD_DEPTH = 3;
+/** Speaker of the lines added by «+ interjection» (T_INTERJECTOR1). */
+const INTERJECTOR = 3;
 /** Whether the minimap is shown (off by default: the graph gets the whole canvas). */
 const MINIMAP_KEY = 'kedit.graph.minimap';
 const MENU_WIDTH = 240;
 
 interface Actions {
   go: (sid: string) => void;
-  add: (sid: string) => void;
+  add: (sid: string, speaker?: number) => void;
   toggle: (sid: string) => void;
   commit: (sid: string, text: string) => void;
   cancel: () => void;
+  /** Node menu at the mouse (the «…» button). */
+  menu: (sid: string, e: ReactMouseEvent) => void;
+  /** Show text variant `i` on the node. */
+  variant: (sid: string, i: number) => void;
+  /** Show the whole text or clamp it again. */
+  full: (sid: string) => void;
+}
+
+interface Hidden {
+  all: number;
+  answers: number;
+  lines: number;
 }
 
 type LineData = {
@@ -103,7 +131,16 @@ type LineData = {
   /** How many descendants in the tree (for «collapse»). */
   kids: number;
   /** Collapsed: how many nodes are hidden. */
-  hidden?: number;
+  hidden?: Hidden;
+  view: LineView | undefined;
+  /** Text variant shown on the node. */
+  variant: number;
+  /** The whole text is shown (no clamp). */
+  full: boolean;
+  /** Nothing follows this line: the conversation ends. */
+  end: boolean;
+  /** The only selected node: the toolbar is shown above it. */
+  tools: boolean;
   matched: boolean;
   editable: boolean;
   /** Text is edited right in the node; `raw` — the record's current first text. */
@@ -128,6 +165,8 @@ interface Ask {
   run: () => void;
 }
 
+const EMPTY: ReadonlySet<string> = new Set();
+
 /** Copied lines (Ctrl+C / «Copy») — shared by all graphs of the window. */
 let clipboard: string[] = [];
 
@@ -140,26 +179,56 @@ export function DialogueGraphTab(props: Props): ReactNode {
   );
 }
 
-/** Nodes hidden by collapsed branches (tree descendants, without loops), and how many each one hid. */
-function hiddenBy(graph: DialogueGraph, collapsed: ReadonlySet<string>): { hidden: Set<string>; count: Map<string, number> } {
+function treeKids(graph: DialogueGraph): Map<string, string[]> {
   const kids = new Map<string, string[]>();
   for (const e of graph.edges) if (!e.back) kids.set(e.source, [...(kids.get(e.source) ?? []), e.target]);
+  return kids;
+}
+
+/** Nodes hidden by collapsed branches (tree descendants, without loops), and how many each one hid. */
+function hiddenBy(graph: DialogueGraph, collapsed: ReadonlySet<string>): { hidden: Set<string>; count: Map<string, Hidden> } {
+  const kids = treeKids(graph);
+  const choice = new Set(graph.nodes.filter((n) => n.choice).map((n) => n.id));
   const hidden = new Set<string>();
-  const count = new Map<string, number>();
+  const count = new Map<string, Hidden>();
   for (const c of collapsed) {
     if (hidden.has(c)) continue;
-    let n = 0;
+    const h: Hidden = { all: 0, answers: 0, lines: 0 };
     const stack = [...(kids.get(c) ?? [])];
     while (stack.length) {
       const x = stack.pop()!;
       if (hidden.has(x) || x === c) continue;
       hidden.add(x);
-      n++;
+      h.all++;
+      if (choice.has(x)) h.answers++;
+      else h.lines++;
       stack.push(...(kids.get(x) ?? []));
     }
-    count.set(c, n);
+    count.set(c, h);
   }
   return { hidden, count };
+}
+
+/** Lines whose children are folded at first: `FOLD_DEPTH` deep from the nearest dialogue, the outermost ones. */
+export function deepFolds(graph: DialogueGraph): Set<string> {
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const kids = treeKids(graph);
+  const out = new Set<string>();
+  const seen = new Set<string>();
+  const walk = (id: string, d: number): void => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    const n = byId.get(id);
+    const depth = n && n.type !== 'DIALOGUE_LINE' ? 0 : d;
+    const ks = kids.get(id) ?? [];
+    if (depth >= FOLD_DEPTH && ks.length > 0) {
+      out.add(id);
+      return;
+    }
+    for (const k of ks) walk(k, depth + 1);
+  };
+  walk(graph.root, 0);
+  return out;
 }
 
 function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, onShowLine, isLineOpen, onPlay }: Props): ReactNode {
@@ -177,7 +246,19 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   const canvasRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [focusRoot, setFocusRoot] = useState<string | undefined>(undefined);
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  /** Folded branches; `undefined` — as at first (deep branches of a big graph folded). */
+  const [collapsedState, setCollapsed] = useState<ReadonlySet<string> | undefined>(undefined);
+  const [codes, setCodesState] = useState(() => localStorage.getItem(CODES_KEY) !== '0');
+  const setCodes = (on: boolean): void => {
+    localStorage.setItem(CODES_KEY, on ? '1' : '0');
+    setCodesState(on);
+  };
+  const [variants, setVariants] = useState<ReadonlyMap<string, number>>(new Map());
+  const [fullTexts, setFullTexts] = useState<ReadonlySet<string>>(new Set());
+  /** Card heights reported by the canvas (the layout uses them instead of the estimate). */
+  const [heights, setHeights] = useState<ReadonlyMap<string, number>>(new Map());
+  /** A node to pan to once it is shown (it was in a folded branch). */
+  const pendingFocus = useRef<string | undefined>(undefined);
   const [moved, setMoved] = useState<ReadonlyMap<string, { x: number; y: number }>>(new Map());
   const [selNodes, setSelNodes] = useState<ReadonlySet<string>>(() => new Set(selected !== undefined ? [selected] : []));
   const [selEdges, setSelEdges] = useState<ReadonlySet<string>>(new Set());
@@ -203,6 +284,16 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     return m;
   }, [checks]);
   const byId = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph]);
+  const views = useMemo(() => dialogueLineViews(ctx, graph, lang), [ctx, graph, lang, version]);
+  const deep = useMemo(() => deepFolds(graph), [graph]);
+  const collapsed = collapsedState ?? (graph.nodes.length > FOLD_MIN_NODES ? deep : EMPTY);
+  /** Change the folded branches (starting from the first-time folding). */
+  const fold = (f: (c: ReadonlySet<string>) => ReadonlySet<string>): void => {
+    setCollapsed((c) => f(c ?? collapsed));
+  };
+  const folding = useMemo(() => hiddenBy(graph, collapsed), [graph, collapsed]);
+  /** Nodes with links going out (loops too): the conversation goes on after them. */
+  const outgoing = useMemo(() => new Set(graph.edges.map((e) => e.source)), [graph]);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -223,6 +314,15 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
       }
     return { parent, kids };
   }, [graph]);
+
+  /** Unfold the branches that hide `id`; true if it was hidden. */
+  const reveal = (id: string): boolean => {
+    if (!folding.hidden.has(id)) return false;
+    const up = new Set<string>();
+    for (let p = tree.parent.get(id); p !== undefined && !up.has(p); p = tree.parent.get(p)) up.add(p);
+    fold((c) => new Set([...c].filter((x) => !up.has(x))));
+    return true;
+  };
 
   // ── what can be done with a node ──
   const isLine = (id: string): boolean => {
@@ -250,7 +350,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
 
   /** A new line was created: expand the parent, select it, edit the text at once. */
   const created = (id: string, parent: string, at?: { x: number; y: number }): void => {
-    setCollapsed((c) => {
+    fold((c) => {
       const n = new Set(c);
       n.delete(parent);
       return n;
@@ -292,7 +392,9 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     const rec = ctx.get(id);
     if (rec) {
       const old = lineTexts(rec);
-      if ((old[0] ?? '') !== text) report(tryEdit(() => { setLineTexts(ctx, id, [text, ...old.slice(1)]); }));
+      // The variant shown on the node is edited.
+      const i = Math.min(variants.get(id) ?? 0, Math.max(0, old.length - 1));
+      if ((old[i] ?? '') !== text) report(tryEdit(() => { setLineTexts(ctx, id, old.length === 0 ? [text] : old.map((x, k) => (k === i ? text : x))); }));
     }
     refocus();
   };
@@ -371,7 +473,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     let copies: string[] = [];
     report(tryEdit(() => { copies = duplicateLines(ctx, items); }));
     if (copies.length > 0) {
-      setCollapsed((c) => {
+      fold((c) => {
         const n = new Set(c);
         n.delete(parent);
         return n;
@@ -419,12 +521,28 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     requestAnimationFrame(() => { setTick((x) => x + 1); });
   };
 
-  const actions = useRef<Actions>({ go: onGo, add: () => undefined, toggle: () => undefined, commit: () => undefined, cancel: () => undefined });
+  const noop = (): void => undefined;
+  const actions = useRef<Actions>({ go: onGo, add: noop, toggle: noop, commit: noop, cancel: noop, menu: noop, variant: noop, full: noop });
   actions.current = {
     go: onGo,
-    add: (id) => { add(id); },
+    add: (id, speaker) => { add(id, speaker); },
+    menu: (id, e) => {
+      selectOnly(id);
+      openMenu(e, { kind: 'node', id });
+    },
+    variant: (id, i) => {
+      setVariants((m) => new Map(m).set(id, i));
+    },
+    full: (id) => {
+      setFullTexts((f) => {
+        const n = new Set(f);
+        if (n.has(id)) n.delete(id);
+        else n.add(id);
+        return n;
+      });
+    },
     toggle: (id) => {
-      setCollapsed((c) => {
+      fold((c) => {
         const n = new Set(c);
         if (n.has(id)) n.delete(id);
         else n.add(id);
@@ -439,14 +557,17 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   };
 
   const { nodes, edges, pos } = useMemo(() => {
-    const { hidden, count } = hiddenBy(graph, collapsed);
+    const { hidden, count } = folding;
     const visible: DialogueGraph = { ...graph, nodes: graph.nodes.filter((n) => !hidden.has(n.id)), edges: graph.edges.filter((e) => !hidden.has(e.source) && !hidden.has(e.target)) };
-    const pos = layoutDialogue(visible, MAX_TEXTS);
+    const pos = layoutDialogue(visible, TEXT_LINES, heights);
     const nodes: LineNode[] = visible.nodes.map((n) => {
       const p = moved.get(n.id) ?? pos.get(n.id) ?? { x: 0, y: 0 };
       const editable = !n.missing && (n.type === 'DIALOGUE' || n.type === 'DIALOGUE_LINE');
       const h = count.get(n.id);
       const rec = n.id === editing ? ctx.get(n.id) : undefined;
+      const view = views.get(n.id);
+      const variant = Math.min(variants.get(n.id) ?? 0, Math.max(0, n.texts.length - 1));
+      const isLineKind = view?.kind === 'npc' || view?.kind === 'inter' || view?.kind === 'player';
       return {
         id: n.id,
         type: 'line',
@@ -461,7 +582,12 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
           matched: matchSet.has(n.id),
           editable,
           editing: rec !== undefined,
-          ...(rec ? { raw: lineTexts(rec)[0] ?? '' } : {}),
+          ...(rec ? { raw: lineTexts(rec)[variant] ?? '' } : {}),
+          view,
+          variant,
+          full: fullTexts.has(n.id),
+          end: (checksByNode.get(n.id) ?? []).some((c) => c.kind === 'end') || (isLineKind && !outgoing.has(n.id)),
+          tools: editable && selNodes.size === 1 && selNodes.has(n.id) && n.id !== editing,
           actions,
         },
         selected: selNodes.has(n.id),
@@ -483,7 +609,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
       ...(e.back ? { animated: true } : {}),
     }));
     return { nodes, edges, pos };
-  }, [graph, collapsed, moved, checksByNode, matchSet, selNodes, selEdges, editing, tree, version]);
+  }, [graph, folding, moved, checksByNode, matchSet, selNodes, selEdges, editing, tree, version, views, variants, fullTexts, heights, outgoing]);
 
   // Initial view at a readable zoom: the whole graph if it fits, otherwise the root at the left edge.
   const startView = useRef<(inst: ReactFlowInstance<LineNode>) => void>(() => undefined);
@@ -495,6 +621,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   const focus = (id: string): void => {
     const n = nodes.find((x) => x.id === id);
     if (n) void flow.setCenter(n.position.x + NODE_WIDTH / 2, n.position.y + 40, { zoom: 1 });
+    else if (reveal(id)) pendingFocus.current = id;
   };
   const focusRef = useRef(focus);
   focusRef.current = focus;
@@ -507,6 +634,14 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     clicked.current = selected;
     focusRef.current(selected);
   }, [selected, nodes]);
+
+  // A node from a folded branch is shown now — pan to it.
+  useEffect(() => {
+    const id = pendingFocus.current;
+    if (id === undefined || !nodes.some((n) => n.id === id)) return;
+    pendingFocus.current = undefined;
+    focusRef.current(id);
+  }, [nodes]);
 
   // The menu closes on a click outside it.
   useEffect(() => {
@@ -536,7 +671,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     setHit(i);
     const id = matches[i]!;
     // A hit in a collapsed branch — expand it.
-    setCollapsed(new Set());
+    reveal(id);
     clicked.current = undefined;
     const n = byId.get(id);
     if (n && (n.type === 'DIALOGUE' || n.type === 'DIALOGUE_LINE')) onSelect?.(id, tree.parent.get(id));
@@ -557,6 +692,19 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   };
 
   const onNodesChange = (changes: NodeChange<LineNode>[]): void => {
+    const dims = changes.filter((c) => c.type === 'dimensions' && c.dimensions);
+    if (dims.length > 0)
+      setHeights((m) => {
+        let n: Map<string, number> | undefined;
+        for (const c of dims) {
+          if (c.type !== 'dimensions' || !c.dimensions) continue;
+          const h = Math.round(c.dimensions.height);
+          if (Math.abs((m.get(c.id) ?? -10) - h) <= 1) continue;
+          n ??= new Map(m);
+          n.set(c.id, h);
+        }
+        return n ?? m;
+      });
     const posCh = changes.filter((c) => c.type === 'position' && c.position);
     if (posCh.length > 0)
       setMoved((m) => {
@@ -648,6 +796,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
         if (!many) out.push(item('edit', t.dgMenuEdit, () => { startEdit(id); }, { keys: 'F2' }));
         if (!many) out.push(item('add-answer', t.dgMenuAddAnswer, () => { setMenu(undefined); add(id, 1); }));
         if (!many) out.push(item('add-npc', t.dgMenuAddNpc, () => { setMenu(undefined); add(id, 0); }));
+        if (!many) out.push(item('add-inter', t.dnMenuAddInter, () => { setMenu(undefined); add(id, INTERJECTOR); }));
         if (!many) out.push(item('link', t.dgMenuLink, () => { setMenu(undefined); setLinkFrom(id); }));
         out.push(sep('sep1'));
         out.push(item('duplicate', t.dgMenuDuplicate + cnt, () => { duplicate(targets(id)); }, { keys: 'Ctrl+D' }));
@@ -662,6 +811,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
       } else if (canParent(id)) {
         out.push(item('add-npc', t.dgMenuAddNpc, () => { setMenu(undefined); add(id, 0); }));
         out.push(item('add-answer', t.dgMenuAddAnswer, () => { setMenu(undefined); add(id, 1); }));
+        out.push(item('add-inter', t.dnMenuAddInter, () => { setMenu(undefined); add(id, INTERJECTOR); }));
         if (clipboard.length > 0) out.push(item('paste', t.dgMenuPaste, () => { paste(id); }, { keys: 'Ctrl+V' }));
         out.push(sep('sep1'));
         out.push(item('show-line', t.dgMenuShowLine, () => { showLine(id); }));
@@ -695,7 +845,6 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
 
   const relayout = (): void => {
     setMoved(new Map());
-    setCollapsed(new Set());
     window.setTimeout(() => void flow.fitView({ padding: 0.1, maxZoom: 1 }), 30);
   };
 
@@ -706,7 +855,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   const lineOpen = isLineOpen?.() ?? true;
   const selLines = [...selNodes].filter(isLine);
   return (
-    <div className="dg" data-testid="dialogue-graph" data-sid={sid} ref={rootRef} tabIndex={-1} onKeyDown={onKeyDown}>
+    <div className={`dg${codes ? '' : ' dg-nocodes'}`} data-testid="dialogue-graph" data-sid={sid} ref={rootRef} tabIndex={-1} onKeyDown={onKeyDown}>
       <div className="dg-bar">
         <span className="muted small" data-testid="dg-stats">
           {t.dgNodes} {graph.nodes.length}, {t.dgChoices} {choices}, {t.dgLoops} {graph.edges.filter((e) => e.back).length}
@@ -715,6 +864,8 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
         <span className="dg-legend small">
           <span className="dg-chip npc">{t.dgNpc}</span>
           <span className="dg-chip choice">{t.dgPlayer}</span>
+          <span className="dg-chip inter">{t.dnLegendInter}</span>
+          <span className="muted">{t.dnLegendOrder}</span>
           <span className="muted">{t.dgLegendLoop}</span>
         </span>
       </div>
@@ -741,8 +892,21 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
         <button className="small" title={t.dgFitHint} onClick={() => void flow.fitView({ padding: 0.1, maxZoom: 1 })}>
           ⤢ {t.dgFit}
         </button>
-        <button className="small" title={t.dgRelayoutHint} data-testid="dg-relayout" onClick={relayout}>
+        <button className="small" title={t.dnRelayoutHint} data-testid="dg-relayout" onClick={relayout}>
           ⟲ {t.dgRelayout}
+        </button>
+        {deep.size > 0 &&
+          (collapsed.size > 0 ? (
+            <button className="small" data-testid="dg-expand-all" title={t.dnExpandAllTip} onClick={() => { setCollapsed(new Set()); }}>
+              ⊞ {t.dnExpandAll}
+            </button>
+          ) : (
+            <button className="small" data-testid="dg-fold-deep" title={t.dnFoldDeepTip} onClick={() => { setCollapsed(new Set(deep)); }}>
+              ⊟ {t.dnFoldDeep}
+            </button>
+          ))}
+        <button className={`small${codes ? ' active' : ''}`} data-testid="dg-codes" aria-pressed={codes} title={t.dnCodesTip} onClick={() => { setCodes(!codes); }}>
+          {'</>'} {t.dnCodes}
         </button>
         {focusRoot !== undefined ? (
           <button className="small active" data-testid="dg-unfocus" onClick={() => { setFocusRoot(undefined); }}>
@@ -861,7 +1025,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
         >
           <Background gap={24} />
           <Controls showInteractive={false} />
-          {minimap && <MiniMap pannable zoomable nodeColor={(n) => ((n.data as LineData).node.choice ? '#4b6f9e' : '#5d6168')} />}
+          {minimap && <MiniMap pannable zoomable nodeColor={(n) => MINIMAP_COLORS[(n.data as LineData).view?.kind ?? 'npc'] ?? '#5d6168'} />}
         </ReactFlow>
         {linkFrom !== undefined && (
           <div className="dg-banner" data-testid="dg-link-mode">
@@ -961,23 +1125,90 @@ function InlineText({ sid, value, actions }: { sid: string; value: string; actio
   );
 }
 
+type Phrase = LineView['conditions'][number];
+
+const MINIMAP_COLORS: Readonly<Record<string, string>> = { npc: '#8a6a35', player: '#4b6f9e', inter: '#3f7a52', head: '#7d6a3a', missing: '#5d6168' };
+
 const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>): ReactNode {
   const t = useT();
   const lang = useLang();
+  const [pickVariant, setPickVariant] = useState(false);
   const n = data.node;
-  const kind = n.type === 'DIALOGUE_LINE' ? (n.choice ? 'choice' : 'npc') : 'head';
+  const v = data.view;
+  const lk = v?.kind ?? (n.type === 'DIALOGUE_LINE' ? (n.choice ? 'player' : 'npc') : 'head');
+  // Class names kept from before: `dg-choice` — a player answer.
+  const kind = lk === 'player' ? 'choice' : lk === 'inter' || lk === 'npc' ? lk : 'head';
   const worst = data.checks.some((c) => c.severity === 'error') ? ' dg-bad' : data.checks.some((c) => c.severity === 'warning') ? ' dg-warnnode' : '';
   const st = data.status === 'new' || data.status === 'changed' ? ` dg-st-${data.status}` : '';
-  const end = data.checks.some((c) => c.kind === 'end');
   const notes = data.checks.filter((c) => c.kind !== 'end');
+  const text = n.texts[data.variant];
+  const shown = text ? (text.localized ?? text.en) : undefined;
+  const long = shown !== undefined && (shown.length > LONG_TEXT || shown.includes('\n'));
+  const stop = (e: ReactMouseEvent): void => {
+    e.stopPropagation();
+  };
+  const who =
+    lk === 'player' ? t.dnPlayer : lk === 'inter' ? t.dnInter : lk === 'npc' ? t.dnNpc : n.type === 'DIALOGUE' ? t.dnDialogue : n.type === 'DIALOGUE_PACKAGE' ? t.dnPackage : n.type;
+  const whoSub = (lk === 'npc' || lk === 'inter') && n.speakerLabel !== undefined ? ` · ${n.speakerLabel}` : '';
+  const whoCode = lk === 'head' || lk === 'missing' ? n.type : v?.speakerCode;
+  // Phrases of the view; package and other records keep the plain FCS lines.
+  const phrased = v !== undefined && lk !== 'missing' && (lk !== 'head' || n.type === 'DIALOGUE');
+  const plain = (c: string): Phrase => ({ text: c, short: c, code: c });
+  const conds: Phrase[] = phrased ? v.conditions : [...n.conditions, ...n.filters].map(plain);
+  const effects: Phrase[] = phrased ? v.effects : n.effects.map(plain);
+  const phrase = (p: Phrase, key: string, cls: string, k: string): ReactNode => (
+    <div key={key} className={`dg-ln ${cls}`} title={p.text}>
+      <span className="dg-k">{k}</span>
+      <span className="dg-v">
+        {p.short}
+        {p.code !== p.short && (
+          <>
+            {' '}
+            <span className="dg-code mono">{p.code}</span>
+          </>
+        )}
+      </span>
+    </div>
+  );
+  const add = (speaker: number) => (e: ReactMouseEvent): void => {
+    stop(e);
+    data.actions.current.add(n.id, speaker);
+  };
   return (
     <div
       className={`dg-node dg-${kind}${worst}${st}${selected ? ' dg-selected' : ''}${data.matched ? ' dg-matched' : ''}${data.editing ? ' dg-editing' : ''}`}
       data-testid="dg-node"
       data-id={n.id}
+      data-kind={lk}
       data-status={data.status}
     >
       <Handle type="target" position={Position.Left} />
+      {data.tools && selected && (
+        <div className="dg-ntools nodrag" data-testid="dg-node-tools">
+          {lk !== 'head' && (
+            <button className="small" data-testid="dg-add-answer" onClick={add(1)}>
+              {t.dnAddAnswer}
+            </button>
+          )}
+          <button className="small" data-testid="dg-add-npc" onClick={add(0)}>
+            {t.dnAddNpc}
+          </button>
+          <button className="small" data-testid="dg-add-inter" title={t.dnAddInterTip} onClick={add(INTERJECTOR)}>
+            {t.dnAddInter}
+          </button>
+          <button
+            className="small"
+            data-testid="dg-more"
+            title={t.dnMoreActions}
+            onClick={(e) => {
+              stop(e);
+              data.actions.current.menu(n.id, e);
+            }}
+          >
+            …
+          </button>
+        </div>
+      )}
       <div className="dg-title">
         {data.kids > 0 && (
           <button
@@ -985,29 +1216,74 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
             data-testid="dg-toggle"
             title={data.hidden !== undefined ? t.dgExpand : t.dgCollapse}
             onClick={(e) => {
-              e.stopPropagation();
+              stop(e);
               data.actions.current.toggle(n.id);
             }}
           >
             {data.hidden !== undefined ? '▸' : '▾'}
           </button>
         )}
-        <span className={`dg-chip ${kind}`}>{n.type === 'DIALOGUE_LINE' ? (n.choice ? t.dgPlayer : (n.speakerLabel ?? t.dgNpc)) : n.type}</span>
+        {v?.order !== undefined && (
+          <span className="dg-ord" data-testid="dg-order" title={t.dnOrderTip(v.order) + (n.score ? ` (+${n.score})` : '')}>
+            {v.order}
+          </span>
+        )}
+        {v?.tie === true && (
+          <span className="dg-tie small" data-testid="dg-tie" title={t.dnTieTip}>
+            {t.dnTie}
+          </span>
+        )}
+        <span className={`dg-chip ${kind}`}>
+          {who}
+          {whoSub}
+        </span>
+        {whoCode !== undefined && whoCode !== who && <span className="dg-code mono">{whoCode}</span>}
         {data.status === 'new' && <span className="st-badge st-new">{t.lineStatus_new}</span>}
         {data.status === 'changed' && <span className="st-badge st-changed">{t.lineStatus_changed}</span>}
         {n.eventLabel !== undefined && <span className="dg-event mono">{n.eventLabel}</span>}
         {n.type !== 'DIALOGUE_LINE' && <span className="dg-name">{n.localized ?? n.name}</span>}
-        <span className="dg-score muted mono">
-          {n.score ? `+${n.score}` : ''}
-          {n.chance !== undefined && n.chance < 100 ? ` ${n.chance}%` : ''}
-        </span>
+        <span className="dg-grow" />
+        {n.score ? <span className="dg-score muted mono dg-code">+{n.score}</span> : null}
+        {n.texts.length > 1 && (
+          <span className="dg-var-wrap">
+            <button
+              className="link small nodrag dg-variant"
+              data-testid="dg-variant"
+              title={t.dnVariantTip}
+              onClick={(e) => {
+                stop(e);
+                setPickVariant(!pickVariant);
+              }}
+            >
+              {t.dnVariant(data.variant + 1, n.texts.length)} ▾
+            </button>
+            {pickVariant && (
+              <div className="dg-var-list nodrag nowheel" data-testid="dg-variant-list">
+                {n.texts.map((x, i) => (
+                  <button
+                    key={i}
+                    className={`dg-var-item${i === data.variant ? ' active' : ''}`}
+                    data-testid="dg-variant-item"
+                    onClick={(e) => {
+                      stop(e);
+                      setPickVariant(false);
+                      data.actions.current.variant(n.id, i);
+                    }}
+                  >
+                    <span className="muted">{i + 1}.</span> {quote(x.localized ?? x.en, lang)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </span>
+        )}
         {data.editable && (
           <button
             className="link small nodrag"
             data-testid="dg-add"
-            title={`${n.type === 'DIALOGUE_LINE' && !n.choice ? t.dgAddAnswer : t.dgAddNpc} (${t.dgAddTip})`}
+            title={`${lk === 'npc' || lk === 'inter' ? t.dgAddAnswer : t.dgAddNpc} (${t.dgAddTip})`}
             onClick={(e) => {
-              e.stopPropagation();
+              stop(e);
               data.actions.current.add(n.id);
             }}
           >
@@ -1018,7 +1294,7 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
           className="link small nodrag"
           title={`${t.lnOpenInspector} (${n.id})`}
           onClick={(e) => {
-            e.stopPropagation();
+            stop(e);
             data.actions.current.go(n.id);
           }}
         >
@@ -1027,36 +1303,39 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
       </div>
       {data.editing ? (
         <InlineText sid={n.id} value={data.raw ?? ''} actions={data.actions} />
-      ) : (
+      ) : shown !== undefined ? (
         <>
-          {n.texts.slice(0, MAX_TEXTS).map((x, i) => (
-            <div key={i} className="dg-text" title={x.localized !== undefined ? x.en : ''}>
-              {quote(x.localized ?? x.en, lang)}
-            </div>
-          ))}
-          {n.type === 'DIALOGUE_LINE' && n.texts.length === 0 && <div className="dg-text muted">{t.dgEmptyText}</div>}
+          <div className={`dg-text${data.full ? '' : ' dg-clamp'}`} title={text?.localized !== undefined ? text.en : ''}>
+            {quote(shown, lang)}
+          </div>
+          {long && (
+            <button
+              className="link small nodrag dg-more"
+              data-testid="dg-full"
+              onClick={(e) => {
+                stop(e);
+                data.actions.current.full(n.id);
+              }}
+            >
+              {data.full ? t.dnLessText : t.dnFullText}
+            </button>
+          )}
         </>
+      ) : (
+        n.type === 'DIALOGUE_LINE' && <div className="dg-text muted">{t.dgEmptyText}</div>
       )}
-      {n.texts.length > MAX_TEXTS && (
-        <div className="muted small">
-          +{n.texts.length - MAX_TEXTS} {t.dgVariants}
+      {conds.map((p, i) => phrase(p, `c${i}`, 'dg-cond', t.dnIf))}
+      {effects.map((p, i) => phrase(p, `e${i}`, 'dg-effect', t.dnThen))}
+      {v !== undefined && v.badges.length > 0 && (
+        <div className="dg-badges">
+          {v.badges.map((b) => (
+            <span key={b.field} className={`dg-badge${b.field === 'locked' ? ' dg-badge-lock' : ''}`} data-testid="dg-badge" data-field={b.field} title={b.code}>
+              {b.label}{' '}
+              <span className="dg-code mono">{b.code}</span>
+            </span>
+          ))}
         </div>
       )}
-      {n.conditions.map((c, i) => (
-        <div key={`c${i}`} className="dg-cond mono">
-          ? {c}
-        </div>
-      ))}
-      {n.filters.map((c, i) => (
-        <div key={`f${i}`} className="dg-cond mono">
-          ? {c}
-        </div>
-      ))}
-      {n.effects.map((c, i) => (
-        <div key={`e${i}`} className="dg-effect mono">
-          ! {c}
-        </div>
-      ))}
       {data.removed > 0 && (
         <div className="dg-removed small">
           ✂ {t.dgRemovedLinks}: {data.removed}
@@ -1067,11 +1346,23 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
           {x.severity === 'info' ? 'ℹ' : '⚠'} {inLang(x.texts, lang)}
         </div>
       ))}
-      {end && <div className="dg-end small muted">⏹ {t.dgEnd}</div>}
-      {data.hidden !== undefined && (
-        <div className="dg-hidden small muted">
-          ▸ {t.dgHidden} {data.hidden}
+      {data.end && (
+        <div className="dg-end small" data-testid="dg-end" title={t.dnEndTip}>
+          ⏹ {t.dnEnd}
         </div>
+      )}
+      {data.hidden !== undefined && (
+        <button
+          className="link small nodrag dg-hidden"
+          data-testid="dg-fold"
+          title={t.dnMoreTip}
+          onClick={(e) => {
+            stop(e);
+            data.actions.current.toggle(n.id);
+          }}
+        >
+          ▸ {t.dnMore(data.hidden.answers, data.hidden.lines)}
+        </button>
       )}
       <Handle type="source" position={Position.Right} />
     </div>

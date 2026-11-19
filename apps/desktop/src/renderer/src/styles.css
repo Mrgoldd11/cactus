@@ -1200,12 +1200,20 @@ tr.fs-removed td:first-child {
   color: var(--text);
   text-align: left;
 }
+/* Who speaks: yellow stripe — NPC, blue — player, green — interjection (UI review G2). */
+.dg-node.dg-npc {
+  border-left-color: #d39b45;
+}
 .dg-node.dg-choice {
   border-left-color: var(--accent);
   background: #24303d;
 }
+.dg-node.dg-inter {
+  border-left-color: #5fb878;
+}
 .dg-node.dg-head {
   border-left-color: var(--changed);
+  background: #2a2720;
 }
 .dg-node.dg-bad {
   border-color: var(--error);
@@ -1218,6 +1226,17 @@ tr.fs-removed td:first-child {
 }
 .dg-title .dg-score {
   margin-left: auto;
+}
+/* The speaker code stays whole: the chip before it gives way instead. */
+.dg-title .dg-code {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.dg-title .dg-chip {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .dg-name {
   font-weight: 600;
@@ -1239,27 +1258,159 @@ tr.fs-removed td:first-child {
   background: var(--bg3);
   white-space: nowrap;
 }
+.dg-chip.npc {
+  background: #4a3a1c;
+  color: #f0cf8e;
+}
 .dg-chip.choice {
-  background: var(--sel);
+  background: #1f3550;
+  color: #9fcaf3;
+}
+.dg-chip.inter {
+  background: #1f3f2a;
+  color: #9be0b0;
 }
 .dg-chip.head {
-  color: var(--changed);
+  background: #4a4020;
+  color: #f1dc9a;
 }
 .dg-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.dg-text.dg-clamp {
   display: -webkit-box;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.dg-cond {
-  color: #9fb7d6;
+.dg-more {
   font-size: 11px;
+}
+/* «if …» / «→ …» lines: plain phrase, FCS code next to it. */
+.dg-ln {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 11.5px;
+  line-height: 16px;
+}
+.dg-ln .dg-k {
+  flex: none;
+  width: 32px;
+  font-weight: 600;
+}
+.dg-ln .dg-v {
+  flex: 1;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
-.dg-effect {
+.dg-cond .dg-k {
+  color: var(--changed);
+}
+.dg-effect .dg-k {
   color: var(--new);
-  font-size: 11px;
+}
+.dg-code {
+  margin-left: 4px;
+  font-size: 10.5px;
+  color: #7f8794;
   overflow-wrap: anywhere;
+}
+.dg-nocodes .dg-code {
+  display: none;
+}
+.dg-grow {
+  flex: 1;
+}
+.dg-ord {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #4a3a1c;
+  color: #f0cf8e;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+}
+.dg-tie {
+  color: var(--changed);
+  cursor: help;
+}
+.dg-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+.dg-badge {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: #33363c;
+  color: #c3c8d0;
+}
+.dg-badge .dg-code {
+  color: inherit;
+  opacity: 0.7;
+}
+.dg-badge.dg-badge-lock {
+  background: #4a2a2e;
+  color: #f3b5ba;
+}
+.dg-var-wrap {
+  position: relative;
+}
+.dg-variant {
+  white-space: nowrap;
+  text-decoration: none;
+}
+.dg-var-list {
+  position: absolute;
+  right: 0;
+  top: 18px;
+  z-index: 5;
+  width: 280px;
+  max-height: 240px;
+  overflow: auto;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px #0008;
+  padding: 2px;
+}
+.dg-var-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 3px 6px;
+  font-size: 12px;
+  white-space: normal;
+}
+.dg-var-item:hover,
+.dg-var-item.active {
+  background: var(--sel);
+}
+/* Toolbar above the selected node. */
+.dg-ntools {
+  position: absolute;
+  top: -28px;
+  right: 0;
+  display: flex;
+  gap: 4px;
+  z-index: 3;
+}
+.dg-ntools button {
+  border: 1px solid var(--accent);
+  background: var(--bg3);
+  white-space: nowrap;
+  padding: 1px 7px;
 }
 .dg-warn {
   color: var(--error);
@@ -1318,9 +1469,20 @@ tr.fs-removed td:first-child {
 .dg-removed {
   color: var(--deleted);
 }
-.dg-end,
 .dg-hidden {
   font-style: italic;
+  display: block;
+  margin-top: 3px;
+  text-decoration: none;
+}
+/* Nothing follows: the conversation ends. */
+.dg-end {
+  margin-top: 4px;
+  width: fit-content;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: #3a2226;
+  color: #f3b5ba;
 }
 .dg:focus {
   outline: none;

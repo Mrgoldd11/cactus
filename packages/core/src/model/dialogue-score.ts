@@ -188,6 +188,11 @@ interface Dist {
 
 /** List order as in the game: descending `score + max(0, best score of children)`, on ties as added. */
 export function chooseOrder(ctx: ModContext, list: readonly string[], scoreOf: (rec: GameRecord) => number = (r) => dialogueScore(ctx, r).total): string[] {
+  return chooseRanking(ctx, list, scoreOf).map((k) => k.sid);
+}
+
+/** `chooseOrder` with the sort key of each element (equal keys are ties: the list position decides). */
+export function chooseRanking(ctx: ModContext, list: readonly string[], scoreOf: (rec: GameRecord) => number = (r) => dialogueScore(ctx, r).total): { sid: string; key: number }[] {
   const keyed = list.flatMap((sid, i) => {
     const rec = ctx.get(sid);
     if (!rec) return [];
@@ -198,7 +203,7 @@ export function chooseOrder(ctx: ModContext, list: readonly string[], scoreOf: (
     }
     return [{ sid, i, key: scoreOf(rec) + best }];
   });
-  return keyed.sort((a, b) => b.key - a.key || a.i - b.i).map((k) => k.sid);
+  return keyed.sort((a, b) => b.key - a.key || a.i - b.i).map((k) => ({ sid: k.sid, key: k.key }));
 }
 
 /** Branching limit: beyond it only the most likely outcome of an empty node is taken. */
