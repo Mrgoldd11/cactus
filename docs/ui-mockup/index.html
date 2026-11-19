@@ -160,7 +160,7 @@
 <div class="page">
   <h1>Cactus: макет «до → после»</h1>
     <p class="lead">
-    Пять экранов. Главный — A: инспектор любой записи (на примере книги), это касается всех типов. B–D — про расы, E — меню. Кнопки «До» — настоящие снимки (русский интерфейс), «После» — как предлагается
+    Шесть экранов. Главный — A: инспектор любой записи (на примере книги), это касается всех типов. B–D — про расы, E — меню, F — когда звучит диалог. Кнопки «До» — настоящие снимки (русский интерфейс), «После» — как предлагается
     (рисунок, не код). Переключатель над каждым экраном. Под ним — что мешает сейчас и что меняется.
     Жёлтые выноски отмечают новое.<br>
     Ориентир — простота FCS при открытии: слева типы, посередине записи, справа поля. Этот путь
@@ -174,6 +174,7 @@
     <a href="#c">C. Мастерская расы: анимации</a>
     <a href="#d">D. Совместимость после «Применить»</a>
     <a href="#e">E. Меню «Создать» и «Мод»</a>
+    <a href="#f">F. Диалог: когда звучит</a>
   </nav>
 
   <!-- ================= A ================= -->
@@ -468,6 +469,48 @@
     </div>
   </section>
 
+  <!-- ================= F ================= -->
+  <section class="screen" id="f">
+    <h2>F. Диалог: когда он звучит и как сделать такой же</h2>
+    <p class="why">Игра знает, когда звучит диалог: по <b>событию</b> в пакете диалогов («закончил лечить», «кислотный дождь», «отрубили руку»).
+      В Cactus событие видно только в пакете, голым кодом. У диалога и реплики его нет совсем, поэтому «условий 0» выглядит
+      как «звучит всегда» или «непонятно когда». Модель: <b>событие → у кого → условия → очки → реплики</b>. Пример — Бип и «beep healing other».</p>
+    <div class="toggle">
+      <button data-v="b-dlg">До: диалог</button><button data-v="b-line">До: реплика</button><button data-v="b-pkg">До: пакет</button><button data-v="b-layout">До: «Диалоги»</button>
+      <button data-v="dlg" class="on">После: диалог</button><button data-v="pkg">После: пакет</button><button data-v="new">После: мастер, событие</button><button data-v="new3">После: мастер, реплики</button><button data-v="all">После: все на событие</button><button data-v="nums">После: числа у ссылок</button>
+    </div>
+    <div class="frame">
+      <img class="view" data-v="b-dlg" src="before/40-dlg-fields.png" alt="">
+      <img class="view" data-v="b-line" src="before/41-line-fields.png" alt="">
+      <img class="view" data-v="b-pkg" src="before/42-package-fields.png" alt="">
+      <img class="view" data-v="b-layout" src="before/43-dialogue-layout.png" alt="">
+      <div class="app view on" data-v="dlg" data-dlg="dlg"></div>
+      <div class="app view" data-v="pkg" data-dlg="pkg"></div>
+      <div class="app view" data-v="new" data-dlg="new"></div>
+      <div class="app view" data-v="new3" data-dlg="new3"></div>
+      <div class="app view" data-v="all" data-dlg="all"></div>
+      <div class="app view" data-v="nums" data-dlg="nums"></div>
+    </div>
+    <div class="changes">
+      <div class="bad"><h3>Сейчас</h3><ul>
+        <li>У диалога и реплики «В игре: говорит Бип» — но не сказано, <i>когда</i>. Событие видно только в пакете: обрезанный список <code>EV_HEALI…</code>.</li>
+        <li>Названия переведены у 16 событий из 76. Описания из <code>fcs_enums.def</code> (кто «собеседник», «игра не вызывает») нигде не показаны.</li>
+        <li>У прочих ссылок числа подписаны «v0 v1 v2», хотя в fcs.def у ~100 ссылок сказано, что они значат (мин./макс., шанс, приоритет).</li>
+        <li>Второе и третье число у ссылки <code>dialogs</code> — голые числа, хотя в данных это тоже события (у «Beep loses arm»: 71, 70, 69).</li>
+        <li>Реплика называется «DIALOGUE_LINE», «Где звучит» показывает только родителя.</li>
+        <li>Как сделать свой диалог на событие, не сказано: нужно вручную создать DIALOGUE, DIALOGUE_LINE, найти пакет и вписать число события.</li>
+      </ul></div>
+      <div class="good"><h3>После</h3><ul>
+        <li>В шапке диалога и реплики строка «<b>Звучит, когда:</b> закончил лечить другого · у Бип · через пакет «beep (player)»». Клик ведёт в пакет.</li>
+        <li>Все 76 событий с переводом и пояснением на en/ru/zh; <b>оригинальное имя и число остаются рядом</b>: «Кислотный дождь · EV_ACID_RAIN (62)». Поиск — по переводу, EV-имени и числу. Голых чисел событий нигде нет.</li>
+        <li>У прочих ссылок числа подписаны по fcs.def: «мин., макс.», «приоритет», «шанс».</li>
+        <li>Мастер «Диалог на событие» <b>с нуля</b>: событие → у кого → реплики. Cactus сам делает диалог, реплики и ссылку в пакете с нужным числом, одна отмена. Копировать образец — второй путь.</li>
+        <li>«Все диалоги на событие» — образцы из игры: открыть, скопировать, посмотреть условия.</li>
+        <li>«Условий 0» объяснено: «звучит каждый раз, когда случилось событие, если очки выше других».</li>
+      </ul></div>
+    </div>
+  </section>
+
   <section class="screen">
     <h2>Порядок работ, если макет подходит</h2>
     <ol>
@@ -477,6 +520,10 @@
       <li><b>Карточка расы</b>, расовые кнопки уходят из списка, меню «Создать ▾» (экраны B, E).</li>
       <li><b>Мастерская расы</b> и «уже применено» в совместимости (экраны C, D; для D нужна правка ядра).</li>
       <li>Пустые состояния, слова, мелочи панели.</li>
+      <li><b>Диалог: когда звучит</b> (экран F): 7a — проверить по exe, события ли второе и третье число у <code>dialogs</code>, и поправить ядро;
+        7b — все 76 событий на en/ru/zh с пояснением, EV-имя и число рядом («Кислотный дождь · EV_ACID_RAIN (62)»), поиск по всему этому, строка «Звучит, когда»;
+        7b′ — подписи прочих чисел у ссылок по fcs.def («мин., макс.», «приоритет»); 7c — мастер «Диалог на событие» с нуля (событие → у кого → реплики), «Ещё такой же» открывает его по образцу;
+        7d — «Все диалоги на событие»; 7e — убрать второй граф: вкладки «Граф» в инспекторе нет, когда центральный «Граф диалога» показывает ту же запись. 7a, 7b, 7b′ и 7e не зависят от шагов 5–6.</li>
     </ol>
     <p class="muted">Каждый шаг — отдельный коммит с <code>npm test</code>, e2e и новым снимком <code>scripts/ux-shots.ts</code>.</p>
   </section>
@@ -680,6 +727,182 @@
         el.innerHTML = shell('<div class="muted" style="margin:auto">Выберите запись</div>') + modal;
         el.querySelector('.row.sel')?.remove();
       }
+    }
+  }
+
+  // Screen F: when a dialogue is spoken (event → who → conditions → score → lines) and how to make one like it.
+  {
+    const dCats = [['★ Изменения мода', '0', 'top'], ['Пакеты диалогов', '293'], ['Диалоги', '', 'sel'], ['Реплики диалогов', ''],
+      ['Персонажи', '639'], ['Фракции', '103'], ['Всё', '54952']];
+    const dCatsHtml = dCats.map(([n, c, k]) => `<div class="cat ${k ?? ''}"><span>${n}</span><span>${c}</span></div>`).join('');
+    const dlgs = [['beep healing other', 'закончил лечить другого', 'sel'], ['beep healed', 'его вылечили · +1'], ['beep marked for death', 'его сейчас съедят'],
+      ['beep unlock attempt', 'пытаются открыть клетку'], ['beep see neutral', 'видит нейтральный отряд · +1'], ['beep wins', 'победил отряд'],
+      ['beep gets up', 'встал зря, бой проигран'], ['beeps crops', 'едят мой урожай'], ['Beep loses arm', 'отрубили руку · +2'],
+      ['beep additional screaming torture', 'его режут (пытка)'], ['Acid rain tough reaction', 'кислотный дождь'], ['Acid rain civ', 'кислотный дождь'],
+      ['acid rain', 'кислотный дождь'], ['Military training equipment', 'трогают мои тренажёры'], ['beep talk to recruit', 'разговор (клик игрока)']];
+    const dRows = dlgs.map(([n, ev, k]) => `<div class="row ${k ?? ''}" style="grid-template-columns:1fr 1fr 70px"><span>${n}</span><span class="muted">${ev}</span><span class="t">Диалог</span></div>`).join('');
+    const dList = `<div class="pane" style="width:400px">
+        <div class="ptabs"><span class="ptab on">▤ Записи</span></div>
+        <div class="pbody">
+          <div style="display:flex;gap:6px;padding:6px 8px"><span class="f" style="flex:1;color:var(--text)">beep</span><span class="b sm">?</span><span class="f" style="width:80px">Все ▾</span></div>
+          <div style="display:flex;gap:6px;padding:0 8px 6px;align-items:center"><span class="b sm">+ Новая</span><span class="b sm">Копия</span><span class="b sm">Удалить</span><span class="grow"></span><span class="muted" style="font-size:12px">Записей: 15</span></div>
+          <div class="row h" style="grid-template-columns:1fr 1fr 70px"><span>Имя</span><span>Звучит, когда</span><span>Тип</span></div>${dRows}
+          <div class="callout" style="left:200px;top:420px;max-width:230px"><b>Колонка «Звучит, когда»</b> у диалогов: событие из пакета, «+1» — ещё событий.</div></div></div>`;
+    const dShell = (insp, left = dCatsHtml, list = dList) => `${TB}<div class="body">
+        <div class="pane" style="width:180px"><div class="ptabs"><span class="ptab on">☰ Категории</span></div><div class="pbody">${left}</div></div>
+        ${list}
+        <div class="pane" style="flex:1;border-right:0"><div class="ptabs"><span class="ptab on">ⓘ Инспектор</span></div>
+          <div class="pbody" style="display:flex;flex-direction:column">${insp}</div></div>
+      </div><div class="status"><span>Записей в моде: 0</span><span>Сохранено</span><span>● Игра не подключена</span></div>`;
+    const fr = (name, ru, val, o = {}) => `<div class="fr2 ${o.sel ? 'sel' : ''}" style="grid-template-columns:130px 150px 1fr 120px"><span class="fn">${name}</span><span class="fru">${ru}</span><span class="v ${o.empty ? 'e' : ''}">${val}</span><span class="fx">${o.x ?? ''}</span></div>`;
+    const gh = (t) => `<div class="fgh">${t}</div>`;
+    const tabs = (on) => `<div style="display:flex;gap:4px;padding:8px 10px 6px">${['Поля', 'Граф', 'Кто ссылается (1)', 'Где в игре', 'Разговор']
+      .map((t) => `<span class="b sm ${t === on ? 'on' : ''}">${t}</span>`).join('')}</div>`;
+    const when = `<div class="banner" style="margin:8px 10px 0;position:relative;flex-direction:column;align-items:stretch;gap:4px;border-color:#2f4f6b;background:#1d2a36">
+        <div style="display:flex;gap:8px;align-items:center"><span>🗨</span>
+          <span><b>Звучит, когда:</b> закончил лечить другого <span class="muted">· EV_HEALING_OTHER_FINISHED (20)</span> · у <span class="link">Бип</span> · через пакет <span class="link">«beep (player)»</span></span>
+          <span class="grow"></span><span class="b sm">Ещё такой же…</span><span class="b sm">?</span></div>
+        <div class="muted" style="font-size:12px;padding-left:24px">Собеседник — тот, кого лечил. Условий нет: звучит после каждого лечения, если у других диалогов Бип на это событие очков меньше (здесь +10).</div>
+        <div class="callout" style="right:8px;top:290px;max-width:330px"><b>Та же строка у реплики</b> «Бип.»: «звучит в диалоге beep healing other, когда закончил лечить другого». Не «DIALOGUE_LINE», а текст реплики.</div></div>`;
+    const dHead = `<div style="padding:8px 10px 0;display:flex;align-items:center;gap:10px">
+        <span style="font-size:17px;font-weight:600">beep healing other</span><span class="chip" title="DIALOGUE">Диалог</span><span class="muted">rebirth.mod</span></div>`;
+    const dFields = `<div class="fields2" style="position:relative">
+        ${gh('Когда звучит')}
+        ${fr('conditions', 'условия', 'пусто — без условий, каждый раз', { empty: true, sel: true, x: '<span class="b sm">+ Условие…</span>' })}
+        ${fr('score bonus', 'очки к выбору', '10', { x: '<span class="muted">выше — чаще</span>' })}
+        ${fr('repetition limit', 'не чаще чем', 'без ограничения')}
+        ${fr('chance permanent', 'шанс, %', '100')}
+        ${fr('monologue', 'говорит сам', '✓ — без ответа собеседника')}
+        ${gh('Реплики')}
+        ${fr('lines', 'что скажет', '→ «Бип.»', { x: '<span class="b sm">+ Реплика</span>' })}
+        <div class="muted" style="padding:4px 10px;font-size:12px">▸ ещё 6 полей (для врагов, по одному, тег…)</div>
+        <div class="callout" style="left:10px;top:250px;max-width:330px"><b>Смысл записи задаёт другая запись</b> (пакет) — поэтому он виден в шапке. Без этого «условий 0» читается как «непонятно когда».</div>
+      </div>
+      <div class="descbar"><b>conditions</b> — условия<br>Диалог звучит, только если все условия верны. Пусто — звучит каждый раз, когда случилось событие из шапки.
+        Из диалогов на одно событие игра берёт тот, у кого больше очков; при равных — случайный. <span class="link">Как игра выбирает диалог ▸</span></div>`;
+
+    // Package: events with readable names; the 2nd and 3rd numbers shown as «also on».
+    const pk = [['20', 'EV_HEALING_OTHER_FINISHED', 'закончил лечить другого', 'beep healing other', '', 'sel'],
+      ['21', 'EV_BEING_HEALED_FINISHED', 'его вылечили', 'beep healed', 'встал, бой идёт · EV_GET_UP_FIGHT (24)'],
+      ['10', 'EV_MARKED_FOR_DEATH', 'его сейчас съедят', 'beep marked for death', ''], ['14', 'EV_UNLOCK_MY_CAGE_ATTEMPT', 'пытаются открыть клетку', 'beep unlock attempt', ''],
+      ['3', 'EV_I_SEE_NEUTRAL_SQUAD', 'видит нейтральный отряд', 'beep see neutral', 'встал, бой кончился · EV_GET_UP_PEACE (23)'],
+      ['15', 'EV_I_DEFEATED_SQUAD', 'победил отряд', 'beep wins', ''], ['25', 'EV_GET_UP_UNNECCESSARY_FIGHT', 'встал зря, бой проигран', 'beep gets up', ''],
+      ['57', 'EV_EATING_MY_CROPS', 'едят мой урожай', 'beeps crops', ''],
+      ['71', 'EV_LOST_ARM', 'отрубили руку', 'Beep loses arm', 'отрубили ногу · EV_LOST_LEG (70), горит · EV_BURNING (69)'],
+      ['11', 'EV_SCREAMING_TORTURE', 'его режут (пытка)', 'beep additional screaming torture', '']];
+    const pkRows = pk.map(([n, ev, ru, d, also, k]) => `<div class="fr2 ${k ?? ''}" style="grid-template-columns:330px 230px 1fr;height:auto;min-height:25px;white-space:normal;font-size:12.5px"><span>${ru} <span class="muted">· ${ev} (${n})</span></span><span class="link">→ ${d}</span><span class="muted">${also ? `ещё и на: ${also}` : ''}</span></div>`).join('');
+    const pkHead = `<div style="padding:8px 10px 0;display:flex;align-items:center;gap:10px">
+        <span style="font-size:17px;font-weight:600">beep (player)</span><span class="chip" title="DIALOGUE_PACKAGE">Пакет диалогов</span><span class="muted">rebirth.mod</span></div>
+      <div class="banner" style="margin:8px 10px 0;border-color:#2f4f6b;background:#1d2a36"><span>🧍</span>
+        <span><b>У кого:</b> <span class="link">Бип</span> <span class="muted">(поле «dialogue package player»)</span> · пакет <span class="link">«beep (recruit)»</span> его наследует · сам наследует <span class="link">«Player HIVER Ronin»</span></span></div>`;
+    const pkBody = `<div class="fields2" style="position:relative">
+        <div class="fgh" style="display:flex;gap:10px"><span>Диалоги по событиям</span><span class="grow"></span><span class="b sm p">+ Диалог на событие…</span></div>
+        <div class="fr2" style="grid-template-columns:330px 230px 1fr;color:var(--muted);font-size:12px"><span>Событие</span><span>Диалог</span><span>Ещё события</span></div>
+        ${pkRows}
+        <div class="muted" style="padding:6px 10px;font-size:12px">▸ ещё 23 от «Player HIVER Ronin» (наследуется) — разговор, бой, плен…</div>
+        <div class="callout" style="left:20px;top:370px;max-width:330px"><b>Событие — переводом, рядом оригинальное имя и число</b> (как в FCS и гайдах). Было: обрезанный список <code>EV_HEALI…</code>, в графе — <code>EV_I_DEFEATED_SQUAD</code> у чужого узла.</div>
+        <div class="callout" style="right:16px;top:380px;max-width:290px"><b>Второе и третье число</b> по данным — тоже события (у 77 пакетов). До кода проверим по exe (шаг 7a); если нет — останется «число, игра не читает».</div>
+      </div>
+      <div class="descbar"><b>Закончил лечить другого</b> <span class="muted">· EV_HEALING_OTHER_FINISHED (20)</span><br>
+        Я только что встал, закончив лечить другого. Собеседник — тот, кого лечил. Совет игры: различайте, враг он, нейтрал или союзник.</div>`;
+
+    // «Dialogue on event…» window over the dialogue view.
+    const evg = (t, items) => `<div style="padding:3px 0"><div class="muted" style="font-size:11px;text-transform:uppercase;padding:2px 10px">${t}</div>${items
+      .map(([n, ev, v, k]) => `<div style="padding:1px 10px;font-size:12.5px;${k === 'on' ? 'background:var(--sel)' : ''}${k === 'off' ? 'color:#5d626b' : ''}">${n} <span class="muted" style="font-size:11px">· ${ev} (${v})</span></div>`).join('')}</div>`;
+    const evList = evg('Лечение и раны', [['начал лечить другого', 'EV_HEALING_OTHER_START', '18'], ['закончил лечить другого', 'EV_HEALING_OTHER_FINISHED', '20', 'on'], ['его вылечили', 'EV_BEING_HEALED_FINISHED', '21'], ['аптечки кончились', 'EV_FIRSTAID_KIT_EMPTY', '22'], ['отрубили руку', 'EV_LOST_ARM', '71'], ['отрубили ногу', 'EV_LOST_LEG', '70'], ['горит', 'EV_BURNING', '69']]) +
+      evg('Погода и место', [['кислотный дождь', 'EV_ACID_RAIN', '62'], ['кислота под ногами', 'EV_ACID_FEET', '61'], ['кислотная вода', 'EV_ACID_WATER', '63'], ['ядовитый газ', 'EV_POISON_GAS', '65'], ['пыльная буря', 'EV_WINDY', '64']]) +
+      evg('Плен', [['его сейчас съедят', 'EV_MARKED_FOR_DEATH', '10'], ['его режут (пытка)', 'EV_SCREAMING_TORTURE', '11'], ['открыли клетку', 'EV_UNLOCK_MY_CAGE_OR_SHACKLES', '13']]) +
+      evg('Игра не вызывает', [['вход в город', 'EV_ENTER_TOWN', '49', 'off'], ['вход в биом', 'EV_ENTER_BIOME', '48', 'off']]);
+    const wzSteps = (on) => `<div style="display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border)">${[
+      ['1', 'Событие', 'закончил лечить другого · EV_HEALING_OTHER_FINISHED (20)'], ['2', 'У кого', 'Бип, свой пакет «beep (player)»'], ['3', 'Что скажет', '']]
+      .map(([n, t, v], i) => `<div class="ws-step ${i + 1 < on ? 'done' : ''} ${i + 1 === on ? 'on' : ''}" style="flex:1;padding:4px 8px;border-radius:4px"><span class="n">${i + 1 < on ? '✓' : n}</span><div>${t}${i + 1 < on ? `<small>${v}</small>` : ''}</div></div>`).join('')}</div>`;
+    const wzFrame = (on, body, foot) => `<div style="position:absolute;left:0;right:0;top:38px;bottom:24px;background:#0008;z-index:2"></div>
+      <div class="dlg" style="left:300px;top:70px;width:880px;z-index:3">
+        <div class="dh"><b>Диалог на событие</b><span class="muted" style="margin-left:10px">новый, с нуля</span><span class="grow"></span><span class="muted">✕</span></div>
+        ${wzSteps(on)}<div class="db">${body}</div>
+        <div class="df">${foot}</div>
+      </div>`;
+    const wz1 = wzFrame(1, `<div style="display:flex;gap:14px">
+          <div style="width:400px;border:1px solid var(--border);border-radius:4px;background:var(--bg)">
+            <div style="padding:6px"><span class="f">Найти: лечи, HEALING, 20…</span></div>${evList}</div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+            <div style="border:1px solid var(--border);border-radius:4px;padding:8px 10px;background:var(--bg)"><b>Закончил лечить другого</b><br><span class="muted" style="font-size:12px">EV_HEALING_OTHER_FINISHED · 20</span>
+              <div style="font-size:12.5px;margin-top:6px">Я встал, закончив лечить другого.</div>
+              <div style="font-size:12.5px"><b>Собеседник:</b> тот, кого лечил.</div>
+              <div class="muted" style="font-size:12px;margin-top:4px">Совет из fcs: различайте, враг он, нейтрал или союзник.<br>Это событие есть у 32 пакетов · <span class="link">посмотреть образцы ▸</span></div></div>
+          </div></div>`, '<span class="b">Отмена</span><span class="b p">Дальше ▸</span>') +
+      `<div class="callout" style="left:1200px;top:90px;max-width:270px;z-index:4"><b>Поиск — по переводу, EV-имени и числу:</b> «лечи», «HEALING», «20» найдут одно и то же.</div>
+      <div class="callout" style="left:1200px;top:200px;max-width:270px;z-index:4"><b>С нуля, без копирования.</b> Открывается из «Создать ▾», из пакета («+ Диалог на событие…») и из «Ещё такой же…» — тогда событие и пакет уже выбраны.</div>`;
+    const lineBox = (n, texts, extra = '') => `<div style="border:1px solid var(--border);border-radius:4px;background:var(--bg);padding:6px 8px;display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;gap:8px;align-items:center"><b>Реплика ${n}</b><span class="muted" style="font-size:12px">говорит: я</span><span class="grow"></span>${extra}<span class="muted">✕</span></div>
+        ${texts.map((t) => `<span class="f" style="color:var(--text)">${t}</span>`).join('')}
+        <div><span class="link" style="font-size:12px">+ вариант текста</span> <span class="muted" style="font-size:11px">— игра выберет один вариант случайно</span></div></div>`;
+    const wz3 = wzFrame(3, `<div style="display:flex;flex-direction:column;gap:8px">
+          ${lineBox(1, ['Бип-бип. Починил.', 'Бип. Готово.'])}
+          ${lineBox(2, ['Не за что, бип.'], '<span class="muted" style="font-size:12px">звучит следом</span>')}
+          <span class="link">+ Реплика</span>
+          <div class="dr"><span>Имя записи</span><span class="f" style="color:var(--text)">beep healing other 2</span></div>
+          <div class="dr"><span>Говорит сам</span><span>☑ <span class="muted">без ответа собеседника (у всех событий, кроме разговора)</span></span></div>
+          <div class="dr"><span>Условия, очки</span><span class="muted">не нужны сейчас — потом в полях диалога</span></div>
+          <div class="dr"><span>Будет</span><span class="muted" style="font-size:12px">Диалог «beep healing other 2» + 2 реплики + ссылка в «beep (player)» с событием EV_HEALING_OTHER_FINISHED (20). Одна отмена (Ctrl+Z).</span></div>
+        </div>`, '<span class="b">◂ Назад</span><span class="grow"></span><span class="b">Отмена</span><span class="b p">Создать</span>') +
+      `<div class="callout" style="left:1200px;top:140px;max-width:270px;z-index:4"><b>Только текст.</b> Cactus сам создаёт DIALOGUE, DIALOGUE_LINE и ссылку в пакете с нужным числом события.</div>`;
+
+    // All dialogues on one event: samples from the game.
+    const evTree = `<div style="padding:6px"><span class="f">Найти: дождь, ACID, 62…</span></div>` +
+      evg('Лечение и раны', [['закончил лечить другого', 'EV_HEALING_OTHER_FINISHED', '20'], ['отрубили руку', 'EV_LOST_ARM', '71']]) +
+      evg('Погода и место', [['кислотный дождь', 'EV_ACID_RAIN', '62', 'on'], ['кислота под ногами', 'EV_ACID_FEET', '61'], ['ядовитый газ', 'EV_POISON_GAS', '65'], ['пыльная буря', 'EV_WINDY', '64']]) +
+      evg('Плен', [['его сейчас съедят', 'EV_MARKED_FOR_DEATH', '10'], ['его режут (пытка)', 'EV_SCREAMING_TORTURE', '11']]) + evg('Разговор', [['игрок заговорил', 'EV_PLAYER_TALK_TO_ME', '1']]);
+    const sample = (name, mod, cond, rep, text, race, pk, extra) => `<div class="grp"><div class="gh"><b>${name}</b><span class="muted">${mod}</span><span class="c"><span class="b sm">Открыть</span> <span class="b sm">Сделать такой же…</span></span></div>
+        <div style="padding:6px 10px;border-top:1px solid var(--border);font-size:12.5px">
+          <div><span class="muted">Условия:</span> ${cond} · <span class="muted">не чаще:</span> ${rep}${race ? ` · <span class="muted">раса:</span> ${race}` : ''}</div>
+          <div>«${text}»${extra ? ` <span class="muted">${extra}</span>` : ''}</div>
+          <div class="muted">через пакеты: ${pk}</div></div></div>`;
+    const allBody = `<div style="padding:10px 14px;display:flex;flex-direction:column;gap:10px;position:relative">
+        <div style="display:flex;align-items:center;gap:10px"><span style="font-size:17px;font-weight:600">Кислотный дождь</span><span class="muted">· EV_ACID_RAIN (62)</span>
+          <span class="grow"></span><span class="b sm p">+ Свой диалог на это событие…</span></div>
+        <div class="muted">Идёт кислотный дождь. Собеседника нет — говорит сам. В игре: 3 диалога у 14 пакетов.</div>
+        ${sample('Acid rain tough reaction', 'Dialogue.mod', 'не раб, не в тюрьме', 'очень коротко', 'Acid rain! Take shelter!', 'зеленоземец, жженоземец, шек', 'Player TOUGH Merc, Player SHEK Warrior, Player THUG, Player Pia, Player Miu, PLAYER Griffin, Player SUNDEMON, Player Horse, Player Doctor Chung, Player Crumblejon', '+4 варианта, ещё 4 реплики')}
+        ${sample('Acid rain civ', 'Dialogue.mod', 'нет', '2 ч', 'Ow! I need to get out of this rain!', 'зеленоземец, жженоземец, шек', 'Player CIVILIAN, Player Squint, Player flotsam', '+4 варианта')}
+        ${sample('acid rain', 'rebirth.mod', 'нет', 'без ограничения', 'Bloody acid rain!', '', 'player character default <span class="muted">(gamedata.base)</span>', '+2 варианта')}
+        <div class="callout" style="right:14px;top:330px;max-width:290px"><b>Образцы из игры:</b> видно, какие условия и пакеты берут разработчики. «Сделать такой же…» — второй путь: тот же мастер, заполненный по образцу.</div>
+      </div>`;
+    const allShell = `${TB.replace('<span class="b on">Данные</span><span class="b">Диалоги</span>', '<span class="b">Данные</span><span class="b on">Диалоги</span>')}<div class="body">
+        <div class="pane" style="width:400px"><div class="ptabs"><span class="ptab">☰ Категории</span><span class="ptab on">⚡ События</span></div><div class="pbody" style="position:relative">${evTree}
+          <div class="callout" style="left:10px;top:470px;max-width:250px"><b>Новая вкладка «События»</b> в раскладке «Диалоги»: события по группам, как их понимает игра.</div></div></div>
+        <div class="pane" style="flex:1;border-right:0"><div class="ptabs"><span class="ptab on">⚡ Все диалоги на событие</span><span class="ptab">Граф</span><span class="ptab">Разговор</span></div>
+          <div class="pbody">${allBody}</div></div>
+      </div><div class="status"><span>Записей в моде: 0</span><span>Сохранено</span><span>● Игра не подключена</span></div>`;
+
+    // Other reference numbers get their meaning from fcs.def descriptions.
+    const rg = (cat, cols, rows) => `<div class="fgh">${cat}</div>
+      <div class="fr2" style="grid-template-columns:260px repeat(${cols.length}, 110px) 1fr;color:var(--muted);font-size:12px"><span></span>${cols.map((c) => `<span>${c}</span>`).join('')}<span></span></div>
+      ${rows.map(([t, vals, hint]) => `<div class="fr2" style="grid-template-columns:260px repeat(${cols.length}, 110px) 1fr"><span class="link">→ ${t}</span>${vals.map((v) => `<span class="v">${v}</span>`).join('')}<span class="muted" style="font-size:12px">${hint ?? ''}</span></div>`).join('')}`;
+    const sqHead = `<div style="padding:8px 10px 0;display:flex;align-items:center;gap:10px">
+        <span style="font-size:17px;font-weight:600">Dust Bandit squad</span><span class="chip" title="SQUAD_TEMPLATE">Отряд</span><span class="muted">gamedata.base</span></div>`;
+    const sqBody = `<div class="fields2" style="position:relative">
+        ${rg('squad <span class="fru">— кто в отряде</span>', ['мин.', 'макс.'], [['Dust Bandit', ['5', '10'], 'от 5 до 10'], ['Dust Bandit Bowman', ['0', '4'], 'от 0 до 4']])}
+        ${rg('leader <span class="fru">— главарь</span>', ['сколько'], [['Dust Boss', ['1']]])}
+        ${rg('AI packages <span class="fru">— поведение</span>', ['приоритет'], [['Patrol map (short range) LOOTING', ['0']], ['passing town assault then occupy', ['1']], ['hostile occupy town', ['2'], 'выше — важнее']])}
+        <div class="callout" style="left:20px;top:380px;max-width:420px"><b>Вместо «v0 v1 v2» — что значит число.</b> Подписи выписаны из описаний fcs.def: у ~100 ссылок из ~160 там сказано, что значат числа. Где не сказано — остаётся «v0», описание внизу.</div>
+      </div>
+      <div class="descbar"><b>squad</b> — кто в отряде<br>Шаблоны персонажей отряда. Первое число — сколько минимум, второе — сколько максимум (0 — не случайно, ровно первое число).
+        <div class="muted" style="font-size:11px;margin-top:3px">fcs.def: the character templates making up each squad, val0 is min number of them, val1 is max number (0=non random)</div></div>`;
+    const sqCats = dCatsHtml.replace('cat sel', 'cat').replace('<div class="cat "><span>Персонажи', '<div class="cat sel"><span>Отряды</span><span></span></div><div class="cat "><span>Персонажи');
+    const sqList = `<div class="pane" style="width:400px"><div class="ptabs"><span class="ptab on">▤ Записи</span></div><div class="pbody">
+        <div style="display:flex;gap:6px;padding:6px 8px"><span class="f" style="flex:1;color:var(--text)">bandit</span></div>
+        ${['Dust Bandit squad', 'Dust bandit raiders 01', 'Dust bandit 1st contact', 'Bandit raid small', 'Blood bandits nest', 'Bandit Raiders'].map((n, i) => `<div class="row ${i ? '' : 'sel'}" style="grid-template-columns:1fr 70px"><span>${n}</span><span class="t">Отряд</span></div>`).join('')}</div></div>`;
+
+    for (const el of document.querySelectorAll('[data-dlg]')) {
+      const k = el.dataset.dlg;
+      if (k === 'dlg') el.innerHTML = dShell(dHead + when + tabs('Поля') + dFields);
+      const quiet = (h) => h.replace(/<div class="callout"/g, '<div style="display:none" class="callout"');
+      if (k === 'new') el.innerHTML = quiet(dShell(dHead + when + tabs('Поля') + dFields)) + wz1;
+      if (k === 'new3') el.innerHTML = quiet(dShell(dHead + when + tabs('Поля') + dFields)) + wz3;
+      if (k === 'nums') el.innerHTML = dShell(sqHead + tabs('Поля') + sqBody, sqCats, sqList);
+      if (k === 'pkg') el.innerHTML = dShell(pkHead + tabs('Поля') + pkBody, dCatsHtml.replace('cat sel', 'cat').replace('<div class="cat "><span>Пакеты диалогов', '<div class="cat sel"><span>Пакеты диалогов'),
+        dList.replace(/<div class="row sel"/, '<div class="row"').replace('<div class="callout"', '<div style="display:none" class="callout"'));
+      if (k === 'all') el.innerHTML = allShell;
     }
   }
 
