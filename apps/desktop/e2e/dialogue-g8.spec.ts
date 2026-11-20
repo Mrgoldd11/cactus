@@ -84,7 +84,8 @@ test('G8: event → who → dialogue, the dialogue panel, «+ if» with the whol
   try {
     await open(app, page);
 
-    // Acid rain: the graph starts with the event and the «who» card.
+    // Acid rain on a full-HD window (the whole test runs at 1920): the graph starts with the event and the «who» card.
+    await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1920, 900); });
     await select(page, ACID_RAIN);
     const ev = page.getByTestId('dg-when-event');
     await expect(ev).toHaveCount(1);
@@ -97,6 +98,7 @@ test('G8: event → who → dialogue, the dialogue panel, «+ if» with the whol
     const x = async (l: ReturnType<Page['locator']>): Promise<number> => (await l.boundingBox())!.x;
     expect(await x(ev)).toBeLessThan(await x(who));
     expect(await x(who)).toBeLessThan(await x(node(page, ACID_RAIN)));
+    await expect(ev).toBeInViewport();
     await page.screenshot({ path: join(shots, '116-g8-acid-rain.png') });
 
     // A click on the dialogue: «Dialogue line» with the switches and their codes.
