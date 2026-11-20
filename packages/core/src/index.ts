@@ -11,6 +11,7 @@ export * from './format/file-cache.ts';
 export * from './schema/index.ts';
 export * from './locale/po.ts';
 export * from './locale/translation.ts';
+export * from './locale/gender-markup.ts';
 export * from './model/index.ts';
 export * from './world/index.ts';
 export * from './mesh/index.ts';

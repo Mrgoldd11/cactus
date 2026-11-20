@@ -11,6 +11,7 @@
  * is expanded once, repeats are marked) and a summary: role (sold / carried / lives…),
  * carrier squad and places.
  */
+import { stripGenderMarkup } from '../locale/gender-markup.ts';
 import { decodeText } from '../text.ts';
 import { itemTypeName } from '../format/item-types.ts';
 import type { GameRecord, Vec3 } from '../format/types.ts';
@@ -205,20 +206,9 @@ export interface WhereOptions {
   instanceSample?: number;
 }
 
-/**
- * Translated name without the gender markup of the game's translations, masculine form:
- * ru `Оружейни/кца1/` → `Оружейник`, `Главн/аяый1/` → `Главный`; de `Bäcker/FEM-IN-ME/` →
- * `Bäcker`; pt `Bandid/OA3/` → `Bandido`.
- */
+/** Translated name without the gender markup, masculine form (see `stripGenderMarkup`). */
 export function plainName(s: string): string {
-  return s.replace(/\/([^/]*?)\d?\//g, (_, inner: string) => {
-    for (const e of ['ец', 'ий', 'ый', 'ой', 'ин', 'к']) if (inner.startsWith(e) || inner.endsWith(e)) return e;
-    // Upper-case pair of endings (pt `OA`): the first one is masculine.
-    if (/^[A-Z]{2}$/.test(inner)) return inner[0]!.toLowerCase();
-    // A tag that marks only the feminine form (de `FEM-IN-ME`): the masculine has no suffix.
-    if (/^[A-Z]+(?:-[A-Z]+)+$/.test(inner)) return '';
-    return inner;
-  });
+  return stripGenderMarkup(s);
 }
 
 function info(ctx: ModContext, id: string, rec?: GameRecord): WhereRecordInfo {

@@ -8,6 +8,7 @@
  * computes a new one. So undo is simply returning the previous snapshot, and "record changed
  * since the last save" means "the snapshot is not the same object that was saved".
  */
+import { stripGenderMarkup } from '../locale/gender-markup.ts';
 import { decodeText, encodeText } from '../text.ts';
 import { UiTextError } from '../ui-text.ts';
 import { itemTypeId, itemTypeName } from '../format/item-types.ts';
@@ -304,8 +305,17 @@ export class ModContext {
     return r ? decodeText(r.name) : undefined;
   }
 
-  /** Name of the record in the data language (from its `gamedata.po`); undefined — no translation. */
+  /**
+   * Name of the record in the data language (from its `gamedata.po`), without the gender markup of
+   * the translation (`Трактирщи/кца1/` → `Трактирщик`); undefined — no translation.
+   */
   localizedName(stringId: string): string | undefined {
+    const s = this.localizedNameRaw(stringId);
+    return s === undefined ? undefined : stripGenderMarkup(s);
+  }
+
+  /** Translated name exactly as `gamedata.po` has it, gender markup included. */
+  localizedNameRaw(stringId: string): string | undefined {
     const e = this.translations.get(stringId)?.name;
     const s = e?.msgstr[0];
     return s === undefined || s === '' ? undefined : s;
