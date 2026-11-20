@@ -18,7 +18,7 @@
  * locked dialogues, vanilla overrides…) — on nodes and as a list. Text search, collapse branch,
  * show branch only, re-layout, minimap.
  */
-import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import {
   Background,
   Controls,
@@ -81,6 +81,7 @@ import { isPortalId, isTransitionEdge, PORTAL_WIDTH, PortalCard, portalElements,
 import { isWhenId, WhenCard, whenElements, type WhenNode } from './DialogueWhenNodes.tsx';
 import { DialogPicker, type RefTargetAsk } from './LinePanelParts.tsx';
 import { RecordPicker } from './RecordPicker.tsx';
+import { PHRASE_EDIT_WIDTH, PhraseEditPop } from './PhraseEditPop.tsx';
 
 interface Props {
   project: Project;
@@ -113,6 +114,8 @@ const LONG_TEXT = 120;
 const INITIAL_ZOOM = 1;
 /** Lowest start zoom used to fit the «when» chain and the dialogue head into the view. */
 const MIN_START_ZOOM = 0.7;
+/** How long after opening the start view follows the measured card heights. */
+const START_SETTLE_MS = 1500;
 /** Whether FCS codes are shown next to the plain words (on by default). */
 const CODES_KEY = 'kedit.graph.codes';
 /** Graphs with more nodes open with deep branches folded. */
@@ -141,6 +144,8 @@ interface Actions {
   pick: (sid: string, kind: DialogPickKind, anchor: HTMLElement) => void;
   /** «×» on a phrase row: remove what it shows. */
   unphrase: (sid: string, source: PhraseSource) => void;
+  /** Click on a phrase row: its editor next to the node. */
+  phrase: (sid: string, source: PhraseSource, anchor: HTMLElement) => void;
 }
 
 /** Width of the «+ if» / «+ →» list next to a node. */
@@ -317,6 +322,10 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   const [ask, setAsk] = useState<Ask | undefined>(undefined);
   const [picking, setPicking] = useState<{ id: string; kind: DialogPickKind; x: number; y: number } | undefined>(undefined);
   const [askRef, setAskRef] = useState<{ id: string; ask: RefTargetAsk } | undefined>(undefined);
+  const [phraseEdit, setPhraseEdit] = useState<{ id: string; source: PhraseSource; x: number; y: number } | undefined>(undefined);
+  const closePhraseEdit = useCallback(() => {
+    setPhraseEdit(undefined);
+  }, []);
   const [, setTick] = useState(0);
   const [query, setQuery] = useState('');
   const [hit, setHit] = useState(0);
@@ -574,7 +583,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   };
 
   const noop = (): void => undefined;
-  const actions = useRef<Actions>({ go: onGo, add: noop, toggle: noop, commit: noop, cancel: noop, menu: noop, variant: noop, full: noop, pick: noop, unphrase: noop });
+  const actions = useRef<Actions>({ go: onGo, add: noop, toggle: noop, commit: noop, cancel: noop, menu: noop, variant: noop, full: noop, pick: noop, unphrase: noop, phrase: noop });
   actions.current = {
     go: onGo,
     pick: (id, kind, anchor) => {
@@ -590,8 +599,28 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
       setPicking({ id, kind, x, y });
     },
     unphrase: (id, source) => {
+      setPhraseEdit(undefined);
       report(tryEdit(() => { removePhrase(ctx, id, source); }));
       refocus();
+    },
+    phrase: (id, source, anchor) => {
+      const r = canvasRef.current?.getBoundingClientRect();
+      const nr = (anchor.closest('.dg-node') ?? anchor).getBoundingClientRect();
+      const ar = anchor.getBoundingClientRect();
+      if (!r) return;
+      setMenu(undefined);
+      setPicking(undefined);
+      // Right of the node at the height of the row, else left of it; with no room on either side — under
+      // the row, so the node with the changed phrase stays in sight.
+      const right = nr.right - r.left + 8;
+      const left = nr.left - r.left - PHRASE_EDIT_WIDTH - 8;
+      const at =
+        right + PHRASE_EDIT_WIDTH <= r.width - 4
+          ? { x: right, y: ar.top - r.top - 8 }
+          : left >= 4
+            ? { x: left, y: ar.top - r.top - 8 }
+            : { x: Math.max(4, Math.min(ar.left - r.left, r.width - PHRASE_EDIT_WIDTH - 4)), y: Math.max(ar.bottom, nr.bottom) - r.top + 8 };
+      setPhraseEdit({ id, source, x: at.x, y: Math.max(4, Math.min(at.y, r.height - 220)) });
     },
     add: (id, speaker) => { add(id, speaker); },
     menu: (id, e) => {
@@ -715,7 +744,8 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
             rootPos,
             heights,
             moved,
-            words: { targetWord: t.pwTarget, noTarget: t.pwNoTarget, nowhere: t.pwNowhere, nowhereTip: t.pwNowhereTip, announcement: t.pwAnnouncement },
+            words: { targetWord: t.pwTarget, noTarget: t.pwNoTarget, nowhere: t.pwNowhere.replace(/^⚠\s*/u, ''), nowhereTip: t.pwNowhereTip, announcement: t.pwAnnouncement, start: t.dwStart, fromDialogue: t.dwFromDialogue, fromDialogueTip: t.dwFromDialogueTip },
+            entries: portals.nodes.filter((n) => n.id.startsWith('portal:in:')).length,
             go: (target) => {
               goRef.current(target);
             },
@@ -738,13 +768,24 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   }, [graph, folding, moved, checksByNode, matchSet, selNodes, selEdges, editing, tree, version, views, variants, fullTexts, heights, outgoing, transitions, translation, lang, t, playing]);
 
   // Initial view at a readable zoom: the whole graph if it fits, otherwise the root at the left edge.
-  const startView = useRef<(inst: ReactFlowInstance<GraphNode>) => void>(() => undefined);
+  const startView = useRef<(inst: Pick<ReactFlowInstance<GraphNode>, 'setViewport'>) => void>(() => undefined);
   startView.current = (inst) => {
     const el = canvasRef.current;
     void inst.setViewport(initialViewport(pos, graph.root, el?.clientWidth ?? 800, el?.clientHeight ?? 600));
   };
+  // The first view is laid out with estimated card heights; while they are measured right after opening, the layout
+  // shifts. Until the user does anything in the graph (or for a short while), the start view follows the measured layout.
+  const startedAt = useRef<number | undefined>(undefined);
+  const endSettle = (): void => {
+    startedAt.current = undefined;
+  };
+  useEffect(() => {
+    if (startedAt.current === undefined || performance.now() - startedAt.current > START_SETTLE_MS) return;
+    startView.current(flow);
+  }, [heights, flow]);
 
   const focus = (id: string): void => {
+    startedAt.current = undefined;
     const n = nodes.find((x) => x.id === id);
     if (n) void flow.setCenter(n.position.x + NODE_WIDTH / 2, n.position.y + 40, { zoom: 1 });
     else if (reveal(id)) pendingFocus.current = id;
@@ -887,6 +928,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     if (e.key === 'Escape') {
       if (ask) setAsk(undefined);
       else if (menu) setMenu(undefined);
+      else if (phraseEdit) setPhraseEdit(undefined);
       else if (linkFrom !== undefined) setLinkFrom(undefined);
       else {
         setSelNodes(new Set());
@@ -987,7 +1029,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   const lineOpen = isLineOpen?.() ?? true;
   const selLines = [...selNodes].filter(isLine);
   return (
-    <div className={`dg${codes ? '' : ' dg-nocodes'}`} data-testid="dialogue-graph" data-sid={sid} ref={rootRef} tabIndex={-1} onKeyDown={onKeyDown}>
+    <div className={`dg${codes ? '' : ' dg-nocodes'}`} data-testid="dialogue-graph" data-sid={sid} ref={rootRef} tabIndex={-1} onKeyDown={onKeyDown} onKeyDownCapture={endSettle} onPointerDownCapture={endSettle}>
       <div className="dg-bar">
         <span className="muted small" data-testid="dg-stats">
           {t.dgNodes} {graph.nodes.length}, {t.dgChoices} {choices}, {t.dgLoops} {graph.edges.filter((e) => e.back).length}
@@ -1153,8 +1195,11 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
           }}
           onPaneClick={() => {
             setLinkFrom(undefined);
+            setPhraseEdit(undefined);
           }}
-          onMoveStart={() => {
+          onMoveStart={(e) => {
+            // A user move (not a programmatic one) ends the start-view settling.
+            if (e) startedAt.current = undefined;
             setMenu(undefined);
           }}
           deleteKeyCode={null}
@@ -1164,6 +1209,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
           maxZoom={2}
           colorMode="dark"
           onInit={(inst) => {
+            startedAt.current = performance.now();
             startView.current(inst);
           }}
           // The wheel scrolls (like a page), Ctrl+wheel zooms.
@@ -1205,6 +1251,23 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
               }}
             />
           </div>
+        )}
+        {phraseEdit && (
+          <PhraseEditPop
+            ctx={ctx}
+            sid={phraseEdit.id}
+            source={phraseEdit.source}
+            x={phraseEdit.x}
+            y={phraseEdit.y}
+            edit={(fn) => {
+              report(tryEdit(fn));
+            }}
+            onGo={onGo}
+            onAddTarget={(a) => {
+              setAskRef({ id: phraseEdit.id, ask: a });
+            }}
+            onClose={closePhraseEdit}
+          />
         )}
         {askRef && (
           <RecordPicker
@@ -1293,8 +1356,23 @@ const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>)
   const plain = (c: string): Phrase => ({ text: c, short: c, code: c });
   const conds: Phrase[] = phrased ? v.conditions : [...n.conditions, ...n.filters].map(plain);
   const effects: Phrase[] = phrased ? v.effects : n.effects.map(plain);
+  const editable = (p: Phrase): boolean => data.editable && p.source !== undefined;
   const phrase = (p: Phrase, key: string, cls: string, k: string): ReactNode => (
-    <div key={key} className={`dg-ln ${cls}`} title={p.text} data-testid="dg-phrase">
+    <div
+      key={key}
+      className={`dg-ln ${cls}${editable(p) ? ' dg-ln-edit nodrag' : ''}`}
+      title={editable(p) ? `${p.text}
+
+${t.dnPhraseEdit}` : p.text}
+      data-testid="dg-phrase"
+      {...(editable(p)
+        ? {
+            onClick: (e: ReactMouseEvent<HTMLElement>) => {
+              data.actions.current.phrase(n.id, p.source!, e.currentTarget);
+            },
+          }
+        : {})}
+    >
       <span className="dg-k">{k}</span>
       <span className="dg-v">
         {p.short}
@@ -1534,7 +1612,15 @@ const NODE_TYPES = { line: LineCard, portal: PortalCard, when: WhenCard };
 
 const MARGIN = 24;
 
-/** View when the graph opens (zoom `INITIAL_ZOOM`, lowered to `MIN_START_ZOOM` so the cards left of the root and the root fit) for a `width`×`height` canvas; too wide — the leftmost card at the left edge. */
+/** Event cards of the chain event → who → dialogue (G8): the first thing dropped from the start view when it does not fit. */
+const isEventCardId = (id: string): boolean => /^when:(ev:|start:|from$|nowhere$)/.test(id);
+
+/**
+ * View when the graph opens for a `width`×`height` canvas. Zoom stays `INITIAL_ZOOM` while the cards left of the root
+ * and the root fit; if the event → who → dialogue chain is too wide, the view starts at the «who» column (the event is
+ * one pan to the left) instead of shrinking the text. Only cards that still do not fit lower the zoom, down to
+ * `MIN_START_ZOOM`; too wide even then — the leftmost card at the left edge.
+ */
 export function initialViewport(pos: ReadonlyMap<string, Placed>, root: string, width: number, height: number): { x: number; y: number; zoom: number } {
   let z = INITIAL_ZOOM;
   let minX = Infinity;
@@ -1548,20 +1634,43 @@ export function initialViewport(pos: ReadonlyMap<string, Placed>, root: string, 
     maxY = Math.max(maxY, p.y + p.height);
   }
   if (!Number.isFinite(minX)) return { x: MARGIN, y: MARGIN, zoom: INITIAL_ZOOM };
-  // Zoom out (down to MIN_START_ZOOM) so that everything left of the root and the root itself fit.
   const rootPos = pos.get(root);
-  const must = rootPos ? rootPos.x + NODE_WIDTH - minX : 0;
-  if (must > 0 && must * z + 2 * MARGIN > width) z = Math.max(MIN_START_ZOOM, (width - 2 * MARGIN) / must);
+  const fits = (left: number): boolean => rootPos === undefined || (rootPos.x + NODE_WIDTH - left) * z + 2 * MARGIN <= width;
+  // The left edge of the start view: all cards, or without the event column when the whole chain is too wide.
+  let left = minX;
+  if (!fits(left)) {
+    let noEvent = Infinity;
+    for (const [id, p] of pos) if (!isEventCardId(id)) noEvent = Math.min(noEvent, p.x);
+    if (Number.isFinite(noEvent) && noEvent > left) left = noEvent;
+  }
+  // Zoom out (down to MIN_START_ZOOM) so that the cards from `left` to the root and the root itself fit.
+  const must = rootPos ? rootPos.x + NODE_WIDTH - left : 0;
+  if (must > 0 && !fits(left)) z = Math.max(MIN_START_ZOOM, (width - 2 * MARGIN) / must);
   const w = (maxX - minX) * z;
-  const h = (maxY - minY) * z;
-  const x = w + 2 * MARGIN <= width ? (width - w) / 2 - minX * z : MARGIN - minX * z;
+  const x = w + 2 * MARGIN <= width ? (width - w) / 2 - minX * z : MARGIN - left * z;
+  // Vertically only the cards at least half in view count: lines far to the right must not push the root to the bottom.
+  const seenFrom = -x / z;
+  const seenTo = (width - x) / z;
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const p of pos.values()) {
+    const mid = p.x + NODE_WIDTH / 2;
+    if (mid < seenFrom || mid > seenTo) continue;
+    top = Math.min(top, p.y);
+    bottom = Math.max(bottom, p.y + p.height);
+  }
+  if (!Number.isFinite(top)) {
+    top = minY;
+    bottom = maxY;
+  }
+  const h = (bottom - top) * z;
   let y: number;
-  if (h + 2 * MARGIN <= height) y = (height - h) / 2 - minY * z;
+  if (h + 2 * MARGIN <= height) y = (height - h) / 2 - top * z;
   else {
     const r = pos.get(root);
-    const center = r ? r.y + r.height / 2 : minY;
-    // Root centred, but without empty space above the top node.
-    y = Math.min(height / 2 - center * z, MARGIN - minY * z);
+    const center = r ? r.y + r.height / 2 : top;
+    // Root centred, but without empty space above the top card in view.
+    y = Math.min(height / 2 - center * z, MARGIN - top * z);
   }
   return { x, y, zoom: z };
 }

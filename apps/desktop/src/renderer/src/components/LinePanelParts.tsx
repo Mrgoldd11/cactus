@@ -148,7 +148,7 @@ export function DialogPicker({ ctx, ownerType, kind, onPick, onClose }: { ctx: M
             {g.key !== 'common' && (gi === 0 || groups[gi - 1]!.key === 'common') && (
               // Divider: the whole list (every DC_ / DA_ value and reference category) starts here.
               <div className="lp-pick-all" data-testid="ln-pick-all" data-count={items.length} title={t.pkAllTip}>
-                {kind === 'condition' ? t.pkAll(items.length) : t.pkAllEffects(items.length)}
+                {kind === 'condition' ? t.pkAllConds(items.length) : t.pkAllEffects(items.length)}
                 {query.trim() !== '' && <span className="muted"> · {t.pkFound(flat.length)}</span>}
               </div>
             )}
@@ -217,6 +217,7 @@ export function RefRows({
   edit,
   onGo,
   onAddTarget,
+  only,
 }: {
   ctx: ModContext;
   sid: string;
@@ -225,13 +226,15 @@ export function RefRows({
   edit: (fn: () => void) => void;
   onGo: (sid: string) => void;
   onAddTarget: (ask: RefTargetAsk) => void;
+  /** Just this category (the editor of one node phrase). */
+  only?: string;
 }): ReactNode {
   const t = useT();
   const lang = useLang();
   const on = ctx.typeName(rec.type) === 'DIALOGUE' ? 'dialogue' : 'line';
   const phrases = new Map(lineRefPhrases(ctx, rec, lang, on).map((p) => [p.category, p.phrase]));
   const fields = ctx.schema?.types.get(ctx.typeName(rec.type))?.fields;
-  const rows = Object.entries(LINE_REF_HELP).filter(([c, h]) => h.kind === kind && (rec.refs.get(c)?.length ?? 0) > 0);
+  const rows = Object.entries(LINE_REF_HELP).filter(([c, h]) => (only === undefined || c === only) && h.kind === kind && (rec.refs.get(c)?.length ?? 0) > 0);
   return (
     <>
       {rows.map(([c, h]) => (
@@ -254,9 +257,14 @@ export function RefRows({
           phrase={phrases.get(c)}
           edit={edit}
           onGo={onGo}
-          onAdd={() => {
-            onAddTarget({ category: c, targetType: fields?.get(c)?.targetType, label: uiText(h.label, lang) });
-          }}
+          // Old fields outside fcs.def have no target type: their targets are only removed.
+          {...(fields?.get(c)?.targetType !== undefined
+            ? {
+                onAdd: () => {
+                  onAddTarget({ category: c, targetType: fields.get(c)?.targetType, label: uiText(h.label, lang) });
+                },
+              }
+            : {})}
         />
       ))}
     </>
@@ -288,7 +296,7 @@ function RefRow({
   phrase: DialogPhrase | undefined;
   edit: (fn: () => void) => void;
   onGo: (sid: string) => void;
-  onAdd: () => void;
+  onAdd?: () => void;
 }): ReactNode {
   const t = useT();
   const describe = useDescribe(desc);
@@ -339,9 +347,11 @@ function RefRow({
             </button>
           </span>
         ))}
-        <button className="small" title={t.lpRefAddTargetTip} data-testid="ln-ref-add" onClick={onAdd}>
-          + {t.lpRefAddTarget}
-        </button>
+        {onAdd && (
+          <button className="small" title={t.lpRefAddTargetTip} data-testid="ln-ref-add" onClick={onAdd}>
+            + {t.lpRefAddTarget}
+          </button>
+        )}
       </div>
       {phrase && <PhraseLine phrase={phrase} kind={kind === 'effect' ? 'effect' : 'cond'} testId="ln-ref-phrase" />}
     </div>

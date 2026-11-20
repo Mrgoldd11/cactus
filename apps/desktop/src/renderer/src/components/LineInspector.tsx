@@ -586,42 +586,14 @@ function refCount(rec: GameRecord, kind: 'condition' | 'effect'): number {
 function Conditions(props: ActionPart): ReactNode {
   const { ctx, sid, rec, t, edit } = props;
   const refs = rec.refs.get('conditions') ?? [];
-  const lang = useLang();
   const on = ctx.typeName(rec.type) === 'DIALOGUE' ? 'dialogue' : 'line';
-  const usage = pickUsage(ctx).conditions;
-  const condDef = getEnum(ctx.schema, 'DialogConditionEnum')!;
-  const talker = getEnum(ctx.schema, 'TalkerEnum')!;
-  const cmpDef = getEnum(ctx.schema, 'ComparisonEnum')!;
   const count = refs.length + refCount(rec, 'condition');
   return (
     <PickSection props={props} kind="condition" title={`${t.lnConditions} (${count})`}>
       {count === 0 && <div className="small muted">{t.lnNoConditions}</div>}
-      {refs.map((r) => {
-        const c = conditionOf(ctx, r);
-        const a = ctx.get(r.target);
-        if (!c || !a) return <ReadOnlyRef key={r.target} ctx={ctx} r={r} cat="conditions" />;
-        const tagDef = fieldEnum(ctx.schema, 'DIALOG_ACTION', 'tag', a);
-        const phrase = dialogActionPhrase(ctx, r, 'conditions', lang, on);
-        const code = condDef.values.find((v) => v.value === c.cond)?.name ?? String(c.cond);
-        return (
-          <ActionRow key={r.target} testId="ln-cond" desc={actionDesc(t, 'condition', code, lang)}>
-            <div className="lp-row">
-              <EnumSelect def={talker} value={c.who} testId="ln-cond-who" onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { who: v })); }} />
-              <DialogValueSelect def={condDef} value={c.cond} usage={usage} testId="ln-cond-name" onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { cond: v })); }} />
-            </div>
-            <div className="lp-row">
-              {tagDef && <EnumSelect def={tagDef} value={c.tag ?? -1} testId="ln-cond-tag" onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { tag: v })); }} />}
-              <EnumSelect def={cmpDef} value={c.cmp} testId="ln-cond-cmp" onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { cmp: v })); }} />
-              <NumberInput value={c.value} int testId="ln-cond-value" onCommit={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { value: v })); }} />
-              <span className="spacer" />
-              <button className="small" title={t.lnRemove} data-testid="ln-cond-remove" onClick={() => { edit(() => { removeAction(ctx, sid, 'conditions', r.target); }); }}>
-                ✕
-              </button>
-            </div>
-            {phrase && <PhraseLine phrase={phrase} kind="cond" testId="ln-cond-phrase" />}
-          </ActionRow>
-        );
-      })}
+      {refs.map((r) => (
+        <ConditionRow key={r.target} ctx={ctx} sid={sid} r={r} on={on} edit={edit} />
+      ))}
       <RefRows ctx={ctx} sid={sid} rec={rec} kind="condition" edit={edit} onGo={props.onGo} onAddTarget={props.onAddTarget} />
     </PickSection>
   );
@@ -630,39 +602,86 @@ function Conditions(props: ActionPart): ReactNode {
 function Effects(props: ActionPart): ReactNode {
   const { ctx, sid, rec, t, edit } = props;
   const refs = rec.refs.get('effects') ?? [];
-  const lang = useLang();
-  const usage = pickUsage(ctx).actions;
-  const def = getEnum(ctx.schema, 'DialogActionEnum')!;
   const count = refs.length + refCount(rec, 'effect');
   return (
     <PickSection props={props} kind="effect" title={`${t.lpEffects} (${count})`}>
       {count === 0 && <div className="small muted">{t.lnNoEffects}</div>}
-      {refs.map((r) => {
-        const e = effectOf(ctx, r);
-        if (!e) return <ReadOnlyRef key={r.target} ctx={ctx} r={r} cat="effects" />;
-        const vals = e.values ?? [0, 0, 0];
-        const phrase = dialogActionPhrase(ctx, r, 'effects', lang);
-        const code = def.values.find((v) => v.value === e.action)?.name ?? String(e.action);
-        return (
-          <ActionRow key={r.target} testId="ln-effect" desc={actionDesc(t, 'effect', code, lang)}>
-            <div className="lp-row">
-              <DialogValueSelect def={def} value={e.action} usage={usage} testId="ln-effect-name" onChange={(v) => { edit(() => void updateEffect(ctx, sid, r.target, { action: v })); }} />
-              <span className="spacer" />
-              <button className="small" title={t.lnRemove} data-testid="ln-effect-remove" onClick={() => { edit(() => { removeAction(ctx, sid, 'effects', r.target); }); }}>
-                ✕
-              </button>
-            </div>
-            <div className="lp-row">
-              {[0, 1, 2].map((k) => (
-                <NumberInput key={k} value={vals[k] ?? 0} testId={`ln-effect-v${k}`} onCommit={(v) => { edit(() => void updateEffect(ctx, sid, r.target, { values: vals.map((x, j) => (j === k ? v : x)) })); }} />
-              ))}
-            </div>
-            {phrase && <PhraseLine phrase={phrase} kind="effect" testId="ln-effect-phrase" />}
-          </ActionRow>
-        );
-      })}
+      {refs.map((r) => (
+        <EffectRow key={r.target} ctx={ctx} sid={sid} r={r} edit={edit} />
+      ))}
       <RefRows ctx={ctx} sid={sid} rec={rec} kind="effect" edit={edit} onGo={props.onGo} onAddTarget={props.onAddTarget} />
     </PickSection>
+  );
+}
+
+interface RowPart {
+  ctx: ModContext;
+  sid: string;
+  r: Reference;
+  edit: (fn: () => void) => void;
+}
+
+/** One DC_ condition: who, the condition, its tag, the comparison and the value, each editable; ✕ removes it. Also the editor of a node phrase. */
+export function ConditionRow({ ctx, sid, r, edit, on }: RowPart & { on: 'dialogue' | 'line' }): ReactNode {
+  const t = useT();
+  const lang = useLang();
+  const usage = pickUsage(ctx).conditions;
+  const condDef = getEnum(ctx.schema, 'DialogConditionEnum')!;
+  const talker = getEnum(ctx.schema, 'TalkerEnum')!;
+  const cmpDef = getEnum(ctx.schema, 'ComparisonEnum')!;
+  const c = conditionOf(ctx, r);
+  const a = ctx.get(r.target);
+  if (!c || !a) return <ReadOnlyRef ctx={ctx} r={r} cat="conditions" />;
+  const tagDef = fieldEnum(ctx.schema, 'DIALOG_ACTION', 'tag', a);
+  const phrase = dialogActionPhrase(ctx, r, 'conditions', lang, on);
+  const code = condDef.values.find((v) => v.value === c.cond)?.name ?? String(c.cond);
+  return (
+    <ActionRow testId="ln-cond" desc={actionDesc(t, 'condition', code, lang)}>
+      <div className="lp-row">
+        <EnumSelect def={talker} value={c.who} testId="ln-cond-who" onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { who: v })); }} />
+        <DialogValueSelect def={condDef} value={c.cond} usage={usage} testId="ln-cond-name" onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { cond: v })); }} />
+      </div>
+      <div className="lp-row">
+        {tagDef && <EnumSelect def={tagDef} value={c.tag ?? -1} testId="ln-cond-tag" onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { tag: v })); }} />}
+        <EnumSelect def={cmpDef} value={c.cmp} testId="ln-cond-cmp" onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { cmp: v })); }} />
+        <NumberInput value={c.value} int testId="ln-cond-value" onCommit={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { value: v })); }} />
+        <span className="spacer" />
+        <button className="small" title={t.lnRemove} data-testid="ln-cond-remove" onClick={() => { edit(() => { removeAction(ctx, sid, 'conditions', r.target); }); }}>
+          ✕
+        </button>
+      </div>
+      {phrase && <PhraseLine phrase={phrase} kind="cond" testId="ln-cond-phrase" />}
+    </ActionRow>
+  );
+}
+
+/** One DA_ effect: the action and its three values, each editable; ✕ removes it. Also the editor of a node phrase. */
+export function EffectRow({ ctx, sid, r, edit }: RowPart): ReactNode {
+  const t = useT();
+  const lang = useLang();
+  const usage = pickUsage(ctx).actions;
+  const def = getEnum(ctx.schema, 'DialogActionEnum')!;
+  const e = effectOf(ctx, r);
+  if (!e) return <ReadOnlyRef ctx={ctx} r={r} cat="effects" />;
+  const vals = e.values ?? [0, 0, 0];
+  const phrase = dialogActionPhrase(ctx, r, 'effects', lang);
+  const code = def.values.find((v) => v.value === e.action)?.name ?? String(e.action);
+  return (
+    <ActionRow testId="ln-effect" desc={actionDesc(t, 'effect', code, lang)}>
+      <div className="lp-row">
+        <DialogValueSelect def={def} value={e.action} usage={usage} testId="ln-effect-name" onChange={(v) => { edit(() => void updateEffect(ctx, sid, r.target, { action: v })); }} />
+        <span className="spacer" />
+        <button className="small" title={t.lnRemove} data-testid="ln-effect-remove" onClick={() => { edit(() => { removeAction(ctx, sid, 'effects', r.target); }); }}>
+          ✕
+        </button>
+      </div>
+      <div className="lp-row">
+        {[0, 1, 2].map((k) => (
+          <NumberInput key={k} value={vals[k] ?? 0} testId={`ln-effect-v${k}`} onCommit={(v) => { edit(() => void updateEffect(ctx, sid, r.target, { values: vals.map((x, j) => (j === k ? v : x)) })); }} />
+        ))}
+      </div>
+      {phrase && <PhraseLine phrase={phrase} kind="effect" testId="ln-effect-phrase" />}
+    </ActionRow>
   );
 }
 

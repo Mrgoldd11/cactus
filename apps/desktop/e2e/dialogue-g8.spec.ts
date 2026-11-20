@@ -4,7 +4,11 @@
  * - A click on the dialogue shows «Dialogue line» with «When it may play» switches, each with its FCS name.
  * - «+ if» on a node opens the whole condition list next to it («All conditions (N)»), search by Russian,
  *   English and code; the added condition shows on the node and in the panel; «×» removes it; Ctrl+Z brings it back.
- * Screenshots 116–120 in out/screenshots/ux/.
+ * - A click on a phrase row on the node opens its editor next to it: the list of a reference condition
+ *   (races, factions…) — remove one, add another; who / comparison / value of a DC_ condition. One undo step
+ *   each, the node and the panel show the change at once.
+ * - Dialogues started without a package (biome arrival, faction campaign) and only from another dialogue.
+ * Screenshots 116–124 in out/screenshots/ux/.
  */
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -22,6 +26,16 @@ const ACID_RAIN = '55630-rebirth.mod';
 const ACID_WATER = '55771-Dialogue.mod';
 /** «Healed (Recruit)»: with an entry portal. */
 const HEALED = '8950-Dialogue.mod';
+/** Line «My skin! This water's eating right through me!» of «Acid water»: my race — Greenlander, Scorchlander or Shek. */
+const MY_SKIN = '55776-Dialogue.mod';
+const SHEK = '5276-chareditor.mod';
+const SKELETON = '17946-stick_people.mod';
+/** «biome Holy Nation»: said when the player squad enters the biome group (BIOME_GROUP.arrival dialog). */
+const BIOME = '47039-Dialogue.mod';
+/** «Bounty extortion pay»: in no package, started from «Small bounty». */
+const FROM_OTHER = '44152-Dialogue.mod';
+/** «in cage - npc»: nothing refers to it. */
+const NOWHERE = '2801-gamedata.base';
 
 async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
   const userData = mkdtempSync(join(tmpdir(), 'kedit-e2e-'));
@@ -153,6 +167,119 @@ test('G8: event → who → dialogue, the dialogue panel, «+ if» with the whol
     await expect(page.getByTestId('dg-when-event').first()).toBeVisible();
     await expect(page.getByTestId('dg-when-who').first()).toBeVisible();
     await page.screenshot({ path: join(shots, '118-g8-healed.png') });
+  } finally {
+    await closeApp(app);
+  }
+});
+
+test('G8: every condition on the node is editable — the race list of «My skin!…», a DC_ value; undo', async () => {
+  const { app, page } = await launch();
+  try {
+    await open(app, page);
+    const panel = page.getByTestId('line-inspector');
+
+    // The line itself: its node with «if my race is Greenlander, Scorchlander or Shek».
+    await select(page, MY_SKIN);
+    const phrase = node(page, MY_SKIN).getByTestId('dg-phrase');
+    await expect(phrase).toHaveCount(1);
+    await expect(phrase).toContainText('Зеленоземец, Жженоземец или Шек');
+    await phrase.click();
+    const pop = page.getByTestId('dg-edit-pop');
+    await expect(pop).toBeVisible();
+    await expect(pop).toHaveAttribute('data-category', 'my race');
+    const targets = pop.getByTestId('ln-ref-target');
+    await expect(targets).toHaveCount(3);
+
+    // Remove Shek, add Skeleton.
+    await pop.locator(`[data-testid="ln-ref-target"][data-sid="${SHEK}"]`).getByTestId('ln-ref-remove').click();
+    await expect(targets).toHaveCount(2);
+    await expect(phrase).not.toContainText('Шек');
+    await pop.getByTestId('ln-ref-add').click();
+    const picker = page.getByTestId('record-picker');
+    await picker.getByTestId('picker-search').fill('Skeleton');
+    await picker.getByTestId('picker-list').locator(`[data-sid="${SKELETON}"]`).dblclick();
+    await expect(picker).toHaveCount(0);
+    await expect(targets).toHaveCount(3);
+    await expect(phrase).toContainText('Зеленоземец, Жженоземец или Скелет');
+    const panelTargets = panel.locator('[data-testid="ln-ref"][data-category="my race"] [data-testid="ln-ref-target"]');
+    await expect(panelTargets).toHaveCount(3);
+    await expect(panel.locator(`[data-testid="ln-ref-target"][data-sid="${SKELETON}"]`)).toHaveCount(1);
+    await expect(panel.locator(`[data-testid="ln-ref-target"][data-sid="${SHEK}"]`)).toHaveCount(0);
+    // The panel scrolled to the same condition: node, popup and panel in one picture.
+    await panel.locator('[data-testid="ln-ref"][data-category="my race"]').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: join(shots, '121-g8-edit-race.png') });
+
+    // Two undo steps: Skeleton goes, Shek comes back.
+    await page.locator('.react-flow__pane').click({ position: { x: 20, y: 20 } });
+    await expect(pop).toHaveCount(0);
+    await page.keyboard.press('Control+z');
+    await expect(phrase).toContainText('Зеленоземец, Жженоземец');
+    await expect(phrase).not.toContainText('Скелет');
+    await page.keyboard.press('Control+z');
+    await expect(phrase).toContainText('Зеленоземец, Жженоземец или Шек');
+    await expect(panel.locator(`[data-testid="ln-ref-target"][data-sid="${SHEK}"]`)).toHaveCount(1);
+    await expect(panelTargets).toHaveCount(3);
+
+    // A DC_ condition of the dialogue: the value changes on the node.
+    await select(page, ACID_WATER);
+    const cond = node(page, ACID_WATER).getByTestId('dg-phrase').filter({ hasText: 'DC_IS_IMPRISONED' });
+    await expect(cond).toContainText('= 0');
+    await cond.click();
+    await expect(pop).toHaveAttribute('data-category', 'conditions');
+    await expect(pop.getByTestId('ln-cond-who')).toBeVisible();
+    await expect(pop.getByTestId('ln-cond-cmp')).toBeVisible();
+    await pop.getByTestId('ln-cond-value').fill('1');
+    await pop.getByTestId('ln-cond-value').press('Enter');
+    await expect(cond).toContainText('= 1');
+    await page.screenshot({ path: join(shots, '122-g8-edit-dc.png') });
+    await page.keyboard.press('Escape');
+    await expect(pop).toHaveCount(0);
+    await page.keyboard.press('Control+z');
+    await expect(cond).toContainText('= 0');
+  } finally {
+    await closeApp(app);
+  }
+});
+
+test('G8: dialogues started without a package and from another dialogue read clearly', async () => {
+  const { app, page } = await launch();
+  try {
+    await open(app, page);
+    // Narrow canvas: the whole chain does not fit at 100%, so the view keeps 100% and starts at the «who» column.
+    await select(page, BIOME);
+    const viewport = page.getByTestId('dialogue-graph').locator('.react-flow__viewport');
+    await expect(viewport).toHaveAttribute('style', /scale\(1\)/);
+    await expect(page.getByTestId('dg-when-who')).toBeInViewport();
+    await expect(node(page, BIOME)).toBeInViewport();
+    // A full-HD window (1920 wide): the whole chain event → who → dialogue at 100%.
+    await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.setSize(1920, 900); });
+    await select(page, NOWHERE);
+    // Biome arrival: the «when» card names the moment and the field, the «who» card the biome groups.
+    await select(page, BIOME);
+    const ev = page.getByTestId('dg-when-event');
+    await expect(viewport).toHaveAttribute('style', /scale\(1\)/);
+    await expect(ev).toBeInViewport();
+    await expect(ev).toHaveCount(1);
+    await expect(ev).toContainText('отряд игрока входит в биом');
+    await expect(ev).toContainText('arrival dialog');
+    await expect(page.getByTestId('dg-when-who')).toContainText('группа биомов');
+    await expect(page.getByTestId('plays-when')).toContainText('отряд игрока входит в биом');
+    await page.screenshot({ path: join(shots, '123-g8-biome.png') });
+
+    // Only from another dialogue: «from another dialogue» and the entry portal, not «in no package».
+    await select(page, FROM_OTHER);
+    await expect(ev).toHaveCount(1);
+    await expect(ev).toContainText('из другого диалога');
+    await expect(page.locator('[data-testid="dg-portal"][data-dir="in"]').first()).toBeVisible();
+    await expect(ev).toBeInViewport();
+    await expect(page.getByTestId('plays-when-from')).toBeVisible();
+    await expect(page.getByTestId('plays-when-nowhere')).toHaveCount(0);
+    await page.screenshot({ path: join(shots, '124-g8-from-dialogue.png') });
+
+    // Nothing refers to it: the honest warning.
+    await select(page, NOWHERE);
+    await expect(ev).toContainText('ни в одном пакете');
+    await expect(page.getByTestId('plays-when-nowhere')).toBeVisible();
   } finally {
     await closeApp(app);
   }

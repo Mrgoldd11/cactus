@@ -390,7 +390,8 @@ test('dialogue graph: lines in Russian, player choice, loops; a line the game wi
     // The minimap is off until asked (G1), the button shows it.
     await expect(graph.locator('.react-flow__minimap')).toHaveCount(0);
     await graph.getByTestId('dg-minimap').click();
-    await expect(graph.locator('.react-flow__minimap-node')).toHaveCount(18);
+    // 18 lines and portals, plus the event and «who» cards of the chain event → who → dialogue (G8).
+    await expect(graph.locator('.react-flow__minimap-node')).toHaveCount(20);
     // Initial view: 100% zoom, root visible.
     await expect(graph.locator('.react-flow__viewport')).toHaveAttribute('style', /scale\(1\)/);
     await expect(graph.locator('[data-testid="dg-node"][data-id="5464-gamedata.base"]')).toBeInViewport();

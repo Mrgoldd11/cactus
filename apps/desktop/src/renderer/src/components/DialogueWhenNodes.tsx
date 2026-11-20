@@ -26,8 +26,8 @@ interface Link {
 }
 
 export type WhenData =
-  | { kind: 'event'; icon: string; label: string; code?: string; tip: string; warn?: boolean; unused?: boolean }
-  | { kind: 'who'; holders: Link[]; moreHolders: number; pkg?: Link; field?: string; nobody: boolean; tip: string; go: (sid: string) => void }
+  | { kind: 'event'; icon: string; label: string; code?: string; tip: string; warn?: boolean; unused?: boolean; /** Header «when» instead of «event»: a moment that is not an EV_ value. */ when?: boolean }
+  | { kind: 'who'; holders: Link[]; moreHolders: number; pkg?: Link; field?: string; fieldType?: string; nobody: boolean; tip: string; go: (sid: string) => void }
   | { kind: 'more'; n: number };
 export type WhenNode = Node<WhenData, 'when'>;
 
@@ -65,6 +65,10 @@ export interface WhenWords {
   nowhere: string;
   nowhereTip: string;
   announcement: string;
+  /** Moment of a record field that starts the dialogue without a package (`WhenSource.start`). */
+  start: (key: string) => string;
+  fromDialogue: string;
+  fromDialogueTip: string;
 }
 
 interface WhenArgs {
@@ -75,6 +79,8 @@ interface WhenArgs {
   heights: ReadonlyMap<string, number>;
   moved: ReadonlyMap<string, { x: number; y: number }>;
   words: WhenWords;
+  /** Entry portals of the graph: lines of other dialogues that lead into this one. */
+  entries: number;
   go: (sid: string) => void;
 }
 
@@ -86,7 +92,7 @@ function whoData(ctx: ModContext, s: WhenSource, go: (sid: string) => void): Whe
     kind: 'who',
     holders,
     moreHolders: Math.max(0, sids.length - HOLDER_NAMES),
-    ...(s.pkg !== undefined ? { pkg: { sid: s.pkg, name: recordName(ctx, s.pkg) } } : { field: s.holders[0]?.field ?? '' }),
+    ...(s.pkg !== undefined ? { pkg: { sid: s.pkg, name: recordName(ctx, s.pkg) } } : { field: s.holders[0]?.field ?? '', fieldType: s.holders[0]?.type ?? '' }),
     nobody: sids.length === 0,
     tip,
     go,
@@ -126,11 +132,15 @@ export function whenElements(a: WhenArgs): WhenElements {
   const evX = whoX - GAP - WHEN_WIDTH;
 
   if (sources.length === 0) {
-    // In no package: one warning card in place of the event.
-    const d: WhenData = { kind: 'event', icon: '⚠', label: a.words.nowhere, tip: a.words.nowhereTip, warn: true };
-    add('when:nowhere', d, whoX, center - height('when:nowhere', d) / 2);
-    edge('when:nowhere', a.root);
-    return { nodes, edges, placed, below: center + height('when:nowhere', d) / 2 + ROW_GAP, right };
+    // In no package: started from another dialogue (its entry portals go under this card), or a warning.
+    const id = a.entries > 0 ? 'when:from' : 'when:nowhere';
+    const d: WhenData =
+      a.entries > 0
+        ? { kind: 'event', icon: '↪', label: a.words.fromDialogue, tip: a.words.fromDialogueTip, when: true }
+        : { kind: 'event', icon: '⚠', label: a.words.nowhere, tip: a.words.nowhereTip, warn: true, when: true };
+    add(id, d, whoX, center - height(id, d) / 2);
+    edge(id, a.root);
+    return { nodes, edges, placed, below: center + height(id, d) / 2 + ROW_GAP, right };
   }
 
   const shown = sources.length <= MAX_SOURCES ? sources : sources.slice(0, MAX_SOURCES - 1);
@@ -151,13 +161,15 @@ export function whenElements(a: WhenArgs): WhenElements {
   const byEvent = new Map<string, { d: WhenData; who: string[] }>();
   for (const w of who) {
     if (!w.s) continue;
+    const start = w.s.start;
     const evs = w.s.events.length > 0 ? w.s.events : [-1];
     for (const ev of evs) {
-      const id = `when:ev:${ev}`;
+      const id = ev < 0 && start !== undefined ? `when:start:${start}` : `when:ev:${ev}`;
       let e = byEvent.get(id);
       if (!e) {
         let d: WhenData;
-        if (ev < 0) d = { kind: 'event', icon: '📢', label: a.words.announcement, tip: '' };
+        if (ev < 0 && start !== undefined) d = { kind: 'event', icon: '📢', label: a.words.start(start), code: start.slice(start.indexOf('.') + 1), tip: start, when: true };
+        else if (ev < 0) d = { kind: 'event', icon: '📢', label: a.words.announcement, tip: '', when: true };
         else {
           const v = def ? enumValue(def, ev) : undefined;
           d = {
@@ -200,7 +212,7 @@ export const WhenCard = memo(function WhenCard({ data }: NodeProps<WhenNode>): R
   if (d.kind === 'event')
     return (
       <div className={`dg-node dg-when dg-when-ev${d.warn ? ' dg-when-warn' : ''}`} data-testid="dg-when-event" title={d.tip}>
-        <div className="dg-when-hd">{t.dwEvent}</div>
+        <div className="dg-when-hd">{d.when ? t.dwWhen : t.dwEvent}</div>
         <div className="dg-when-ev-name">
           <span className="dg-when-icon">{d.icon}</span> {d.label}
         </div>
@@ -247,7 +259,7 @@ export const WhenCard = memo(function WhenCard({ data }: NodeProps<WhenNode>): R
             {t.dwPkg} {link(d.pkg)}
           </>
         ) : (
-          t.pwDirect(d.field ?? '')
+          t.dwField(d.fieldType ?? '', d.field ?? '')
         )}
       </div>
       <Handle type="source" position={Position.Right} isConnectable={false} />

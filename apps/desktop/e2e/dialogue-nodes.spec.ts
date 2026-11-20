@@ -118,7 +118,7 @@ test('dialogue nodes: speakers, checking order, phrases, end plates, folding, to
     await expect(node(s(8951))).toHaveClass(/selected/);
     const tools = node(s(8951)).getByTestId('dg-node-tools');
     await expect(tools).toBeVisible();
-    await expect(tools.locator('button')).toHaveText(['+ ответ игрока', '+ реплика NPC', '+ вставка', '…']);
+    await expect(tools.locator('button')).toHaveText(['+ ответ игрока', '+ реплика NPC', '+ вставка', '+ если', '+ →', '…']);
     await expect(graph.getByTestId('dg-node-tools')).toHaveCount(1);
     await page.screenshot({ path: join(shots, '96-dialogue-node-tools.png') });
 

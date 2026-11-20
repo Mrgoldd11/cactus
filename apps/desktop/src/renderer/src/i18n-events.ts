@@ -6,7 +6,6 @@ export const eventsEn = {
   pwVia: ['(via package ', ')'] as readonly [string, string],
   /** Text around the package and its heir: «(via package «X», inherited by «Y»)». */
   pwViaHeir: ['(via package ', ', inherited by ', ')'] as readonly [string, string, string],
-  pwDirect: (field: string): string => `(character field «${field}»)`,
   pwNobody: 'nobody — the package hangs on no one',
   pwNobodyTip: 'No character, squad or faction has this package, and no package inherits it: the game will not say it.',
   pwNowhere: '⚠ in no package: the game will not say it',
@@ -30,7 +29,6 @@ export const eventsRu: typeof eventsEn = {
   pwWho: 'у кого:',
   pwVia: ['(через пакет ', ')'],
   pwViaHeir: ['(через пакет ', ', его наследует ', ')'],
-  pwDirect: (field) => `(поле персонажа «${field}»)`,
   pwNobody: 'ни у кого — пакет ни на ком не висит',
   pwNobodyTip: 'Этот пакет не стоит ни у персонажа, ни у отряда, ни у фракции, и его не наследует другой пакет: игра диалог не скажет.',
   pwNowhere: '⚠ ни в одном пакете: игра его не скажет',
@@ -54,7 +52,6 @@ export const eventsZh: typeof eventsEn = {
   pwWho: '谁说：',
   pwVia: ['（通过对话包 ', '）'],
   pwViaHeir: ['（通过对话包 ', '，由 ', ' 继承）'],
-  pwDirect: (field) => `（角色字段「${field}」）`,
   pwNobody: '无人——此对话包没有挂在任何人身上',
   pwNobodyTip: '没有角色、小队或派系使用此对话包，也没有其他对话包继承它：游戏不会说出这段对话。',
   pwNowhere: '⚠ 不在任何对话包中：游戏不会说出它',

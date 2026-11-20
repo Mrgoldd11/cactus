@@ -15,6 +15,7 @@ import {
   lineDialogues,
   quote,
   refValueEnum,
+  transitionsTo,
   uiText,
   type EnumDef,
   type EnumValue,
@@ -161,6 +162,8 @@ export function PlaysWhen({ ctx, sid, type, version, onGo }: { ctx: ModContext; 
     const dialogs = isLine ? lineDialogues(ctx, sid) : [sid];
     return dialogs.flatMap((dialog) => dialogueWhen(ctx, dialog).map((source) => ({ dialog, source })));
   }, [ctx, sid, isLine, version]);
+  // In no package but other dialogues lead into it: not a dead dialogue.
+  const entered = useMemo(() => rows.length === 0 && (isLine ? lineDialogues(ctx, sid) : [sid]).some((d) => transitionsTo(ctx, d).length > 0), [ctx, sid, isLine, rows, version]);
   const def = eventEnum(ctx);
   if (!hasPlaysWhen(type)) return null;
   const name = (s: string): string => quote(recordName(ctx, s), lang);
@@ -181,7 +184,12 @@ export function PlaysWhen({ ctx, sid, type, version, onGo }: { ctx: ModContext; 
   return (
     <div className="plays-when" data-testid="plays-when" data-state={rows.length > 0 ? 'in' : 'nowhere'} title={t.pwHelpTip}>
       <span className="muted">{t.pwLabel}</span>{' '}
-      {rows.length === 0 && (
+      {rows.length === 0 && entered && (
+        <span data-testid="plays-when-from" title={t.dwFromDialogueTip}>
+          ↪ {t.dwFromDialogue}
+        </span>
+      )}
+      {rows.length === 0 && !entered && (
         <span className="warn" data-testid="plays-when-nowhere" title={t.pwNowhereTip}>
           {t.pwNowhere}
         </span>
@@ -201,7 +209,9 @@ export function PlaysWhen({ ctx, sid, type, version, onGo }: { ctx: ModContext; 
                 {source.events.length === 0
                   ? source.pkg !== undefined
                     ? t.pwNoEvents
-                    : t.pwAnnouncement
+                    : source.start !== undefined
+                      ? `📢 ${t.dwStart(source.start)}`
+                      : t.pwAnnouncement
                   : source.events.map((e, k) => (
                       <span key={e} title={eventTip(def, e, lang, t.pwTarget, t.pwNoTarget)}>
                         {k > 0 ? ', ' : ''}
@@ -305,7 +315,7 @@ function Holders({ source, link, name }: { source: WhenSource; link: (s: string,
           )}
         </span>
       ) : (
-        <span className="muted">{t.pwDirect(source.holders[0]!.field)}</span>
+        <span className="muted">({t.dwField(source.holders[0]!.type, source.holders[0]!.field)})</span>
       )}
     </>
   );

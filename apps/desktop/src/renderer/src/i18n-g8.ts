@@ -8,6 +8,33 @@ function ruPlural(n: number, one: string, few: string, many: string): string {
   return many;
 }
 
+/** Moments of the records that start a dialogue without a package (`WhenSource.start`, `TYPE.field`). */
+const START_EN: Readonly<Record<string, string>> = {
+  'CHARACTER.announcement dialogue': 'the character announces on their own',
+  'SINGLE_DIPLOMATIC_ASSAULT.dialogue announce': 'announcement of a diplomatic assault',
+  'BIOME_GROUP.arrival dialog': 'the player squad enters the biome',
+  'FACTION_CAMPAIGN.dialog announcement': 'announcement of a faction campaign',
+  'AI_PACKAGE.contract end talk passive': 'an AI contract ends',
+};
+const START_RU: Readonly<Record<string, string>> = {
+  'CHARACTER.announcement dialogue': 'персонаж объявляет сам',
+  'SINGLE_DIPLOMATIC_ASSAULT.dialogue announce': 'объявление дипломатического налёта',
+  'BIOME_GROUP.arrival dialog': 'отряд игрока входит в биом',
+  'FACTION_CAMPAIGN.dialog announcement': 'объявление кампании фракции',
+  'AI_PACKAGE.contract end talk passive': 'кончается AI-контракт',
+};
+const START_ZH: Readonly<Record<string, string>> = {
+  'CHARACTER.announcement dialogue': '角色自行公告',
+  'SINGLE_DIPLOMATIC_ASSAULT.dialogue announce': '外交突袭的公告',
+  'BIOME_GROUP.arrival dialog': '玩家小队进入该生物群系',
+  'FACTION_CAMPAIGN.dialog announcement': '派系战役的公告',
+  'AI_PACKAGE.contract end talk passive': 'AI 合约结束',
+};
+/** Record types that hold a dialogue directly. */
+const TYPE_EN: Readonly<Record<string, string>> = { CHARACTER: 'character', SINGLE_DIPLOMATIC_ASSAULT: 'diplomatic assault', BIOME_GROUP: 'biome group', FACTION_CAMPAIGN: 'faction campaign', AI_PACKAGE: 'AI package' };
+const TYPE_RU: Readonly<Record<string, string>> = { CHARACTER: 'персонаж', SINGLE_DIPLOMATIC_ASSAULT: 'дипломатический налёт', BIOME_GROUP: 'группа биомов', FACTION_CAMPAIGN: 'кампания фракции', AI_PACKAGE: 'AI-пакет' };
+const TYPE_ZH: Readonly<Record<string, string>> = { CHARACTER: '角色', SINGLE_DIPLOMATIC_ASSAULT: '外交突袭', BIOME_GROUP: '生物群系组', FACTION_CAMPAIGN: '派系战役', AI_PACKAGE: 'AI 包' };
+
 export const g8En = {
   dwEvent: 'EVENT',
   dwWho: 'WHO HAS IT',
@@ -16,6 +43,11 @@ export const g8En = {
   dwUnused: 'the game does not raise it',
   dwMore: (n: number): string => `and ${n} more package${n === 1 ? '' : 's'}`,
   dwMoreTip: 'The full list is in the «Dialogue line» panel, «Plays when» block (click the dialogue).',
+  dwWhen: 'WHEN',
+  dwStart: (key: string): string => START_EN[key] ?? key,
+  dwField: (type: string, field: string): string => `field «${field}» · ${TYPE_EN[type] ?? type}`,
+  dwFromDialogue: 'from another dialogue',
+  dwFromDialogueTip: 'In no package: lines of other dialogues start this one (interrupt into it, pick it up or unlock it) — they are on the left.',
   dhLike: 'One more like it…',
   dhLikeTip: 'A new dialogue on the same event and package: race, conditions, lines, repetition and «monologue» are copied, you change the text.',
   dhHang: 'Hang on another event too…',
@@ -45,7 +77,10 @@ export const g8En = {
   dnAddEffect: '+ →',
   dnAddEffectTip: 'Add an effect («then …»): the whole list of DA_ actions and reference effects, searchable',
   dnPhraseRemove: 'Remove this condition or effect (Ctrl+Z brings it back)',
-  pkAll: (n: number): string => `All conditions (${n})`,
+  dnPhraseEdit: 'Click — change it right here: who, the comparison, the value, or the list (races, factions, items…)',
+  dnEditCond: 'Condition',
+  dnEditEffect: 'Effect',
+  pkAllConds: (n: number): string => `All conditions (${n})`,
   pkAllEffects: (n: number): string => `All effects (${n})`,
   pkFound: (n: number): string => `found ${n}`,
   pkAllTip: 'Below the common ones: every condition the game knows, by group. Type to search in your language, in English or by code.',
@@ -59,6 +94,11 @@ export const g8Ru: typeof g8En = {
   dwUnused: 'игра это событие не вызывает',
   dwMore: (n) => `и ещё ${n} ${ruPlural(n, 'пакет', 'пакета', 'пакетов')}`,
   dwMoreTip: 'Весь список — в панели «Реплика диалога», блок «Звучит, когда» (щёлкните диалог).',
+  dwWhen: 'КОГДА',
+  dwStart: (key) => START_RU[key] ?? key,
+  dwField: (type, field) => `поле «${field}» · ${TYPE_RU[type] ?? type}`,
+  dwFromDialogue: 'из другого диалога',
+  dwFromDialogueTip: 'Ни в одном пакете: этот диалог начинают реплики других диалогов (перебивают, подхватывают или отпирают его) — они слева.',
   dhLike: 'Ещё такой же…',
   dhLikeTip: 'Новый диалог на то же событие и в тот же пакет: раса, условия, реплики, повтор и «монолог» копируются, вы меняете текст.',
   dhHang: 'Повесить и на другое событие…',
@@ -88,7 +128,10 @@ export const g8Ru: typeof g8En = {
   dnAddEffect: '+ →',
   dnAddEffectTip: 'Добавить эффект («затем …»): весь список действий DA_ и ссылочных эффектов, с поиском',
   dnPhraseRemove: 'Убрать это условие или эффект (Ctrl+Z вернёт)',
-  pkAll: (n: number): string => `Все условия (${n})`,
+  dnPhraseEdit: 'Щелчок — поменять прямо здесь: кто, сравнение, значение или список (расы, фракции, предметы…)',
+  dnEditCond: 'Условие',
+  dnEditEffect: 'Эффект',
+  pkAllConds: (n: number): string => `Все условия (${n})`,
   pkAllEffects: (n: number): string => `Все эффекты (${n})`,
   pkFound: (n: number): string => `найдено ${n}`,
   pkAllTip: 'Под частыми — все условия, которые знает игра, по группам. Поиск по-русски, по-английски и по коду.',
@@ -102,6 +145,11 @@ export const g8Zh: typeof g8En = {
   dwUnused: '游戏不触发此事件',
   dwMore: (n) => `还有 ${n} 个对话包`,
   dwMoreTip: '完整列表见「对话台词」面板的「触发时机」部分（点击对话）。',
+  dwWhen: '何时',
+  dwStart: (key) => START_ZH[key] ?? key,
+  dwField: (type, field) => `字段「${field}」· ${TYPE_ZH[type] ?? type}`,
+  dwFromDialogue: '来自另一段对话',
+  dwFromDialogueTip: '不在任何对话包中：由其他对话的台词开启（打断转入、接话或解锁）——见左侧。',
   dhLike: '再做一个同样的…',
   dhLikeTip: '在同一事件和同一对话包上新建对话：复制种族、条件、台词、重复限制和「独白」，你只需改文本。',
   dhHang: '也挂到另一个事件上…',
@@ -131,7 +179,10 @@ export const g8Zh: typeof g8En = {
   dnAddEffect: '+ →',
   dnAddEffectTip: '添加效果（「然后……」）：全部 DA_ 动作和引用效果，可搜索',
   dnPhraseRemove: '移除此条件或效果（Ctrl+Z 可恢复）',
-  pkAll: (n: number): string => `全部条件（${n}）`,
+  dnPhraseEdit: '单击——就地修改：谁、比较方式、数值或列表（种族、派系、物品……）',
+  dnEditCond: '条件',
+  dnEditEffect: '效果',
+  pkAllConds: (n: number): string => `全部条件（${n}）`,
   pkAllEffects: (n: number): string => `全部效果（${n}）`,
   pkFound: (n: number): string => `找到 ${n} 项`,
   pkAllTip: '常用项下面是游戏认识的全部条件，按组排列。可用中文、英文或代码搜索。',

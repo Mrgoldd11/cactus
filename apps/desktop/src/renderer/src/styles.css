@@ -4303,3 +4303,30 @@ code.pk-code {
   font-weight: 600;
   font-size: 12px;
 }
+/* Editor of one condition / effect next to a graph node (G8). */
+.dg-edit-pop {
+  position: absolute;
+  z-index: 21;
+  padding: 6px 8px 8px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+.dg-edit-hd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dg-ln.dg-ln-edit {
+  cursor: pointer;
+  border-radius: 3px;
+}
+.dg-ln.dg-ln-edit:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
