@@ -163,6 +163,102 @@ export function floorAt(objects: readonly InteriorObject[], y: number, except?: 
   return best?.floor ?? 0;
 }
 
+/**
+ * Objects far from the rest: a layout with coordinates of the world instead of the building's
+ * (rebirth.mod has spotlights in the Metal Warehouse 120 000 units away). The game puts them that
+ * far from the building, so inside they are not seen; the view leaves them out of the frame.
+ * Rule: farther than `radius` (horizontally or vertically) from the median of all objects.
+ */
+export function strayObjects(objects: readonly Pick<InteriorObject, 'key' | 'position'>[], radius = 2000): Set<string> {
+  const out = new Set<string>();
+  if (objects.length < 2) return out;
+  const median = (i: number): number => {
+    const v = objects.map((o) => o.position[i] ?? 0).sort((a, b) => a - b);
+    return v[Math.floor(v.length / 2)]!;
+  };
+  const m = [median(0), median(1), median(2)];
+  for (const o of objects) {
+    const dx = o.position[0] - m[0]!;
+    const dz = o.position[2] - m[2]!;
+    if (Math.hypot(dx, dz) > radius || Math.abs(o.position[1] - m[1]!) > radius) out.add(o.key);
+  }
+  return out;
+}
+
+/** A floor of the interior: number as in the game (`floornum`, `building floor`) and its height. */
+export interface InteriorFloor {
+  floor: number;
+  /** Height of the floor surface in the building's coordinates. */
+  level: number;
+}
+
+/** What a building piece tells about floors (a ModelPiece plus its mesh bounds, if known). */
+export interface FloorPiece {
+  floor?: number;
+  interior?: boolean;
+  /** Lowest point of the mesh. */
+  minY?: number;
+}
+
+/**
+ * Floors of an interior. Numbers: the `floornum` of the objects and the `building floor` of the
+ * interior parts (exterior parts are not used: roofs have floors of their own). Height: the lowest
+ * object of that floor (furniture stands on the floor), otherwise the lowest point of the floor's
+ * interior parts, otherwise above the floor below. Stray objects do not count.
+ */
+export function interiorFloors(objects: readonly InteriorObject[], pieces: readonly FloorPiece[] = [], stray: ReadonlySet<string> = new Set()): InteriorFloor[] {
+  const byObjects = new Map<number, number>();
+  for (const o of objects) {
+    if (o.floor === undefined || stray.has(o.key)) continue;
+    byObjects.set(o.floor, Math.min(byObjects.get(o.floor) ?? Infinity, o.position[1]));
+  }
+  const byPieces = new Map<number, number>();
+  for (const p of pieces) {
+    if (!p.interior || p.floor === undefined) continue;
+    byPieces.set(p.floor, Math.min(byPieces.get(p.floor) ?? Infinity, p.minY ?? Infinity));
+  }
+  const nums = [...new Set([...byObjects.keys(), ...byPieces.keys()])].sort((a, b) => a - b);
+  if (nums.length === 0) {
+    // No floor numbers at all: one floor where the objects stand.
+    let low = Infinity;
+    for (const o of objects) if (!stray.has(o.key)) low = Math.min(low, o.position[1]);
+    return [{ floor: 0, level: Number.isFinite(low) ? low : 0 }];
+  }
+  const out: InteriorFloor[] = [];
+  for (const floor of nums) {
+    let level = byObjects.get(floor) ?? byPieces.get(floor) ?? Infinity;
+    if (!Number.isFinite(level)) level = (out.at(-1)?.level ?? 0) + 50;
+    out.push({ floor, level });
+  }
+  // Heights only grow with the floor number.
+  for (let i = 1; i < out.length; i++) if (out[i]!.level < out[i - 1]!.level) out[i]!.level = out[i - 1]!.level;
+  return out;
+}
+
+/** The floor an object is on: its `floornum`, otherwise the highest floor at or below it. */
+export function objectFloor(o: Pick<InteriorObject, 'floor' | 'position'>, floors: readonly InteriorFloor[]): number {
+  if (o.floor !== undefined) return o.floor;
+  let best = floors[0]?.floor ?? 0;
+  for (const f of floors) if (f.level <= o.position[1] + 1) best = f.floor;
+  return best;
+}
+
+/**
+ * Cut height for looking at `floor` from above: half a storey over its level (walls up to the waist
+ * of a person, the room seen like a plan), never over the next floor. The storey is the median gap
+ * between floor levels; with one floor — `single` (Metal Wallhouse: storey 52, ceiling of the top
+ * floor 32 over it, so a fixed height would leave the ceiling on). undefined — no such floor.
+ */
+export function floorCut(floors: readonly InteriorFloor[], floor: number, single = 40): number | undefined {
+  const here = floors.find((f) => f.floor === floor);
+  if (!here) return undefined;
+  const gaps = floors.slice(1).map((f, i) => f.level - floors[i]!.level).filter((g) => g > 5).sort((a, b) => a - b);
+  const storey = gaps.length > 0 ? gaps[Math.floor(gaps.length / 2)]! : single * 2;
+  const cut = here.level + Math.min(Math.max(storey / 2, 20), single);
+  const next = floors.find((f) => f.floor > floor);
+  return next ? Math.min(next.level - 2, cut) : cut;
+}
+
 /** State template: the same object in any layout (this one first). */
 function templateOf(edits: WorldEdits, layout: string, target: string, type: string): { inst: Instance; state: GameRecord } | undefined {
   const order = [layout, ...edits.holders(INTERIORS).filter((h) => h !== layout)];

@@ -37,6 +37,12 @@ export interface ModelPiece {
   field: string;
   /** Interior part of the building (`interior`), not exterior. */
   interior?: boolean;
+  /** BUILDING_PART `building floor`: the floor the part belongs to (the game hides upper floors). */
+  floor?: number;
+  /** BUILDING_PART `is unwalkable roof`: the game hides it when the camera is inside. */
+  roof?: boolean;
+  /** A door of the building (`doors` → part with `is door`). */
+  door?: boolean;
   /** Alpha threshold 0..255 (foliage, plants): pixels with `alphaMap` alpha below it are not drawn. */
   alphaTest?: number;
   /**
@@ -196,6 +202,26 @@ function buildingPieces(ctx: ModContext, rec: GameRecord, out: RecordModel, inte
     for (const r of chooseParts(refs(rec, cat))) partPieces(ctx, r.target, base, out, interior, seen);
 }
 
+/**
+ * The whole building as seen from inside: exterior parts, interior parts and doors, each piece
+ * with its floor. Doors are BUILDING records whose parts are already placed in the building's
+ * coordinates.
+ */
+function shellPieces(ctx: ModContext, rec: GameRecord, out: RecordModel): void {
+  const seen = new Set<string>();
+  buildingPieces(ctx, rec, out, false, seen);
+  buildingPieces(ctx, rec, out, true, seen);
+  const base = materialOf(ctx, refs(rec, 'material')[0]?.target) ?? materialOf(ctx, commonTownMaterial(ctx));
+  for (const r of chooseParts(refs(rec, 'doors'))) {
+    const door = ctx.get(r.target);
+    if (!door || itemTypeName(door.type) !== 'BUILDING') continue;
+    const from = out.pieces.length;
+    const own = materialOf(ctx, refs(door, 'material')[0]?.target) ?? base;
+    for (const p of chooseParts(refs(door, 'parts'))) partPieces(ctx, p.target, own, out, false, seen);
+    for (const piece of out.pieces.slice(from)) piece.door = true;
+  }
+}
+
 function partPieces(ctx: ModContext, sid: string, base: Material | undefined, out: RecordModel, interior: boolean, seen: Set<string>): void {
   if (seen.has(sid)) return;
   seen.add(sid);
@@ -214,6 +240,9 @@ function partPieces(ctx: ModContext, sid: string, base: Material | undefined, ou
     const piece: ModelPiece = { mesh, source: sid, field: 'phs or mesh' };
     if (!marker && (ox !== 0 || oy !== 0 || oz !== 0)) piece.offset = [ox, oy, oz];
     if (interior) piece.interior = true;
+    const floor = part.ints.get('building floor');
+    if (floor !== undefined) piece.floor = floor;
+    if (part.bools.get('is unwalkable roof') === true) piece.roof = true;
     out.pieces.push(withMaterial(piece, own ?? base));
   } else if (mesh) {
     const name = ctx.name(sid) ?? sid;
@@ -291,7 +320,8 @@ function foliagePieces(rec: GameRecord, sid: string, out: RecordModel, modeField
 }
 
 /**
- * Record model. `interior: true`: for a building, interior parts instead of exterior ones. `female: true`: for a
+ * Record model. `interior: true`: for a building, interior parts instead of exterior ones; `shell: true`:
+ * exterior, interior parts and doors together (the «Inside» view). `female: true`: for a
  * race, the female body instead of the male one.
  * Empty `pieces`: the record has no model (or it is in a `.phs`).
  */
@@ -316,12 +346,16 @@ export function foliageRockOf(ctx: ModContext, building: GameRecord): GameRecord
   return best;
 }
 
-export function modelOfRecord(ctx: ModContext, sid: string, options: { interior?: boolean; female?: boolean } = {}): RecordModel {
+export function modelOfRecord(ctx: ModContext, sid: string, options: { interior?: boolean; shell?: boolean; female?: boolean } = {}): RecordModel {
   const rec = ctx.get(sid);
   const type = rec ? itemTypeName(rec.type) : '';
   const out: RecordModel = { sid, type, pieces: [], notes: [] };
   if (!rec) {
     out.notes.push({ en: 'no record', ru: 'записи нет', zh: '没有记录' });
+    return out;
+  }
+  if (type === 'BUILDING' && options.shell === true) {
+    shellPieces(ctx, rec, out);
     return out;
   }
   if (type === 'BUILDING') {

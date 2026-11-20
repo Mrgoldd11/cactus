@@ -1,13 +1,17 @@
 /**
- * «Inside» view: the building interior model (background, not selectable by mouse) and layout objects —
- * furniture, chests, workbenches, item points. Camera as in «Model» (rotate, pan,
- * wheel); click — select an object, gizmo — move (G) / rotate around the vertical (R) with grid
- * and angle step, Del — delete, F — to selection, Esc — clear selection. Object coordinates are from the
- * building model origin, as in the game file.
+ * «Inside» view: the building shell (exterior parts, interior parts and doors — background, not
+ * selectable by mouse) and layout objects — furniture, chests, workbenches, item points. Camera as
+ * in «Model» (rotate, pan, wheel); click — select an object, gizmo — move (G) / rotate around the
+ * vertical (R) with grid and angle step, Del — delete, F — frame (selection or building), Esc —
+ * clear selection. Object coordinates are from the building model origin, as in the game file.
+ *
+ * Floors as in the game: looking at a floor hides the parts of upper floors and the roofs, cuts the
+ * walls a little above the floor (the room is seen from above, like a plan) and hides the objects
+ * of upper floors. A grid lies on the floor; the ring shows where a new object goes.
  */
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { modelOfRecord, type InteriorKind, type ModContext } from '@kenshi-editor/core';
+import { floorCut, modelOfRecord, type FloorPiece, type InteriorFloor, type InteriorKind, type ModContext } from '@kenshi-editor/core';
 import type { GameInstallInfo } from '../../../shared/api.ts';
 import { letterOf } from '../keys.ts';
 import { buildModel, disposeModel } from './build.ts';
@@ -37,6 +41,30 @@ interface Entry {
   item: InteriorItem;
   group: THREE.Group;
 }
+
+/** What the view shows of the floors. */
+export interface InteriorFloorView {
+  floors: readonly InteriorFloor[];
+  /** Floor looked at (game number); undefined — the whole building, nothing cut or hidden. */
+  floor: number | undefined;
+  /** Floor of every object (game number). */
+  floorOf: ReadonlyMap<string, number>;
+  /** Objects far from the building (world coordinates in the layout): not framed. */
+  stray: ReadonlySet<string>;
+}
+
+/** A shell piece: one building part. */
+interface ShellPiece {
+  holder: THREE.Object3D;
+  floor: number;
+  interior: boolean;
+  roof: boolean;
+  door: boolean;
+  minY: number;
+  materials: THREE.MeshStandardMaterial[];
+}
+
+const NO_CUT = 1e9;
 
 /** Box colour of an object without a model: item point — yellow, others — grey-blue. */
 const MARKER: Record<InteriorKind, number> = { furniture: 0x8fa3b8, items: 0xe0b040, other: 0x9a8fb8 };
@@ -69,12 +97,28 @@ export class InteriorView {
   private backdropSid: string | undefined;
   private disposed = false;
   private readonly ray = new THREE.Raycaster();
+  /** Shell pieces of the building (empty — no model or not loaded yet). */
+  private shell: ShellPiece[] = [];
+  private shellPending = false;
+  private readonly cutPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), NO_CUT);
+  private floorView: InteriorFloorView = { floors: [], floor: undefined, floorOf: new Map(), stray: new Set() };
+  /** Frame the camera once the shell and the objects are there. */
+  private needFrame = true;
+  private grid: THREE.GridHelper | undefined;
+  private fill: THREE.Mesh | undefined;
+  private readonly ring: THREE.Mesh;
+  /** Shell loaded (its pieces with their lowest points): for the floor heights. */
+  onShell: (pieces: FloorPiece[]) => void = () => undefined;
+  /** The picture changed (framed, floor shown): for the e2e probes. */
+  onViewChange: () => void = () => undefined;
 
   constructor(host: HTMLElement, game: GameInstallInfo, ctx: ModContext) {
     this.game = game;
     this.ctx = ctx;
     this.viewer = new ModelViewer(host);
     const v = this.viewer;
+    v.autoGrid = false;
+    v.renderer.localClippingEnabled = true;
     this.root.name = 'interior-objects';
     v.scene.add(this.root);
     for (const b of [this.selectBox, this.hoverBox]) {
@@ -101,6 +145,19 @@ export class InteriorView {
       const o = this.selectedEntry();
       if (o) this.box(this.selectBox, o);
     });
+    this.ring = new THREE.Mesh(
+      new THREE.RingGeometry(2.5, 4, 32).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xffc040, transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide }),
+    );
+    this.ring.name = 'place-ring';
+    this.ring.renderOrder = 11;
+    this.ring.visible = false;
+    v.scene.add(this.ring);
+    // The far plane follows the zoom: objects never vanish when the camera moves away.
+    v.controls.addEventListener('change', () => {
+      this.fitDepth();
+      this.placeRing();
+    });
     this.applyEdit();
 
     const el = v.renderer.domElement;
@@ -112,36 +169,244 @@ export class InteriorView {
     el.addEventListener('keydown', this.onKey);
   }
 
-  /** Building interior model — background. */
+  /** Building shell — background. */
   async setBuilding(sid: string | undefined): Promise<void> {
     if (sid === this.backdropSid) return;
     this.backdropSid = sid;
+    this.needFrame = true;
     const old = this.viewer.scene.getObjectByName('__model');
+    this.shell = [];
     if (!sid) {
+      this.shellPending = false;
       this.viewer.setModel(undefined);
       if (old) disposeModel(old);
+      this.layoutFloor();
       return;
     }
-    const model = modelOfRecord(this.ctx, sid, { interior: true });
+    const model = modelOfRecord(this.ctx, sid, { shell: true });
+    this.shellPending = model.pieces.length > 0;
     const built = model.pieces.length > 0 ? await buildModel(this.game, model).catch(() => undefined) : undefined;
     if (this.disposed || sid !== this.backdropSid) {
       if (built) disposeModel(built.group);
       return;
     }
+    this.shellPending = false;
     const group = built?.group ?? new THREE.Group();
     group.name = '__model';
-    // The background is semi-transparent: furniture behind walls is visible and can be selected.
-    group.traverse((o) => {
-      if (o instanceof THREE.Mesh) for (const m of [o.material].flat() as THREE.MeshStandardMaterial[]) {
-        m.transparent = true;
-        m.opacity = 0.55;
-        m.depthWrite = false;
-      }
-    });
+    const bySource = new Map(model.pieces.map((p) => [p.source, p]));
+    group.updateMatrixWorld(true);
+    for (const holder of group.children) {
+      const p = bySource.get(holder.name);
+      const materials: THREE.MeshStandardMaterial[] = [];
+      holder.traverse((o) => {
+        if (o instanceof THREE.Mesh) materials.push(...([o.material].flat() as THREE.MeshStandardMaterial[]));
+      });
+      for (const m of materials) m.clippingPlanes = [this.cutPlane];
+      const box = new THREE.Box3().setFromObject(holder);
+      this.shell.push({
+        holder,
+        floor: p?.floor ?? 0,
+        interior: p?.interior === true,
+        roof: p?.roof === true,
+        door: p?.door === true,
+        minY: box.isEmpty() ? 0 : box.min.y,
+        materials,
+      });
+    }
     const prev = this.viewer.scene.getObjectByName('__model');
     this.viewer.setModel(group);
     if (prev) disposeModel(prev);
-    if (group.children.length === 0) this.frameObjects();
+    this.applyFloorView();
+    this.onShell(this.shell.map((p) => ({ floor: p.floor, interior: p.interior, minY: p.minY })));
+    this.tryFrame();
+  }
+
+  /** What floor to show; objects and shell follow. */
+  setFloorView(f: InteriorFloorView): void {
+    const changed = f.floor !== this.floorView.floor;
+    const firstFloors = this.floorView.floors.length === 0 && f.floors.length > 0;
+    this.floorView = f;
+    this.applyFloorView();
+    if (changed && this.selectedKey !== undefined && !this.isShown(this.selectedKey)) this.select(undefined);
+    if (changed || firstFloors) this.needFrame = true;
+    this.tryFrame();
+    this.onViewChange();
+  }
+
+  /** Frame the building again once objects come (a new layout). */
+  resetFrame(): void {
+    this.needFrame = true;
+    this.tryFrame();
+  }
+
+  private isShown(key: string): boolean {
+    const f = this.floorView.floor;
+    return f === undefined || (this.floorView.floorOf.get(key) ?? 0) <= f;
+  }
+
+  /** Level of the floor looked at (the lowest one for the whole building). */
+  private level(): number {
+    const fv = this.floorView;
+    const f = fv.floor === undefined ? fv.floors[0] : (fv.floors.find((x) => x.floor === fv.floor) ?? fv.floors[0]);
+    return f?.level ?? 0;
+  }
+
+  /**
+   * The building has its own interior parts. Without them (Metal Warehouse: `interior blank`) the
+   * rooms are the exterior parts themselves, and see-through outer walls would take the floors away.
+   */
+  private hasInterior(): boolean {
+    return this.shell.some((p) => p.interior);
+  }
+
+  private cutHeight(): number | undefined {
+    const fv = this.floorView;
+    // Whole building without interior parts: cut over the top floor, the roof stays as glass.
+    const floor = fv.floor ?? (this.hasInterior() ? undefined : fv.floors.at(-1)?.floor);
+    if (floor === undefined) return undefined;
+    return floorCut(fv.floors, floor) ?? this.level() + 40;
+  }
+
+  private applyFloorView(): void {
+    const fv = this.floorView;
+    const floor = fv.floor;
+    const all = floor === undefined;
+    const ownInterior = this.hasInterior();
+    const cut = this.cutHeight();
+    this.cutPlane.constant = cut ?? NO_CUT;
+    for (const p of this.shell) {
+      p.holder.visible = all || (!p.roof && p.floor <= floor);
+      // Whole building: outer parts (or only roofs, see hasInterior) are glass so the rooms show;
+      // a floor: everything solid and cut above the floor.
+      const glass = all && !p.interior && !p.door && (ownInterior || p.roof);
+      for (const m of p.materials) {
+        m.transparent = glass;
+        m.opacity = glass ? 0.4 : 1;
+        m.depthWrite = !glass;
+        m.clippingPlanes = glass ? [] : [this.cutPlane];
+        m.needsUpdate = true;
+      }
+    }
+    for (const e of this.entries.values()) e.group.visible = this.isShown(e.item.key);
+    if (this.hoveredKey !== undefined && !this.isShown(this.hoveredKey)) this.setHover(undefined);
+    this.layoutFloor();
+    this.refreshBoxes();
+  }
+
+  /** Box of the building: the shell, otherwise the objects (strays left out). */
+  private buildingBox(): THREE.Box3 {
+    const box = new THREE.Box3();
+    const model = this.viewer.scene.getObjectByName('__model');
+    if (model && this.shell.length > 0) box.setFromObject(model);
+    const p = new THREE.Vector3();
+    for (const e of this.entries.values()) if (!this.floorView.stray.has(e.item.key)) box.expandByPoint(p.set(...e.item.position));
+    return box;
+  }
+
+  /** Grid on the floor looked at, solid ground under the lowest floor, the ring. */
+  private layoutFloor(): void {
+    const v = this.viewer;
+    for (const o of [this.grid, this.fill]) {
+      if (!o) continue;
+      v.scene.remove(o);
+      o.geometry.dispose();
+      for (const m of [o.material].flat()) m.dispose();
+    }
+    this.grid = undefined;
+    this.fill = undefined;
+    const box = this.buildingBox();
+    if (box.isEmpty()) {
+      this.placeRing();
+      return;
+    }
+    const level = this.level();
+    let step = Math.max(this.edit.grid, 10);
+    const lowest = this.floorView.floors[0];
+    const ground = this.floorView.floor === undefined || lowest === undefined || this.floorView.floor === lowest.floor;
+    // Upper floors: the grid only over the building and fainter, it lies over the walls below.
+    const span = Math.max(box.max.x - box.min.x, box.max.z - box.min.z, 40) + (ground ? step * 4 : 0);
+    while (span / step > 120) step *= 2;
+    const cells = Math.ceil(span / step / 2) * 2;
+    const cx = Math.round((box.min.x + box.max.x) / 2 / step) * step;
+    const cz = Math.round((box.min.z + box.max.z) / 2 / step) * step;
+    const grid = new THREE.GridHelper(cells * step, cells, 0x9aa3ad, 0x5d636b);
+    grid.name = 'floor-grid';
+    for (const m of [grid.material].flat()) {
+      m.transparent = true;
+      m.opacity = ground ? 0.45 : 0.22;
+      m.depthWrite = false;
+    }
+    grid.position.set(cx, level + 0.3, cz);
+    grid.renderOrder = 1;
+    v.scene.add(grid);
+    this.grid = grid;
+    if (ground) {
+      const fill = new THREE.Mesh(
+        new THREE.PlaneGeometry(cells * step, cells * step).rotateX(-Math.PI / 2),
+        new THREE.MeshStandardMaterial({ color: 0x4d4943, roughness: 1, metalness: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }),
+      );
+      fill.name = 'floor-fill';
+      fill.position.set(cx, (lowest?.level ?? level) - 0.6, cz);
+      v.scene.add(fill);
+      this.fill = fill;
+    }
+    this.placeRing();
+    v.requestRender();
+  }
+
+  /** Where the screen centre meets the floor looked at (undefined — the camera looks above it). */
+  private floorPoint(): THREE.Vector3 | undefined {
+    this.ray.setFromCamera(new THREE.Vector2(0, 0), this.viewer.camera);
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.level());
+    return this.ray.ray.intersectPlane(plane, new THREE.Vector3()) ?? undefined;
+  }
+
+  private placeRing(): void {
+    const p = this.editable ? this.floorPoint() : undefined;
+    this.ring.visible = p !== undefined && !this.buildingBox().isEmpty();
+    if (p) this.ring.position.set(p.x, p.y + 0.4, p.z);
+    this.viewer.requestRender();
+  }
+
+  /** Near and far planes for the current distance. */
+  private fitDepth(): void {
+    const v = this.viewer;
+    const d = v.camera.position.distanceTo(v.controls.target);
+    const near = Math.max(d / 2000, 0.05);
+    const far = Math.max(d * 200, 1e5);
+    if (Math.abs(v.camera.near - near) / near < 0.25 && v.camera.far >= d * 50) return;
+    v.camera.near = near;
+    v.camera.far = far;
+    v.camera.updateProjectionMatrix();
+  }
+
+  private tryFrame(): void {
+    if (!this.needFrame || this.shellPending) return;
+    if (this.entries.size === 0 && this.shell.length === 0) return;
+    if (this.frameInterior()) this.needFrame = false;
+  }
+
+  /** Camera on the building from above at an angle, the floor looked at in the middle. */
+  frameInterior(): boolean {
+    const box = this.buildingBox();
+    if (box.isEmpty()) return false;
+    const cut = this.cutHeight();
+    if (cut !== undefined) box.max.y = Math.min(box.max.y, cut);
+    box.min.y = Math.max(box.min.y, this.level() - 20);
+    if (box.max.y < box.min.y + 1) box.max.y = box.min.y + 1;
+    const v = this.viewer;
+    const c = box.getCenter(new THREE.Vector3());
+    const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 20);
+    const dist = (radius / Math.sin(THREE.MathUtils.degToRad(v.camera.fov / 2))) * 0.95;
+    const dir = new THREE.Vector3(0.75, 1.25, 1).normalize();
+    v.controls.target.copy(c);
+    v.camera.position.copy(c).addScaledVector(dir, dist);
+    v.controls.update();
+    this.fitDepth();
+    this.placeRing();
+    v.requestRender();
+    this.onViewChange();
+    return true;
   }
 
   /** Layout objects: new ones are built, moved ones repositioned, missing ones removed. */
@@ -162,7 +427,10 @@ export class InteriorView {
     if (this.selectedKey !== undefined && !this.entries.has(this.selectedKey)) this.select(undefined);
     else this.attachGizmo();
     if (this.hoveredKey !== undefined && !this.entries.has(this.hoveredKey)) this.setHover(undefined);
+    for (const e of this.entries.values()) e.group.visible = this.isShown(e.item.key);
+    this.layoutFloor();
     this.refreshBoxes();
+    this.tryFrame();
   }
 
   /** How many object models are still loading. */
@@ -252,13 +520,16 @@ export class InteriorView {
   }
 
   setEdit(e: InteriorEditSettings): void {
+    const regrid = e.grid !== this.edit.grid;
     this.edit = e;
     this.applyEdit();
+    if (regrid) this.layoutFloor();
   }
 
   setEditable(on: boolean): void {
     this.editable = on;
     this.attachGizmo();
+    this.placeRing();
   }
 
   private applyEdit(): void {
@@ -304,6 +575,7 @@ export class InteriorView {
     const p = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     this.ray.setFromCamera(p, this.viewer.camera);
     for (const hit of this.ray.intersectObject(this.root, true)) {
+      if (!shownInScene(hit.object)) continue;
       let o: THREE.Object3D | null = hit.object;
       while (o && o.userData['key'] === undefined) o = o.parent;
       const key: unknown = o?.userData['key'];
@@ -312,14 +584,9 @@ export class InteriorView {
     return undefined;
   }
 
-  /** Point under the screen centre (model or object), otherwise the point the camera orbits. */
+  /** Where a new object goes: the ring (screen centre on the floor looked at), otherwise the orbit point on that floor. */
   centrePoint(): [number, number, number] {
-    this.ray.setFromCamera(new THREE.Vector2(0, 0), this.viewer.camera);
-    const targets: THREE.Object3D[] = [this.root];
-    const model = this.viewer.scene.getObjectByName('__model');
-    if (model) targets.push(model);
-    const hit = this.ray.intersectObjects(targets, true)[0];
-    const p = hit ? hit.point : this.viewer.controls.target;
+    const p = this.floorPoint() ?? this.viewer.controls.target.clone().setY(this.level());
     return [p.x, p.y, p.z];
   }
 
@@ -338,19 +605,6 @@ export class InteriorView {
     v.requestRender();
   }
 
-  /** Camera on all objects (when there is no building model). */
-  private frameObjects(): void {
-    const box = new THREE.Box3().setFromObject(this.root);
-    if (box.isEmpty()) return;
-    const v = this.viewer;
-    const c = box.getCenter(new THREE.Vector3());
-    const r = Math.max(box.getSize(new THREE.Vector3()).length(), 50);
-    v.controls.target.copy(c);
-    v.camera.position.copy(c).add(new THREE.Vector3(r, r * 0.8, r));
-    v.controls.update();
-    v.requestRender();
-  }
-
   /** Gizmo centre in canvas pixels ('' — no gizmo): for e2e. */
   gizmoProbe(): string {
     const e = this.selectedEntry();
@@ -358,6 +612,28 @@ export class InteriorView {
     const v = e.group.position.clone().project(this.viewer.camera);
     const el = this.viewer.renderer.domElement;
     return `${Math.round(((v.x + 1) / 2) * el.clientWidth)},${Math.round(((1 - v.y) / 2) * el.clientHeight)}`;
+  }
+
+  /**
+   * A shown object a click in the canvas picks: `key@x,y` in canvas pixels ('' — none). For e2e:
+   * the one nearest the canvas centre whose box centre the pick ray hits.
+   */
+  objectProbe(): string {
+    const el = this.viewer.renderer.domElement;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0) return '';
+    let best: { d: number; text: string } | undefined;
+    for (const e of this.entries.values()) {
+      if (!this.isShown(e.item.key) || this.floorView.stray.has(e.item.key)) continue;
+      const c = new THREE.Box3().setFromObject(e.group).getCenter(new THREE.Vector3()).project(this.viewer.camera);
+      if (Math.abs(c.x) > 0.85 || Math.abs(c.y) > 0.85 || c.z > 1) continue;
+      const x = ((c.x + 1) / 2) * r.width;
+      const y = ((1 - c.y) / 2) * r.height;
+      if (this.pick({ clientX: r.left + x, clientY: r.top + y }) !== e.item.key) continue;
+      const d = Math.hypot(c.x, c.y);
+      if (!best || d < best.d) best = { d, text: `${e.item.key}@${Math.round(x)},${Math.round(y)}` };
+    }
+    return best?.text ?? '';
   }
 
   private readonly onDown = (e: PointerEvent): void => {
@@ -389,7 +665,7 @@ export class InteriorView {
     const letter = letterOf(e);
     if (letter === 'f') {
       if (this.selectedKey !== undefined) this.focus(this.selectedKey);
-      else this.viewer.frame();
+      else this.frameInterior();
     } else if ((letter === 'g' || letter === 'r') && this.editable) {
       this.setEdit({ ...this.edit, mode: letter === 'g' ? 'move' : 'rotate' });
       this.onEditChange(this.edit);
@@ -412,6 +688,11 @@ export class InteriorView {
     this.gizmo.dispose();
     for (const e of this.entries.values()) disposeModel(e.group);
     this.entries.clear();
+    for (const o of [this.grid, this.fill, this.ring]) {
+      if (!o) continue;
+      o.geometry.dispose();
+      for (const m of [o.material].flat()) m.dispose();
+    }
     const model = this.viewer.scene.getObjectByName('__model');
     if (model) disposeModel(model);
     this.viewer.dispose();
@@ -426,4 +707,10 @@ function marker(kind: InteriorKind): THREE.Mesh {
   );
   m.name = 'marker';
   return m;
+}
+
+/** The object and all its parents are visible (the raycaster does not check it). */
+function shownInScene(o: THREE.Object3D): boolean {
+  for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false;
+  return true;
 }

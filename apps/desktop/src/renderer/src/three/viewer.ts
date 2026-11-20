@@ -15,6 +15,8 @@ export class ModelViewer {
   readonly controls: OrbitControls;
   private readonly host: HTMLElement;
   private grid: THREE.GridHelper | undefined;
+  /** Grid under the model; off — the owner draws its own (the «Inside» view draws one per floor). */
+  autoGrid = true;
   private model: THREE.Object3D | undefined;
   private readonly resize: ResizeObserver;
   private frameRequested = false;
@@ -137,7 +139,9 @@ export class ModelViewer {
       this.scene.remove(this.grid);
       this.grid.geometry.dispose();
       (this.grid.material as THREE.Material).dispose();
+      this.grid = undefined;
     }
+    if (!this.autoGrid) return;
     const box = this.bounds();
     const size = box.getSize(new THREE.Vector3());
     const span = Math.max(size.x, size.y, size.z, 0.1) * 1.5;
