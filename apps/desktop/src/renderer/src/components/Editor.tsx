@@ -27,7 +27,7 @@ import { Workbench } from '../workbench/Workbench.tsx';
 import { LayoutSwitch, WindowMenu } from '../workbench/WindowMenu.tsx';
 import { UndoRedoButtons, stepOf } from './History.tsx';
 import { GameIndicator } from './GameLink.tsx';
-import { applyPreset, isPreset, openPanel, type PresetId } from '../workbench/layouts.ts';
+import { applyPreset, isPreset, openBelow, openPanel, type PresetId } from '../workbench/layouts.ts';
 import type { PanelParams } from '../workbench/registry.ts';
 import { raceCompatPair } from '../workbench/race-compat-pair.ts';
 
@@ -408,7 +408,9 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
           data-testid="validate"
           title={t.checkBtnTip}
           onClick={() => {
-            open('diagnostics');
+            const api = apiRef.current;
+            // Beside the line panel (dialogue layout), not as a tab over it.
+            if (!api || !openBelow(api, t, 'diagnostics', 'line')) open('diagnostics');
             window.dispatchEvent(new Event(RESCAN_EVENT));
           }}
         >
@@ -484,7 +486,13 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
           {t.modRecords}: {modCount}
         </span>
         {/* Monospace only for the path: in Consolas the label's space looks doubled. */}
-        <span className={project.path !== undefined ? 'mono muted' : 'muted'}>{project.path ?? t.unsaved}</span>
+        {project.path !== undefined ? (
+          <span className="mono muted">{project.path}</span>
+        ) : (
+          <span className="muted" data-testid="status-unsaved" title={t.unsavedWhereTip}>
+            {t.unsavedWhere(project.bundle.suggestedPath.replace(/[^\\/]*$/, ''))}
+          </span>
+        )}
         <GameIndicator />
         {status && (
           <span className={`status-msg ${status.kind}`} data-testid="status-msg">
@@ -583,6 +591,8 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
             if (!res) return;
             setModal(undefined);
             const made = res;
+            // The «Package» panel follows the latest package selected: show the one the wizard used.
+            selection.select({ kind: 'record', sid: made.pkg }, { history: false });
             go(made.dialog);
             setStatus({ text: (s) => s.edDone(project.entry(made.dialog)?.name ?? made.dialog, project.entry(made.pkg)?.name ?? made.pkg), kind: 'info' });
           }}

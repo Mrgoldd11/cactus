@@ -220,7 +220,7 @@ function EventRow({ project, row, groupHead, open, current, onToggle, onDialog, 
         <span className="pk-tw">{count > 0 ? (open ? '▾' : '▸') : ''}</span>
         <span className="pk-ev-name">
           {label ?? t.pkUnknownEvent(ev.event)}
-          <span className="pk-code">
+          <span className="pk-code fcs-code">
             {ev.name ?? ''} ({ev.event})
           </span>
         </span>
@@ -371,7 +371,7 @@ function Holders({ project, overview }: { project: Project; overview: PackageOve
                 </button>
               </>
             )}
-            <span className="muted">
+            <span className="muted fcs-code">
               {' · '}
               {t.pkField} <code className="pk-code">{list[0]!.field}</code>
             </span>

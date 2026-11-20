@@ -27,6 +27,12 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({ args: ['.'], cwd: appDir, env });
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
+  // These checks read the FCS codes next to the words: turn the «FCS codes» setting on (off by default).
+  await page.evaluate(() => {
+    localStorage.setItem('kedit.fcsCodes', '1');
+  });
+  await page.reload();
+  await page.waitForLoadState('domcontentloaded');
   return { app, page };
 }
 
@@ -71,20 +77,21 @@ test('line panel: FCS rows, one condition list with search, reference condition 
     await expect(cond.getByTestId('ln-cond-who').locator('option:checked')).toContainText('T_ME');
     await expect(cond.getByTestId('ln-cond-name').locator('option:checked')).toHaveText(/ · DC_PERSONALITY_TAG$/);
     await expect(cond.getByTestId('ln-cond-tag').locator('option:checked')).toContainText('PT_HONORABLE');
-    await expect(cond.getByTestId('ln-cond-value')).toHaveValue('1');
+    // A yes / no condition reads as «да» (= 1) rather than a comparison and a number.
+    await expect(cond.getByTestId('ln-cond-yes')).toHaveValue('1');
     await expect(cond.getByTestId('ln-cond-phrase')).toContainText('Сказать, только если у меня есть черта «честный»');
     await expect(panel.getByTestId('ln-effect-phrase').first()).toContainText(/^Затем: /);
 
     // The description pane: a hint at first, the meaning of the clicked field after.
     const desc = panel.getByTestId('ln-desc');
     await expect(desc).toContainText('Нажмите на поле');
-    await cond.getByTestId('ln-cond-value').click();
+    await cond.getByTestId('ln-cond-yes').click();
     await expect(desc).toContainText('Условие:');
     await expect(desc).toContainText('DC_PERSONALITY_TAG');
     await panel.getByTestId('ln-f-chance temporary').click();
     await expect(desc).toContainText('chance temporary');
     await expect(desc).toContainText('СКАЖЕТ');
-    await cond.getByTestId('ln-cond-value').click();
+    await cond.getByTestId('ln-cond-yes').click();
     await page.screenshot({ path: join(shots, '99-line-panel.png') });
 
     // «+ условие»: one list; Russian, English and the code prefix all find DC_STARVING.
@@ -117,7 +124,7 @@ test('line panel: FCS rows, one condition list with search, reference condition 
     await panel.getByTestId('ln-cond-add').click();
     await search.fill('моя раса');
     const myRace = pick.locator('[data-testid="ln-pick-item"][data-key="ref:my race"]');
-    await expect(myRace).toContainText('ссылка → RACE');
+    await expect(myRace).toContainText('ссылка → раса');
     await myRace.click();
     const picker = page.getByTestId('record-picker');
     await expect(picker).toBeVisible();
@@ -152,7 +159,7 @@ test('line panel: FCS rows, one condition list with search, reference condition 
     const epick = panel.getByTestId('ln-pick');
     await expect(epick).toHaveAttribute('data-kind', 'effect');
     await epick.getByTestId('ln-pick-search').fill('give item');
-    await expect(epick.locator('[data-testid="ln-pick-item"][data-key="ref:give item"]')).toContainText('ссылка → ITEM');
+    await expect(epick.locator('[data-testid="ln-pick-item"][data-key="ref:give item"]')).toContainText('ссылка → предмет');
     await epick.getByTestId('ln-pick-search').fill('DA_LOCK');
     await expect(epick.locator('[data-testid="ln-pick-item"][data-key="DA_LOCK_THIS_DIALOG"]')).toHaveCount(1);
     await panel.screenshot({ path: join(shots, '103-line-effect-picker.png') });

@@ -91,11 +91,12 @@ test('dialogue portals: entry from 8940, «← unlocked by» in the list, a clic
     await expect(graph.locator('[data-testid="dg-portal"][data-dir="out"]')).toHaveCount(0);
     await graph.screenshot({ path: join(shots, '105-dialogue-portal-entry.png') });
 
-    // «FCS codes» off: the verbs stay, the codes hide.
-    await graph.getByTestId('dg-codes').click();
+    // «FCS codes» off by default: the verbs stay, the codes are hidden; the toggle shows them.
     await expect(kinds.first().locator('.dg-code')).toBeHidden();
     await graph.getByTestId('dg-codes').click();
     await expect(kinds.first().locator('.dg-code')).toBeVisible();
+    await graph.getByTestId('dg-codes').click();
+    await expect(kinds.first().locator('.dg-code')).toBeHidden();
 
     // A click on the portal opens 8940-D; it has an exit portal back to 8950.
     await entry.click();

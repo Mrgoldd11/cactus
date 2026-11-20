@@ -44,6 +44,12 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({ args: ['.'], cwd: appDir, env });
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
+  // These checks read the FCS codes next to the words: turn the «FCS codes» setting on (off by default).
+  await page.evaluate(() => {
+    localStorage.setItem('kedit.fcsCodes', '1');
+  });
+  await page.reload();
+  await page.waitForLoadState('domcontentloaded');
   return { app, page };
 }
 
@@ -229,9 +235,9 @@ test('G8: every condition on the node is editable — the race list of «My skin
     await cond.click();
     await expect(pop).toHaveAttribute('data-category', 'conditions');
     await expect(pop.getByTestId('ln-cond-who')).toBeVisible();
-    await expect(pop.getByTestId('ln-cond-cmp')).toBeVisible();
-    await pop.getByTestId('ln-cond-value').fill('1');
-    await pop.getByTestId('ln-cond-value').press('Enter');
+    // A yes / no condition reads «yes / no» (G9), the code shows «= 0» / «= 1».
+    await expect(pop.getByTestId('ln-cond-yes')).toHaveValue('0');
+    await pop.getByTestId('ln-cond-yes').selectOption('1');
     await expect(cond).toContainText('= 1');
     await page.screenshot({ path: join(shots, '122-g8-edit-dc.png') });
     await page.keyboard.press('Escape');

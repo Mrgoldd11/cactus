@@ -139,7 +139,7 @@ function Flag({ k, ctx, sid, rec, t, edit }: HeadPart & { k: FlagKey }): ReactNo
   return (
     <label className="dh-flag" data-testid={`dh-flag-${slug}`} title={desc} {...describe}>
       <input type="checkbox" checked={on} onChange={(e) => { set(e.target.checked); }} />
-      <span>{label}</span> <span className="mono muted small">{code}</span>
+      <span>{label}</span> <span className="mono muted small fcs-code">{code}</span>
       {oldOnce && <span className="warn small"> ⚠ once only=true</span>}
     </label>
   );

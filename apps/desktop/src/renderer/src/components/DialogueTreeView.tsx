@@ -32,6 +32,7 @@ import {
   type TransitionKind,
 } from '@kenshi-editor/core';
 import { inLang, useLang, useT } from '../i18n.ts';
+import { setFcsCodes, stripEnumCodes, useFcsCodes } from '../fcs-codes.ts';
 import { recordName, useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
 import { tryEdit } from '../hooks.ts';
@@ -56,8 +57,6 @@ export interface TreeProps {
 const FOLD_MIN_NODES = 20;
 /** Speaker of the lines added by «+ interjection» (T_INTERJECTOR1). */
 const INTERJECTOR = 3;
-/** Shared with the graph: FCS codes next to the plain words. */
-const CODES_KEY = 'kedit.graph.codes';
 const EMPTY: ReadonlySet<string> = new Set();
 
 type Phrase = LineView['conditions'][number];
@@ -117,11 +116,8 @@ export function DialogueTreeView({ project, sid, version, onGo, selected, onSele
   /** Where each node stands as a whole row: its tree parent and the edge to it. */
   const place = useMemo(() => new Map(allRows.filter((r) => r.link === undefined).map((r) => [r.id, r])), [allRows]);
 
-  const [codes, setCodesState] = useState(() => localStorage.getItem(CODES_KEY) !== '0');
-  const setCodes = (on: boolean): void => {
-    localStorage.setItem(CODES_KEY, on ? '1' : '0');
-    setCodesState(on);
-  };
+  const codes = useFcsCodes();
+  const setCodes = setFcsCodes;
   const [sel, setSel] = useState<string | undefined>(selected !== undefined && byId.has(selected) ? selected : undefined);
   const [editing, setEditing] = useState<string | undefined>(undefined);
   const [variantsOpen, setVariantsOpen] = useState<ReadonlySet<string>>(new Set());
@@ -445,7 +441,7 @@ export function DialogueTreeView({ project, sid, version, onGo, selected, onSele
             {whoCode !== undefined && whoCode !== who && <span className="dg-code mono">{whoCode}</span>}
             {status === 'new' && <span className="st-badge st-new">{t.lineStatus_new}</span>}
             {status === 'changed' && <span className="st-badge st-changed">{t.lineStatus_changed}</span>}
-            {n.eventLabel !== undefined && <span className="dg-event mono">{n.eventLabel}</span>}
+            {n.eventLabel !== undefined && <span className="dg-event mono">{stripEnumCodes(n.eventLabel, codes)}</span>}
             {n.type !== 'DIALOGUE_LINE' && <b className="dt-name">{n.localized ?? n.name}</b>}
           </span>
           {rec ? (

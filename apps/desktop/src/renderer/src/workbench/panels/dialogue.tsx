@@ -5,11 +5,13 @@
  * the line inspector shows the latest one.
  */
 import { useMemo, useState, type ReactNode } from 'react';
-import { EVENT_TALK, formatEnumValue, refValueEnum, simulateTalk, squadIndex, talkSources } from '@kenshi-editor/core';
+import { EVENT_TALK, refValueEnum, simulateTalk, squadIndex, talkSources } from '@kenshi-editor/core';
 import { DialogueGraphTab } from '../../components/DialogueGraphTab.tsx';
 import { LineInspector } from '../../components/LineInspector.tsx';
 import { TalkExample } from '../../components/ConversationPlayer.tsx';
-import { PlayStrip } from '../../components/PlayStrip.tsx';
+import { PlayStrip, playedCharacter } from '../../components/PlayStrip.tsx';
+import { useStore } from '../store.ts';
+import { DialogueStart } from '../../components/DialogueStart.tsx';
 import { TalkRulesBody, TalkTab } from '../../components/TalkTab.tsx';
 import { useLang, useT } from '../../i18n.ts';
 import { recordName } from '../../data-names.ts';
@@ -17,6 +19,7 @@ import type { Project } from '../../project.ts';
 import { registerPanel, type PanelProps } from '../registry.ts';
 import { useFollowed, useWorkbench } from '../context.ts';
 import { Empty } from './common.tsx';
+import { enumText, useFcsCodes } from '../../fcs-codes.ts';
 
 /** Select a line (without «back/forward» history: these are steps inside a dialogue). */
 function useSelectLine(dialog: string | undefined): (sid: string, parent?: string) => void {
@@ -27,9 +30,9 @@ function useSelectLine(dialog: string | undefined): (sid: string, parent?: strin
 }
 
 function GraphPanel({ def, params }: PanelProps): ReactNode {
-  const { project } = useWorkbench();
+  const { project, go, newEventDialogue } = useWorkbench();
   const { sid, version } = useFollowed(def, params);
-  if (sid === undefined) return <Empty types={def.shows?.types} />;
+  if (sid === undefined) return <DialogueStart project={project} onNew={() => { newEventDialogue(); }} onOpen={go} />;
   const rec = project.record(sid);
   if (rec && project.ctx.typeName(rec.type) === 'CHARACTER') return <CharacterGraph key={sid} character={sid} version={version} />;
   return <Graph sid={sid} version={version} />;
@@ -77,12 +80,13 @@ function CharacterGraph({ character, version }: { character: string; version: nu
   const [picked, setPicked] = useState<string | undefined>(undefined);
   const selectLine = useSelectLine(undefined);
   const selectPlayed = useSelectPlayed();
+  const codes = useFcsCodes();
   const who = recordName(project.ctx, character);
   if (!list.length) return <Empty text={t.dgCharNone(who)} />;
   const cur = list.find((d) => d.dialog === picked) ?? list[0]!;
   const at = list.indexOf(cur);
   const evDef = refValueEnum(project.ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0);
-  const evName = (event: number): string => (evDef ? formatEnumValue(evDef, event, lang) : String(event));
+  const evName = (event: number): string => (evDef ? enumText(evDef, event, lang, codes) : String(event));
   return (
     <div className="dg-char" data-testid="graph-character" data-sid={character}>
       <div className="dg-char-bar">
@@ -233,10 +237,16 @@ function PlayerPanel({ def, params }: PanelProps): ReactNode {
 /** «How the game chooses a dialogue»: the rule in plain words and an example on the selected character. */
 function HowtoPanel({ def, params }: PanelProps): ReactNode {
   const { project } = useWorkbench();
+  const t = useT();
   const { sid, version } = useFollowed(def, params);
+  // No character selected: the example takes the one being played in «Play» (G9, M9).
+  const played = useStore(playedCharacter);
+  const isChar = (id: string | undefined): boolean => id !== undefined && project.ctx.typeName(project.ctx.get(id)?.type ?? -1) === 'CHARACTER';
+  const fromPlay = !isChar(sid) && isChar(played);
   return (
     <div className="panel-scroll panel-pad howto" data-testid="howto">
-      <TalkExample project={project} sid={sid} version={version} />
+      {fromPlay && <div className="muted small" data-testid="howto-from-play">{t.howtoFromPlay}</div>}
+      <TalkExample project={project} sid={fromPlay ? played : sid} version={version} />
       <TalkRulesBody />
     </div>
   );

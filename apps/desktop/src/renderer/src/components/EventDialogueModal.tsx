@@ -20,7 +20,6 @@ import {
   eventDialogueTarget,
   eventHelp,
   fieldEnum,
-  formatEnumValue,
   freeRecordName,
   holderFields,
   lineRefPhrase,
@@ -36,6 +35,8 @@ import { useLang, useT } from '../i18n.ts';
 import type { Project } from '../project.ts';
 import { EventSelect, eventEnum, eventText } from './EventUi.tsx';
 import { DialogPicker } from './LinePanelParts.tsx';
+import { boolCondition, YesNoSelect } from './DialogHelpUi.tsx';
+import { enumText, useFcsCodes, withoutCode } from '../fcs-codes.ts';
 import { RecordPicker } from './RecordPicker.tsx';
 import { Modal } from './widgets.tsx';
 
@@ -111,6 +112,7 @@ function condWhen(row: CondRow): DialogWhen {
 export function EventDialogueModal({ project, preset, onCreate, onClose }: Props): ReactNode {
   const t = useT();
   const lang = useLang();
+  const codes = useFcsCodes();
   const ctx = project.ctx;
   const evDef = useMemo(() => eventEnum(ctx), [ctx]);
   const repDef = useMemo(() => fieldEnum(ctx.schema, 'DIALOGUE', 'repetition limit'), [ctx]);
@@ -150,11 +152,13 @@ export function EventDialogueModal({ project, preset, onCreate, onClose }: Props
     return w;
   }, [whoSid, whoType, kind, curField, own, fieldPkg]);
   const target = useMemo(() => (who ? eventDialogueTarget(ctx, who) : undefined), [ctx, who]);
+  // The shared package option keeps its own count while «own package» is chosen (it is not the target then).
+  const shared = useMemo(() => (who?.kind === 'holder' && who.own ? eventDialogueTarget(ctx, { ...who, own: false }) : target), [ctx, who, target]);
 
   const eventCode = evDef?.values.find((v) => v.value === event)?.name;
   const holderRaw = whoSid !== undefined ? ctx.name(whoSid) || whoSid : '';
   const raceSid = raceOn ? race : undefined;
-  const autoName = freeRecordName(ctx, 'DIALOGUE', eventDialogueBaseName(raceSid !== undefined ? `${holderRaw} ${ctx.name(raceSid)}` : holderRaw, eventCode, event));
+  const autoName = event === 0 ? '' : freeRecordName(ctx, 'DIALOGUE', eventDialogueBaseName(raceSid !== undefined ? `${holderRaw} ${ctx.name(raceSid)}` : holderRaw, eventCode, event));
   const when = useMemo(() => [...conds.map(condWhen), ...(like?.extra ?? [])], [conds, like]);
   const monologue = mono ?? event !== EVENT_TALK;
 
@@ -209,7 +213,7 @@ export function EventDialogueModal({ project, preset, onCreate, onClose }: Props
 
   const whoName = whoSid !== undefined ? recordName(ctx, whoSid) : undefined;
   const pkgLabel = target?.pkg !== undefined ? recordName(ctx, target.pkg) : freeRecordName(ctx, 'DIALOGUE_PACKAGE', `${holderRaw} dialogues`);
-  const evLabel = eventText(evDef, event, lang);
+  const evLabel = eventText(evDef, event, lang, codes);
   const will = spec
     ? (target?.pkg === undefined && whoName !== undefined ? t.edWillPkg(pkgLabel, whoName) : '') +
       t.edWillNew(name ?? autoName, lines.length, pkgLabel, evLabel)
@@ -321,7 +325,7 @@ export function EventDialogueModal({ project, preset, onCreate, onClose }: Props
                   <select value={curField} data-testid="ed-field" onChange={(e) => { setField(e.target.value); }}>
                     {fields.map((f) => (
                       <option key={f} value={f}>
-                        {t.edFields[f] ?? f}
+                        {withoutCode(t.edFields[f] ?? f, codes)}
                       </option>
                     ))}
                   </select>
@@ -338,7 +342,7 @@ export function EventDialogueModal({ project, preset, onCreate, onClose }: Props
                   <>
                     <label>
                       <input type="radio" name="ed-own" checked={!own} data-testid="ed-shared" onChange={() => { setOwn(false); }} />
-                      {t.edShared(recordName(ctx, target.pkg ?? target.existing[0]!), target.pkg !== undefined ? target.sharedBy : 0)}
+                      {t.edShared(recordName(ctx, shared?.pkg ?? target.existing[0]!), shared?.pkg !== undefined ? shared.sharedBy : 0)}
                     </label>
                     {target.existing.length > 1 && !own && (
                       <select value={target.pkg} onChange={(e) => { setFieldPkg(e.target.value); }}>
@@ -447,29 +451,41 @@ export function EventDialogueModal({ project, preset, onCreate, onClose }: Props
                         <option value={0}>{t.edSpeakerMe}</option>
                         <option value={1}>{t.edSpeakerTarget}</option>
                       </select>
-                      <select
-                        value={row.cmp}
-                        onChange={(e) => {
-                          const v = Number(e.target.value);
-                          setConds((cs) => cs.map((c, k) => (k === i ? { ...row, cmp: v } : c)));
-                        }}
-                      >
-                        {CMP_SYMBOLS.map((s, k) => (
-                          <option key={k} value={k}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="number"
-                        className="ed-num-input"
-                        value={row.v}
-                        title={t.edCondValue}
-                        onChange={(e) => {
-                          const v = Number(e.target.value) || 0;
-                          setConds((cs) => cs.map((c, k) => (k === i ? { ...row, v } : c)));
-                        }}
-                      />
+                      {CONDITION_HELP[row.item.code]?.kind === 'bool' && boolCondition(row.cmp, row.v) !== undefined ? (
+                        <YesNoSelect
+                          value={boolCondition(row.cmp, row.v)!}
+                          testId="ed-cond-yes"
+                          onChange={(yes) => {
+                            setConds((cs) => cs.map((c, k) => (k === i ? { ...row, cmp: 0, v: yes ? 1 : 0 } : c)));
+                          }}
+                        />
+                      ) : (
+                        <>
+                        <select
+                          value={row.cmp}
+                          onChange={(e) => {
+                            const v = Number(e.target.value);
+                            setConds((cs) => cs.map((c, k) => (k === i ? { ...row, cmp: v } : c)));
+                          }}
+                        >
+                          {CMP_SYMBOLS.map((s, k) => (
+                            <option key={k} value={k}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          className="ed-num-input"
+                          value={row.v}
+                          title={t.edCondValue}
+                          onChange={(e) => {
+                            const v = Number(e.target.value) || 0;
+                            setConds((cs) => cs.map((c, k) => (k === i ? { ...row, v } : c)));
+                          }}
+                        />
+                        </>
+                      )}
                     </>
                   )}
                   <button className="small" title={t.edRemoveCond} onClick={() => { setConds((cs) => cs.filter((_, k) => k !== i)); }}>
@@ -492,7 +508,7 @@ export function EventDialogueModal({ project, preset, onCreate, onClose }: Props
                 <select value={rep ?? autoRep} data-testid="ed-rep" title={t.edRepTip} onChange={(e) => { setRep(Number(e.target.value)); }}>
                   {repDef.values.map((v) => (
                     <option key={v.value} value={v.value}>
-                      {formatEnumValue(repDef, v.value, lang)}
+                      {enumText(repDef, v.value, lang, codes)}
                     </option>
                   ))}
                 </select>
@@ -500,7 +516,7 @@ export function EventDialogueModal({ project, preset, onCreate, onClose }: Props
                 <input type="number" value={rep ?? autoRep} data-testid="ed-rep" onChange={(e) => { setRep(Number(e.target.value) || 0); }} />
               )}
               <label>{t.edName}</label>
-              <input value={name ?? autoName} data-testid="ed-name" onChange={(e) => { setName(e.target.value); }} />
+              <input value={name ?? autoName} data-testid="ed-name" placeholder={t.edNameLater} title={t.edNameTip} onChange={(e) => { setName(e.target.value); }} />
               <label>{t.edBonus}</label>
               <span className="ed-row">
                 <input
@@ -521,6 +537,7 @@ export function EventDialogueModal({ project, preset, onCreate, onClose }: Props
 
           {scoreLines.length > 0 && (
             <div className={`ed-score ed-score-${shown ? outcomeOf(shown.key, shown.best) : 'alone'}`} data-testid="ed-score">
+              <div className="ed-score-lead" data-testid="ed-score-lead">{t.edScoreLead}</div>
               <b>{t.edScoreTitle}:</b>
               {scoreLines.map((s, i) => (
                 <div key={i}>{s}</div>

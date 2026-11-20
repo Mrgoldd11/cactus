@@ -158,7 +158,7 @@ export const zh2 = {
   dgHidden: '已隐藏：',
   dgEnd: '对话到此结束',
   dgEmptyText: '（还没有文本）',
-  dgHint: '右键——菜单 · 双击或 F2——编辑文本 · Del——删除 · Shift+拖动——多选 · Ctrl+D——复制',
+  dgHint: '右键——菜单 · 双击或 F2——编辑文本 · Del——删除 · Shift+拖动——多选 · Ctrl+D——复制 · 滚轮——缩放，Shift/Ctrl+滚轮——滚动',
   dgAddTip: '右键点击节点——更多操作',
   dgOpenLine: '打开台词',
   dgOpenLineHint: '在“台词”面板中显示所选台词',

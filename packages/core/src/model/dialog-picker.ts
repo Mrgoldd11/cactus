@@ -172,13 +172,76 @@ export function dialogPickItems(ctx: ModContext, ownerType: string, kind: Dialog
 
 const fold = (s: string): string => s.toLowerCase().replace(/ё/g, 'е');
 
-/** Whether an item matches a search: code (`DC_STARV`, `my race`), name in the interface language or English. */
+/**
+ * Words a modder may search with that are not in the names: word stems in en / ru / zh → the items
+ * (keys) or picker groups they mean. «предмет» finds «Give item», «здоров» the health group.
+ */
+const SYNONYMS: readonly { words: readonly string[]; keys?: readonly string[]; groups?: readonly string[] }[] = [
+  { words: ['item', 'thing', 'предмет', 'вещ', 'дать', 'дает', 'подар', '物品', '东西', '给'], keys: ['ref:give item', 'ref:target has item', 'ref:target has item type'] },
+  { words: ['health', 'hurt', 'injur', 'wound', 'здоров', 'ранен', 'рана', 'болен', 'голод', '健康', '受伤', '饥饿'], groups: ['state'] },
+  { words: ['money', 'cats', 'pay', 'cash', 'деньг', 'кат', 'плат', 'монет', '钱', '金钱', '付'], groups: ['money', 'trade'] },
+  { words: ['shop', 'buy', 'sell', 'торг', 'куп', 'прода', 'магаз', '买', '卖', '商店'], keys: ['DA_TRADE'], groups: ['trade'] },
+  { words: ['fight', 'attack', 'kill', 'enemy', 'бой', 'драк', 'атак', 'напа', 'убит', 'враг', '战斗', '攻击', '敌'], groups: ['fight'] },
+  { words: ['join', 'recruit', 'hire', 'follow', 'вступ', 'присоедин', 'наня', 'нанят', 'завербов', 'спутник', '加入', '招募', '雇'], groups: ['squad'] },
+  { words: ['race', 'раса', 'расы', 'расе', '种族'], keys: ['ref:my race', 'ref:target race', 'ref:no target race', 'ref:my subrace'] },
+  { words: ['faction', 'фракц', '派系', '阵营'], keys: ['ref:my faction', 'ref:target faction'] },
+  { words: ['friend', 'relation', 'remember', 'memory', 'отношен', 'друж', 'друг', 'помн', 'памят', '关系', '朋友', '记'], groups: ['relations'] },
+  { words: ['prison', 'jail', 'slave', 'law', 'arrest', 'тюрьм', 'плен', 'раб', 'закон', 'арест', '监狱', '奴隶', '法律'], groups: ['captivity', 'law'] },
+  { words: ['town', 'city', 'place', 'город', 'место', 'дом', '城', '地点'], groups: ['place'] },
+  { words: ['talk', 'conversation', 'разговор', 'беседа', 'реплик', '对话'], groups: ['dialog'] },
+];
+
+/** Labels of every picker group in every language, searched together with the item names. */
+const GROUP_WORDS: Readonly<Record<string, string>> = (() => {
+  const out: Record<string, string> = {};
+  for (const labels of [CONDITION_GROUP_LABELS, ACTION_GROUP_LABELS, DIALOG_PICK_GROUP_LABELS] as readonly Readonly<Record<string, UiText>>[])
+    for (const [k, l] of Object.entries(labels)) out[k] = `${out[k] ?? ''} | ${l.en} | ${l.ru ?? ''} | ${l.zh ?? ''}`;
+  return out;
+})();
+
+function synonymOf(item: DialogPickItem, w: string): boolean {
+  // Short Latin / Cyrillic words are too vague for stems; Chinese ones are short by nature.
+  if (w.length < 3 && !/[\u4e00-\u9fff]/.test(w)) return false;
+  return SYNONYMS.some((s) => (s.keys?.includes(item.key) || s.groups?.includes(item.group)) && s.words.some((x) => x.startsWith(w) || w.startsWith(x)));
+}
+
+function hayOf(item: DialogPickItem): string {
+  return fold([item.code, item.code.replace(/_/g, ' '), item.label, item.labelEn, GROUP_WORDS[item.group] ?? ''].join(' | '));
+}
+
+/**
+ * Whether an item matches a search: code (`DC_STARV`, `my race`), name in the interface language
+ * or English, its group's name, or a synonym (`SYNONYMS`). Every word of the query must match.
+ */
 export function dialogPickMatches(item: DialogPickItem, query: string): boolean {
   const q = fold(query.trim());
   if (!q) return true;
-  const hay = fold([item.code, item.code.replace(/_/g, ' '), item.label, item.labelEn].join(' | '));
-  return q.split(/\s+/).every((w) => hay.includes(w));
+  const hay = hayOf(item);
+  return q.split(/\s+/).every((w) => hay.includes(w) || synonymOf(item, w));
 }
+
+/**
+ * «Maybe: …» when nothing matches: items whose name, description or group shares the start of any
+ * word of the query (the first four letters), most used first.
+ */
+export function dialogPickMaybe(items: readonly DialogPickItem[], query: string, n = 5): DialogPickItem[] {
+  const words = fold(query.trim())
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 || /[\u4e00-\u9fff]/.test(w))
+    .map((w) => w.slice(0, 4));
+  if (!words.length) return [];
+  return items
+    .filter((i) => {
+      const hay = `${hayOf(i)} | ${fold(i.desc)}`;
+      return words.some((w) => hay.includes(w));
+    })
+    .sort((a, b) => b.used - a.used)
+    .slice(0, n);
+}
+
+/** Effects that start a fight or a chase: «Often used» lists the peaceful ones first. */
+const HOSTILE = /^DA_(ATTACK|DECLARE_WAR|MATES_KILL_ME|KNOCKOUT|FLAG_TEMP_ENEMY|CRIME_ALARM|MASSIVE_ALARM|ARREST|ASSAULT_PHASE|THUG_HUNTER)/;
+const hostile = (i: DialogPickItem): boolean => i.group === 'fight' || HOSTILE.test(i.code);
 
 /**
  * The picker list: items matching `query` by group. Without a query a group of the `common` most
@@ -194,7 +257,11 @@ export function dialogPickGroups(items: readonly DialogPickItem[], kind: DialogP
   }
   const out: DialogPickGroup[] = [];
   if (query.trim() === '' && common > 0) {
-    const top = [...shown].filter((i) => i.used > 0).sort((a, b) => b.used - a.used).slice(0, common);
+    // By how often the loaded data (vanilla first of all) uses them; peaceful ones before fights.
+    const top = [...shown]
+      .filter((i) => i.used > 0)
+      .sort((a, b) => Number(hostile(a)) - Number(hostile(b)) || b.used - a.used)
+      .slice(0, common);
     if (top.length) out.push({ key: 'common', label: groupLabel(kind, 'common', lang), items: top });
   }
   for (const g of order) {

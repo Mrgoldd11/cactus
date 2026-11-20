@@ -987,6 +987,8 @@ tr.fs-removed td:first-child {
   border-top: 1px solid var(--border);
 }
 .picker-list {
+  /* G9 (M7): a fixed height, so the window does not shrink and move while typing a search. */
+  flex: none;
   height: 55vh;
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -4178,6 +4180,12 @@ code.pk-code {
   text-align: right;
   font-weight: 600;
 }
+/* G9 (M9): the visible breakdown of the points next to the sort key. */
+.pl-key .pl-sum {
+  font-weight: normal;
+  font-family: inherit;
+  white-space: nowrap;
+}
 .ed-like {
   padding: 4px 8px;
   border-left: 3px solid var(--accent);
@@ -4329,6 +4337,7 @@ code.pk-code {
 }
 .dg-ln.dg-ln-edit:hover {
   background: rgba(255, 255, 255, 0.06);
+}
 
 /* Model with clip playback (wizards' right side) */
 .model-preview { display: flex; flex-direction: column; height: 100%; min-height: 0; }
@@ -4369,4 +4378,83 @@ code.pk-code {
   .cw { flex-direction: column-reverse; justify-content: flex-end; }
   .cw-steps { flex: 1 1 auto; max-width: none; min-height: 0; }
   .cw-subject { flex: 0 0 300px; border-left: none; border-bottom: 1px solid var(--border); }
+}
+
+/* ---- G9: dialogue screen after the mouse test ---- */
+.pk-dup {
+  color: var(--changed);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ds-start {
+  max-width: 560px;
+  padding: 24px 28px;
+}
+.ds-title {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+.ds-new {
+  font-size: 15px;
+  padding: 8px 18px;
+  margin: 6px 0 18px;
+}
+.ds-open {
+  margin: 14px 0 6px;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.ds-search {
+  width: 100%;
+}
+.ds-list {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+}
+.ds-row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 3px 6px;
+}
+.ds-row:hover {
+  border-color: var(--border);
+  background: var(--sel);
+}
+.ds-kind {
+  margin-left: auto;
+}
+/* «FCS codes» off (the default): codes next to the words are hidden everywhere. */
+.no-fcs-codes .fcs-code,
+.no-fcs-codes .dg-code,
+.no-fcs-codes .dh-code {
+  display: none;
+}
+/* G9: what a played line does; the strip keeps one height so the graph above does not jump. */
+.pl-effects {
+  color: #9fd08f;
+  margin-top: 2px;
+}
+.pl-answer-row {
+  flex-wrap: wrap;
+}
+.pl-answer-row > .pl-effects {
+  flex-basis: 100%;
+  padding-left: 18px;
+}
+.dg-views > .play-strip {
+  height: 45%;
+  max-height: none;
+}
+.ed-score-lead {
+  margin-bottom: 4px;
 }

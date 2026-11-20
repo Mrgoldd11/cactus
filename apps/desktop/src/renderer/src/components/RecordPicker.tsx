@@ -38,6 +38,23 @@ export function RecordPicker({ project, title, targetType, exclude, onPick, onCl
     return out.sort((a, b) => (a.hay < b.hay ? -1 : a.hay > b.hay ? 1 : 0));
   }, [project, ctx, query, anyType, targetType, exclude, ids]);
 
+  // Names shared by several rows: such rows tell where each record comes from and how much it is used.
+  const dupNames = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const e of items) {
+      const k = (e.localized || e.name).toLowerCase();
+      seen.set(k, (seen.get(k) ?? 0) + 1);
+    }
+    return new Set([...seen].filter(([, n]) => n > 1).map(([k]) => k));
+  }, [items]);
+  const dupInfo = (e: IndexEntry): { origin: string; uses: number; tip: string } | undefined => {
+    if (!dupNames.has((e.localized || e.name).toLowerCase())) return undefined;
+    const origin = ctx.origin(e.sid)?.origin ?? ctx.modName;
+    const refs = ctx.referencesTo(e.sid);
+    const where = [...new Set(refs.map((r) => ctx.localizedName(r.source) ?? ctx.name(r.source) ?? r.source))].slice(0, 3).join(', ');
+    return { origin, uses: refs.length, tip: t.pkDupHint(origin, refs.length, where) };
+  };
+
   const cur = Math.min(cursor, items.length - 1);
   const pick = (e: IndexEntry | undefined): void => {
     if (e) onPick(e.sid);
@@ -103,10 +120,13 @@ export function RecordPicker({ project, title, targetType, exclude, onPick, onCl
         scrollToIndex={cur}
         className="picker-list"
         testId="picker-list"
-        renderRow={(e, i) => (
+        renderRow={(e, i) => {
+          const dup = dupInfo(e);
+          return (
           <div
             className={`list-row picker-grid st-${ctx.status(e.sid) ?? 'base'} ${i === cur ? 'selected' : ''}`}
             data-sid={e.sid}
+            {...(dup ? { title: dup.tip } : {})}
             onClick={() => {
               setCursor(i);
             }}
@@ -117,9 +137,18 @@ export function RecordPicker({ project, title, targetType, exclude, onPick, onCl
             <span className="name">{e.name}</span>
             <span className="tr-name">{e.localized}</span>
             <span className="sid mono">{e.sid}</span>
-            <span className="type">{e.type}</span>
+            <span className="type">
+              {dup ? (
+                <span className="pk-dup" data-testid="picker-dup">
+                  {dup.origin} · {t.pkDupUses(dup.uses)}
+                </span>
+              ) : (
+                e.type
+              )}
+            </span>
           </div>
-        )}
+          );
+        }}
       />
     </Modal>
   );

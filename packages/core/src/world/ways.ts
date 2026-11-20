@@ -246,6 +246,11 @@ const TYPE_WORDS: Readonly<Record<string, UiText>> = {
   DIALOGUE_LINE: { en: 'Dialogue line', ru: 'Реплика', zh: '台词' },
   DIALOGUE: { en: 'Dialogue', ru: 'Диалог', zh: '对话' },
   DIALOGUE_PACKAGE: { en: 'Dialogue package', ru: 'Пакет диалогов', zh: '对话包' },
+  // Targets of dialogue reference conditions and effects (G9): «reference → race» in words.
+  RACE: { en: 'Race', ru: 'Раса', zh: '种族' },
+  ITEM: { en: 'Item', ru: 'Предмет', zh: '物品' },
+  WORLD_EVENT_STATE: { en: 'World state', ru: 'Состояние мира', zh: '世界状态' },
+  AI_PACKAGE: { en: 'AI package', ru: 'Пакет ИИ', zh: 'AI 包' },
 };
 
 /** A record type in words; unknown types stay as their code. */

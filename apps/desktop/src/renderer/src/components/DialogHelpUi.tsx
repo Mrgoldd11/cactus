@@ -24,12 +24,14 @@ import {
   type ModContext,
 } from '@kenshi-editor/core';
 import { useLang, useT } from '../i18n.ts';
+import { useFcsCodes } from '../fcs-codes.ts';
 
 /** «Starving · DC_STARVING»; values without help keep the old «CODE — label» form. */
-export function dialogOptionText(def: EnumDef, v: EnumValue, lang: string): string {
+export function dialogOptionText(def: EnumDef, v: EnumValue, lang: string, codes = true): string {
   const help = dialogValueHelp(def.name, v.name);
-  if (help) return `${uiText(help.label, lang)} · ${v.name}`;
+  if (help) return codes ? `${uiText(help.label, lang)} · ${v.name}` : uiText(help.label, lang);
   const l = enumLabel(def, v, lang);
+  if (!codes && l !== undefined) return l;
   return l !== undefined ? `${v.name} — ${l}` : v.name;
 }
 
@@ -79,6 +81,7 @@ interface DialogValueSelectProps {
 export function DialogValueSelect({ def, value, onChange, usage, testId }: DialogValueSelectProps): ReactNode {
   const t = useT();
   const lang = useLang();
+  const codes = useFcsCodes();
   const [query, setQuery] = useState('');
   const groups = useMemo(() => groupValues(def, lang, t.dhOther, value), [def, lang, t, value]);
   const match = (v: EnumValue): boolean => enumValueMatches(def, v, query, lang);
@@ -91,7 +94,7 @@ export function DialogValueSelect({ def, value, onChange, usage, testId }: Dialo
     const tip = [dialogOptionTip(dialogValueHelp(def.name, v.name), lang), unusedHere ? `⚠ ${t.dhUnusedData}` : undefined].filter(Boolean).join(' ');
     return (
       <option key={v.value} value={v.value} title={tip || undefined}>
-        {dialogOptionText(def, v, lang)}
+        {dialogOptionText(def, v, lang, codes)}
         {unusedHere ? ' ⚠' : ''}
       </option>
     );
@@ -175,4 +178,22 @@ export function useRecordPhrases(sid: string, on: 'line' | 'dialogue', fields: b
   const lang = useLang();
   const rec = ctx?.get(sid);
   return ctx && rec ? recordPhrases(ctx, rec, lang, on, fields) : undefined;
+}
+
+/** A yes / no condition (`kind: 'bool'`) as the game stores it: `= 1` / `= 0`, or `> 0` / `< 1`. */
+export function boolCondition(cmp: number, value: number): boolean | undefined {
+  if ((cmp === 0 && value === 1) || (cmp === 2 && value === 0)) return true;
+  if ((cmp === 0 && value === 0) || (cmp === 1 && value === 1)) return false;
+  return undefined;
+}
+
+/** «yes / no» instead of a comparison and a number for a yes / no condition; picks store `= 1` / `= 0`. */
+export function YesNoSelect({ value, onChange, testId }: { value: boolean; onChange: (yes: boolean) => void; testId?: string }): ReactNode {
+  const t = useT();
+  return (
+    <select className="ln-select yn-select" value={value ? '1' : '0'} data-testid={testId} title={t.ynTip} onChange={(e) => { onChange(e.target.value === '1'); }}>
+      <option value="1">{t.ynYes}</option>
+      <option value="0">{t.ynNo}</option>
+    </select>
+  );
 }

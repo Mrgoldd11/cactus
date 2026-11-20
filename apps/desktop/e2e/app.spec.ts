@@ -756,7 +756,7 @@ test('vanilla dialogue: new answer, link by dragging, undo/redo, save, kedit val
     // «Show all», then zoom out: near the graph edge the view scrolls by itself while dragging.
     await graph.getByRole('button', { name: /Показать всё/ }).click();
     await page.waitForTimeout(400);
-    await graph.locator('.react-flow__controls-zoomout').click();
+    await graph.getByTestId('dg-zoom-out').click();
     await page.waitForTimeout(400);
     const from = (await node(answer).locator('.react-flow__handle.source').boundingBox())!;
     const to = (await node('61860-Dialogue.mod').locator('.react-flow__handle.target').boundingBox())!;

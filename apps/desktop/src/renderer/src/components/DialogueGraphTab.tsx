@@ -21,6 +21,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import {
   Background,
+  ControlButton,
   Controls,
   Handle,
   MarkerType,
@@ -29,6 +30,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   SelectionMode,
+  useKeyPress,
   useReactFlow,
   type Connection,
   type Edge,
@@ -70,6 +72,7 @@ import {
   type LineView,
 } from '@kenshi-editor/core';
 import { inLang, useLang, useT } from '../i18n.ts';
+import { setFcsCodes, stripEnumCodes, useFcsCodes } from '../fcs-codes.ts';
 import { useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
 import { tryEdit } from '../hooks.ts';
@@ -114,10 +117,10 @@ const LONG_TEXT = 120;
 const INITIAL_ZOOM = 1;
 /** Lowest start zoom used to fit the «when» chain and the dialogue head into the view. */
 const MIN_START_ZOOM = 0.7;
+/** G9 (M2): «Show all» does not zoom out below this — the cards stay readable; the rest is reached by scrolling. */
+const FIT_MIN_ZOOM = 0.5;
 /** How long after opening the start view follows the measured card heights. */
 const START_SETTLE_MS = 1500;
-/** Whether FCS codes are shown next to the plain words (on by default). */
-const CODES_KEY = 'kedit.graph.codes';
 /** Graphs with more nodes open with deep branches folded. */
 const FOLD_MIN_NODES = 20;
 /** Lines this deep from the dialogue (NPC line → answer → reply) keep their children folded at first. */
@@ -302,17 +305,16 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
   const [focusRoot, setFocusRoot] = useState<string | undefined>(undefined);
   /** Folded branches; `undefined` — as at first (deep branches of a big graph folded). */
   const [collapsedState, setCollapsed] = useState<ReadonlySet<string> | undefined>(undefined);
-  const [codes, setCodesState] = useState(() => localStorage.getItem(CODES_KEY) !== '0');
-  const setCodes = (on: boolean): void => {
-    localStorage.setItem(CODES_KEY, on ? '1' : '0');
-    setCodesState(on);
-  };
+  const codes = useFcsCodes();
+  const setCodes = setFcsCodes;
   const [variants, setVariants] = useState<ReadonlyMap<string, number>>(new Map());
   const [fullTexts, setFullTexts] = useState<ReadonlySet<string>>(new Set());
   /** Card heights reported by the canvas (the layout uses them instead of the estimate). */
   const [heights, setHeights] = useState<ReadonlyMap<string, number>>(new Map());
   /** A node to pan to once it is shown (it was in a folded branch). */
   const pendingFocus = useRef<string | undefined>(undefined);
+  /** G9 (M3): after a new line the parent stays where it was on screen, and the new line is brought into view. */
+  const anchor = useRef<{ id: string; x: number; y: number; show: string } | undefined>(undefined);
   const [moved, setMoved] = useState<ReadonlyMap<string, { x: number; y: number }>>(new Map());
   const [selNodes, setSelNodes] = useState<ReadonlySet<string>>(() => new Set(selected !== undefined ? [selected] : []));
   const [selEdges, setSelEdges] = useState<ReadonlySet<string>>(new Set());
@@ -416,10 +418,13 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
       n.delete(parent);
       return n;
     });
-    if (at) {
-      setMoved((m) => new Map(m).set(id, at));
-      clicked.current = id;
-    } else clicked.current = undefined;
+    if (at) setMoved((m) => new Map(m).set(id, at));
+    else {
+      const p = nodes.find((x) => x.id === parent);
+      if (p) anchor.current = { id: parent, x: p.position.x, y: p.position.y, show: id };
+    }
+    // The graph does not pan to the new line by itself: the anchor keeps the view (or the line is already where it was dropped).
+    clicked.current = at || anchor.current ? id : undefined;
     selectOnly(id);
     onSelect?.(id, parent);
     setEditing(id);
@@ -816,6 +821,56 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     focusRef.current(id);
   }, [nodes]);
 
+  // A new line re-laid the graph out: keep its parent in place on screen, then pan only as much as the new line needs.
+  useEffect(() => {
+    const a = anchor.current;
+    if (a === undefined) return;
+    const p = nodes.find((n) => n.id === a.id);
+    const shown = nodes.find((n) => n.id === a.show);
+    if (!p || !shown) return;
+    anchor.current = undefined;
+    const vp = flow.getViewport();
+    let x = vp.x - (p.position.x - a.x) * vp.zoom;
+    let y = vp.y - (p.position.y - a.y) * vp.zoom;
+    const el = canvasRef.current;
+    if (el) {
+      const pad = 24;
+      const h = (heights.get(shown.id) ?? 90) * vp.zoom;
+      const w = NODE_WIDTH * vp.zoom;
+      const sx = shown.position.x * vp.zoom;
+      const sy = shown.position.y * vp.zoom;
+      if (sx + x + w > el.clientWidth - pad) x = el.clientWidth - pad - w - sx;
+      if (sx + x < pad) x = pad - sx;
+      if (sy + y + h > el.clientHeight - pad) y = el.clientHeight - pad - h - sy;
+      if (sy + y < pad) y = pad - sy;
+    }
+    if (x !== vp.x || y !== vp.y) void flow.setViewport({ x, y, zoom: vp.zoom }, { duration: 200 });
+  }, [nodes]);
+
+  // Shift / Ctrl held: the wheel scrolls the canvas instead of zooming.
+  const scrollKeys = useKeyPress(['Shift', 'Control'], { actInsideInputWithModifier: false });
+  /** «+» / «−»: zoom around the selected card when it is in view (it stays under the cursor's eye), else around the centre. */
+  const zoomBy = (k: number): void => {
+    const vp = flow.getViewport();
+    const zoom = Math.min(2, Math.max(0.1, vp.zoom * k));
+    const n = nodes.find((x) => selNodes.has(x.id));
+    const el = canvasRef.current;
+    if (!n || !el) {
+      void flow.zoomTo(zoom, { duration: 150 });
+      return;
+    }
+    const cx = n.position.x + NODE_WIDTH / 2;
+    const cy = n.position.y + 40;
+    const sx = cx * vp.zoom + vp.x;
+    const sy = cy * vp.zoom + vp.y;
+    const inView = sx >= 0 && sy >= 0 && sx <= el.clientWidth && sy <= el.clientHeight;
+    if (!inView) {
+      void flow.setCenter(cx, cy, { zoom, duration: 150 });
+      return;
+    }
+    void flow.setViewport({ x: sx - cx * zoom, y: sy - cy * zoom, zoom }, { duration: 150 });
+  };
+
   // The menu closes on a click outside it.
   useEffect(() => {
     if (!menu) return;
@@ -1007,7 +1062,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
       if (clipboard.length > 0) out.push(item('paste', t.dgMenuPaste, () => { paste(graph.root); }, { keys: 'Ctrl+V' }));
       out.push(sep('sep1'));
       out.push(item('relayout', t.dgRelayout, () => { setMenu(undefined); relayout(); }));
-      out.push(item('fit', t.dgFit, () => { setMenu(undefined); void flow.fitView({ padding: 0.1, maxZoom: 1 }); }));
+      out.push(item('fit', t.dgFit, () => { setMenu(undefined); fitAll(); }));
     }
     // Separators not at the start, not at the end and not in a row.
     return out.filter((x, i, a) => {
@@ -1017,9 +1072,28 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
     });
   };
 
+  // «Show all» stops at a readable zoom (M2); when the graph is still larger than the view, the dialogue head stays
+  // in view instead of the middle of the bounds.
+  const fitAll = (): void => {
+    void flow.fitView({ padding: 0.1, maxZoom: 1, minZoom: FIT_MIN_ZOOM }).then(() => {
+      const el = canvasRef.current;
+      const n = flow.getInternalNode(graph.root);
+      if (!el || !n) return;
+      const { x, y, zoom } = flow.getViewport();
+      const p = n.internals.positionAbsolute;
+      const w = (n.measured.width ?? NODE_WIDTH) * zoom;
+      const h = (n.measured.height ?? 0) * zoom;
+      const keep = (at: number, size: number, view: number, shift: number): number =>
+        at + shift < MARGIN ? MARGIN - at : at + size + shift > view - MARGIN ? Math.max(MARGIN - at, view - MARGIN - size - at) : shift;
+      const nx = keep(p.x * zoom, w, el.clientWidth, x);
+      const ny = keep(p.y * zoom, h, el.clientHeight, y);
+      if (nx !== x || ny !== y) void flow.setViewport({ x: nx, y: ny, zoom });
+    });
+  };
+
   const relayout = (): void => {
     setMoved(new Map());
-    window.setTimeout(() => void flow.fitView({ padding: 0.1, maxZoom: 1 }), 30);
+    window.setTimeout(fitAll, 30);
   };
 
   const shown = checks.filter((c) => showInfo || c.severity !== 'info');
@@ -1063,7 +1137,7 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
             {matches.length === 0 ? t.dgNotFound : `${hit + 1}/${matches.length}`}
           </span>
         )}
-        <button className="small" title={t.dgFitHint} onClick={() => void flow.fitView({ padding: 0.1, maxZoom: 1 })}>
+        <button className="small" title={t.dgFitHint} onClick={fitAll}>
           ⤢ {t.dgFit}
         </button>
         <button className="small" title={t.dnRelayoutHint} data-testid="dg-relayout" onClick={relayout}>
@@ -1212,12 +1286,24 @@ function GraphView({ project, sid, version, onGo, selected, onSelect, onReport, 
             startedAt.current = performance.now();
             startView.current(inst);
           }}
-          // The wheel scrolls (like a page), Ctrl+wheel zooms.
-          panOnScroll
+          // G9 (M2): the wheel zooms (as in FCS and most graph editors); with Shift or Ctrl held it scrolls.
+          panOnScroll={scrollKeys}
+          zoomOnScroll={!scrollKeys}
+          zoomActivationKeyCode={null}
           proOptions={{ hideAttribution: true }}
         >
           <Background gap={24} />
-          <Controls showInteractive={false} />
+          <Controls showInteractive={false} showZoom={false} showFitView={false}>
+            <ControlButton data-testid="dg-zoom-in" title={t.dgZoomIn} onClick={() => { zoomBy(1.25); }}>
+              +
+            </ControlButton>
+            <ControlButton data-testid="dg-zoom-out" title={t.dgZoomOut} onClick={() => { zoomBy(0.8); }}>
+              −
+            </ControlButton>
+            <ControlButton data-testid="dg-zoom-fit" title={t.dgFitHint} onClick={fitAll}>
+              ⛶
+            </ControlButton>
+          </Controls>
           {minimap && <MiniMap pannable zoomable nodeColor={(n) => (n.type === 'portal' ? '#7a5ea6' : n.type === 'when' ? '#4f7a5e' : (MINIMAP_COLORS[(n.data as LineData).view?.kind ?? 'npc'] ?? '#5d6168'))} />}
         </ReactFlow>
         {linkFrom !== undefined && (
@@ -1332,6 +1418,7 @@ const MINIMAP_COLORS: Readonly<Record<string, string>> = { npc: '#8a6a35', playe
 const LineCard = memo(function LineCard({ data, selected }: NodeProps<LineNode>): ReactNode {
   const t = useT();
   const lang = useLang();
+  const codes = useFcsCodes();
   const [pickVariant, setPickVariant] = useState(false);
   const n = data.node;
   const v = data.view;
@@ -1479,7 +1566,7 @@ ${t.dnPhraseEdit}` : p.text}
         {whoCode !== undefined && whoCode !== who && <span className="dg-code mono">{whoCode}</span>}
         {data.status === 'new' && <span className="st-badge st-new">{t.lineStatus_new}</span>}
         {data.status === 'changed' && <span className="st-badge st-changed">{t.lineStatus_changed}</span>}
-        {n.eventLabel !== undefined && <span className="dg-event mono">{n.eventLabel}</span>}
+        {n.eventLabel !== undefined && <span className="dg-event mono">{stripEnumCodes(n.eventLabel, codes)}</span>}
         {n.type !== 'DIALOGUE_LINE' && <span className="dg-name">{n.localized ?? n.name}</span>}
         <span className="dg-grow" />
         {n.score ? <span className="dg-score muted mono dg-code">+{n.score}</span> : null}

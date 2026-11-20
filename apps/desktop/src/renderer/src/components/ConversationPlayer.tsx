@@ -8,7 +8,6 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  buildDialogueGraph,
   dialogueScore,
   EVENT_TALK,
   getEnum,
@@ -18,6 +17,7 @@ import {
   playStartList,
   plainName,
   quote,
+  recordPhrases,
   refValueEnum,
   shortEnumLabel,
   type ModContext,
@@ -26,6 +26,7 @@ import {
   type PlayOption,
   type PlayResult,
   type PlayStep,
+  type ScorePart,
   type TalkSource,
   type TranslationIndex,
 } from '@kenshi-editor/core';
@@ -74,14 +75,18 @@ export function playingLine(r: PlayResult): string | undefined {
 const pct = (p: number): string => `${String(Math.round(p * 100))}%`;
 
 /** A record's conditions on one line — as in the graph (conditions and filters). */
-function conditionsOf(ctx: ModContext, sid: string, tr: TranslationIndex | undefined, lang: string): string[] {
-  const n = buildDialogueGraph(ctx, sid, { maxNodes: 1, lang, ...(tr ? { translation: tr } : {}) }).nodes[0];
-  const out = n ? [...n.conditions, ...n.filters] : [];
+/** Conditions of a dialogue or line in words (short phrases); the FCS code forms go to the hint. */
+function conditionsOf(ctx: ModContext, sid: string, lang: string, lockedWord: string): { words: string[]; codes: string[] } {
   const r = ctx.get(sid);
-  if (r?.bools.get('locked')) out.unshift('locked');
-  const ch = r?.floats.get('chance temporary') ?? 100;
-  if (ch < 100) out.push(`chance ${String(ch)}%`);
-  return out;
+  if (!r) return { words: [], codes: [] };
+  const phrases = recordPhrases(ctx, r, lang, ctx.typeName(r.type) === 'DIALOGUE' ? 'dialogue' : 'line').conditions;
+  const words = phrases.map((x) => x.short);
+  const codes = phrases.map((x) => x.code);
+  if (r.bools.get('locked')) {
+    words.unshift(lockedWord);
+    codes.unshift('locked');
+  }
+  return { words, codes };
 }
 
 export function ConversationPlayer(props: Props): ReactNode {
@@ -320,6 +325,7 @@ function Step(p: StepProps): ReactNode {
           <button className="link" title={t.plOpenLine} onClick={() => { p.onSelectLine(step.said!, dialog); }}>
             {caption(step.said)}
           </button>
+          <LineEffects ctx={ctx} sid={step.said} t={t} />
         </div>
       )}
       {(step.answers.length > 0 || step.npcToo) && (
@@ -331,6 +337,26 @@ function Step(p: StepProps): ReactNode {
         </div>
       )}
     </li>
+  );
+}
+
+/** What a line does when it is said (gives an item, opens trade…): «Then: …», or nothing. */
+function LineEffects({ ctx, sid, t }: { ctx: ModContext; sid: string; t: Strings }): ReactNode {
+  const lang = useLang();
+  const rec = ctx.get(sid);
+  const effects = rec ? recordPhrases(ctx, rec, lang, 'line', false).effects : [];
+  if (!effects.length) return null;
+  return (
+    <div className="pl-effects small" data-testid="pl-effects" data-sid={sid}>
+      ⚡ {t.plThen}{' '}
+      {effects.map((e, i) => (
+        <span key={i} className="pl-effect" title={e.code}>
+          {i > 0 ? '; ' : ''}
+          {e.short}
+          <span className="fcs-code mono muted"> {e.code}</span>
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -357,6 +383,7 @@ function Answers(p: StepProps & { answers: readonly PlayAnswer[] }): ReactNode {
               {lineCaption(ctx, a.sid, tr, lang)}
             </button>
             {!a.always && <AsIf {...p} sid={a.sid} passes={a.shown} />}
+            {chosen && <LineEffects ctx={ctx} sid={a.sid} t={t} />}
           </div>
         );
       })}
@@ -378,9 +405,9 @@ function Answers(p: StepProps & { answers: readonly PlayAnswer[] }): ReactNode {
 
 function AsIf(p: StepProps & { sid: string; passes: boolean }): ReactNode {
   const lang = useLang();
-  const conds = conditionsOf(p.ctx, p.sid, p.tr, lang);
+  const { words, codes } = conditionsOf(p.ctx, p.sid, lang, p.t.talkPart_locked);
   return (
-    <label className="pl-asif small" data-testid="pl-asif" data-sid={p.sid} title={conds.length ? `${p.t.talkConditions}: ${conds.join('; ')}` : undefined}>
+    <label className="pl-asif small" data-testid="pl-asif" data-sid={p.sid} title={codes.length ? `${p.t.talkConditions}: ${codes.join('; ')}` : undefined}>
       <input
         type="checkbox"
         checked={p.passes}
@@ -389,9 +416,18 @@ function AsIf(p: StepProps & { sid: string; passes: boolean }): ReactNode {
         }}
       />{' '}
       {p.t.plAsIf}
-      {conds.length > 0 && <span className="muted mono pl-conds"> ({conds.join('; ')})</span>}
+      {words.length > 0 && <span className="muted pl-conds"> ({words.join('; ')})</span>}
     </label>
   );
+}
+
+/** «bonus 9 + conditions 1 + target race 2»: where the points of a candidate come from; none for a single part.
+ * The label goes first so no language has to agree the noun with the number. */
+function scoreSum(parts: readonly ScorePart[], line: number, t: Strings): string | undefined {
+  const items = parts.map((p) => ({ v: p.value, label: p.key === 'bonus' ? t.plSumBonus : t[`talkPart_${p.key}`] }));
+  if (line !== 0) items.push({ v: line, label: t.plSumLine });
+  if (items.length < 2) return undefined;
+  return items.map((x, i) => `${i === 0 ? '' : x.v < 0 ? ' − ' : ' + '}${x.label} ${i === 0 && x.v < 0 ? '−' : ''}${String(Math.abs(x.v))}`).join('');
 }
 
 function Choice(p: StepProps & { title: string; options: readonly PlayOption[]; keyOf: string; isDialog: boolean }): ReactNode {
@@ -409,6 +445,7 @@ function Choice(p: StepProps & { title: string; options: readonly PlayOption[]; 
             const rec = ctx.get(o.sid);
             const parts = rec ? dialogueScore(ctx, rec).parts : [];
             const row = ranked?.rows.find((r) => r.sid === o.sid);
+            const sum = row ? scoreSum(parts, row.line, t) : undefined;
             return (
               <tr
                 key={o.sid}
@@ -436,6 +473,11 @@ function Choice(p: StepProps & { title: string; options: readonly PlayOption[]; 
                 {row ? (
                   <td className="mono small pl-key" data-testid="pl-key" title={`${t.psKeyTip(row.place, row.own, row.line)}\n${partsText(parts, t)}`}>
                     {row.key}
+                    {sum !== undefined && (
+                      <span className="pl-sum muted" data-testid="pl-sum" title={t.plSumTip}>
+                        {' '}= {sum}
+                      </span>
+                    )}
                   </td>
                 ) : (
                   <td className="mono small" title={partsText(parts, t)}>

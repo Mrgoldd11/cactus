@@ -27,6 +27,7 @@ import { dialogueTreeEn, dialogueTreeRu, dialogueTreeZh } from './i18n-dialogue-
 import { dialogHelpEn, dialogHelpRu, dialogHelpZh } from './i18n-dialog-help.ts';
 import { linePanelEn, linePanelRu, linePanelZh } from './i18n-line-panel.ts';
 import { g8En, g8Ru, g8Zh } from './i18n-g8.ts';
+import { g9En, g9Ru, g9Zh } from './i18n-g9.ts';
 import { cardEn, cardRu, cardZh } from './i18n-card.ts';
 import { creatureEn, creatureRu, creatureZh } from './i18n-creature.ts';
 import { zh1 } from './i18n-zh-1.ts';
@@ -522,7 +523,7 @@ const en = {
   dgHidden: 'hidden:',
   dgEnd: 'conversation ends here',
   dgEmptyText: '(no text yet)',
-  dgHint: 'Right click — menu · double click or F2 — edit text · Del — delete · Shift+drag — select several · Ctrl+D — copy',
+  dgHint: 'Right click — menu · double click or F2 — edit text · Del — delete · Shift+drag — select several · Ctrl+D — copy · wheel — zoom, Shift/Ctrl+wheel — scroll',
   dgAddTip: 'right click the node — more actions',
   dgOpenLine: 'Open line',
   dgOpenLineHint: 'Show the selected line in the “Line” panel',
@@ -653,6 +654,7 @@ const en = {
   ...dialogHelpEn,
   ...linePanelEn,
   ...g8En,
+  ...g9En,
 };
 
 export type Strings = typeof en;
@@ -1136,7 +1138,7 @@ const ru: Strings = {
   dgHidden: 'скрыто:',
   dgEnd: 'здесь разговор заканчивается',
   dgEmptyText: '(текста пока нет)',
-  dgHint: 'ПКМ — меню · двойной клик или F2 — изменить текст · Del — удалить · Shift+рамка — выделить несколько · Ctrl+D — копия',
+  dgHint: 'ПКМ — меню · двойной клик или F2 — изменить текст · Del — удалить · Shift+рамка — выделить несколько · Ctrl+D — копия · колесо — масштаб, Shift/Ctrl+колесо — прокрутка',
   dgAddTip: 'ПКМ по узлу — другие действия',
   dgOpenLine: 'Открыть реплику',
   dgOpenLineHint: 'Показать выбранную реплику в панели «Реплика»',
@@ -1267,9 +1269,10 @@ const ru: Strings = {
   ...dialogHelpRu,
   ...linePanelRu,
   ...g8Ru,
+  ...g9Ru,
 };
 
-const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh, ...searchZh, ...fixesZh, ...publishZh, ...raceZh, ...animsZh, ...fieldsZh, ...newRecZh, ...waysZh, ...cardZh, ...creatureZh, ...eventsZh, ...packageZh, ...eventDialogueZh, ...playStripZh, ...dialogueNodesZh, ...dialoguePortalsZh, ...dialogueTreeZh, ...dialogHelpZh, ...linePanelZh, ...g8Zh };
+const zh: Strings = { ...zh1, ...zh2, ...specialZh, ...mergeZh, ...backupZh, ...extensionsZh, ...searchZh, ...fixesZh, ...publishZh, ...raceZh, ...animsZh, ...fieldsZh, ...newRecZh, ...waysZh, ...cardZh, ...creatureZh, ...eventsZh, ...packageZh, ...eventDialogueZh, ...playStripZh, ...dialogueNodesZh, ...dialoguePortalsZh, ...dialogueTreeZh, ...dialogHelpZh, ...linePanelZh, ...g8Zh, ...g9Zh };
 
 export const STRINGS: Record<Lang, Strings> = { en, ru, zh };
 

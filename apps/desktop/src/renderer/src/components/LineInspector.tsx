@@ -58,11 +58,12 @@ import {
 } from '@kenshi-editor/core';
 import { useDataLocale, useLang, useT, type Strings } from '../i18n.ts';
 import { useGameTexts } from '../data-names.ts';
+import { useFcsCodes } from '../fcs-codes.ts';
 import type { Project } from '../project.ts';
 import { tryEdit } from '../hooks.ts';
 import { CommitInput } from './widgets.tsx';
 import { PlaysWhen } from './EventUi.tsx';
-import { DialogValueSelect, dialogOptionText, dialogOptionTip, PhraseLine } from './DialogHelpUi.tsx';
+import { boolCondition, DialogValueSelect, dialogOptionText, dialogOptionTip, PhraseLine, YesNoSelect } from './DialogHelpUi.tsx';
 import { RecordPicker } from './RecordPicker.tsx';
 import { DialogueActs, DialogueName, WhenAllowed } from './DialogueHeadParts.tsx';
 import type { EventDialoguePreset } from './EventDialogueModal.tsx';
@@ -133,7 +134,8 @@ function EnumSelect({ def, value, onChange, usage, testId }: { def: EnumDef; val
   const values = def.values.filter((v) => !v.name.endsWith('_END') || v.value === value);
   const used = usage ? values.filter((v) => usage.has(v.value) || v.value === value) : values;
   const unused = usage ? values.filter((v) => !usage.has(v.value) && v.value !== value) : [];
-  const label = (v: EnumValue): string => dialogOptionText(def, v, lang);
+  const codes = useFcsCodes();
+  const label = (v: EnumValue): string => dialogOptionText(def, v, lang, codes);
   const tip = (v: EnumValue): string | undefined => dialogOptionTip(dialogValueHelp(def.name, v.name), lang);
   return (
     <select
@@ -428,7 +430,14 @@ function Speaker({ ctx, sid, rec, t, edit }: Part): ReactNode {
   return (
     <Section title={t.lnSpeaker}>
       <div {...describe}>
-        <EnumSelect def={talker} value={v} testId="ln-speaker" onChange={(n) => { edit(() => { ctx.setField(sid, 'ints', 'speaker', n); }); }} />
+        {isChoice(rec) && name === 'T_TARGET' ? (
+          // A player answer is said by the one the NPC talks to: name it plainly, not «target».
+          <div data-testid="ln-speaker-player">
+            {t.lnSpeakerPlayer} <span className="fcs-code mono muted small">speaker = T_TARGET</span>
+          </div>
+        ) : (
+          <EnumSelect def={talker} value={v} testId="ln-speaker" onChange={(n) => { edit(() => { ctx.setField(sid, 'ints', 'speaker', n); }); }} />
+        )}
       </div>
       <div className="small muted">{isChoice(rec) ? t.lnSpeakerChoice : t.lnSpeakerNpc}</div>
     </Section>
@@ -517,7 +526,7 @@ function ChooseField({ f, ctx, sid, rec, lower, t, edit, lang }: Part & { f: (ty
   return (
     <div className="ln-field" title={lnText(t, `lnField_${f.key.replace(/ /g, '_')}`)} {...describe}>
       <label className="small">
-        {label} <span className="mono muted">{f.key}</span>
+        {label} <span className="mono muted fcs-code">{f.key}</span>
       </label>
       {def ? <EnumSelect def={def} value={v} onChange={commit} testId={`ln-f-${f.key}`} /> : <NumberInput value={v} onCommit={commit} int={f.dict === 'ints'} testId={`ln-f-${f.key}`} />}
       {changed && (
@@ -635,6 +644,8 @@ export function ConditionRow({ ctx, sid, r, edit, on }: RowPart & { on: 'dialogu
   const tagDef = fieldEnum(ctx.schema, 'DIALOG_ACTION', 'tag', a);
   const phrase = dialogActionPhrase(ctx, r, 'conditions', lang, on);
   const code = condDef.values.find((v) => v.value === c.cond)?.name ?? String(c.cond);
+  // Yes / no conditions (DC_IS_IMPRISONED…) read as «yes / no» rather than «= 1».
+  const yes = CONDITION_HELP[code]?.kind === 'bool' ? boolCondition(c.cmp, c.value) : undefined;
   return (
     <ActionRow testId="ln-cond" desc={actionDesc(t, 'condition', code, lang)}>
       <div className="lp-row">
@@ -643,8 +654,17 @@ export function ConditionRow({ ctx, sid, r, edit, on }: RowPart & { on: 'dialogu
       </div>
       <div className="lp-row">
         {tagDef && <EnumSelect def={tagDef} value={c.tag ?? -1} testId="ln-cond-tag" onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { tag: v })); }} />}
-        <EnumSelect def={cmpDef} value={c.cmp} testId="ln-cond-cmp" onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { cmp: v })); }} />
-        <NumberInput value={c.value} int testId="ln-cond-value" onCommit={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { value: v })); }} />
+        {yes !== undefined ? (
+          <>
+            <YesNoSelect value={yes} testId="ln-cond-yes" onChange={(y) => { edit(() => void updateCondition(ctx, sid, r.target, { cmp: 0, value: y ? 1 : 0 })); }} />
+            <span className="fcs-code mono muted small">= {yes ? 1 : 0}</span>
+          </>
+        ) : (
+          <>
+            <EnumSelect def={cmpDef} value={c.cmp} testId="ln-cond-cmp" onChange={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { cmp: v })); }} />
+            <NumberInput value={c.value} int testId="ln-cond-value" onCommit={(v) => { edit(() => void updateCondition(ctx, sid, r.target, { value: v })); }} />
+          </>
+        )}
         <span className="spacer" />
         <button className="small" title={t.lnRemove} data-testid="ln-cond-remove" onClick={() => { edit(() => { removeAction(ctx, sid, 'conditions', r.target); }); }}>
           ✕

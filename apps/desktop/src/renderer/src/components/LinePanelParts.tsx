@@ -6,11 +6,13 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import {
   dialogPickGroups,
   dialogPickItems,
+  dialogPickMaybe,
   dialogPickUsage,
   LINE_REF_HELP,
   lineRefPhrases,
   removeLineRef,
   setLineRefValue,
+  typeWords,
   uiText,
   type DialogPhrase,
   type DialogPickItem,
@@ -87,6 +89,7 @@ export function DialogPicker({ ctx, ownerType, kind, onPick, onClose }: { ctx: M
   const items = useMemo(() => dialogPickItems(ctx, ownerType, kind, lang, pickUsage(ctx)), [ctx, ownerType, kind, lang]);
   const groups = useMemo(() => dialogPickGroups(items, kind, query, lang), [items, kind, query, lang]);
   const flat = groups.flatMap((g) => g.items);
+  const maybe = useMemo(() => (flat.length === 0 ? dialogPickMaybe(items, query) : []), [flat.length, items, query]);
   const cur = Math.min(cursor, flat.length - 1);
   const sel = cur >= 0 ? flat[cur] : undefined;
 
@@ -169,8 +172,8 @@ export function DialogPicker({ ctx, ownerType, kind, onPick, onClose }: { ctx: M
                   }}
                 >
                   <span className="lp-pick-label">{i.label}</span>
-                  <span className="mono small muted">{i.code}</span>
-                  {i.source === 'ref' && <span className="lp-pick-ref small">{t.lpPickRef.replace('{type}', i.targetType ?? '?')}</span>}
+                  <span className="mono small muted fcs-code">{i.code}</span>
+                  {i.source === 'ref' && <span className="lp-pick-ref small">{t.lpPickRef.replace('{type}', i.targetType ? uiText(typeWords(i.targetType), lang).toLowerCase() : '?')}</span>}
                   {i.used === 0 && (
                     <span className="warn small" title={t.lpPickUnused}>
                       ⚠
@@ -182,11 +185,23 @@ export function DialogPicker({ ctx, ownerType, kind, onPick, onClose }: { ctx: M
           </div>
         ))}
         {flat.length === 0 && <div className="muted small">{t.lpPickNone}</div>}
+        {maybe.length > 0 && (
+          // Nothing matches every word: the nearest ones by any word, names and descriptions.
+          <div className="lp-pick-group" data-testid="ln-pick-maybe">
+            <div className="lp-pick-gtitle">{t.pkMaybe}</div>
+            {maybe.map((i) => (
+              <button key={i.key} className="lp-pick-item" data-testid="ln-pick-item" data-key={i.key} onClick={() => { onPick(i); }}>
+                <span className="lp-pick-label">{i.label}</span>
+                <span className="mono small muted fcs-code">{i.code}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {sel && (
         <div className="lp-pick-desc" data-testid="ln-pick-desc">
           <div>
-            <b>{sel.label}</b> <span className="mono small muted">{sel.code}</span>
+            <b>{sel.label}</b> <span className="mono small muted fcs-code">{sel.code}</span>
           </div>
           <div>{sel.desc}</div>
           {sel.source === 'ref' && <div className="small muted">{t.lpPickRefTip}</div>}
@@ -305,7 +320,7 @@ function RefRow({
     <div className="ln-action lp-cond lp-ref" data-testid="ln-ref" data-category={category} {...describe}>
       <div className="lp-row">
         <span className="lp-ref-name">{label}</span>
-        <span className="mono small muted">{category}</span>
+        <span className="mono small muted fcs-code">{category}</span>
       </div>
       <div className="lp-row lp-targets">
         {refs.map((r) => (

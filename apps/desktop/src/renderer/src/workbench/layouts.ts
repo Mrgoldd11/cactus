@@ -101,6 +101,25 @@ export function openPanel(api: DockviewApi, t: Strings, id: string, params: Pane
   api.addPanel({ id: iid, component: def.id, title: panelTitle(def, t), params, position });
 }
 
+/**
+ * Open a panel in its own group below `below` (G9, M8: «Check» must not hide the line panel behind a tab).
+ * Returns false when there is no `below` panel: the caller opens the panel the usual way.
+ */
+export function openBelow(api: DockviewApi, t: Strings, id: string, below: string): boolean {
+  const ref = api.getPanel(below);
+  const def = panelDef(id);
+  if (!ref || !def) return false;
+  const iid = instanceId(def);
+  const cur = api.getPanel(iid);
+  if (cur && cur.group !== ref.group) {
+    cur.api.setActive();
+    return true;
+  }
+  cur?.api.close();
+  api.addPanel({ id: iid, component: def.id, title: panelTitle(def, t), params: {}, position: { referencePanel: ref.id, direction: 'below' } });
+  return true;
+}
+
 /** Whether all panels of the saved layout are in the registry (otherwise the layout cannot be restored). */
 export function layoutKnown(layout: unknown): boolean {
   if (typeof layout !== 'object' || layout === null) return false;

@@ -3,7 +3,7 @@
  * reference conditions in one list, search by translation, English and code, adding into the right field.
  */
 import { describe, expect, it } from 'vitest';
-import { addDialogPick, dialogPickGroups, dialogPickItems, dialogPickUsage, itemTypeId, recordPhrases, removeLineRef, removePhrase, setLineRefValue } from '../src/index.ts';
+import { addDialogPick, dialogPickGroups, dialogPickItems, dialogPickMaybe, dialogPickUsage, itemTypeId, recordPhrases, removeLineRef, removePhrase, setLineRefValue } from '../src/index.ts';
 import { hasGame, loadModContext, resolveGamePaths } from '../src/node/index.ts';
 
 const paths = resolveGamePaths();
@@ -97,6 +97,27 @@ describe.skipIf(!hasGame(paths))('dialog picker: vanilla', () => {
       const found = dialogPickGroups(items, 'condition', q, 'ru').flatMap((g) => g.items.map((i) => i.code));
       expect(found, q).toContain('DC_IS_SLAVE');
     }
+  });
+
+  it('search by synonyms and group names; «maybe» when nothing matches; peaceful effects first', () => {
+    const effects = dialogPickItems(ctx, 'DIALOGUE_LINE', 'effect', 'ru', usage);
+    const codes = (kind: 'condition' | 'effect', items: typeof effects, q: string): string[] =>
+      dialogPickGroups(items, kind, q, 'ru').flatMap((g) => g.items.map((i) => i.code));
+    for (const q of ['предмет', 'item', '物品', 'вещь']) expect(codes('effect', effects, q), q).toContain('give item');
+    expect(codes('effect', effects, 'деньги'), 'деньги').toContain('DA_GIVE_MONEY');
+    const conds = dialogPickItems(ctx, 'DIALOGUE_LINE', 'condition', 'ru', usage);
+    // «здоров» is in the group name «Здоровье и состояние» only.
+    expect(codes('condition', conds, 'здоров')).toContain('DC_STARVING');
+    expect(dialogPickGroups(conds, 'condition', 'здоров', 'ru').map((g) => g.key)).toEqual(['state']);
+    // Nothing matches a made-up word; for a real one «maybe» offers items by their descriptions and names instead.
+    expect(codes('effect', effects, 'zzqx')).toEqual([]);
+    expect(dialogPickMaybe(effects, 'zzqx')).toEqual([]);
+    expect(dialogPickMaybe(effects, 'торговаться').map((i) => i.code)).toContain('DA_TRADE');
+    // «Often used» effects: peaceful ones first, no fight ahead of them.
+    const common = dialogPickGroups(effects, 'effect', '', 'ru')[0]!;
+    expect(common.key).toBe('common');
+    expect(common.items[0]!.group).not.toBe('fight');
+    expect(common.items[0]!.code.startsWith('DA_ATTACK')).toBe(false);
   });
 
   it('graph «×»: a phrase knows its source; removing it is one undo step', () => {

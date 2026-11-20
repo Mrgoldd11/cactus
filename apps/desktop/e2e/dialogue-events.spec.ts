@@ -27,6 +27,12 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({ args: ['.'], cwd: appDir, env });
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
+  // These checks read the FCS codes next to the words: turn the «FCS codes» setting on (off by default).
+  await page.evaluate(() => {
+    localStorage.setItem('kedit.fcsCodes', '1');
+  });
+  await page.reload();
+  await page.waitForLoadState('domcontentloaded');
   return { app, page };
 }
 

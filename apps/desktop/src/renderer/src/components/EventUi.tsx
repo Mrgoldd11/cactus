@@ -12,6 +12,7 @@ import {
   EVENT_UNUSED_LABEL,
   eventHelp,
   formatEnumValue,
+  shortEnumLabel,
   lineDialogues,
   quote,
   refValueEnum,
@@ -24,6 +25,7 @@ import {
   type WhenSource,
 } from '@kenshi-editor/core';
 import { useLang, useT } from '../i18n.ts';
+import { useFcsCodes } from '../fcs-codes.ts';
 import { recordName } from '../data-names.ts';
 
 /** EventTriggerEnum of the schema (or the built-in one). */
@@ -32,8 +34,9 @@ export function eventEnum(ctx: ModContext): EnumDef | undefined {
 }
 
 /** `Acid rain · EV_ACID_RAIN (62)` in the interface language; a bare number only without the enum. */
-export function eventText(def: EnumDef | undefined, value: number, lang: string): string {
-  return def ? formatEnumValue(def, value, lang) : String(value);
+export function eventText(def: EnumDef | undefined, value: number, lang: string, codes = true): string {
+  if (!def) return String(value);
+  return codes ? formatEnumValue(def, value, lang) : shortEnumLabel(def, value, lang);
 }
 
 /** Tooltip of an event: what happened and who the target is. */
@@ -83,6 +86,7 @@ interface EventSelectProps {
 export function EventSelect({ def, value, onChange, disabled = false, testId, className }: EventSelectProps): ReactNode {
   const t = useT();
   const lang = useLang();
+  const codes = useFcsCodes();
   const [query, setQuery] = useState('');
   const { none, groups } = useMemo(() => groupValues(def, lang, t.evOther), [def, lang, t]);
   const match = (v: EnumValue): boolean => enumValueMatches(def, v, query, lang);
@@ -121,14 +125,14 @@ export function EventSelect({ def, value, onChange, disabled = false, testId, cl
           setQuery('');
         }}
       >
-        {!known && <option value={value}>{eventText(def, value, lang)}</option>}
-        {none && <option value={none.value}>{eventText(def, none.value, lang)}</option>}
-        {curHidden && <option value={cur.value}>{eventText(def, cur.value, lang)}</option>}
+        {!known && <option value={value}>{eventText(def, value, lang, codes)}</option>}
+        {none && <option value={none.value}>{eventText(def, none.value, lang, codes)}</option>}
+        {curHidden && <option value={cur.value}>{eventText(def, cur.value, lang, codes)}</option>}
         {shown.map((g) => (
           <optgroup key={g.key} label={g.label}>
             {g.values.map((v) => (
               <option key={v.value} value={v.value} title={eventTip(def, v.value, lang, t.pwTarget, t.pwNoTarget)}>
-                {eventText(def, v.value, lang)}
+                {eventText(def, v.value, lang, codes)}
               </option>
             ))}
           </optgroup>
@@ -156,6 +160,7 @@ export function hasPlaysWhen(type: string): boolean {
 export function PlaysWhen({ ctx, sid, type, version, onGo }: { ctx: ModContext; sid: string; type: string; version: number; onGo: (sid: string) => void }): ReactNode {
   const t = useT();
   const lang = useLang();
+  const codes = useFcsCodes();
   const [open, setOpen] = useState(false);
   const isLine = type === 'DIALOGUE_LINE';
   const rows = useMemo((): WhenRow[] => {
@@ -215,7 +220,7 @@ export function PlaysWhen({ ctx, sid, type, version, onGo }: { ctx: ModContext; 
                   : source.events.map((e, k) => (
                       <span key={e} title={eventTip(def, e, lang, t.pwTarget, t.pwNoTarget)}>
                         {k > 0 ? ', ' : ''}
-                        {eventText(def, e, lang)}
+                        {eventText(def, e, lang, codes)}
                       </span>
                     ))}
               </span>

@@ -29,6 +29,12 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({ args: ['.'], cwd: appDir, env });
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
+  // These checks read the FCS codes next to the words: turn the «FCS codes» setting on (off by default).
+  await page.evaluate(() => {
+    localStorage.setItem('kedit.fcsCodes', '1');
+  });
+  await page.reload();
+  await page.waitForLoadState('domcontentloaded');
   return { app, page };
 }
 
@@ -122,7 +128,7 @@ test('dialogue nodes: speakers, checking order, phrases, end plates, folding, to
     await expect(graph.getByTestId('dg-node-tools')).toHaveCount(1);
     await page.screenshot({ path: join(shots, '96-dialogue-node-tools.png') });
 
-    // «FCS codes» off: only the plain words stay.
+    // «FCS codes» off (the setting is turned on in launch()): only the plain words stay.
     await graph.getByTestId('dg-codes').click();
     await expect(graph.getByTestId('dg-codes')).toHaveAttribute('aria-pressed', 'false');
     await expect(head.locator('.dg-code').first()).toBeHidden();

@@ -11,7 +11,7 @@
  * With `character` the strip plays that character (a character graph, the «Player» panel): the
  * player keeps its own character input and event select.
  */
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   dialoguePlaySpots,
   packageHolders,
@@ -28,6 +28,8 @@ import { recordName } from '../data-names.ts';
 import { ConversationPlayer } from './ConversationPlayer.tsx';
 import type { EventDialoguePreset } from './EventDialogueModal.tsx';
 import { eventEnum, eventText } from './EventUi.tsx';
+import { useFcsCodes } from '../fcs-codes.ts';
+import { ValueStore } from '../workbench/store.ts';
 
 export interface PlayStripProps {
   project: Project;
@@ -50,10 +52,14 @@ export interface PlayStripProps {
 /** Characters listed in the speaker select. */
 const MAX_SPEAKERS = 200;
 
+/** The character the last shown strip plays (G9, M9): «How the game chooses» takes its example from it. */
+export const playedCharacter = new ValueStore<string | undefined>(undefined);
+
 export function PlayStrip(props: PlayStripProps): ReactNode {
   const { project, sid, version, character } = props;
   const t = useT();
   const lang = useLang();
+  const codes = useFcsCodes();
   const ctx = project.ctx;
   const evDef = useMemo(() => eventEnum(ctx), [ctx]);
   const spots = useMemo(() => (character !== undefined ? [] : dialoguePlaySpots(ctx, sid)), [ctx, sid, character, version]);
@@ -66,6 +72,11 @@ export function PlayStrip(props: PlayStripProps): ReactNode {
     [ctx, pkg, version],
   );
   const who = spot?.character ?? (speaker !== '' && speakers.some((h) => h.sid === speaker) ? speaker : undefined);
+  // A package with one character (the wizard's «only this record» package) plays as that character for «How the game chooses».
+  const played = character ?? who ?? (speakers.length === 1 ? speakers[0]!.sid : undefined);
+  useEffect(() => {
+    if (played !== undefined) playedCharacter.set(played);
+  }, [played]);
   const start = useMemo(() => (pkg !== undefined && who === undefined && spot ? packagePlayStart(ctx, pkg, spot.event) : undefined), [ctx, pkg, who, spot?.event, version]);
   const typeOfGraph = ctx.typeName(ctx.get(sid)?.type ?? -1);
   const graphDialog = character === undefined && (typeOfGraph === 'DIALOGUE' || typeOfGraph === 'DIALOGUE_LINE') ? spot?.dialog : undefined;
@@ -152,7 +163,7 @@ export function PlayStrip(props: PlayStripProps): ReactNode {
     );
 
   const spotText = (s: PlaySpot): string =>
-    s.character !== undefined ? t.psSpotChar(eventText(evDef, s.event, lang), recordName(ctx, s.character)) : t.psSpotPkg(eventText(evDef, s.event, lang), recordName(ctx, s.pkg ?? ''));
+    s.character !== undefined ? t.psSpotChar(eventText(evDef, s.event, lang, codes), recordName(ctx, s.character)) : t.psSpotPkg(eventText(evDef, s.event, lang, codes), recordName(ctx, s.pkg ?? ''));
   const lead = (
     <>
       {title}
