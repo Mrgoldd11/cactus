@@ -50,34 +50,57 @@ export function loadSkeleton(game: GameInstallInfo, path: string): Promise<OgreS
   return p;
 }
 
+/** DDS bytes → three.js texture; null — the format cannot be read. */
+function textureFrom(bytes: Uint8Array): THREE.Texture | null {
+  try {
+    const img = decodeDds(bytes, { maxSize: TEXTURE_MAX });
+    const tex = new THREE.DataTexture(img.rgba, img.width, img.height, THREE.RGBAFormat);
+    // DDS stores rows top to bottom, and Ogre UVs count v from the top — no flip needed.
+    tex.flipY = false;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
+    tex.anisotropy = 4;
+    tex.needsUpdate = true;
+    return tex;
+  } catch {
+    return null;
+  }
+}
+
 /** Texture from the game folder; null — no file or the format cannot be read. */
 export function loadTexture(game: GameInstallInfo, path: string): Promise<THREE.Texture | null> {
   const k = key(game, path);
   let p = textures.get(k);
   if (!p) {
-    p = window.kedit.readGameAsset(game, path).then((bytes) => {
-      if (!bytes) return null;
-      try {
-        const img = decodeDds(bytes, { maxSize: TEXTURE_MAX });
-        const tex = new THREE.DataTexture(img.rgba, img.width, img.height, THREE.RGBAFormat);
-        // DDS stores rows top to bottom, and Ogre UVs count v from the top — no flip needed.
-        tex.flipY = false;
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
-        tex.magFilter = THREE.LinearFilter;
-        tex.minFilter = THREE.LinearMipmapLinearFilter;
-        tex.generateMipmaps = true;
-        tex.anisotropy = 4;
-        tex.needsUpdate = true;
-        return tex;
-      } catch {
-        return null;
-      }
-    });
+    p = window.kedit.readGameAsset(game, path).then((bytes) => (bytes ? textureFrom(bytes) : null));
     textures.set(k, p);
   }
   return p;
+}
+
+/**
+ * Files picked on disk but not yet in the game folder (a wizard preview): put into the caches under
+ * `<dir>/<name>` so `buildModel` can show them like game files. Kinds by extension; a file that does
+ * not parse loads as missing.
+ */
+export function primeAssets(game: GameInstallInfo, dir: string, files: readonly { name: string; bytes: Uint8Array }[]): void {
+  const safe = <T>(f: () => T): T | null => {
+    try {
+      return f();
+    } catch {
+      return null;
+    }
+  };
+  for (const f of files) {
+    const k = key(game, `${dir}/${f.name}`);
+    if (/\.mesh$/i.test(f.name)) meshes.set(k, Promise.resolve(safe(() => parseOgreMesh(f.bytes))));
+    else if (/\.skeleton$/i.test(f.name)) skeletons.set(k, Promise.resolve(safe(() => parseOgreSkeleton(f.bytes))));
+    else textures.set(k, Promise.resolve(textureFrom(f.bytes)));
+  }
 }
 
 /**

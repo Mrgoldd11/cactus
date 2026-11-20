@@ -513,7 +513,10 @@ function registerIpc(): void {
     const path = r.canceled ? undefined : r.filePaths[0];
     if (path === undefined) return null;
     const got = readPickedAsset(path, kind);
-    if ('bytes' in got) pickedAssets.add(resolve(path).toLowerCase());
+    if ('bytes' in got) {
+      pickedAssets.add(resolve(path).toLowerCase());
+      for (const l of Object.values(got.linked ?? {})) pickedAssets.add(resolve(l.path).toLowerCase());
+    }
     return got;
   });
   ipcMain.handle(IPC.importModAsset, (_e, req: ImportModAssetRequest) => importModAsset(req, (p) => pickedAssets.has(resolve(p).toLowerCase())));

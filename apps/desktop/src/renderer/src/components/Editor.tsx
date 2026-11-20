@@ -353,7 +353,7 @@ export function Editor({ project, onReplace, onClose, lang, onLang, settings, on
               },
             },
             { testId: 'new-item-soon', label: t.crNewItem, disabledHint: t.crSoon, onClick: () => undefined },
-            { testId: 'new-creature-soon', label: t.crNewCreature, disabledHint: t.crSoon, onClick: () => undefined },
+            { testId: 'new-creature', label: t.crNewCreature, title: t.creatureHint, onClick: () => { open('creature'); } },
           ]}
         />
         <ModMenu

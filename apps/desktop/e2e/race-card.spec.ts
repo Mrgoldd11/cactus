@@ -45,13 +45,13 @@ test('Create menu and the race card: steps from the data, fold remembered, butto
     await page.getByTestId('create-mod').click();
     await expect(page.getByTestId('editor')).toBeVisible({ timeout: 120_000 });
 
-    // «Create ▾»: new record, new race, two items coming later (disabled with a hint).
+    // «Create ▾»: new record, new race, an item coming later (disabled with a hint), own creature.
     await page.getByTestId('create-menu').click();
     const list = page.getByTestId('create-menu-list');
     await expect(list.getByTestId('create-new-record')).toBeEnabled();
     await expect(list.getByTestId('new-race-btn')).toBeEnabled();
     await expect(list.getByTestId('new-item-soon')).toBeDisabled();
-    await expect(list.getByTestId('new-creature-soon')).toBeDisabled();
+    await expect(list.getByTestId('new-creature')).toBeEnabled();
     await page.screenshot({ path: join(shots, '90-create-menu.png') });
     await list.getByTestId('create-new-record').click();
     await expect(page.getByTestId('new-record-modal')).toBeVisible();

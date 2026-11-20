@@ -4190,3 +4190,44 @@ code.pk-code {
   background: rgba(111, 207, 111, 0.2);
   box-shadow: inset 3px 0 0 var(--new);
 }
+
+/* Model with clip playback (wizards' right side) */
+.model-preview { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.model-preview-bar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; padding: 4px 6px; }
+.model-preview-canvas { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; outline: none; }
+.model-preview-note { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 12px; pointer-events: none; }
+
+/* «Own creature» workshop: steps on the left, the model on the right */
+.cw-host { height: 100%; min-height: 0; container-type: inline-size; }
+.cw { display: flex; height: 100%; min-height: 0; }
+.cw-steps { flex: 0 0 52%; max-width: 640px; overflow: auto; padding: 8px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; }
+.cw-subject { flex: 1; min-width: 0; display: flex; flex-direction: column; border-left: 1px solid var(--border); }
+.cw-subject-note { padding: 4px 8px; }
+.cw-intro { line-height: 1.4; }
+.cw-how summary { cursor: pointer; display: inline; color: var(--accent); }
+.cw-how[open] { display: block; margin-top: 4px; white-space: pre-line; }
+.cw-step { border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; }
+.cw-step h3 { margin: 0 0 6px; font-size: 1em; font-weight: 600; }
+.cw-step-body { display: flex; flex-direction: column; gap: 5px; }
+.cw-mark { display: inline-block; width: 1.2em; text-align: center; }
+.cw-mark-ok { color: var(--new); }
+.cw-mark-todo { color: var(--muted, #888); }
+.cw-mark-bad { color: var(--changed); }
+.cw-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.cw-num { width: 5em; }
+.cw-num.bad { border-color: var(--error); }
+.cw-ok { color: var(--new); }
+.cw-clips tr.cw-clip-ok { cursor: pointer; }
+.cw-clips tr.cw-clip-ok:hover { background: var(--hover, rgba(255, 255, 255, 0.06)); }
+.cw-problems { margin: 0; padding-left: 16px; }
+.cw-problems:empty { display: none; }
+.cw-traders { display: flex; flex-direction: column; gap: 2px; max-height: 160px; overflow: auto; }
+.cw-start { margin-left: 22px; }
+.cw-done ul { margin: 4px 0; padding-left: 18px; }
+.cw-nowrap { white-space: nowrap; }
+/* Narrow (a side dock): the model on top, the steps scroll below it. */
+@container (max-width: 860px) {
+  .cw { flex-direction: column-reverse; justify-content: flex-end; }
+  .cw-steps { flex: 1 1 auto; max-width: none; min-height: 0; }
+  .cw-subject { flex: 0 0 300px; border-left: none; border-bottom: 1px solid var(--border); }
+}
