@@ -132,6 +132,15 @@ describe('kenshi-mcp: game bridge', () => {
     expect((await call('game_command', { cmd: 'teleport', confirm: true })).isError).toBe(true);
   });
 
+  it('game_spawn sends nothing without confirm', async () => {
+    const r = await call('game_spawn', { id: '1-bull.mod', faction: 'player' });
+    expect(r.text).toContain('not done: spawn «1-bull.mod» at the camera (faction player)');
+    expect(seen).toEqual([]);
+    const ok = await call('game_spawn', { id: '1-bull.mod', pos: [1, 2, 3], confirm: true });
+    expect(ok.text).toContain('done: spawn «1-bull.mod» at 1, 2, 3');
+    expect(seen).toEqual([{ cmd: 'spawn', args: { id: '1-bull.mod', pos: [1, 2, 3] } }]);
+  });
+
   it('game_towns reads towns', async () => {
     const t = await call('game_towns', { near: [0, 0, 0], range: 9000 });
     expect(t.text).toContain('towns: 1');

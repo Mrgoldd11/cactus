@@ -87,7 +87,8 @@ export type GameAction =
   | { cmd: 'teleport'; args: { pos: Vec3 } }
   | { cmd: 'camera'; args: { pos: Vec3 } }
   | { cmd: 'speed'; args: { value: number } }
-  | { cmd: 'pause'; args: { on: boolean } };
+  | { cmd: 'pause'; args: { on: boolean } }
+  | { cmd: 'spawn'; args: { id: string; pos?: Vec3; faction?: string } };
 
 /** A town from the plugin's `towns` command. */
 export interface GameTown {

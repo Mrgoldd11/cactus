@@ -4,7 +4,7 @@
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { formatDumpStatus, formatFlyoverStatus, formatGameState, formatTraceRecord, formatVec3, type GameAction, type GameFlyoverArgs } from '@kenshi-editor/core';
+import { formatDumpStatus, formatFlyoverStatus, formatGameState, formatTraceRecord, formatVec3, type GameAction, type GameFlyoverArgs, type Vec3 } from '@kenshi-editor/core';
 import type { GameBridge } from '@kenshi-editor/core/node';
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
@@ -29,6 +29,8 @@ function describeAction(a: GameAction): string {
       return a.args.value === 0 ? 'pause the game (speed 0)' : `game speed ×${a.args.value}`;
     case 'pause':
       return a.args.on ? 'pause the game' : 'unpause the game';
+    case 'spawn':
+      return `spawn «${a.args.id}» ${a.args.pos ? `at ${formatVec3(a.args.pos)}` : 'at the camera'}${a.args.faction ? ` (faction ${a.args.faction})` : ''}`;
   }
 }
 
@@ -166,6 +168,33 @@ export function registerGameTools(server: McpServer, game: GameBridge): void {
         } else {
           action = { cmd: 'pause', args: { on: a.on ?? true } };
         }
+        const what = describeAction(action);
+        if (!a.confirm) return [`not done: ${what}.`, 'Ask the user and repeat with confirm: true.'];
+        const r = await game.action(action);
+        return [`done: ${what}`, JSON.stringify(r)];
+      }),
+  );
+
+  server.registerTool(
+    'game_spawn',
+    {
+      title: 'Spawn a character or animal in the game',
+      description:
+        'Put a character or animal (a CHARACTER record of the vanilla game or a mod, by string id) into the running game: at the camera by default or at pos [x, y, z]. faction: "player" (the faction of the selected character), a FACTION string id, or omitted (the faction named in the record). It adds a real unit to the world: ask the user first. Without confirm: true it only shows what would be done; repeat with confirm: true.',
+      inputSchema: {
+        id: z.string().describe('String id of the CHARACTER record (find / show give it)'),
+        pos: vec3.optional().describe('Point [x, y, z] (default: where the camera looks)'),
+        faction: z.string().optional().describe('"player" or a FACTION string id'),
+        confirm: z.boolean().optional().describe('true: the user agrees, execute'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false, title: 'Spawn in the game' },
+    },
+    (a) =>
+      guarded(async () => {
+        const args: { id: string; pos?: Vec3; faction?: string } = { id: a.id };
+        if (a.pos) args.pos = a.pos;
+        if (a.faction) args.faction = a.faction;
+        const action: GameAction = { cmd: 'spawn', args };
         const what = describeAction(action);
         if (!a.confirm) return [`not done: ${what}.`, 'Ask the user and repeat with confirm: true.'];
         const r = await game.action(action);
