@@ -13,6 +13,7 @@ import {
   createCreature,
   creatureClipNeeds,
   creatureProblems,
+  creatureScale,
   creatureSamples,
   creatureVerdict,
   decodeText,
@@ -159,7 +160,7 @@ describe('creature clips and ragdoll', () => {
     expect(empty[0]!.text.en).toContain('no animations');
   });
 
-  it('best ragdoll: fewest missing bones, then most bound', () => {
+  it('best ragdoll: fewest missing bones, then the sample ragdoll, then most bound', () => {
     const s = skel(['Bip01', 'Bip01 Pelvis', 'Bip01 Tail'], []);
     const best = bestRagdoll(
       s,
@@ -170,6 +171,13 @@ describe('creature clips and ragdoll', () => {
       ]),
     );
     expect(best).toEqual({ path: 'bull.phs', missing: [] });
+    // The sample's own ragdoll wins a tie, never against fewer missing bones.
+    const tie = new Map([
+      ['bull.phs', ['Bip01', 'Bip01 Pelvis', 'Bip01 Tail']],
+      ['goat.phs', ['Bip01', 'Bip01 Pelvis']],
+    ]);
+    expect(bestRagdoll(s, tie, 'GOAT.phs')?.path).toBe('goat.phs');
+    expect(bestRagdoll(s, new Map([...tie, ['goat.phs', ['Bip01', 'Bip01 Ponytail1']]]), 'goat.phs')?.path).toBe('bull.phs');
     expect(animalRagdolls(make()).map((r) => r.path)).toEqual(['.\\data\\animal\\ragdoll\\bull.phs', '.\\data\\animal\\ragdoll\\goat.phs']);
   });
 });
@@ -188,6 +196,12 @@ describe('traders, samples, starts', () => {
     expect(newCreatureNameProblem(ctx, ' ')?.en).toContain('Enter');
     expect(newCreatureNameProblem(ctx, 'goat')?.en).toContain('taken');
     expect(newCreatureNameProblem(ctx, 'Donkey')).toBeUndefined();
+  });
+
+  it('scale: height ratio of the bounds, none for a flat mesh', () => {
+    const b = (h: number): { bounds: { min: [number, number, number]; max: [number, number, number] } } => ({ bounds: { min: [0, -1, 0], max: [1, h - 1, 1] } });
+    expect(creatureScale(b(15.2), b(11.6))).toBe(1.31);
+    expect(creatureScale(b(0), b(11.6))).toBeUndefined();
   });
 });
 

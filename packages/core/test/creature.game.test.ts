@@ -26,7 +26,7 @@ const game = hasGame(paths);
 const GOAT = '3993-gamedata.base';
 const FARM_SHOP = '53642-rebirth.mod';
 const inGame = (rel: string): string => join(paths.kenshi, rel);
-const DONKEY = inGame('mods/Custom Animal Test/donkey.skeleton');
+const DONKEY = inGame('mods/Custom Animal Test/creatures/donkey/donkey.skeleton');
 
 describe.skipIf(!game)('own creature on game files', () => {
   const { ctx } = loadModContext({ paths, po: false });

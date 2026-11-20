@@ -20,6 +20,7 @@
  */
 import { decodeText, encodeText } from '../text.ts';
 import type { GameRecord, Reference } from '../format/types.ts';
+import type { OgreMesh } from '../mesh/ogre-mesh.ts';
 import type { OgreSkeleton } from '../mesh/ogre-skeleton.ts';
 import type { UiText } from '../ui-text.ts';
 import { EditError, type ModContext } from './context.ts';
@@ -123,16 +124,27 @@ function animalRaces(ctx: ModContext): string[] {
 }
 
 /**
- * The ragdoll that fits a skeleton best: fewest missing bones, then most bones bound (a ragdoll
- * with more bodies follows the model better). `bones` holds the parsed names per path.
+ * The ragdoll that fits a skeleton best: fewest missing bones, then `prefer` (the sample's own
+ * ragdoll: made for that behaviour), then most bones bound (a ragdoll with more bodies follows the
+ * model better). `bones` holds the parsed names per path.
  */
-export function bestRagdoll(skeleton: OgreSkeleton, bones: ReadonlyMap<string, readonly string[]>): { path: string; missing: string[] } | undefined {
+export function bestRagdoll(
+  skeleton: OgreSkeleton,
+  bones: ReadonlyMap<string, readonly string[]>,
+  prefer?: string,
+): { path: string; missing: string[] } | undefined {
+  const preferred = (path: string): boolean => prefer !== undefined && path.toLowerCase() === prefer.toLowerCase();
   let best: { path: string; missing: string[]; bound: number } | undefined;
   for (const [path, names] of bones) {
     if (names.length === 0) continue;
     const missing = ragdollMissingBones(names, skeleton);
     const bound = names.length - missing.length;
-    if (!best || missing.length < best.missing.length || (missing.length === best.missing.length && bound > best.bound)) best = { path, missing, bound };
+    const better =
+      !best ||
+      missing.length < best.missing.length ||
+      (missing.length === best.missing.length &&
+        (preferred(path) !== preferred(best.path) ? preferred(path) : bound > best.bound));
+    if (better) best = { path, missing, bound };
   }
   return best && { path: best.path, missing: best.missing };
 }
@@ -349,6 +361,18 @@ export function newCreatureNameProblem(ctx: ModContext, name: string): UiText | 
     }
   }
   return undefined;
+}
+
+/**
+ * Suggested `scale` of a new body: its height (Y extent of the bounds) over the sample body's, to two
+ * decimals; undefined when a height is zero.
+ */
+export function creatureScale(mesh: Pick<OgreMesh, 'bounds'>, sampleMesh: Pick<OgreMesh, 'bounds'>): number | undefined {
+  const h = (m: Pick<OgreMesh, 'bounds'>): number => m.bounds.max[1] - m.bounds.min[1];
+  const own = h(mesh);
+  const base = h(sampleMesh);
+  if (!(own > 0) || !(base > 0)) return undefined;
+  return Math.round((own / base) * 100) / 100;
 }
 
 export interface CreatureSpec {
