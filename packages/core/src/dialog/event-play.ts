@@ -47,7 +47,8 @@ function spotsOfDialogue(ctx: ModContext, dialog: string): PlaySpot[] {
       continue;
     }
     if (!s.events.includes(EVENT_TALK)) continue;
-    for (const h of s.holders.slice(0, MAX_DIRECT)) out.push({ event: EVENT_TALK, character: h.sid, dialog });
+    // Only characters are played; a diplomatic assault overrides the dialogue of its squad leader.
+    for (const h of s.holders.filter((x) => x.type === 'CHARACTER').slice(0, MAX_DIRECT)) out.push({ event: EVENT_TALK, character: h.sid, dialog });
   }
   return out;
 }

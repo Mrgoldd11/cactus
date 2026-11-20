@@ -74,8 +74,18 @@ export function lineRefPhrases(
       out.push({ category, kind, phrase: { ...lineRefPhrase(category, names, lang, on), source: { category } } });
     }
   }
+  // A reference category without help (a field from a newer schema or an FCS Extended file) is still
+  // shown — as its code — so that a node never hides what is on the record.
+  for (const [category, refs] of rec.refs) {
+    if (OWN_REF_CATEGORIES.has(category) || category in LINE_REF_HELP || refs.length === 0) continue;
+    const names = refs.map((r) => targetName(ctx, r, false));
+    out.push({ category, kind: 'effect', phrase: { ...lineRefPhrase(category, names, lang, on), source: { category } } });
+  }
   return out;
 }
+
+/** Reference categories of DIALOGUE / DIALOGUE_LINE that are not phrases: the lines and the DIALOG_ACTION lists. */
+const OWN_REF_CATEGORIES: ReadonlySet<string> = new Set(['lines', 'conditions', 'effects']);
 
 /** Enum of a plain DIALOGUE_LINE field, from the schema or the built-in table. */
 const FIELD_ENUMS: Readonly<Record<string, string>> = { 'repetition limit': 'DialogRepetitionEnum', 'target is type': 'CharacterTypeEnum' };

@@ -19,6 +19,25 @@ export const PACKAGE_HOLDER_FIELDS: Readonly<Record<string, readonly string[]>> 
 /** Fields of CHARACTER that reference a dialogue directly. */
 export const CHARACTER_DIALOGUE_FIELDS: readonly string[] = ['dialogue', 'announcement dialogue'];
 
+/**
+ * Records that start a dialogue themselves, not through a package (fcs.def): type → fields. The fields
+ * in `TALK_START_FIELDS` are the talk dialogue of who has them; the others start it on their own moment
+ * (an announcement, entering the biome, the end of an AI contract).
+ */
+export const DIALOGUE_STARTER_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  CHARACTER: CHARACTER_DIALOGUE_FIELDS,
+  SINGLE_DIPLOMATIC_ASSAULT: ['dialogue', 'dialogue squad', 'dialogue announce'],
+  BIOME_GROUP: ['arrival dialog'],
+  FACTION_CAMPAIGN: ['dialog announcement'],
+  AI_PACKAGE: ['contract end talk passive'],
+};
+
+/** Starter fields whose dialogue is the talk dialogue (the «talk» event). */
+const TALK_START_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  CHARACTER: ['dialogue'],
+  SINGLE_DIPLOMATIC_ASSAULT: ['dialogue', 'dialogue squad'],
+};
+
 export interface WhenHolder {
   /** Character, squad or faction. */
   sid: string;
@@ -36,6 +55,11 @@ export interface WhenSource {
   pkg?: string;
   /** Who has the package (or the dialogue); empty — the package hangs on nobody. */
   holders: WhenHolder[];
+  /**
+   * For a source without a package and without events: the `TYPE.field` that starts the dialogue
+   * (`CHARACTER.announcement dialogue`, `BIOME_GROUP.arrival dialog`…).
+   */
+  start?: string;
 }
 
 const MAX_HOLDERS = 200;
@@ -84,13 +108,18 @@ export function dialogueWhen(ctx: ModContext, dialog: string): WhenSource[] {
         continue;
       }
       out.push({ events: [...new Set(events)], pkg: e.source, holders: packageHolders(ctx, e.source) });
-    } else if (type === 'CHARACTER' && CHARACTER_DIALOGUE_FIELDS.includes(e.category)) {
-      const list = direct.get(e.category) ?? [];
+    } else if (DIALOGUE_STARTER_FIELDS[type]?.includes(e.category)) {
+      const key = `${type}.${e.category}`;
+      const list = direct.get(key) ?? [];
       if (!list.some((h) => h.sid === e.source)) list.push({ sid: e.source, type, field: e.category });
-      direct.set(e.category, list);
+      direct.set(key, list);
     }
   }
-  for (const [field, holders] of direct) out.push({ events: field === 'dialogue' ? [EVENT_TALK] : [], holders });
+  for (const [key, holders] of direct) {
+    const { type, field } = holders[0]!;
+    if (TALK_START_FIELDS[type]?.includes(field)) out.push({ events: [EVENT_TALK], holders });
+    else out.push({ events: [], holders, start: key });
+  }
   return out;
 }
 

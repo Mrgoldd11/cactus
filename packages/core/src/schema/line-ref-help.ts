@@ -151,6 +151,18 @@ export const LINE_REF_HELP: Readonly<Record<string, LineRefHelp>> = {
     t('Sets the «territorial» setting of this faction campaign to false.', 'Ставит у этой кампании фракции настройку «territorial» в «нет».', '将此派系战役的「territorial」设置为否。'),
     t('campaign locked: {list}', 'закрывается кампания: {list}', '战役锁定：{list}'),
   ),
+  // Old fields: in vanilla data (gamedata.base, dialogue-02.mod), but fcs.def has them on no dialogue line,
+  // so FCS does not show them. Shown so that a line never hides a reference; the picker does not offer them.
+  'delivery AI package': e(
+    t('Delivery AI package (old field)', 'AI-пакет доставки (старое поле)', '交付 AI 包（旧字段）'),
+    t('Not in fcs.def for a dialogue line: an old field FCS does not show; the game may ignore it. Use «AI contract» or «Change AI».', 'В fcs.def у реплики такого поля нет: старое поле, FCS его не показывает, игра может его не читать. Вместо него — «AI-контракт» или «Сменить AI».', 'fcs.def 中对话台词没有此字段：FCS 不显示的旧字段，游戏可能不会读取。请改用「AI 合约」或「更换 AI」。'),
+    t('old field: delivery AI package {list}', 'старое поле: AI-пакет доставки {list}', '旧字段：交付 AI 包 {list}'),
+  ),
+  'set AI package': e(
+    t('Set AI package (old field)', 'Задать AI-пакет (старое поле)', '设置 AI 包（旧字段）'),
+    t('Not in fcs.def for a dialogue line: an old field FCS does not show; the game may ignore it. Use «AI contract» or «Change AI».', 'В fcs.def у реплики такого поля нет: старое поле, FCS его не показывает, игра может его не читать. Вместо него — «AI-контракт» или «Сменить AI».', 'fcs.def 中对话台词没有此字段：FCS 不显示的旧字段，游戏可能不会读取。请改用「AI 合约」或「更换 AI」。'),
+    t('old field: AI package becomes {list}', 'старое поле: AI-пакет становится {list}', '旧字段：AI 包变为 {list}'),
+  ),
   'unlock campaign': e(
     t('Unlock campaign', 'Открыть кампанию', '解锁战役'),
     t('Sets the «territorial» setting of this faction campaign to true: it can happen now, but is not started.', 'Ставит у этой кампании фракции настройку «territorial» в «да»: она становится возможной, но не запускается.', '将此派系战役的「territorial」设置为是：使其可能发生，但不会触发。'),
