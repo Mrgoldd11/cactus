@@ -263,6 +263,8 @@ export class Session {
     if (!cur) throw new SessionError('No mod is open: open_mod first');
     const target = path !== undefined ? resolve(this.cwd, path) : cur.path;
     if (target === undefined) throw new SessionError('The mod is new: give a path');
+    // Never overwrite an arbitrary file with mod bytes because of a wrong path.
+    if (!target.toLowerCase().endsWith('.mod')) throw new SessionError(`${target} is not a .mod file: give a path ending in .mod`);
     if (isInWorkshop(this.paths, target)) {
       throw new SessionError(`${target} is in the Steam Workshop; we never write there, even with force. To edit someone else's mod, use a copy in mods/ (kedit mods copy or the button in the editor)`);
     }

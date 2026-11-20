@@ -60,3 +60,14 @@
 .as-in-game .warn {
   color: var(--changed);
 }
+
+.game-help {
+  display: inline-block;
+  width: 1.3em;
+  text-align: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  opacity: 0.6;
+  cursor: help;
+  font-size: 0.85em;
+}

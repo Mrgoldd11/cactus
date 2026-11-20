@@ -340,6 +340,12 @@ describe('kenshi-mcp: editing and saving', () => {
     await call('open_mod', { name: 'Fresh.mod' });
     await call('edit', { ops: [{ op: 'rename', id: 'Y', name: 'Big shield' }] });
     expect((await call('save')).text).toBe('The mod is new: give a path');
+    // A path that is not a .mod is refused and nothing is written.
+    const notMod = join(fx.game, 'mods', 'Fresh', 'notes.txt');
+    const wrong = await call('save', { path: notMod, force: true });
+    expect(wrong.isError).toBe(true);
+    expect(wrong.text).toContain('.mod');
+    expect(existsSync(notMod)).toBe(false);
     const inGame = join(fx.game, 'mods', 'Fresh', 'Fresh.mod');
     expect((await call('save', { path: inGame })).isError).toBe(true);
     expect(existsSync(inGame)).toBe(false);

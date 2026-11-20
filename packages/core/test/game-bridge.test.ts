@@ -151,3 +151,17 @@ describe('game answer format', () => {
     ]);
   });
 });
+
+describe('parseVec3', () => {
+  it('takes the shapes a person copies', async () => {
+    const { parseVec3 } = await import('../src/index.ts');
+    expect(parseVec3('-35546.4, 117.6, -63593.6')).toEqual([-35546.4, 117.6, -63593.6]);
+    expect(parseVec3('[1, 2, 3]')).toEqual([1, 2, 3]);
+    expect(parseVec3(' (1 2 3) ')).toEqual([1, 2, 3]);
+    expect(parseVec3('1;2;3')).toEqual([1, 2, 3]);
+    expect(parseVec3('1,2')).toBeUndefined();
+    expect(parseVec3('1,2,3,4')).toBeUndefined();
+    expect(parseVec3('a,b,c')).toBeUndefined();
+    expect(parseVec3('')).toBeUndefined();
+  });
+});

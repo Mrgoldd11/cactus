@@ -88,7 +88,7 @@ export type GameAction =
   | { cmd: 'camera'; args: { pos: Vec3 } }
   | { cmd: 'speed'; args: { value: number } }
   | { cmd: 'pause'; args: { on: boolean } }
-  | { cmd: 'spawn'; args: { id: string; pos?: Vec3; faction?: string } };
+  | { cmd: 'spawn'; args: { id: string; pos?: Vec3; faction?: string; age?: number } };
 
 /** A town from the plugin's `towns` command. */
 export interface GameTown {
@@ -225,6 +225,19 @@ export function gameErrorText(code: string, lang = 'en'): string {
 }
 
 const fmt = (v: number): string => (Math.round(v * 10) / 10).toString();
+/**
+ * A point typed or pasted by a person: «x, y, z», «[x, y, z]», «(x y z)» (commas, semicolons or
+ * spaces between numbers; a comma may be a decimal comma only when numbers are split by `;`).
+ * Returns undefined unless exactly three finite numbers are found.
+ */
+export function parseVec3(text: string): Vec3 | undefined {
+  const t = text.trim().replace(/^[[(]\s*/, '').replace(/\s*[\])]$/, '');
+  const parts = t.split(/\s*[,;]\s*|\s+/).filter((x) => x !== '');
+  if (parts.length !== 3) return undefined;
+  const nums = parts.map((x) => (/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(x) ? Number(x) : NaN));
+  return nums.every((n) => Number.isFinite(n)) ? (nums as Vec3) : undefined;
+}
+
 export const formatVec3 = (p: readonly number[]): string => p.map(fmt).join(', ');
 
 /** Game state as lines (for MCP and logs). */

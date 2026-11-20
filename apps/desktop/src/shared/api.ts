@@ -319,7 +319,7 @@ export interface GameLinkStatus {
 export type GameReply = { ok: true; result: unknown } | { ok: false; code: string; message: string };
 
 /** Plugin commands the window may send (via main). */
-export const GAME_COMMANDS = ['state', 'camera', 'teleport', 'speed', 'pause', 'towns', 'trace', 'trace_get'] as const;
+export const GAME_COMMANDS = ['state', 'camera', 'teleport', 'spawn', 'speed', 'pause', 'towns', 'trace', 'trace_get'] as const;
 export type GameCommand = (typeof GAME_COMMANDS)[number];
 
 /** Preview picture of a Workshop item. */

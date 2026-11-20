@@ -180,18 +180,20 @@ export function registerGameTools(server: McpServer, game: GameBridge): void {
     {
       title: 'Spawn a character or animal in the game',
       description:
-        'Put a character or animal (a CHARACTER record of the vanilla game or a mod, by string id) into the running game: at the camera by default or at pos [x, y, z]. faction: "player" (the faction of the selected character), a FACTION string id, or omitted (the faction named in the record). It adds a real unit to the world: ask the user first. Without confirm: true it only shows what would be done; repeat with confirm: true.',
+        'Put a character or animal (a CHARACTER record of the vanilla game or a mod, by string id) into the running game: at the camera by default or at pos [x, y, z]. faction: "player" (the faction of the selected character), a FACTION string id, or omitted (the faction named in the record; animal records usually name none, then pass e.g. the Herbivore faction). age: animals only, 0 = pup .. 1. It adds a real unit to the world: ask the user first. Without confirm: true it only shows what would be done; repeat with confirm: true.',
       inputSchema: {
         id: z.string().describe('String id of the CHARACTER record (find / show give it)'),
         pos: vec3.optional().describe('Point [x, y, z] (default: where the camera looks)'),
         faction: z.string().optional().describe('"player" or a FACTION string id'),
+        age: z.number().min(0).max(1).optional().describe('Animals only: 0 = pup .. 1 (default 0.5, grown)'),
         confirm: z.boolean().optional().describe('true: the user agrees, execute'),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false, title: 'Spawn in the game' },
     },
     (a) =>
       guarded(async () => {
-        const args: { id: string; pos?: Vec3; faction?: string } = { id: a.id };
+        const args: { id: string; pos?: Vec3; faction?: string; age?: number } = { id: a.id };
+        if (a.age !== undefined) args.age = a.age;
         if (a.pos) args.pos = a.pos;
         if (a.faction) args.faction = a.faction;
         const action: GameAction = { cmd: 'spawn', args };

@@ -3,12 +3,13 @@
  * a link to the record), position, time, pause and the dialogue trace log.
  */
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { formatEnumValue, getEnum, type GameState } from '@kenshi-editor/core';
+import { formatEnumValue, getEnum, parseVec3, type GameState } from '@kenshi-editor/core';
 import { langOf, useLang } from '../../i18n.ts';
-import { GAME_STRINGS, gameRequest, gameState, replyError, setGameTrace, useGameLink, useGameT, useGameTrace } from '../../game.ts';
-import { ShowInGame, TraceView } from '../../components/GameLink.tsx';
+import { GAME_STRINGS, gameRequest, gameState, replyError, setGameTrace, spawnAt, teleportTo, useGameLink, useGameT, useGameTrace } from '../../game.ts';
+import { CoordsHelp, ShowInGame, TraceView } from '../../components/GameLink.tsx';
 import { registerPanel } from '../registry.ts';
 import { useWorkbench } from '../context.ts';
+import { useSelectionVersion } from '../selection.ts';
 
 function GamePanel(): ReactNode {
   const g = useGameT();
@@ -109,7 +110,73 @@ function GamePanel(): ReactNode {
           )}
         </>
       )}
+      <GotoSection onDone={refresh} />
+      <SpawnSection />
       <TraceSection onGo={go} />
+    </div>
+  );
+}
+
+/** Field for pasted coordinates + Teleport (with confirmation). */
+function GotoSection({ onDone }: { onDone: () => Promise<void> }): ReactNode {
+  const g = useGameT();
+  const lang = useLang();
+  const [text, setText] = useState('');
+  const [err, setErr] = useState<string | undefined>();
+  const go = async (): Promise<void> => {
+    const pos = parseVec3(text);
+    if (!pos) return setErr(g.badCoords);
+    if (!window.confirm(g.teleportAsk(pos.map((v) => Math.round(v)).join(', ')))) return;
+    const r = await teleportTo(pos);
+    setErr(r.ok ? undefined : replyError(r, lang));
+    await onDone();
+  };
+  return (
+    <div className="game-row" data-testid="game-goto">
+      {g.gotoLabel} <CoordsHelp />{' '}
+      <input
+        data-testid="game-goto-input"
+        value={text}
+        placeholder={g.gotoPlaceholder}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && void go()}
+      />{' '}
+      <button className="small" data-testid="game-goto-button" onClick={() => void go()}>
+        {g.gotoButton}
+      </button>
+      {err && <span className="error"> {err}</span>}
+    </div>
+  );
+}
+
+/** Creature from a record at the camera (with confirmation). */
+function SpawnSection(): ReactNode {
+  const g = useGameT();
+  const lang = useLang();
+  const { selection } = useWorkbench();
+  const [id, setId] = useState('');
+  const [err, setErr] = useState<string | undefined>();
+  useSelectionVersion(selection);
+  const picked = selection.latest((s) => s.kind === 'record');
+  const place = async (): Promise<void> => {
+    const sid = id.trim();
+    if (!sid || !window.confirm(g.spawnAsk(sid))) return;
+    const r = await spawnAt(sid);
+    setErr(r.ok ? undefined : replyError(r, lang));
+  };
+  return (
+    <div className="game-row" data-testid="game-spawn">
+      {g.spawnLabel}{' '}
+      <input data-testid="game-spawn-input" value={id} placeholder={g.spawnPlaceholder} onChange={(e) => setId(e.target.value)} />{' '}
+      {picked && picked.kind === 'record' && (
+        <button className="small" title={picked.sid} onClick={() => setId(picked.sid)}>
+          ← {picked.sid}
+        </button>
+      )}{' '}
+      <button className="small" data-testid="game-spawn-button" onClick={() => void place()}>
+        {g.spawnButton}
+      </button>
+      {err && <span className="error"> {err}</span>}
     </div>
   );
 }

@@ -4,7 +4,7 @@
  */
 import { useState, type ReactNode } from 'react';
 import './game.css';
-import type { TraceRecord, Vec3 } from '@kenshi-editor/core';
+import { formatVec3, type TraceRecord, type Vec3 } from '@kenshi-editor/core';
 import { useLang } from '../i18n.ts';
 import { cameraTo, lastTraceFor, replyError, setGameTrace, teleportTo, useGameLink, useGameT, useGameTrace } from '../game.ts';
 
@@ -28,16 +28,49 @@ export function GameIndicator(): ReactNode {
 const fmt = (p: Vec3): string => p.map((v) => String(Math.round(v))).join(', ');
 
 /** Buttons for a world point: camera (at once) and teleport of the selected (with confirmation). */
+/** "?" with an explanation of the coordinate copy/paste workflow. */
+export function CoordsHelp(): ReactNode {
+  const g = useGameT();
+  return (
+    <span className="game-help" data-testid="coords-help" title={g.coordsHelp}>
+      ?
+    </span>
+  );
+}
+
+/** Copies a point as "x, y, z" (works without the game). */
+export function CopyCoords({ pos }: { pos: Vec3 }): ReactNode {
+  const g = useGameT();
+  const [done, setDone] = useState(false);
+  return (
+    <span className="game-actions">
+      <button
+        className="small"
+        data-testid="copy-coords"
+        onClick={() => {
+          void navigator.clipboard.writeText(formatVec3(pos)).then(() => {
+            setDone(true);
+            setTimeout(() => setDone(false), 1500);
+          });
+        }}
+      >
+        ⧉ {done ? g.copied : g.copyCoords}
+      </button>
+      <CoordsHelp />
+    </span>
+  );
+}
+
 export function ShowInGame({ pos }: { pos: Vec3 }): ReactNode {
   const g = useGameT();
   const lang = useLang();
   const s = useGameLink();
   const [err, setErr] = useState<string | undefined>();
-  if (!s.inGame) return null;
   const run = async (fn: () => ReturnType<typeof cameraTo>): Promise<void> => {
     const r = await fn();
     setErr(r.ok ? undefined : replyError(r, lang));
   };
+  if (!s.inGame) return <CopyCoords pos={pos} />;
   return (
     <span className="game-actions">
       <button className="small" data-testid="show-in-game" title={g.showInGameTip} onClick={() => void run(() => cameraTo(pos))}>
@@ -53,6 +86,7 @@ export function ShowInGame({ pos }: { pos: Vec3 }): ReactNode {
       >
         ⇢
       </button>
+      <CopyCoords pos={pos} />
       {err && <span className="error"> {err}</span>}
     </span>
   );
