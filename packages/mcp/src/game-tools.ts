@@ -185,7 +185,7 @@ export function registerGameTools(server: McpServer, game: GameBridge): void {
         id: z.string().describe('String id of the CHARACTER record (find / show give it)'),
         pos: vec3.optional().describe('Point [x, y, z] (default: where the camera looks)'),
         faction: z.string().optional().describe('"player" or a FACTION string id'),
-        age: z.number().min(0).max(1).optional().describe('Animals only: 0 = pup .. 1 (default 0.5, grown)'),
+        age: z.number().min(0).max(1).optional().describe('Animals only: 0 = pup .. 1 (default 1 = adult)'),
         confirm: z.boolean().optional().describe('true: the user agrees, execute'),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false, title: 'Spawn in the game' },
