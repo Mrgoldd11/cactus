@@ -71,3 +71,10 @@
   cursor: help;
   font-size: 0.85em;
 }
+
+.game-shot {
+  display: block;
+  max-width: 100%;
+  margin-top: 6px;
+  border: 1px solid var(--border, #555);
+}

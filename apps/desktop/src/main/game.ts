@@ -3,7 +3,7 @@
  * Every 3 s main checks the link (ping of the Kenshi Bridge plugin) and broadcasts the state to windows.
  * The window may send only the listed commands (`GAME_COMMANDS`).
  */
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow, ipcMain, nativeImage } from 'electron';
 import { GameBridge, GameBridgeError } from '@kenshi-editor/core/node';
 import { GAME_COMMANDS, IPC, type GameLinkStatus, type GameReply } from '../shared/api.ts';
 
@@ -30,11 +30,21 @@ async function poll(): Promise<void> {
   }
 }
 
+/** Adds a small JPEG `dataUrl` (up to 1280 px wide) of the picture the plugin wrote. */
+async function withPicture(shot: { path: string; width: number; height: number }): Promise<object> {
+  const img = nativeImage.createFromPath(shot.path);
+  if (img.isEmpty()) return shot;
+  const small = img.getSize().width > 1280 ? img.resize({ width: 1280, quality: 'good' }) : img;
+  return { ...shot, dataUrl: `data:image/jpeg;base64,${small.toJPEG(85).toString('base64')}` };
+}
+
 async function request(cmd: string, args: object): Promise<GameReply> {
   if (!bridge) return { ok: false, code: 'no_connection', message: 'off' };
   if (!(GAME_COMMANDS as readonly string[]).includes(cmd)) return { ok: false, code: 'unknown_cmd', message: cmd };
   try {
-    return { ok: true, result: await bridge.request(cmd, args) };
+    const result = await bridge.request(cmd, args);
+    if (cmd === 'screenshot') return { ok: true, result: await withPicture(result as { path: string; width: number; height: number }) };
+    return { ok: true, result };
   } catch (e) {
     if (e instanceof GameBridgeError) {
       if (e.code === 'no_connection') void poll();

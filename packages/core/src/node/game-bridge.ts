@@ -167,6 +167,11 @@ export class GameBridge {
     return this.request(a.cmd, a.args);
   }
 
+  /** The game window written to a picture file on this computer (read only for the game). */
+  screenshot(path?: string): Promise<{ path: string; width: number; height: number }> {
+    return this.request('screenshot', path ? { path } : {});
+  }
+
   /** World towns with center and border radius (read only). */
   towns(args: { near?: Vec3; range?: number; mult?: number } = {}): Promise<{ towns: GameTown[]; count: number }> {
     return this.request('towns', args);

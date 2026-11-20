@@ -112,6 +112,7 @@ function GamePanel(): ReactNode {
       )}
       <GotoSection onDone={refresh} />
       <SpawnSection />
+      <ShotSection />
       <TraceSection onGo={go} />
     </div>
   );
@@ -145,6 +146,33 @@ function GotoSection({ onDone }: { onDone: () => Promise<void> }): ReactNode {
         {g.gotoButton}
       </button>
       {err && <span className="error"> {err}</span>}
+    </div>
+  );
+}
+
+/** Picture of the game window. */
+function ShotSection(): ReactNode {
+  const g = useGameT();
+  const lang = useLang();
+  const [pic, setPic] = useState<string | undefined>();
+  const [err, setErr] = useState<string | undefined>();
+  const [busy, setBusy] = useState(false);
+  const take = async (): Promise<void> => {
+    setBusy(true);
+    const r = await gameRequest('screenshot');
+    setBusy(false);
+    if (r.ok) {
+      setErr(undefined);
+      setPic((r.result as { dataUrl?: string }).dataUrl);
+    } else setErr(replyError(r, lang));
+  };
+  return (
+    <div className="game-row" data-testid="game-shot">
+      <button className="small" data-testid="game-shot-button" title={g.shotTip} disabled={busy} onClick={() => void take()}>
+        {g.shotButton}
+      </button>
+      {err && <span className="error"> {err}</span>}
+      {pic && <img className="game-shot" data-testid="game-shot-image" src={pic} alt="" />}
     </div>
   );
 }

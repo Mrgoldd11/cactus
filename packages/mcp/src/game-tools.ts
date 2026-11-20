@@ -3,11 +3,12 @@
  * Reading is free; commands that change the game run only with confirm: true (after the user agrees).
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { formatDumpStatus, formatFlyoverStatus, formatGameState, formatTraceRecord, formatVec3, type GameAction, type GameFlyoverArgs, type Vec3 } from '@kenshi-editor/core';
 import type { GameBridge } from '@kenshi-editor/core/node';
 
-type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
+type ToolResult = { content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; isError?: boolean };
 
 async function guarded(fn: () => Promise<string[]>): Promise<ToolResult> {
   try {
@@ -202,6 +203,31 @@ export function registerGameTools(server: McpServer, game: GameBridge): void {
         const r = await game.action(action);
         return [`done: ${what}`, JSON.stringify(r)];
       }),
+  );
+
+  server.registerTool(
+    'game_screenshot',
+    {
+      title: 'Screenshot of the game',
+      description:
+        'Take a picture of the running game window (what the player sees, with the interface) and return it as an image. Changes nothing in the game. Useful to check a spawn, a teleport or a camera move: move the camera first (game_command), then look.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false, title: 'Game screenshot' },
+    },
+    async () => {
+      try {
+        const shot = await game.screenshot();
+        const data = (await readFile(shot.path)).toString('base64');
+        return {
+          content: [
+            { type: 'image' as const, data, mimeType: 'image/png' },
+            { type: 'text' as const, text: `${shot.width}x${shot.height}, saved as ${shot.path}` },
+          ],
+        };
+      } catch (e) {
+        return { content: [{ type: 'text' as const, text: e instanceof Error ? e.message : String(e) }], isError: true };
+      }
+    },
   );
 
   let since = 0;
