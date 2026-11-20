@@ -384,6 +384,12 @@ export function modelOfRecord(ctx: ModContext, sid: string, options: { interior?
     racePieces(ctx, rec, out, options.female === true);
     return out;
   }
+  // An animal is drawn as the body of its race.
+  if (type === 'ANIMAL_CHARACTER') {
+    const race = ctx.get(refs(rec, 'race')[0]?.target ?? '');
+    if (race) racePieces(ctx, race, out, options.female === true);
+    return out;
+  }
   const fields = MESH_FIELDS[type] ?? [...rec.files.keys()];
   const field = fields.find((f) => isMesh(file(rec, f)));
   if (!field) return out;
@@ -426,6 +432,7 @@ export function hasModel(ctx: ModContext, sid: string): boolean {
   const type = itemTypeName(rec.type);
   if (type === 'BUILDING') return refs(rec, 'parts').length > 0 || refs(rec, 'interior').length > 0 || foliageRockOf(ctx, rec) !== undefined;
   if (type === 'BUILDING_PART') return isMesh(file(rec, 'phs or mesh'));
+  if (type === 'ANIMAL_CHARACTER') return refs(rec, 'race').some((r) => hasModel(ctx, r.target));
   for (const f of MESH_FIELDS[type] ?? [...rec.files.keys()]) if (isMesh(file(rec, f))) return true;
   return false;
 }

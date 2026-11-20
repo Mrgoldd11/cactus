@@ -34,10 +34,46 @@ export function readPickedAsset(path: string, kind: ModAssetKind): PickedModAsse
   if (kindOf(path) !== kind) return { error: 'bad-type' };
   try {
     if (statSync(path).size > MAX_MOD_ASSET) return { error: 'too-big' };
-    return { path, name: basename(path), bytes: readFileSync(path) };
+    const got: PickedModAsset = { path, name: basename(path), bytes: readFileSync(path) };
+    if (kind === 'mesh') {
+      const linked = linkedAssets(path, got.bytes);
+      if (linked) got.linked = linked;
+    }
+    return got;
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+/** A sibling file of the given kind, if it is there and readable. */
+function sibling(dir: string, name: string, kind: ModAssetKind): PickedModAsset | undefined {
+  const p = join(dir, basename(name));
+  if (!existsSync(p)) return undefined;
+  const got = readPickedAsset(p, kind);
+  return 'bytes' in got ? got : undefined;
+}
+
+/**
+ * Files Kenshi IO Tools writes next to a `.mesh`: the `.skeleton` the model links by name and the
+ * textures named after it (`donkey.dds`, `donkey_n.dds`). Missing ones are simply left out.
+ */
+export function linkedAssets(meshPath: string, bytes: Uint8Array): PickedModAsset['linked'] | undefined {
+  const dir = dirname(meshPath);
+  const stem = basename(meshPath, extname(meshPath));
+  let skeletonName: string | undefined;
+  try {
+    skeletonName = parseOgreMesh(bytes).skeleton;
+  } catch {
+    skeletonName = undefined;
+  }
+  const out: NonNullable<PickedModAsset['linked']> = {};
+  const skeleton = skeletonName ? sibling(dir, skeletonName, 'skeleton') : undefined;
+  if (skeleton) out.skeleton = skeleton;
+  const texture = sibling(dir, `${stem}.dds`, 'texture') ?? sibling(dir, `${stem}.png`, 'texture');
+  if (texture) out.texture = texture;
+  const normalMap = sibling(dir, `${stem}_n.dds`, 'texture');
+  if (normalMap) out.normalMap = normalMap;
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /**

@@ -375,6 +375,11 @@ export interface PickedModAsset {
   path: string;
   name: string;
   bytes: Uint8Array;
+  /**
+   * For a `.mesh`: files found next to it — the `.skeleton` it links by name, `<stem>.dds`/`.png` and
+   * `<stem>_n.dds` (normal map). They count as picked too (can be copied into the mod).
+   */
+  linked?: { skeleton?: PickedModAsset; texture?: PickedModAsset; normalMap?: PickedModAsset };
 }
 
 export interface ImportModAssetRequest {

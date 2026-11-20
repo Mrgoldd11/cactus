@@ -115,7 +115,7 @@ const zh: ModelStrings = {
   partial: (path: string, clips: number, bones: string): string =>
     `${path} 中有 ${clips} 个动画会移动模型骨骼中没有的骨骼（${bones}）：这些骨骼保持不动`,
 };
-const MODEL_STRINGS: Record<Lang, ModelStrings> = { en, ru, zh };
+export const MODEL_STRINGS: Record<Lang, ModelStrings> = { en, ru, zh };
 
 /** Record types that can have a model in the game. */
 const MODEL_TYPES = [
@@ -135,6 +135,7 @@ const MODEL_TYPES = [
   'MAP_FEATURES',
   'FOLIAGE_MESH',
   'RACE',
+  'ANIMAL_CHARACTER',
   'WILDLIFE_BIRDS',
 ] as const;
 

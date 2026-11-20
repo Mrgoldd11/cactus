@@ -313,8 +313,8 @@ export function readIconDataUrl(game: GameInstallInfo, iconPath: string): string
   return `data:${mime};base64,${readFileSync(full).toString('base64')}`;
 }
 
-// `.dat` — map features (`data/newland/land/features.dat`).
-const ASSET_TYPES = new Set(['.mesh', '.dds', '.png', '.material', '.skeleton', '.dat']);
+// `.dat` — map features (`data/newland/land/features.dat`); `.phs` — ragdolls (bone names for the «Own creature» check).
+const ASSET_TYPES = new Set(['.mesh', '.dds', '.png', '.material', '.skeleton', '.dat', '.phs']);
 /** Larger than this — not a game model or texture. */
 const MAX_ASSET = 256 * 1024 * 1024;
 
