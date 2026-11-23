@@ -144,7 +144,7 @@ test('packaged: clean start, game, vanilla, search, World, Diagnostics, Cleanup,
   const { app, page } = await launch(env);
   try {
     const info = await app.evaluate(({ app: a }) => ({ version: a.getVersion(), packaged: a.isPackaged, name: a.getName(), exe: process.execPath, appPath: a.getAppPath() }));
-    expect(info.version).toBe('0.2.0-beta');
+    expect(info.version).toBe('1.0.0');
     expect(info.packaged).toBe(true);
     expect(resolve(info.exe).toLowerCase()).toBe(resolve(EXE).toLowerCase());
     expect(info.appPath.toLowerCase()).toContain(join('resources', 'app').toLowerCase());

@@ -50,7 +50,9 @@ export function CopyCoords({ pos }: { pos: Vec3 }): ReactNode {
         onClick={() => {
           void navigator.clipboard.writeText(formatVec3(pos)).then(() => {
             setDone(true);
-            setTimeout(() => setDone(false), 1500);
+            setTimeout(() => {
+              setDone(false);
+            }, 1500);
           });
         }}
       >

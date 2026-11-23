@@ -7,7 +7,7 @@
  * Настройки — временные (KEDIT_USER_DATA), реальные settings.json не трогаются.
  * Ничего не сохраняется на диск: правка живёт в окне, пока её не сохранят сами.
  */
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { _electron as electron, expect, type ElectronApplication } from '@playwright/test';
@@ -93,11 +93,15 @@ async function main(): Promise<void> {
 
   console.log(ok ? '✔ Готово. Окно оставляю открытым — закрой его, когда посмотришь.' : '✖ Не получилось. Окно оставляю открытым для разбора.');
   // Держим процесс, пока окно не закроют: приложение живёт, пока жив скрипт.
-  await new Promise<void>((resolve) => app.on('close', () => resolve()));
+  await new Promise<void>((resolve) => {
+    app.on('close', () => {
+      resolve();
+    });
+  });
   console.log('■ Окно закрыто, выхожу.');
 }
 
-main().catch((e) => {
+main().catch((e: unknown) => {
   console.error(e);
   process.exit(1);
 });

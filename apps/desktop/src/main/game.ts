@@ -31,7 +31,7 @@ async function poll(): Promise<void> {
 }
 
 /** Adds a small JPEG `dataUrl` (up to 1280 px wide) of the picture the plugin wrote. */
-async function withPicture(shot: { path: string; width: number; height: number }): Promise<object> {
+function withPicture(shot: { path: string; width: number; height: number }): object {
   const img = nativeImage.createFromPath(shot.path);
   if (img.isEmpty()) return shot;
   const small = img.getSize().width > 1280 ? img.resize({ width: 1280, quality: 'good' }) : img;
@@ -43,7 +43,7 @@ async function request(cmd: string, args: object): Promise<GameReply> {
   if (!(GAME_COMMANDS as readonly string[]).includes(cmd)) return { ok: false, code: 'unknown_cmd', message: cmd };
   try {
     const result = await bridge.request(cmd, args);
-    if (cmd === 'screenshot') return { ok: true, result: await withPicture(result as { path: string; width: number; height: number }) };
+    if (cmd === 'screenshot') return { ok: true, result: withPicture(result as { path: string; width: number; height: number }) };
     return { ok: true, result };
   } catch (e) {
     if (e instanceof GameBridgeError) {

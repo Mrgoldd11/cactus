@@ -219,7 +219,7 @@ export function createServer(session: Session, opts: { game?: GameBridge } = {})
       return fn();
     });
   const server = new McpServer(
-    { name: SERVER_NAME, version: '0.2.0-beta' },
+    { name: SERVER_NAME, version: '1.0.0' },
     {
       instructions: [
         'Kenshi data: vanilla (gamedata.base → Newwworld.mod → Dialogue.mod → rebirth.mod), the mod dependencies, and the mod itself.',

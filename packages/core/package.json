@@ -1,6 +1,6 @@
 {
   "name": "@kenshi-editor/core",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Kenshi data format (.base/.mod), FCS schema and locale parsers",
   "type": "module",

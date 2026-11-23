@@ -126,7 +126,10 @@ function GotoSection({ onDone }: { onDone: () => Promise<void> }): ReactNode {
   const [err, setErr] = useState<string | undefined>();
   const go = async (): Promise<void> => {
     const pos = parseVec3(text);
-    if (!pos) return setErr(g.badCoords);
+    if (!pos) {
+      setErr(g.badCoords);
+      return;
+    }
     if (!window.confirm(g.teleportAsk(pos.map((v) => Math.round(v)).join(', ')))) return;
     const r = await teleportTo(pos);
     setErr(r.ok ? undefined : replyError(r, lang));
@@ -139,7 +142,9 @@ function GotoSection({ onDone }: { onDone: () => Promise<void> }): ReactNode {
         data-testid="game-goto-input"
         value={text}
         placeholder={g.gotoPlaceholder}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setText(e.target.value);
+        }}
         onKeyDown={(e) => e.key === 'Enter' && void go()}
       />{' '}
       <button className="small" data-testid="game-goto-button" onClick={() => void go()}>
@@ -195,9 +200,22 @@ function SpawnSection(): ReactNode {
   return (
     <div className="game-row" data-testid="game-spawn">
       {g.spawnLabel}{' '}
-      <input data-testid="game-spawn-input" value={id} placeholder={g.spawnPlaceholder} onChange={(e) => setId(e.target.value)} />{' '}
-      {picked && picked.kind === 'record' && (
-        <button className="small" title={picked.sid} onClick={() => setId(picked.sid)}>
+      <input
+        data-testid="game-spawn-input"
+        value={id}
+        placeholder={g.spawnPlaceholder}
+        onChange={(e) => {
+          setId(e.target.value);
+        }}
+      />{' '}
+      {picked && (
+        <button
+          className="small"
+          title={picked.sid}
+          onClick={() => {
+            setId(picked.sid);
+          }}
+        >
           ← {picked.sid}
         </button>
       )}{' '}

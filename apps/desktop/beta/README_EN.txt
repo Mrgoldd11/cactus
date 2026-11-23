@@ -2,8 +2,8 @@ Cactus {VERSION} - quick start
 ==============================
 
 Cactus is a mod editor for Kenshi (a replacement for FCS) with a dialogue graph, a
-world view and AI assistant integration (MCP). This is a beta: keep a copy of your
-.mod files before editing them.
+world view and AI assistant integration (MCP). Keep a copy of your .mod files before
+editing them.
 
 RUN
 1. Unzip to a simple folder, for example C:\Cactus (do not run from inside the archive).
@@ -20,15 +20,18 @@ THINGS TO TRY
 - Your own mod: type a name on the start screen -> "New mod" -> edit -> Ctrl+S.
   It is saved to <game folder>\mods\<Name>\; tick it in the Kenshi launcher.
 
-NEW IN 0.2
-- Search with conditions: type "type=WEAPON; weight kg>10" in the record list search;
-  the "?" button next to it shows examples.
-- "Diagnostics" (toolbar) lists problems of your mod with fix buttons;
-  "Window" -> "Mod cleanup" removes leftovers (obsolete fields, no-op changes, dead references).
-- "Mod" menu (toolbar): mod info, dependencies, backups and "Publish..." to the Steam
-  Workshop (Steam must be running). Publishing is unofficial, like the FCS: try it first with
-  a Private test item.
-- Chinese interface; the language of game texts is set separately (Settings -> Data language).
+NEW IN 1.0
+- Dialogue editor: a tree like the FCS (Window -> Tree), the package and events on the
+  left, the line panel on the right with conditions in plain words; "Play" under the
+  graph shows how the game would pick a line.
+- "Create -> Own creature...": a new race and animal out of the game's own files (mesh,
+  skeleton, texture), clip and ragdoll check, sale and start, all in one undo step.
+- Inside buildings: Window -> Inside building - walls, floors, a cutaway, click a prop in 3D.
+- Model panel: Ogre skeletons, skin weights and animation clips; "Add animations..."
+  copies your own clips from Blender into a race.
+- Record list: multi-select (Ctrl/Shift) and bulk edit of the selection.
+- The game through Kenshi Bridge: spawn a character and take a screenshot of the game
+  window from the Game panel and from MCP.
 
 AI (any MCP client: Claude Desktop, Claude Code and others)
 1. In Cactus: "Help" -> "Connect AI (MCP)..." -> "Copy".
