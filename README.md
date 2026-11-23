@@ -32,7 +32,7 @@ Requirements: Windows 10/11 x64, an installed copy of Kenshi. Cactus reads your 
 Check that the file you downloaded is the one that was built:
 
 ```
-SHA-256  332ba4b369f6e9e36bb7de6f00f7610ae983d35df6ca8b656ae7b4e7e7fb2e1e
+SHA-256  cf2f5815adaf87e4e478bf6c1678b04a1c76e2a6aa36bce781e4e99cfeacd62c
          Cactus-1.0.0-win-x64.zip
 ```
 
@@ -75,7 +75,7 @@ Cactus speaks standard **MCP (stdio)**, so any MCP-capable AI client can connect
 The tool names, descriptions, parameters and server messages the AI sees are in **English**, so the AI can work in any language you talk to it in. `find` takes the same search conditions as the search box, `fix` / `cleanup` tools preview first and change the mod only with `apply: true`, and `game_spawn` / `game_screenshot` drive the game through the Bridge below.
 
 ## Optional: Kenshi Bridge (live link to the running game)
-[**Kenshi Bridge**](https://github.com/Mrgoldd11/Kenshi-Bridge) is a separate **open-source** (GPLv3) plugin for [RE_Kenshi](https://github.com/BFrizzleFoShizzle/RE_Kenshi) built on KenshiLib. With it Cactus and the AI can see the running game: the selected character and position, which dialogue the game actually chose and why, the town list with border radii, a dump of the real foliage and buildings for the World view, and (with your confirmation) teleport, camera, speed and pause — plus spawning a character and a screenshot of the game window. It is **not required**; Cactus works without it. Checked in the running game with Cactus 1.0. Cactus itself stays closed source; the two programs share no code and talk only over a local socket (`127.0.0.1`).
+[**Kenshi Bridge**](https://github.com/Mrgoldd11/Kenshi-Bridge) is a separate **open-source** (GPLv3) plugin for [RE_Kenshi](https://github.com/BFrizzleFoShizzle/RE_Kenshi) built on KenshiLib. With it Cactus and the AI can see the running game: the selected character and position, which dialogue the game actually chose and why, the town list with border radii, a dump of the real foliage and buildings for the World view, and (with your confirmation) teleport, camera, speed and pause — plus spawning a character and a screenshot of the game window. It is **not required**; Cactus works without it. Checked in the running game with Cactus 1.0. Cactus itself is open source (GPLv3); the two programs share no code and talk only over a local socket (`127.0.0.1`).
 
 ## Known limitations
 - Windows x64 only; zip + exe, no installer; not code-signed (SmartScreen warning).
@@ -95,7 +95,7 @@ Use [GitHub Issues](https://github.com/Mrgoldd11/Cactus/issues/new/choose): **Bu
 If you like, mention "Made with Cactus" in its description — just the name is enough, no link needed. Completely optional, but it helps other modders find the tool.
 
 ## License
-Cactus is **free to use but closed source** (binaries only). See [LICENSE](LICENSE). Not affiliated with or endorsed by Lo-Fi Games.
+Cactus is **free and open source** under the GNU GPLv3 — take the code, change it, share it (see [LICENSE](LICENSE)). Not affiliated with or endorsed by Lo-Fi Games.
 
 ---
 
