@@ -32,11 +32,10 @@ read directly it is marked **unverified**: read the live rules before posting.
 - Reply to every comment in the first days; collect bugs into GitHub issues (templates are in `.github/ISSUE_TEMPLATE`).
 - AI side is standard MCP: say "any MCP client can connect, verified only with Claude"; do not claim tested support for other providers.
 
-## Note on licensing wording (decision 2026-11-07)
+## Note on licensing wording (decision 2026-11-24, supersedes 2026-11-07)
 
-Cactus is free proprietary software (freeware, binaries only). The GitHub repo `Mrgoldd11/Cactus`
-(unconfirmed) holds only README, logo, screenshots, issue templates and Releases: no source, no
-forks. Do not write "open source", "contribute", "PRs welcome" or "fork it" in any post. The in-game
-plugin Kenshi Bridge is a separate optional project (GPLv3) and is not part of Beta 0.1.0.
-Some communities (Nexus, Reddit) may ask about closed-source tools: answer plainly that it is
-freeware, and say what the program reads and writes (only `.mod` files and its own settings).
+Cactus is free and open source under the **GNU GPLv3**. The GitHub repo `Mrgoldd11/Cactus`
+holds the source, README, logo, screenshots, issue templates and Releases. Posts may say
+"open source", "fork it", "PRs welcome" (issues are the better channel for a solo project).
+The in-game plugin Kenshi Bridge is a separate optional project (GPLv3) and is not part of
+the release. What the program reads and writes: only `.mod` files and its own settings.

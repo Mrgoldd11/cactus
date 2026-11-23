@@ -20,6 +20,6 @@ Full notes with smaller changes, known limitations and upgrade notes: [release-n
 
 **Made a mod with Cactus?** If you like, mention "Made with Cactus" in its description — just the name is enough, no link needed. Completely optional, but it helps other modders find the tool.
 
-SHA-256 (`Cactus-1.0.0-win-x64.zip`): `332ba4b369f6e9e36bb7de6f00f7610ae983d35df6ca8b656ae7b4e7e7fb2e1e`
+SHA-256 (`Cactus-1.0.0-win-x64.zip`): `cf2f5815adaf87e4e478bf6c1678b04a1c76e2a6aa36bce781e4e99cfeacd62c`
 
-Cactus is free to use but closed source (see LICENSE). Bugs, ideas and compatibility problems: [Issues](https://github.com/Mrgoldd11/Cactus/issues/new/choose).
+Cactus is free and open source under the GNU GPLv3 (see LICENSE). Bugs, ideas and compatibility problems: [Issues](https://github.com/Mrgoldd11/Cactus/issues/new/choose).

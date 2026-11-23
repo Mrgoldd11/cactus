@@ -3,7 +3,7 @@
 > Links: GitHub (download, screenshots, bug reports): {GITHUB_URL} (default https://github.com/Mrgoldd11/Cactus, TODO-verify) · Video walkthrough: {YOUTUBE_URL}
 
 I've been modding Kenshi for a while, and at some point I started building my own editor for it.
-It is called **Cactus**, it is free (freeware: closed source, binaries only), and today I'm
+It is called **Cactus**, it is free and open source (GPLv3), and today I'm
 releasing the first public Beta. This post explains what it is, why I made it, what it can and
 cannot do yet, and how you can help by breaking it.
 
@@ -87,7 +87,7 @@ Kenshi 1.0.65 (Steam) on Windows. Please report anything weird.
 
 ## Known limitations
 
-- **Closed source.** Cactus is free to use, but it is distributed as binaries only; the GitHub page has the download, screenshots and the issue tracker, not the code.
+- **Open source.** Cactus is free and open source under the GNU GPLv3: the GitHub page has the download, the code, and the issue tracker.
 - Windows x64 only. It is a zip with an exe, not an installer, and it is not code-signed, so
   Windows SmartScreen will warn you ("More info" → "Run anyway").
 - Tested mostly on one machine with Steam Kenshi 1.0.65. GOG detection exists but has had

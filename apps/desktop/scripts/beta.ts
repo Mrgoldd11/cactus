@@ -149,7 +149,7 @@ for (const [from, to] of Object.entries(DOCS)) {
 step('Проверка: нет личных данных и игровых файлов');
 {
   const user = userInfo().username;
-  const forbidden = ['Kenshiproject', 'dulkinn', user, homedir(), homedir().replaceAll('\\', '/'), homedir().replaceAll('\\', '\\\\')].filter((s) => s.length >= 4);
+  const forbidden = [user, homedir(), homedir().replaceAll('\\', '/'), homedir().replaceAll('\\', '\\\\')].filter((s) => s.length >= 4);
   const textExt = new Set(['.js', '.mjs', '.cjs', '.json', '.html', '.css', '.txt', '.md', '.map']);
   const gameExt = new Set(['.mod', '.base', '.po', '.def']);
   const problems: string[] = [];

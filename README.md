@@ -1,6 +1,7 @@
-# Cactus — mod editor for Kenshi
+# Cactus - mod editor for Kenshi
 
-A replacement for the FCS (Forgotten Construction Set). What is in this repository:
+A replacement for the FCS (Forgotten Construction Set). Free and open source under the
+[GNU GPLv3](LICENSE). What is in this repository:
 
 - `packages/core` — lossless `.base`/`.mod` format, schema from `fcs*.def`, translations from
   `gamedata.po`; editing model: layers vanilla → dependencies → mod, reference index,
@@ -473,7 +474,7 @@ In Cactus, **Help → Connect AI (MCP)…** shows a ready snippet to copy. By ha
   "mcpServers": {
     "kenshi": {
       "command": "node",
-      "args": ["D:/Kenshiproject/editor/packages/mcp/bin/kenshi-mcp.js", "--mod", "Skeleton Cannibal Friend"],
+      "args": ["C:/path/to/Cactus/editor/packages/mcp/bin/kenshi-mcp.js", "--mod", "Skeleton Cannibal Friend"],
       "env": { "KENSHI_DIR": "D:/SteamLibrary/steamapps/common/Kenshi" }
     }
   }
@@ -507,7 +508,7 @@ compiled to JavaScript with type declarations, with no dependencies:
 
 ```sh
 pnpm core:package                       # → out/kedit-core/  (--tgz — also an archive for npm)
-cd D:/my-mod && npm install D:/Kenshiproject/editor/out/kedit-core
+cd D:/my-mod && npm install C:/path/to/Cactus/editor/out/kedit-core
 ```
 
 ```ts

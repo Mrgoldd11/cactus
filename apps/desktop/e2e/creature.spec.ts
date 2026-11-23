@@ -6,7 +6,7 @@
  * copies the files into `<game>/mods/<mod>/creatures/<model>/` and makes race, animal, sale and start.
  *
  * With `KEDIT_ANIMAL_TEST=1` a second test builds the «Custom Animal Test» mod for the in-game check
- * with the converted Quaternius donkey (`KEDIT_ANIMAL_SRC`, default `D:/Kenshiproject/tools/creatures/donkey`)
+ * with the converted Quaternius donkey (`KEDIT_ANIMAL_SRC`, default `tools/creatures/donkey`)
  * and saves it into the mods folder (it is left there).
  */
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -142,7 +142,7 @@ test('own creature: files checked, clips played, copied into the mod, race + ani
   }
 });
 
-const SRC = process.env.KEDIT_ANIMAL_SRC ?? 'D:/Kenshiproject/tools/creatures/donkey';
+const SRC = process.env.KEDIT_ANIMAL_SRC ?? '';
 
 test('build «Custom Animal Test» with the donkey', async () => {
   test.skip(process.env.KEDIT_ANIMAL_TEST !== '1' || !existsSync(join(SRC, 'donkey.mesh')), 'only on request');
