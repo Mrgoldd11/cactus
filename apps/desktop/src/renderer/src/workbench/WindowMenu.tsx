@@ -2,9 +2,10 @@
  * «Window» menu: all panels from the registry (check mark — open; click opens or closes),
  * preset layouts and «Reset layout».
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type { DockviewApi } from 'dockview-react';
 import { useT } from '../i18n.ts';
+import { useDismiss } from '../hooks.ts';
 import { allPanels, PANEL_GROUPS, type PanelDef, type PanelGroup } from './registry.ts';
 import { PRESETS, type PresetId } from './layouts.ts';
 
@@ -43,21 +44,9 @@ export function WindowMenu({ api, preset, onPreset, onOpen }: Props): ReactNode 
   const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: MouseEvent): void => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const esc = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('mousedown', close);
-    window.addEventListener('keydown', esc);
-    return () => {
-      window.removeEventListener('mousedown', close);
-      window.removeEventListener('keydown', esc);
-    };
-  }, [open]);
+  useDismiss(open, ref, () => {
+    setOpen(false);
+  });
 
   const isOpen = (id: string): boolean => api?.panels.some((p) => p.api.component === id) ?? false;
   const toggle = (id: string): void => {

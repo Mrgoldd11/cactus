@@ -29,9 +29,9 @@ export class ByteReader {
   readonly bytes: Uint8Array;
   readonly view: DataView;
   pos = 0;
-  /** Bits of the last read float, if it was NaN. */
-  lastNaNBits: number | undefined;
   /** Original bits of the last read float, if it was NaN. */
+  lastNaNBits: number | undefined;
+
   constructor(bytes: Uint8Array) {
     this.bytes = bytes;
     this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);

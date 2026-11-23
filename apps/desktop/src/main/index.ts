@@ -120,6 +120,11 @@ function loadSettings(): Settings {
 
 let settings = loadSettings();
 
+/** Write `settings.json` atomically: a crash mid-write must not reset the user's settings. */
+function writeSettings(): void {
+  writeFileAtomic(settingsPath(), Buffer.from(JSON.stringify(settings, null, 2), 'utf8'));
+}
+
 initLog(
   join(app.getPath('userData'), 'logs'),
   `start ${APP_TITLE} ${app.getVersion()}; Electron ${process.versions.electron}; ${process.platform} ${process.arch}; ${app.isPackaged ? 'packaged' : 'dev'}`,
@@ -235,7 +240,12 @@ async function saveMod(e: IpcMainInvokeEvent, request: SaveRequest): Promise<Sav
     }
     if (win) autosaveRefs.delete(win.id);
     settings.recent = [req.path, ...settings.recent.filter((p) => p !== req.path)].slice(0, 10);
-    writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
+    // The mod is already on disk: a failure to update the recent list must not report a failed save.
+    try {
+      writeSettings();
+    } catch (err) {
+      log('error', 'writeSettings', settingsPath(), err);
+    }
     const game = games().find((g) => needsConfirmation(g, req.path)) ?? currentGame;
     const provenance = game ? provenanceOf(game, req.path) : undefined;
     return { ok: true, path: req.path, ...(provenance ? { provenance } : {}), ...(saved.backupError !== undefined ? { backupError: saved.backupError } : {}) };
@@ -282,7 +292,7 @@ async function copyModForEditing(e: IpcMainInvokeEvent, game: GameInstallInfo, p
 
 /** New `mods.cfg` order: it is a game file — always with confirmation, the game must be closed. */
 async function saveModOrder(e: IpcMainInvokeEvent, game: GameInstallInfo, names: string[], expected: string[]): Promise<ModOrderResult> {
-  const known = [...knownGames, ...(currentGame ? [currentGame] : [])].some((g) => resolve(g.kenshi).toLowerCase() === resolve(game.kenshi).toLowerCase());
+  const known = games().some((g) => resolve(g.kenshi).toLowerCase() === resolve(game.kenshi).toLowerCase());
   if (!known) return { ok: false, cancelled: false, error: 'unknown game folder' };
   const lg = settings.lang;
   const changes = describeOrderChange(expected, names, lg);
@@ -532,7 +542,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.setSettings, (_e, patch: Partial<Settings>) => {
     const langChanged = patch.lang !== undefined && patch.lang !== settings.lang;
     settings = sanitizeSettings({ ...settings, ...patch });
-    writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
+    writeSettings();
     if (langChanged) buildMenu(settings.lang);
     return settings;
   });
@@ -608,6 +618,8 @@ function createWindow(): void {
   win.webContents.on('will-navigate', (e) => {
     e.preventDefault();
   });
+  // Same for new windows (window.open, target=_blank): external pages are opened by main only.
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
   if (devUrl) void win.loadURL(devUrl);
   else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'));

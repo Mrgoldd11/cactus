@@ -22,6 +22,7 @@ import { formatModsCfg, parseModsCfg, type ModsCfgText } from '../model/load-ord
 import type { ConflictLayer } from '../model/conflicts.ts';
 import type { DataFile, GameRecord } from '../format/types.ts';
 import { readDataFile } from '../format/read.ts';
+import { writeFileAtomic } from './backup.ts';
 import { installedModFiles, type GamePaths } from './paths.ts';
 import { UiTextError, type UiText } from '../ui-text.ts';
 
@@ -155,7 +156,7 @@ export function runningGameProcesses(): string[] {
   if (process.platform !== 'win32') return [];
   let text: string;
   try {
-    text = execFileSync('tasklist', ['/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    text = execFileSync('tasklist', ['/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true, timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
   } catch {
     return [];
   }
@@ -207,7 +208,8 @@ export function writeModsCfg(paths: GamePaths, names: readonly string[], options
     backup = `${path}.bak-${stamp(options.now ?? new Date())}`;
     copyFileSync(path, backup);
   }
-  writeFileSync(path, text, 'utf-8');
+  // Temp file, then rename: the launcher never reads a half-written mods.cfg.
+  writeFileAtomic(path, Buffer.from(text, 'utf-8'));
   return { path, ...(backup !== undefined ? { backup } : {}), changed: true };
 }
 

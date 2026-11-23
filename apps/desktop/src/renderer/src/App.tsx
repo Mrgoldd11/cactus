@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { dataLocaleFor, LANGS, type GameInstallInfo, type Lang, type ModRef, type ProjectRequest, type RecoveryInfo, type Settings } from '../../shared/api.ts';
 import { errorText, LangContext, setErrorLang, STRINGS } from './i18n.ts';
+import { useDismiss } from './hooks.ts';
 import { openProject, openRecovered, prefetchVanilla, type Project } from './project.ts';
 import { setLiveProject } from './live.ts';
 import { StartScreen } from './components/StartScreen.tsx';
@@ -213,21 +214,9 @@ export function App(): ReactNode {
 export function LangSwitch({ lang, onLang }: { lang: Lang; onLang: (l: Lang) => void }): ReactNode {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent): void => {
-      if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
-    };
-    const esc = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', away);
-      document.removeEventListener('keydown', esc);
-    };
-  }, [open]);
+  useDismiss(open, root, () => {
+    setOpen(false);
+  });
   const current = LANGS.find((l) => l.code === lang) ?? LANGS[0];
   return (
     <span className="lang-switch" data-testid="lang-switch" ref={root}>

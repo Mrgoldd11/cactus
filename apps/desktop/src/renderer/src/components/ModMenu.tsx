@@ -3,8 +3,9 @@
  * mod-level actions (mod info, dependencies, backups, publish) grouped so the toolbar fits one row;
  * with `testId` and `label` the same dropdown serves the «Create» menu.
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useT } from '../i18n.ts';
+import { useDismiss } from '../hooks.ts';
 
 export interface ModMenuItem {
   testId: string;
@@ -30,21 +31,9 @@ export function ModMenu({ items, badge, title, testId = 'mod-menu', label }: Pro
   const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: MouseEvent): void => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const esc = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('mousedown', close);
-    window.addEventListener('keydown', esc);
-    return () => {
-      window.removeEventListener('mousedown', close);
-      window.removeEventListener('keydown', esc);
-    };
-  }, [open]);
+  useDismiss(open, ref, () => {
+    setOpen(false);
+  });
 
   return (
     <div className="menu-wrap" ref={ref}>

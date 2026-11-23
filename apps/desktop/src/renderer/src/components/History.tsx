@@ -7,7 +7,7 @@ import type { Lang } from '../../../shared/api.ts';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { describeChangeset, type Changeset, type TranslationIndex } from '@kenshi-editor/core';
 import { inLang, useLang, useT, type Strings } from '../i18n.ts';
-import { tryEdit, useProjectVersion } from '../hooks.ts';
+import { tryEdit, useDismiss, useProjectVersion } from '../hooks.ts';
 import { useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
 import type { StatusMessage } from '../workbench/context.ts';
@@ -72,21 +72,9 @@ export function UndoRedoButtons({ project, status, onAll }: ButtonsProps): React
   const [hover, setHover] = useState(-1);
   const root = useRef<HTMLSpanElement>(null);
 
-  useEffect(() => {
-    if (!menu) return;
-    const down = (e: MouseEvent): void => {
-      if (!root.current?.contains(e.target as Node)) setMenu(undefined);
-    };
-    const key = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setMenu(undefined);
-    };
-    window.addEventListener('mousedown', down);
-    window.addEventListener('keydown', key);
-    return () => {
-      window.removeEventListener('mousedown', down);
-      window.removeEventListener('keydown', key);
-    };
-  }, [menu]);
+  useDismiss(menu !== undefined, root, () => {
+    setMenu(undefined);
+  });
 
   const h = ctx.history();
   const undoSteps = [...h.undo].reverse().map((cs) => stepOf(project, cs, lang));

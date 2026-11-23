@@ -2,8 +2,8 @@
  * Loading the editing context from disk: vanilla in order, the mod's dependencies (from the game's `mods/`
  * and the Workshop, in `data/mods.cfg` order), then the mod itself. Saving the mod to a file.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { readDataFile } from '../format/read.ts';
 import { writeDataFile } from '../format/write.ts';
 import { splitModList } from '../format/helpers.ts';
@@ -11,6 +11,7 @@ import type { DataFile } from '../format/types.ts';
 import { ModContext, type Layer } from '../model/context.ts';
 import type { PoFile } from '../locale/po.ts';
 import type { GameSchema } from '../schema/game-schema.ts';
+import { assertReadable, writeFileAtomic } from './backup.ts';
 import { extensionsFor, type ExtensionChoice, type FoundExtension } from './extensions.ts';
 import { installedModFiles, VANILLA_FILES, vanillaFilePaths, type GamePaths } from './paths.ts';
 import { gamedataPoPath, loadGamedataPo, loadGameSchema } from './schema.ts';
@@ -188,11 +189,14 @@ export function loadModContext(options: LoadContextOptions): LoadedContext {
   return { ctx, missingDependencies: plan.missingDependencies, dependencyPaths, context: plan.context, extensions };
 }
 
-/** Write the mod (changes only) to a file and mark the context as saved. */
+/**
+ * Write the mod (changes only) to a file and mark the context as saved. The write is atomic
+ * (temp file, read back and parsed, then renamed into place), so a crash or a full disk never
+ * leaves half a mod on disk.
+ */
 export function saveModContext(ctx: ModContext, path: string): DataFile {
   const file = ctx.buildModFile();
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, writeDataFile(file));
+  writeFileAtomic(path, writeDataFile(file), { check: assertReadable });
   ctx.markSaved();
   return file;
 }

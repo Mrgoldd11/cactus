@@ -4,7 +4,7 @@
  * effects, which one the game picks and where the conversation starts. The selection rule is exact, from the game code
  * (same as `kedit talk`); the «How the game chooses» button explains it in plain words.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   EVENT_TALK,
   quote,
@@ -16,6 +16,7 @@ import {
   type TalkSimulation,
 } from '@kenshi-editor/core';
 import { errorText, type Strings, useLang, useT } from '../i18n.ts';
+import { useDismiss } from '../hooks.ts';
 import { recordName, useGameTexts } from '../data-names.ts';
 import type { Project } from '../project.ts';
 import { EventSelect } from './EventUi.tsx';
@@ -338,21 +339,9 @@ function RulesButton(): ReactNode {
   const t = useT();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const down = (e: MouseEvent): void => {
-      if (box.current && e.target instanceof Node && !box.current.contains(e.target)) setOpen(false);
-    };
-    const key = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', down);
-    document.addEventListener('keydown', key);
-    return () => {
-      document.removeEventListener('mousedown', down);
-      document.removeEventListener('keydown', key);
-    };
-  }, [open]);
+  useDismiss(open, box, () => {
+    setOpen(false);
+  });
   return (
     <span className="talk-rules-wrap" ref={box}>
       <button

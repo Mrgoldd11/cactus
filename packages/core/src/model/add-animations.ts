@@ -134,7 +134,7 @@ export interface ClipRow {
   nearMisses: { sid: string; animName: string }[];
 }
 
-/** Clip name compared loosely: the near misses moders make. */
+/** Clip name compared loosely: the near misses modders make. */
 export function looseClipName(s: string): string {
   return s.toLowerCase().replace(/[\s_\-.]+/g, '');
 }
