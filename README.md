@@ -5,21 +5,20 @@
 # Cactus
 
 <p align="center">
-  <a href="https://github.com/Mrgoldd11/Cactus/releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Cactus%20v0.2.0%20Beta-4f8cc9?style=for-the-badge" alt="Download Cactus v0.2.0 Beta"></a>
-  <a href="https://www.virustotal.com/gui/file/37deee3b50f98e377a8d4792374efa1ed3a538dd9294c534ab0f6be33734d866"><img src="https://img.shields.io/badge/VirusTotal-0%20%2F%2065%20detections-2ea44f?style=for-the-badge&logo=virustotal&logoColor=white" alt="VirusTotal: 0 of 65 engines flagged this file"></a>
+  <a href="https://github.com/Mrgoldd11/Cactus/releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Cactus%20v1.0.0-4f8cc9?style=for-the-badge" alt="Download Cactus v1.0.0"></a>
 </p>
 
-<p align="center"><sub>Windows 10/11 x64 · free · Beta · <a href="https://github.com/Mrgoldd11/Cactus/releases/latest">Releases page</a> → <b>Assets</b> → <code>Cactus-0.2.0-beta-win-x64.zip</code></sub></p>
+<p align="center"><sub>Windows 10/11 x64 · free · <a href="https://github.com/Mrgoldd11/Cactus/releases/latest">Releases page</a> → <b>Assets</b> → <code>Cactus-1.0.0-win-x64.zip</code></sub></p>
 
 **A free mod editor for Kenshi** — a modern alternative to the FCS with a dialogue graph, a "where in the game" reference tracer, diagnostics with one-click fixes, Steam Workshop publishing, a world view and AI assistant integration (MCP).
 
-> **v0.2.0 Beta.** Stable enough to build real mods, but young. Back up your `.mod` files and work on copies. What changed: [release notes](docs/release-notes-v0.2.0-beta.md).
+> **v1.0.0 — out of beta.** The dialogue editor is rebuilt (tree, line panel, ▶ Play), you can create your own creature and race, and look inside buildings. Back up your `.mod` files and work on copies. What changed: [release notes](docs/release-notes-v1.0.0.md).
 
 ![Main window](docs/screenshots/01-main.png)
 
 ## Download
 
-**[Cactus v0.2.0 Beta → Releases](https://github.com/Mrgoldd11/Cactus/releases/latest)** — on that page open **Assets** and download `Cactus-0.2.0-beta-win-x64.zip` (about 144 MB).
+**[Cactus v1.0.0 → Releases](https://github.com/Mrgoldd11/Cactus/releases/latest)** — on that page open **Assets** and download `Cactus-1.0.0-win-x64.zip` (about 144 MB).
 
 1. Unzip to a simple folder, e.g. `C:\Cactus` (don't run from inside the archive).
 2. Run `Cactus.exe`. Nothing to install.
@@ -30,27 +29,26 @@ Requirements: Windows 10/11 x64, an installed copy of Kenshi. Cactus reads your 
 
 ### Is it safe?
 
-The release archive was scanned on [VirusTotal](https://www.virustotal.com/gui/file/37deee3b50f98e377a8d4792374efa1ed3a538dd9294c534ab0f6be33734d866) on 2026-11-17: **0 of 65 engines flagged it**. You can check that the file you downloaded is the same one:
+Check that the file you downloaded is the one that was built:
 
 ```
-SHA-256  37deee3b50f98e377a8d4792374efa1ed3a538dd9294c534ab0f6be33734d866
-         Cactus-0.2.0-beta-win-x64.zip
+SHA-256  332ba4b369f6e9e36bb7de6f00f7610ae983d35df6ca8b656ae7b4e7e7fb2e1e
+         Cactus-1.0.0-win-x64.zip
 ```
 
-In PowerShell: `Get-FileHash .\Cactus-0.2.0-beta-win-x64.zip` — the value must match. The app is not code-signed yet (that is why Windows shows a warning), and the app has no telemetry: it goes online only when you publish to the Workshop yourself (through your running Steam client); otherwise the only connection it opens is a local one (127.0.0.1) for the AI/game integration.
+In PowerShell: `Get-FileHash .\Cactus-1.0.0-win-x64.zip` — the value must match. The app is not code-signed yet (that is why Windows shows a warning), and the app has no telemetry: it goes online only when you publish to the Workshop yourself (through your running Steam client); otherwise the only connection it opens is a local one (127.0.0.1) for the AI/game integration.
 
-## New in 0.2
+## New in 1.0
 
 | | |
 |---|---|
-| ![Publish](docs/screenshots/15-publish.png) | **Publish to the Steam Workshop** from *Mod → Publish…*: new item or update, tags, visibility, preview, change note, checks and a confirm step. Uses the FCS `_<mod>.info` / `_<mod>.img` format, so the FCS and Cactus can update the same item. Try a *Private* test item first. |
-| ![Diagnostics](docs/screenshots/10-diagnostics.png) | **Diagnostics with one-click fixes**, "Fix all" per kind and an ignore list, plus new FCS checks. |
-| ![Cleanup](docs/screenshots/11-cleanup.png) | **Mod cleanup**: obsolete fields, no-op changes, orphaned records, invalid references — grouped, with checkboxes. |
-| ![Search](docs/screenshots/09-search.png) | **Search with conditions**: `type=WEAPON; weight kg>10`, `state=mod`, `ref=Katana`, `vendors.weapons:katana`; the **?** button lists the syntax. |
-| ![World](docs/screenshots/16-world.png) | **World view with the real game world**: foliage and buildings from a [Kenshi Bridge](https://github.com/Mrgoldd11/Kenshi-Bridge) dump, land features and ore deposits. |
-| ![Chinese](docs/screenshots/17-chinese.png) | **Chinese interface**, and a data language separate from the interface language. **FCS Extended** schema files are applied automatically. |
+| ![Dialogue](docs/screenshots/06-dialogue.png) | **The dialogue editor is rebuilt**: a tree like the FCS, the graph reads left to right (event → who → dialogue), a line panel with conditions in plain words, and **▶ Play** under the graph showing how the game would pick a line. |
+| ![Own creature](docs/screenshots/01-main.png) | **Create → Own creature…**: a new race and animal out of the game's own files (mesh, skeleton, texture), clip and ragdoll check, sale and start — one undo step. Race compatibility and Add animations wizards too. |
+| ![Inside](docs/screenshots/07-world.png) | **Inside view of buildings**: the shell, floors with a cutaway, click a prop in 3D. Plus the **Model panel** (Ogre skeletons, skin weights, clips with playback). |
+| ![Where in game](docs/screenshots/02-where.png) | **Every record says whether it is in the game**, and the record list multi-selects (Ctrl/Shift) for bulk edits. Saving the mod, `mods.cfg` and settings is now atomic. |
+| ![AI](docs/screenshots/08-ai.png) | **The game through Kenshi Bridge**: spawn a character and screenshot the game window from the Game panel and from MCP (`game_spawn`, `game_screenshot`). |
 
-Full list, known limitations and upgrade notes: [release notes v0.2.0 Beta](docs/release-notes-v0.2.0-beta.md).
+Full list, known limitations and upgrade notes: [release notes v1.0.0](docs/release-notes-v1.0.0.md).
 
 ## What it can do
 
@@ -74,12 +72,12 @@ In Cactus: **Help → Connect AI (MCP)… → Copy**, then paste into Claude Des
 
 Cactus speaks standard **MCP (stdio)**, so any MCP-capable AI client can connect: Claude Desktop, Claude Code and, in principle, ChatGPT-based tools, Qwen and other models. **Verified only with Claude** so far; other clients are untested, and reports are welcome. Ready-made setup snippets exist for Claude only; for other clients, point them at the same stdio command that *Connect AI (MCP)* copies.
 
-The tool names, descriptions, parameters and server messages the AI sees are in **English**, so the AI can work in any language you talk to it in. New in 0.2: `find` takes the same search conditions as the search box, and `fix` / `cleanup` tools preview first and change the mod only with `apply: true`.
+The tool names, descriptions, parameters and server messages the AI sees are in **English**, so the AI can work in any language you talk to it in. `find` takes the same search conditions as the search box, `fix` / `cleanup` tools preview first and change the mod only with `apply: true`, and `game_spawn` / `game_screenshot` drive the game through the Bridge below.
 
 ## Optional: Kenshi Bridge (live link to the running game)
-[**Kenshi Bridge**](https://github.com/Mrgoldd11/Kenshi-Bridge) is a separate **open-source** (GPLv3) plugin for [RE_Kenshi](https://github.com/BFrizzleFoShizzle/RE_Kenshi) built on KenshiLib. With it Cactus and the AI can see the running game: the selected character and position, which dialogue the game actually chose and why, the town list with border radii, a dump of the real foliage and buildings for the World view, and (with your confirmation) teleport, camera, speed and pause. It is **not required**; Cactus works without it. Status: the plugin itself is checked in game, but the link between the Cactus window / AI tools and the plugin has **not been tested with the real game yet**. Cactus itself stays closed source; the two programs share no code and talk only over a local socket (`127.0.0.1`).
+[**Kenshi Bridge**](https://github.com/Mrgoldd11/Kenshi-Bridge) is a separate **open-source** (GPLv3) plugin for [RE_Kenshi](https://github.com/BFrizzleFoShizzle/RE_Kenshi) built on KenshiLib. With it Cactus and the AI can see the running game: the selected character and position, which dialogue the game actually chose and why, the town list with border radii, a dump of the real foliage and buildings for the World view, and (with your confirmation) teleport, camera, speed and pause — plus spawning a character and a screenshot of the game window. It is **not required**; Cactus works without it. Checked in the running game with Cactus 1.0. Cactus itself stays closed source; the two programs share no code and talk only over a local socket (`127.0.0.1`).
 
-## Known limitations of the Beta
+## Known limitations
 - Windows x64 only; zip + exe, no installer; not code-signed (SmartScreen warning).
 - Tested mostly with Steam Kenshi 1.0.65 on one machine; GOG detection has had less testing.
 - Before your first real Workshop upload, try a *Private* test item. Not there yet: updating the mod's info from Steam, an ownership pre-check, a BBCode preview.
@@ -102,5 +100,5 @@ Cactus is **free to use but closed source** (binaries only). See [LICENSE](LICEN
 ---
 
 ## Download
-**[⬇ Cactus v0.2.0 Beta — latest release](https://github.com/Mrgoldd11/Cactus/releases/latest)** → **Assets** → `Cactus-0.2.0-beta-win-x64.zip`. Unzip, run `Cactus.exe`. Steps are in [Download](#download) above.
+**[⬇ Cactus v1.0.0 — latest release](https://github.com/Mrgoldd11/Cactus/releases/latest)** → **Assets** → `Cactus-1.0.0-win-x64.zip`. Unzip, run `Cactus.exe`. Steps are in [Download](#download) above.
 Optional live link to the game: [Kenshi Bridge](https://github.com/Mrgoldd11/Kenshi-Bridge/releases/latest).
