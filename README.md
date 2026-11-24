@@ -6,13 +6,16 @@
 
 <p align="center">
   <a href="https://github.com/Mrgoldd11/Cactus/releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Cactus%20v1.0.0-4f8cc9?style=for-the-badge" alt="Download Cactus v1.0.0"></a>
+  <a href="https://www.virustotal.com/gui/file/cf2f5815adaf87e4e478bf6c1678b04a1c76e2a6aa36bce781e4e99cfeacd62c"><img src="https://img.shields.io/badge/VirusTotal-0%20%2F%2064%20detections-2ea44f?style=for-the-badge&logo=virustotal&logoColor=white" alt="VirusTotal: 0 of 64 engines flagged this file"></a>
 </p>
 
-<p align="center"><sub>Windows 10/11 x64 · free · <a href="https://github.com/Mrgoldd11/Cactus/releases/latest">Releases page</a> → <b>Assets</b> → <code>Cactus-1.0.0-win-x64.zip</code></sub></p>
+<p align="center"><sub>Windows 10/11 x64 · free · open source (GPLv3) · <a href="https://github.com/Mrgoldd11/Cactus/releases/latest">Releases page</a> → <b>Assets</b> → <code>Cactus-1.0.0-win-x64.zip</code></sub></p>
 
 **A free mod editor for Kenshi** — a modern alternative to the FCS with a dialogue graph, a "where in the game" reference tracer, diagnostics with one-click fixes, Steam Workshop publishing, a world view and AI assistant integration (MCP).
 
 > **v1.0.0 — out of beta.** The dialogue editor is rebuilt (tree, line panel, ▶ Play), you can create your own creature and race, and look inside buildings. Back up your `.mod` files and work on copies. What changed: [release notes](docs/release-notes-v1.0.0.md).
+
+> **Development status:** the code is open (GPLv3) — take it, change it, ship your own build. I am busy with my studies, so **no further updates are planned for now**; there may be some later, but nothing is scheduled. Bug reports and issues are still welcome.
 
 ![Main window](docs/screenshots/01-main.png)
 
@@ -29,7 +32,7 @@ Requirements: Windows 10/11 x64, an installed copy of Kenshi. Cactus reads your 
 
 ### Is it safe?
 
-Check that the file you downloaded is the one that was built:
+The release archive was scanned on [VirusTotal](https://www.virustotal.com/gui/file/cf2f5815adaf87e4e478bf6c1678b04a1c76e2a6aa36bce781e4e99cfeacd62c) on 2026-11-24: **0 of 64 engines flagged it**. You can check that the file you downloaded is the one that was built:
 
 ```
 SHA-256  cf2f5815adaf87e4e478bf6c1678b04a1c76e2a6aa36bce781e4e99cfeacd62c
