@@ -61,4 +61,4 @@ This is the first release outside beta.
 
 **Made a mod with Cactus?** If you like, mention "Made with Cactus" in its description — just the name is enough, no link needed. Completely optional, but it helps other modders find the tool.
 
-Cactus is free and open source under the GNU GPLv3 (see LICENSE). Bugs, ideas and compatibility problems: [Issues](https://github.com/Mrgoldd11/Cactus/issues/new/choose).
+Cactus is free and open source under the GNU GPLv3 (see LICENSE). Scanned on VirusTotal at release: 0 of 64 detections. I am busy with my studies, so no further updates are planned for now — take the code and build your own. Bugs, ideas and compatibility problems: [Issues](https://github.com/Mrgoldd11/Cactus/issues/new/choose).

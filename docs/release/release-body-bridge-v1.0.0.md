@@ -15,3 +15,4 @@ Built for Kenshi 1.0.65, RE_Kenshi 0.3.5, KenshiLib 0.5.0. Checked in the runnin
 The plugin listens on `127.0.0.1` only. It does not change game data (its `.mod` is empty).
 
 SHA-256 (`KenshiBridge-1.0.0-win-x64.zip`): `fcf2269fe27792496887653908b850b9c08969b917602e2010f57a9b8ec3ae5e`
+VirusTotal: 0 / 65 detections — https://www.virustotal.com/gui/file/fcf2269fe27792496887653908b850b9c08969b917602e2010f57a9b8ec3ae5e
