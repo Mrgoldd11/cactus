@@ -1,0 +1,290 @@
+import { decodeIdentifier } from '../text.ts';
+import { ByteReader, FormatError } from './binary.ts';
+import {
+  FileType,
+  type DataFile,
+  type DeleteRequest,
+  type GameRecord,
+  type Instance,
+  type MergeData,
+  type MergeEntry,
+  type ModHeader,
+  type RecordQuirks,
+  type Reference,
+  type Vec3,
+  type Vec4,
+} from './types.ts';
+
+export interface ReadOptions {
+  /**
+   * Files without a type at the start (old-style saves): type 15 is assumed if the first
+   * number is not 15/16/17. By default an unknown type is an error.
+   */
+  allowUnknownFileType?: boolean;
+}
+
+class DataFileReader {
+  private readonly r: ByteReader;
+  private latin1Ids: Set<string> | undefined;
+
+  constructor(bytes: Uint8Array) {
+    this.r = new ByteReader(bytes);
+  }
+
+  /** Field keys and ids repeat hundreds of thousands of times: the ASCII string is taken from a cache by byte hash. */
+  private readonly idCache = new Map<number, string>();
+
+  private id(): string {
+    const r = this.r;
+    const bytes = r.bytes;
+    const at = r.pos;
+    const n = r.i32();
+    if (n >= 0 && n <= 64 && r.pos + n <= bytes.length) {
+      const s = r.pos;
+      const e = s + n;
+      let h = 0x811c9dc5 ^ n;
+      let ascii = true;
+      for (let i = s; i < e; i++) {
+        const b = bytes[i]!;
+        if (b >= 0x80) {
+          ascii = false;
+          break;
+        }
+        h = Math.imul(h ^ b, 0x01000193);
+      }
+      if (ascii) {
+        r.pos = e;
+        const hit = this.idCache.get(h);
+        if (hit !== undefined && hit.length === n) {
+          let same = true;
+          for (let i = 0; i < n; i++) {
+            if (hit.charCodeAt(i) !== bytes[s + i]) {
+              same = false;
+              break;
+            }
+          }
+          if (same) return hit;
+        }
+        const text = String.fromCharCode.apply(null, bytes.subarray(s, e) as unknown as number[]);
+        this.idCache.set(h, text);
+        return text;
+      }
+    }
+    r.pos = at;
+    const { text, latin1 } = decodeIdentifier(r.str());
+    if (latin1) (this.latin1Ids ??= new Set()).add(text);
+    return text;
+  }
+
+  /** Only the file type and the mod header (no records). */
+  readHeader(): { fileType: number; header?: ModHeader; recordCount?: number } {
+    const fileType = this.r.i32();
+    if (fileType !== FileType.Mod && fileType !== FileType.MergeMod) return { fileType };
+    const header = this.header(fileType);
+    this.r.i32();
+    return { fileType, header, recordCount: this.r.i32() };
+  }
+
+  read(options: ReadOptions): DataFile {
+    const head = this.start(options);
+    for (let i = 0; i < head.records.length; i++) head.records[i] = this.record();
+    return this.finish(head);
+  }
+
+  /** Same as `read`, but with `pause()` roughly every `sliceMs` ms. */
+  async readSliced(options: ReadOptions, pause: () => Promise<void>, sliceMs: number): Promise<DataFile> {
+    const head = this.start(options);
+    let t = performance.now();
+    for (let i = 0; i < head.records.length; i++) {
+      head.records[i] = this.record();
+      if ((i & 127) === 127 && performance.now() - t > sliceMs) {
+        await pause();
+        t = performance.now();
+      }
+    }
+    return this.finish(head);
+  }
+
+  private start(options: ReadOptions): { fileType: number; header: ModHeader | undefined; lastId: number; records: GameRecord[] } {
+    const r = this.r;
+    const fileType = r.i32();
+    if (fileType !== FileType.Data && fileType !== FileType.Mod && fileType !== FileType.MergeMod) {
+      if (!options.allowUnknownFileType) throw new FormatError({ en: `Unknown file type ${fileType}`, ru: `Неизвестный тип файла ${fileType}`, zh: `未知文件类型 ${fileType}` }, 0);
+    }
+    const header = fileType === FileType.Mod || fileType === FileType.MergeMod ? this.header(fileType) : undefined;
+    const lastId = r.i32();
+    const count = r.count(60, { en: 'records', ru: 'записи', zh: '记录' });
+    return { fileType, header, lastId, records: new Array<GameRecord>(count) };
+  }
+
+  private finish({ fileType, header, lastId, records }: { fileType: number; header: ModHeader | undefined; lastId: number; records: GameRecord[] }): DataFile {
+    const r = this.r;
+    const tail = r.take(r.remaining);
+    const file: DataFile = { fileType, lastId, records, tail };
+    if (header) file.header = header;
+    if (this.latin1Ids) file.latin1Ids = this.latin1Ids;
+    return file;
+  }
+
+  private header(fileType: number): ModHeader {
+    const r = this.r;
+    let end = -1;
+    if (fileType === FileType.MergeMod) {
+      const start = r.pos;
+      const len = r.i32();
+      end = r.pos + len;
+      if (len < 0 || end > r.length) throw new FormatError({ en: `Wrong header length ${len}`, ru: `Неверная длина заголовка ${len}`, zh: `文件头长度错误：${len}` }, start);
+    }
+    const header: ModHeader = {
+      version: r.i32(),
+      author: r.str(),
+      description: r.str(),
+      dependencies: r.str(),
+      references: r.str(),
+    };
+    if (end < 0) return header;
+    if (r.pos > end) throw new FormatError({ en: 'Header fields go past its length', ru: 'Поля заголовка выходят за его длину', zh: '文件头字段超出其长度' }, r.pos);
+
+    const afterRefs = r.pos;
+    if (r.pos < end) {
+      try {
+        header.merge = this.mergeData(end);
+      } catch (e) {
+        if (!(e instanceof FormatError)) throw e;
+        // Unknown content: keep it as is.
+        r.pos = afterRefs;
+      }
+    }
+    if (r.pos < end) header.extra = r.take(end - r.pos);
+    return header;
+  }
+
+  private mergeData(end: number): MergeData {
+    const r = this.r;
+    const guard = (): void => {
+      if (r.pos > end) throw new FormatError({ en: 'Merge data go past the header', ru: 'Данные слияния выходят за заголовок', zh: '合并数据超出文件头' }, r.pos);
+    };
+    const saveCount = r.u32();
+    const lastMerge = r.u32();
+    const mergeEntries: MergeEntry[] = [];
+    const n = r.u8();
+    for (let i = 0; i < n; i++) {
+      mergeEntries.push({ key: this.id(), a: r.u32(), b: r.u32() });
+      guard();
+    }
+    guard();
+    const merge: MergeData = { saveCount, lastMerge, mergeEntries };
+    if (r.pos < end) {
+      const deleteRequests: DeleteRequest[] = [];
+      const d = r.u8();
+      for (let i = 0; i < d; i++) {
+        deleteRequests.push({ key: this.id(), a: r.u32(), value: r.str() });
+        guard();
+      }
+      guard();
+      merge.deleteRequests = deleteRequests;
+    }
+    return merge;
+  }
+
+  private dict<T>(what: string, minSize: number, read: (key: string) => T): Map<string, T> {
+    const r = this.r;
+    const n = r.count(4 + minSize, what);
+    const map = new Map<string, T>();
+    for (let i = 0; i < n; i++) {
+      const at = r.pos;
+      const key = this.id();
+      if (map.has(key)) throw new FormatError({ en: `Duplicate key “${key}” (${what})`, ru: `Повтор ключа «${key}» (${what})`, zh: `重复的键“${key}”（${what}）` }, at);
+      map.set(key, read(key));
+    }
+    return map;
+  }
+
+  private record(): GameRecord {
+    const r = this.r;
+    let quirks: RecordQuirks | undefined;
+    const float = (path: string): number => {
+      const v = r.f32();
+      if (r.lastNaNBits !== undefined) ((quirks ??= {}).nanBits ??= new Map()).set(path, r.lastNaNBits);
+      return v;
+    };
+
+    const lead = r.i32();
+    const type = r.i32();
+    const id = r.i32();
+    const name = r.str();
+    const stringId = this.id();
+    const changeFlags = r.u32();
+
+    const bools = this.dict('bool', 1, (key) => {
+      const b = r.u8();
+      if (b > 1) ((quirks ??= {}).boolBytes ??= new Map()).set(key, b);
+      return b !== 0;
+    });
+    const floats = this.dict('float', 4, (key) => float(`float:${key}`));
+    const ints = this.dict('int', 4, () => r.i32());
+    const vec3s = this.dict('vec3', 12, (key): Vec3 => [float(`vec3:${key}:0`), float(`vec3:${key}:1`), float(`vec3:${key}:2`)]);
+    const vec4s = this.dict('vec4', 16, (key): Vec4 => [
+      float(`vec4:${key}:0`),
+      float(`vec4:${key}:1`),
+      float(`vec4:${key}:2`),
+      float(`vec4:${key}:3`),
+    ]);
+    const strings = this.dict('string', 4, () => r.str());
+    const files = this.dict('filename', 4, () => r.str());
+    const refs = this.dict('ref category', 4, (): Reference[] => {
+      const n = r.count(16, { en: 'references', ru: 'ссылки', zh: '引用' });
+      const list: Reference[] = new Array<Reference>(n);
+      for (let i = 0; i < n; i++) list[i] = { target: this.id(), v0: r.i32(), v1: r.i32(), v2: r.i32() };
+      return list;
+    });
+    const instances = this.dict('instance', 36, (key): Instance => {
+      const target = this.id();
+      const position: Vec3 = [float(`inst:${key}:0`), float(`inst:${key}:1`), float(`inst:${key}:2`)];
+      const rotation: Vec4 = [float(`inst:${key}:3`), float(`inst:${key}:4`), float(`inst:${key}:5`), float(`inst:${key}:6`)];
+      const n = r.count(4, { en: 'instance states', ru: 'состояния экземпляра', zh: '实例状态' });
+      const states: Uint8Array[] = new Array<Uint8Array>(n);
+      for (let i = 0; i < n; i++) states[i] = r.str();
+      return { target, position, rotation, states };
+    });
+
+    const rec: GameRecord = {
+      lead,
+      type,
+      id,
+      name,
+      stringId,
+      changeFlags,
+      bools,
+      floats,
+      ints,
+      vec3s,
+      vec4s,
+      strings,
+      files,
+      refs,
+      instances,
+    };
+    if (quirks) rec.quirks = quirks;
+    return rec;
+  }
+}
+
+/** Parse a data file (.base/.mod/.save…) from bytes. */
+export function readDataFile(bytes: Uint8Array, options: ReadOptions = {}): DataFile {
+  return new DataFileReader(bytes).read(options);
+}
+
+/**
+ * Parse a file in slices, yielding control (`pause`, e.g. `setTimeout 0`) roughly
+ * every `sliceMs` ms, so the window does not freeze on large files. The result is the same as
+ * from `readDataFile`.
+ */
+export function readDataFileSliced(bytes: Uint8Array, pause: () => Promise<void>, sliceMs = 12, options: ReadOptions = {}): Promise<DataFile> {
+  return new DataFileReader(bytes).readSliced(options, pause, sliceMs);
+}
+
+/** File type, mod header and record count, without reading the records (for the mod list). */
+export function readModHeader(bytes: Uint8Array): { fileType: number; header?: ModHeader; recordCount?: number } {
+  return new DataFileReader(bytes).readHeader();
+}

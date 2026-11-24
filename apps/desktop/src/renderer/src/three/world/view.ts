@@ -1,0 +1,785 @@
+/**
+ * «World» view: rendering, light, fly camera, terrain, objects, town labels, highlight and measurements.
+ * A frame is drawn only when something changed (camera, loading) — at rest the GPU idles.
+ * Heavy work is in background threads (`WorkerPool`), here only three.js object assembly.
+ */
+import * as THREE from 'three';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { MAP_FEATURES_PATH, parseMapFeatures, TOWN_DEFAULT_TYPE, townBorderRadius, type ModContext, type Vec3, type Vec4, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
+import type { GameInstallInfo } from '../../../../shared/api.ts';
+import { WorkerPool } from './protocol.ts';
+import { TerrainLod, type TerrainQuality } from './terrain.ts';
+import { readBiomes } from './biomes.ts';
+import { FoliageScatter, type FoliageQuality } from './foliage.ts';
+import { WorldDump } from './dump.ts';
+import { WorldObjects, type ObjectsQuality, type WorldObject } from './objects.ts';
+import { FlyControls } from './fly.ts';
+import { letterOf } from '../../keys.ts';
+
+export type QualityLevel = 'low' | 'medium' | 'high';
+
+export interface WorldSettings {
+  quality: QualityLevel;
+  /** Object (marker) draw distance, world units. */
+  drawDistance: number;
+  /** Draw town borders (a circle with the game's `Town::getRadius` radius). */
+  borders: boolean;
+  /**
+   * Draw buildings known only from the game dump (placed by mods that are not opened here).
+   * Off by default: the world shows what the opened data has.
+   */
+  gameBuildings: boolean;
+}
+
+export const DEFAULT_SETTINGS: WorldSettings = { quality: 'medium', drawDistance: 25000, borders: false, gameBuildings: false };
+
+const QUALITY: Record<QualityLevel, { terrain: TerrainQuality; foliage: FoliageQuality; models: number; modelDist: number; protos: number; markers: number; pixelRatio: number }> = {
+  low: { terrain: { split: 1.6, maxLevel: 6, cache: 300, fullColour: 2 }, foliage: { radius: 2500, maxInstances: 1500 }, models: 400, modelDist: 3000, protos: 60, markers: 3000, pixelRatio: 1 },
+  medium: { terrain: { split: 2.4, maxLevel: 7, cache: 600, fullColour: 4 }, foliage: { radius: 4000, maxInstances: 4000 }, models: 1500, modelDist: 6000, protos: 160, markers: 8000, pixelRatio: 1 },
+  high: { terrain: { split: 3.4, maxLevel: 7, cache: 1000, fullColour: 8 }, foliage: { radius: 6500, maxInstances: 10000 }, models: 4000, modelDist: 10000, protos: 400, markers: 15000, pixelRatio: 2 },
+};
+
+/** Town type of a big town (`type` of a TOWN record, the game's townType). */
+const TOWN_TYPE_CITY = 2;
+/** Height of a town label box in pixels, for the overlap check. */
+const LABEL_HEIGHT = 16;
+
+export interface TownLabel {
+  sid: string;
+  name: string;
+  pos: THREE.Vector3;
+  /** Town border radius (0 — no border). */
+  radius: number;
+  /** A big town (town type 2): its label is always shown, even over others. */
+  major: boolean;
+}
+
+export interface WorldStatsView {
+  fps: number;
+  /** Average CPU frame time, ms. */
+  frameMs: number;
+  /** From opening the view to the first terrain image, ms (undefined — not yet). */
+  firstFrameMs: number | undefined;
+  /** JS memory (MB), if the browser provides it. */
+  heapMb: number | undefined;
+  geometries: number;
+  textures: number;
+  drawCalls: number;
+  triangles: number;
+  /** Tiles with the biome pattern. */
+  detailed: number;
+  tiles: number;
+  tilesDrawn: number;
+  models: number;
+  markers: number;
+  loading: number;
+  /** Loaded models (distinct) and records without a model. */
+  protos: number;
+  failed: number;
+  /** Vegetation: instances around the camera and drawn (in frame). */
+  foliage: number;
+  foliageDrawn: number;
+  /** Foliage instances standing exactly as in the running game (plugin dump). */
+  foliageFromGame: number;
+  /** Zones that have a game dump: foliage and buildings. */
+  dumpZones: number;
+  /** Buildings only the game dump has, near the camera: all / drawn / without a model in the opened data. */
+  dumpBuildings: number;
+  dumpBuildingsDrawn: number;
+  dumpBuildingsNoModel: number;
+  overview: number;
+  /** Where the camera is (for e2e and «Show in game»). */
+  camera: { x: number; y: number; z: number };
+  /** Gizmo on screen (canvas pixels): centre and a point on the X arrow — for e2e. */
+  gizmo: string;
+}
+
+/** Gizmo object editing: mode, grid step (0 — none), rotation step in degrees (0 — none), snap to ground. */
+export interface EditSettings {
+  mode: 'move' | 'rotate';
+  grid: number;
+  angle: number;
+  ground: boolean;
+}
+
+export const DEFAULT_EDIT: EditSettings = { mode: 'move', grid: 0, angle: 15, ground: true };
+
+/** Where to put the instance after dragging. */
+export interface EditCommit {
+  /** Instance position (y — as in the file: above ground). */
+  position: Vec3;
+  /** Quaternion in file order (w, x, y, z). */
+  rotation: Vec4;
+  /** World height for the building state (`world Y pos`). */
+  worldY?: number;
+}
+
+function qualityOf(s: WorldSettings): { terrain: TerrainQuality; objects: ObjectsQuality; foliage: FoliageQuality; pixelRatio: number } {
+  const q = QUALITY[s.quality];
+  return {
+    terrain: q.terrain,
+    foliage: { radius: Math.min(q.foliage.radius, s.drawDistance), maxInstances: q.foliage.maxInstances },
+    objects: { markerDist: s.drawDistance, modelDist: Math.min(q.modelDist, s.drawDistance), maxModels: q.models, maxProtos: q.protos, maxMarkers: q.markers },
+    pixelRatio: Math.min(window.devicePixelRatio || 1, q.pixelRatio),
+  };
+}
+
+export class WorldView {
+  readonly renderer: THREE.WebGLRenderer;
+  readonly scene = new THREE.Scene();
+  readonly camera: THREE.PerspectiveCamera;
+  readonly fly: FlyControls;
+  readonly terrain: TerrainLod;
+  readonly objects: WorldObjects;
+  readonly foliage: FoliageScatter;
+  /** What the running game has dumped through the Kenshi Bridge plugin (real foliage, all buildings). */
+  readonly dump = new WorldDump();
+  readonly towns: TownLabel[];
+  private readonly pool: WorkerPool;
+  private readonly host: HTMLElement;
+  private readonly labels: HTMLDivElement;
+  private readonly labelEls = new Map<string, HTMLDivElement>();
+  /** Town borders: one ring per town, the ring height follows the terrain. */
+  private readonly borderGroup = new THREE.Group();
+  private borderRings: { town: TownLabel; line: THREE.LineLoop }[] = [];
+  private bordersDirty = true;
+  private lastBorders = 0;
+  private readonly hoverBox: THREE.LineSegments;
+  private readonly selectBox: THREE.LineSegments;
+  private readonly resize: ResizeObserver;
+  private readonly fog: THREE.Fog;
+  private raf = 0;
+  private disposed = false;
+  private dirty = true;
+  private lastObjects = 0;
+  private objectsDirty = true;
+  private last = performance.now();
+  private readonly started = performance.now();
+  private frames: number[] = [];
+  private cpu: number[] = [];
+  private firstFrame: number | undefined;
+  hovered: WorldObject | undefined;
+  selected: WorldObject | undefined;
+  settings: WorldSettings;
+  /** Called after selection by click (or clearing the selection). */
+  onSelect: (o: WorldObject | undefined) => void = () => undefined;
+  /** The gizmo was released: write the edit. false — the edit failed, the object returns to its place. */
+  onCommit: (o: WorldObject, c: EditCommit) => boolean = () => false;
+  /** Delete key on the selected object. */
+  onRemove: (o: WorldObject) => void = () => undefined;
+  /** Gizmo mode changed (G / R keys). */
+  onEditChange: (e: EditSettings) => void = () => undefined;
+  /** Whether editing is allowed (a mod is open). */
+  editable = false;
+  edit: EditSettings = { ...DEFAULT_EDIT };
+  readonly gizmo: TransformControls;
+  private readonly pivot = new THREE.Object3D();
+  private dragStart: { pos: THREE.Vector3; quat: THREE.Quaternion; above: number | undefined } | undefined;
+  /** The last pointerdown hit the gizmo — the click after it does not select. */
+  private gizmoDown = false;
+
+  constructor(host: HTMLElement, game: GameInstallInfo, ctx: ModContext, world: WorldIndex, settings: WorldSettings) {
+    this.host = host;
+    this.settings = settings;
+    const q = qualityOf(settings);
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(q.pixelRatio);
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.domElement.tabIndex = 0;
+    this.renderer.domElement.style.outline = 'none';
+    this.renderer.domElement.style.display = 'block';
+    this.renderer.domElement.dataset['testid'] = 'world-canvas';
+    host.appendChild(this.renderer.domElement);
+
+    this.labels = document.createElement('div');
+    this.labels.style.cssText = 'position:absolute;inset:0;pointer-events:none;overflow:hidden;font-size:12px';
+    host.appendChild(this.labels);
+
+    const sky = new THREE.Color(0xc8c2b0);
+    this.scene.background = sky;
+    // Fog depends on camera height (see `loop`): from above the whole world is clear, near the ground the distance fades.
+    this.fog = new THREE.Fog(sky, 60000, 300000);
+    this.scene.fog = this.fog;
+    this.scene.add(new THREE.HemisphereLight(0xfff4e0, 0x6b5a45, 1.4));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+    sun.position.set(0.5, 1, 0.3);
+    this.scene.add(sun);
+
+    this.camera = new THREE.PerspectiveCamera(55, 1, 2, 600000);
+    this.pool = new WorkerPool(Math.max(2, Math.min(4, (navigator.hardwareConcurrency || 4) - 1)));
+    const biomes = readBiomes(ctx);
+    this.terrain = new TerrainLod(game, this.pool, q.terrain, biomes);
+    // While vegetation has no detailed terrain, new tiles are a reason to recompute it.
+    this.terrain.onChange = () => { this.bordersDirty = true; this.invalidate(this.foliage.incomplete); };
+    this.scene.add(this.terrain.group);
+    this.objects = new WorldObjects(game, this.pool, ctx, world, q.objects);
+    this.objects.groundAt = (x, z) => this.terrain.heightAt(x, z);
+    this.objects.groundMap = this.terrain.colourMap;
+    this.objects.onChange = () => { this.invalidate(true); };
+    this.scene.add(this.objects.group);
+    // Huge hand-placed scenery (robot arms, bridges, wrecks) lives in its own file.
+    void window.kedit.readGameAsset(game, MAP_FEATURES_PATH).then((bytes) => {
+      if (!bytes || this.disposed) return;
+      this.objects.setFeatures(parseMapFeatures(bytes));
+      this.invalidate(true);
+    }).catch((e: unknown) => { console.warn('world: map features', e); });
+
+    this.towns = [];
+    for (const t of world.allTowns()) {
+      const name = ctx.localizedName(t.target) ?? ctx.name(t.target) ?? t.target;
+      const rec = ctx.get(t.target);
+      const radius = townBorderRadius(rec?.ints.get('type'), rec?.floats.get('town radius mult') ?? 1);
+      const major = (rec?.ints.get('type') ?? TOWN_DEFAULT_TYPE) === TOWN_TYPE_CITY;
+      this.towns.push({ sid: t.target, name: name || t.target, pos: new THREE.Vector3(t.position[0], t.position[1], t.position[2]), radius, major });
+    }
+    this.buildBorders();
+    this.foliage = new FoliageScatter(biomes, this.terrain, this.towns.map((t) => t.pos), this.objects.list.map((o) => o.pos), q.foliage);
+    this.foliage.dump = this.dump;
+    this.objects.dump = this.dump;
+    this.objects.showDumpBuildings = settings.gameBuildings;
+    this.dump.onChange = () => { this.invalidate(true); };
+
+    // Highlight frames: under the mouse — light grey, selected — bright blue (visible through everything).
+    const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
+    this.hoverBox = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xdddddd, depthTest: false, transparent: true, opacity: 0.8 }));
+    this.selectBox = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x3fa9ff, depthTest: false }));
+    for (const h of [this.hoverBox, this.selectBox]) {
+      h.visible = false;
+      h.matrixAutoUpdate = false;
+      h.renderOrder = 10;
+      h.frustumCulled = false;
+      this.scene.add(h);
+    }
+
+    this.fly = new FlyControls(this.camera, this.renderer.domElement);
+    this.fly.groundAt = (x, z) => this.terrain.heightAt(x, z);
+    this.fly.onChange = () => { this.invalidate(true); };
+
+    // Gizmo: move arrows / rotation ring on the selected object.
+    this.pivot.name = 'pivot';
+    this.scene.add(this.pivot);
+    this.gizmo = new TransformControls(this.camera, this.renderer.domElement);
+    this.gizmo.setSpace('world');
+    this.gizmo.size = 1.1;
+    const helper = this.gizmo.getHelper();
+    helper.name = 'gizmo';
+    this.scene.add(helper);
+    this.fly.blocked = () => this.gizmoOn() && this.gizmo.axis !== null;
+    this.gizmo.addEventListener('change', () => { this.invalidate(); });
+    this.gizmo.addEventListener('mouseDown', () => { this.gizmoDown = true; });
+    this.gizmo.addEventListener('dragging-changed', (e) => {
+      const o = this.selected;
+      if (!o) return;
+      if (e.value) {
+        const g = this.terrain.heightAt(o.pos.x, o.pos.z);
+        this.dragStart = { pos: o.pos.clone(), quat: o.quat.clone(), above: g === undefined ? undefined : o.pos.y - g };
+      } else this.commitDrag(o);
+    });
+    this.gizmo.addEventListener('objectChange', () => { this.onGizmoMove(); });
+    this.applyEdit();
+    // Start above the map centre, the whole world in frame.
+    this.fly.set(new THREE.Vector3(0, 200000, 160000), new THREE.Vector3(0, 0, 0));
+
+    const el = this.renderer.domElement;
+    el.addEventListener('pointermove', this.onMove);
+    el.addEventListener('pointerleave', this.onLeave);
+    el.addEventListener('click', this.onClick);
+    el.addEventListener('dblclick', this.onDouble);
+    el.addEventListener('keydown', this.onKey);
+
+    this.resize = new ResizeObserver(() => { this.fit(); });
+    this.resize.observe(host);
+    this.fit();
+    this.raf = requestAnimationFrame(this.loop);
+  }
+
+  private fit(): void {
+    const w = Math.max(1, this.host.clientWidth);
+    const h = Math.max(1, this.host.clientHeight);
+    this.renderer.setSize(w, h, false);
+    this.renderer.domElement.style.width = `${w}px`;
+    this.renderer.domElement.style.height = `${h}px`;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.invalidate(true);
+  }
+
+  invalidate(objects = false): void {
+    this.dirty = true;
+    if (objects) this.objectsDirty = true;
+  }
+
+  applySettings(s: WorldSettings): void {
+    this.settings = s;
+    const q = qualityOf(s);
+    this.terrain.quality = q.terrain;
+    this.objects.quality = q.objects;
+    this.foliage.quality = q.foliage;
+    this.renderer.setPixelRatio(q.pixelRatio);
+    this.borderGroup.visible = s.borders;
+    this.bordersDirty = true;
+    this.objects.showDumpBuildings = s.gameBuildings;
+    this.fit();
+  }
+
+  private buildBorders(): void {
+    this.borderGroup.visible = this.settings.borders;
+    this.borderGroup.renderOrder = 5;
+    for (const t of this.towns) {
+      if (t.radius <= 0) continue;
+      const segs = t.radius > 2000 ? 160 : 96;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(segs * 3), 3));
+      const line = new THREE.LineLoop(geo, new THREE.LineBasicMaterial({ color: 0xffd23f, depthTest: false, transparent: true, opacity: 0.9 }));
+      line.frustumCulled = false;
+      line.renderOrder = 5;
+      this.borderGroup.add(line);
+      this.borderRings.push({ town: t, line });
+    }
+    this.scene.add(this.borderGroup);
+  }
+
+  /** Rings follow the terrain where it is loaded; otherwise they sit at the town centre height. */
+  private refreshBorders(): void {
+    for (const { town, line } of this.borderRings) {
+      const pos = line.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const n = pos.count;
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2;
+        const x = town.pos.x + town.radius * Math.cos(a);
+        const z = town.pos.z + town.radius * Math.sin(a);
+        pos.setXYZ(k, x, (this.terrain.heightAt(x, z) ?? town.pos.y) + 15, z);
+      }
+      pos.needsUpdate = true;
+    }
+  }
+
+  private ray(e: { clientX: number; clientY: number }): THREE.Ray {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(ndc, this.camera);
+    return rc.ray;
+  }
+
+  private pending: PointerEvent | undefined;
+  private readonly onMove = (e: PointerEvent): void => {
+    if (e.buttons !== 0) return;
+    this.pending = e;
+    this.dirty = true;
+  };
+
+  private readonly onLeave = (): void => {
+    this.pending = undefined;
+    this.setHover(undefined);
+  };
+
+  private readonly onClick = (e: MouseEvent): void => {
+    if (this.gizmoDown) {
+      this.gizmoDown = false;
+      return;
+    }
+    if (this.fly.dragged || e.button !== 0) return;
+    this.select(this.objects.pick(this.ray(e)));
+  };
+
+  /** Double-click on the ground — fly to that point (closer — more detail). */
+  private readonly onDouble = (e: MouseEvent): void => {
+    if (e.button !== 0) return;
+    const p = this.groundHit(this.ray(e));
+    if (!p) return;
+    const cam = this.camera.position;
+    this.fly.flyTo(p, Math.max(600, Math.min(cam.distanceTo(p) * 0.35, 40000)));
+  };
+
+  /** Ground point under the ray: steps along the ray, then refinement by bisection. */
+  groundHit(ray: THREE.Ray): THREE.Vector3 | undefined {
+    const above = (t: number): number | undefined => {
+      const p = ray.at(t, new THREE.Vector3());
+      const g = this.terrain.heightAt(p.x, p.z);
+      return g === undefined ? undefined : p.y - g;
+    };
+    const far = 600000;
+    let t0 = 0;
+    let step = Math.max(50, (above(0) ?? 0) / 50);
+    for (let t = step; t < far; t += step) {
+      const a = above(t);
+      if (a === undefined) {
+        t0 = t;
+        continue;
+      }
+      if (a <= 0) {
+        let lo = t0;
+        let hi = t;
+        for (let k = 0; k < 24; k++) {
+          const mid = (lo + hi) / 2;
+          if ((above(mid) ?? 1) > 0) lo = mid;
+          else hi = mid;
+        }
+        return ray.at(hi, new THREE.Vector3());
+      }
+      t0 = t;
+      step = Math.max(50, a / 4);
+    }
+    return undefined;
+  }
+
+  private readonly onKey = (e: KeyboardEvent): void => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const letter = letterOf(e);
+    if (letter === 'f' && this.selected) {
+      this.focus(this.selected);
+      e.preventDefault();
+    } else if ((letter === 'g' || letter === 'r') && this.editable) {
+      this.setEdit({ ...this.edit, mode: letter === 'g' ? 'move' : 'rotate' });
+      this.onEditChange(this.edit);
+      e.preventDefault();
+    } else if (e.key === 'Delete' && this.selected && this.editable && !this.gizmo.dragging) {
+      this.onRemove(this.selected);
+      e.preventDefault();
+    } else if (e.key === 'Escape') this.select(undefined);
+  };
+
+  /** Change gizmo settings (mode, grid, angle, snap to ground). */
+  setEdit(e: EditSettings): void {
+    this.edit = e;
+    this.applyEdit();
+  }
+
+  setEditable(on: boolean): void {
+    this.editable = on;
+    this.attachGizmo();
+  }
+
+  private applyEdit(): void {
+    const e = this.edit;
+    const g = this.gizmo;
+    g.setMode(e.mode === 'move' ? 'translate' : 'rotate');
+    g.setTranslationSnap(e.grid > 0 ? e.grid : null);
+    g.setRotationSnap(e.angle > 0 ? THREE.MathUtils.degToRad(e.angle) : null);
+    // Rotation only around the vertical (as in the game). The green arrow (Y) is always up-down;
+    // «snap to ground» applies to moving along the ground (X/Z): the height above ground is kept.
+    const rotate = e.mode === 'rotate';
+    g.showX = !rotate;
+    g.showZ = !rotate;
+    g.showY = true;
+    this.invalidate();
+  }
+
+  private attachGizmo(): void {
+    const o = this.selected;
+    if (o && this.editable) {
+      this.pivot.position.copy(o.pos);
+      this.pivot.quaternion.copy(o.quat);
+      this.pivot.updateMatrixWorld();
+      if (this.gizmo.object !== this.pivot) this.gizmo.attach(this.pivot);
+    } else if (this.gizmoOn()) this.gizmo.detach();
+    this.invalidate();
+  }
+
+  private onGizmoMove(): void {
+    const o = this.selected;
+    const start = this.dragStart;
+    if (!o || !start) return;
+    const vertical = this.gizmo.axis?.includes('Y') === true;
+    if (this.edit.mode === 'move' && this.edit.ground && !vertical && start.above !== undefined) {
+      const g = this.terrain.heightAt(this.pivot.position.x, this.pivot.position.z);
+      if (g !== undefined) this.pivot.position.y = g + start.above;
+    }
+    o.pos.copy(this.pivot.position);
+    o.quat.copy(this.pivot.quaternion);
+    this.place(this.selectBox, o);
+    this.objects.update(this.camera);
+  }
+
+  private commitDrag(o: WorldObject): void {
+    const start = this.dragStart;
+    this.dragStart = undefined;
+    if (!start) return;
+    if (o.pos.equals(start.pos) && o.quat.equals(start.quat)) return;
+    const c = this.commitOf(o, start.pos);
+    if (!this.onCommit(o, c)) {
+      o.pos.copy(start.pos);
+      o.quat.copy(start.quat);
+      this.attachGizmo();
+      this.place(this.selectBox, o);
+      this.invalidate(true);
+    }
+  }
+
+  /** What to write to the file for an object now standing at `o.pos`/`o.quat` (previously at `from`). */
+  commitOf(o: WorldObject, from: THREE.Vector3): EditCommit {
+    // Instance y is above ground: old height + lift − ground rise.
+    const g0 = this.terrain.heightAt(from.x, from.z);
+    const g1 = this.terrain.heightAt(o.pos.x, o.pos.z);
+    const y = o.p.position[1] + (o.pos.y - from.y) - (g0 !== undefined && g1 !== undefined ? g1 - g0 : 0);
+    const q = o.quat;
+    const c: EditCommit = { position: [o.pos.x, y, o.pos.z], rotation: [q.w, q.x, q.y, q.z] };
+    if (o.b) c.worldY = o.pos.y;
+    return c;
+  }
+
+  /** Pull in the mod world edits (own, undo/redo, AI edits). */
+  sync(edits: WorldEdits, changes: readonly WorldChange[]): void {
+    const touched = this.objects.sync(edits, changes);
+    if (this.selected?.gone) this.select(undefined);
+    else if (this.selected && touched.includes(this.selected) && !this.gizmo.dragging) {
+      this.attachGizmo();
+      this.place(this.selectBox, this.selected);
+    }
+    if (this.hovered?.gone) this.setHover(undefined);
+    this.objects.update(this.camera);
+    this.invalidate(true);
+  }
+
+  /** Ground point at the screen centre (where to place a new object). */
+  centreGround(): THREE.Vector3 | undefined {
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+    return this.groundHit(rc.ray);
+  }
+
+  private setHover(o: WorldObject | undefined): void {
+    if (o === this.hovered) return;
+    this.hovered = o;
+    this.renderer.domElement.style.cursor = o ? 'pointer' : 'default';
+    this.place(this.hoverBox, o && o !== this.selected ? o : undefined);
+  }
+
+  select(o: WorldObject | undefined): void {
+    this.selected = o;
+    this.attachGizmo();
+    this.place(this.selectBox, o);
+    this.place(this.hoverBox, this.hovered && this.hovered !== o ? this.hovered : undefined);
+    this.onSelect(o);
+  }
+
+  private place(helper: THREE.LineSegments, o: WorldObject | undefined): void {
+    helper.visible = o !== undefined;
+    if (o) {
+      const box = this.objects.boxOf(o);
+      const local = new THREE.Matrix4().compose(box.getCenter(new THREE.Vector3()), new THREE.Quaternion(), box.getSize(new THREE.Vector3()).multiplyScalar(1.04));
+      helper.matrix.copy(this.objects.matrixOf(o)).multiply(local);
+      helper.matrixWorldNeedsUpdate = true;
+    }
+    this.invalidate();
+  }
+
+  /** Fly to an object. */
+  focus(o: WorldObject): void {
+    const size = this.objects.boxOf(o).getSize(new THREE.Vector3()).length();
+    this.fly.flyTo(o.pos, Math.max(250, size * 2.2));
+  }
+
+  /** Fly to a point (town): look at the ground at that point. */
+  /** Fly to world coordinates (the height is taken from the terrain). */
+  flyToXZ(x: number, z: number, dist = 2500): void {
+    this.flyToPoint(new THREE.Vector3(x, this.terrain.heightAt(x, z) ?? 0, z), dist);
+  }
+
+  flyToPoint(p: THREE.Vector3, dist = 2500): void {
+    const look = p.clone();
+    const g = this.terrain.heightAt(p.x, p.z);
+    if (g !== undefined) look.y = g;
+    this.fly.flyTo(look, dist);
+  }
+
+  private readonly loop = (): void => {
+    this.raf = requestAnimationFrame(this.loop);
+    // Tab hidden — no computing and no drawing.
+    if (!this.host.isConnected || this.host.clientWidth === 0) return;
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - this.last) / 1000);
+    this.last = now;
+    if (this.fly.update(dt)) this.objectsDirty = true;
+    const t0 = performance.now();
+    this.camera.updateMatrixWorld();
+    // Terrain LOD every frame (cheap); objects no more than ~6 times per second.
+    this.terrain.update(this.camera);
+    if (this.settings.borders && this.bordersDirty && now - this.lastBorders > 700) {
+      this.refreshBorders();
+      this.bordersDirty = false;
+      this.lastBorders = now;
+      this.dirty = true;
+    }
+    if (this.objectsDirty && now - this.lastObjects > 150) {
+      if (this.foliage.update(this.camera.position)) this.objects.setFoliage(this.foliage.byTarget);
+      this.objects.update(this.camera);
+      // Vegetation is computed in parts — while not done, keep updating.
+      this.objectsDirty = this.foliage.incomplete;
+      this.lastObjects = now;
+      this.dirty = true;
+    }
+    if (this.pending) {
+      const e = this.pending;
+      this.pending = undefined;
+      this.setHover(this.objects.pick(this.ray(e)));
+    }
+    if (!this.dirty && !this.fly.moving) return;
+    this.dirty = false;
+    const cam = this.camera.position;
+    const above = Math.max(0, cam.y - (this.terrain.heightAt(cam.x, cam.z) ?? 0));
+    this.fog.near = Math.max(40000, above * 2.5);
+    this.fog.far = this.fog.near * 5;
+    this.renderer.render(this.scene, this.camera);
+    this.updateLabels();
+    this.cpu.push(performance.now() - t0);
+    if (this.cpu.length > 60) this.cpu.shift();
+    this.frames.push(now);
+    while (this.frames.length > 0 && now - this.frames[0]! > 1000) this.frames.shift();
+    if (this.firstFrame === undefined && this.terrain.ready) this.firstFrame = now - this.started;
+  };
+
+  private readonly labelWidths = new Map<string, number>();
+  private measureCtx: CanvasRenderingContext2D | null | undefined;
+
+  /** Width of a town label in pixels (12px font, as the label is drawn), cached per name. */
+  private labelWidth(name: string): number {
+    let wd = this.labelWidths.get(name);
+    if (wd === undefined) {
+      this.measureCtx ??= document.createElement('canvas').getContext('2d');
+      if (this.measureCtx) this.measureCtx.font = `12px ${getComputedStyle(this.labels).fontFamily}`;
+      wd = this.measureCtx?.measureText(name).width ?? name.length * 7;
+      this.labelWidths.set(name, wd);
+    }
+    return wd;
+  }
+
+  private updateLabels(): void {
+    const w = this.host.clientWidth;
+    const h = this.host.clientHeight;
+    const cam = this.camera.position;
+    // From above you see farther: labels within up to three camera heights.
+    const reach = Math.max(90000, (cam.y - (this.terrain.heightAt(cam.x, cam.z) ?? 0)) * 3);
+    const shown = this.towns
+      .map((t) => ({ t, d: t.pos.distanceTo(cam) }))
+      .filter((x) => x.d < reach)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 60);
+    const keep = new Set<string>();
+    const v = new THREE.Vector3();
+    // Declutter: big towns first, then by border size and distance; a smaller settlement whose label
+    // would overlap one already placed waits until the camera comes closer and they spread apart.
+    const onScreen: { t: TownLabel; d: number; x: number; y: number }[] = [];
+    for (const { t, d } of shown) {
+      v.copy(t.pos);
+      v.y += 300;
+      v.project(this.camera);
+      if (v.z > 1 || v.x < -1.1 || v.x > 1.1 || v.y < -1.1 || v.y > 1.1) continue;
+      onScreen.push({ t, d, x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h });
+    }
+    onScreen.sort((a, b) => Number(b.t.major) - Number(a.t.major) || b.t.radius - a.t.radius || a.d - b.d);
+    const placed: [number, number, number, number][] = [];
+    for (const { t, x, y } of onScreen) {
+      const half = this.labelWidth(t.name) / 2 + 4;
+      const box: [number, number, number, number] = [x - half, y - LABEL_HEIGHT, x + half, y];
+      if (!t.major && placed.some((p) => box[0] < p[2] && box[2] > p[0] && box[1] < p[3] && box[3] > p[1])) continue;
+      placed.push(box);
+      const key = `${t.sid}@${Math.round(t.pos.x)}`;
+      keep.add(key);
+      let el = this.labelEls.get(key);
+      if (!el) {
+        el = document.createElement('div');
+        el.textContent = t.name;
+        el.style.cssText = 'position:absolute;transform:translate(-50%,-100%);color:#fff;text-shadow:0 0 3px #000,0 0 2px #000;white-space:nowrap;pointer-events:auto;cursor:pointer';
+        el.dataset['town'] = t.name;
+        // Click on a name — fly to the town.
+        const pos = t.pos;
+        el.addEventListener('click', () => { this.flyToPoint(pos); });
+        this.labels.appendChild(el);
+        this.labelEls.set(key, el);
+      }
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+    }
+    for (const [k, el] of this.labelEls)
+      if (!keep.has(k)) {
+        el.remove();
+        this.labelEls.delete(k);
+      }
+  }
+
+  stats(): WorldStatsView {
+    const info = this.renderer.info;
+    const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+    const avg = this.cpu.length ? this.cpu.reduce((a, b) => a + b, 0) / this.cpu.length : 0;
+    return {
+      fps: this.frames.length,
+      frameMs: Math.round(avg * 10) / 10,
+      firstFrameMs: this.firstFrame === undefined ? undefined : Math.round(this.firstFrame),
+      heapMb: mem ? Math.round(mem.usedJSHeapSize / 1048576) : undefined,
+      geometries: info.memory.geometries,
+      textures: info.memory.textures,
+      drawCalls: info.render.calls,
+      triangles: info.render.triangles,
+      tiles: this.terrain.tileCount,
+      detailed: this.terrain.detailed,
+      tilesDrawn: this.terrain.drawn,
+      models: this.objects.drawnModels,
+      markers: this.objects.drawnMarkers,
+      loading: this.objects.busy,
+      protos: this.objects.protoCount,
+      failed: this.objects.failed,
+      foliage: this.foliage.count,
+      foliageDrawn: this.objects.drawnFoliage,
+      foliageFromGame: this.foliage.fromGame,
+      dumpZones: Math.max(this.dump.foliageZoneCount, this.dump.buildingZoneCount),
+      dumpBuildings: this.objects.extraNear,
+      dumpBuildingsDrawn: this.objects.drawnExtras,
+      dumpBuildingsNoModel: this.objects.extraNoModel,
+      overview: Math.round(this.terrain.overviewProgress * 100),
+      camera: this.cameraState(),
+      gizmo: this.gizmoProbe(),
+    };
+  }
+
+  /** The gizmo is attached to an object (in three types `object` is always present, in practice it is not). */
+  private gizmoOn(): boolean {
+    return (this.gizmo.object as THREE.Object3D | undefined) !== undefined;
+  }
+
+  /** Gizmo centre and a point on the X arrow in canvas pixels ('' — no gizmo). */
+  private gizmoProbe(): string {
+    if (!this.gizmoOn()) return '';
+    const cam = this.camera;
+    const c = this.pivot.position.clone();
+    // Gizmo size as in TransformControls: from the camera distance and the field of view.
+    const factor = c.distanceTo(cam.position) * Math.min((1.9 * Math.tan((Math.PI * cam.fov) / 360)) / cam.zoom, 7);
+    const ax = c.clone().add(new THREE.Vector3(0.45 * factor * this.gizmo.size / 4, 0, 0));
+    const w = this.host.clientWidth;
+    const h = this.host.clientHeight;
+    const px = (v: THREE.Vector3): string => {
+      v.project(cam);
+      return `${Math.round(((v.x + 1) / 2) * w)},${Math.round(((1 - v.y) / 2) * h)}`;
+    };
+    return `${px(c)},${px(ax)}`;
+  }
+
+  /** Camera: position and where it looks (for «Show in game» and e2e). */
+  cameraState(): { x: number; y: number; z: number } {
+    const p = this.camera.position;
+    return { x: Math.round(p.x), y: Math.round(p.y), z: Math.round(p.z) };
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    cancelAnimationFrame(this.raf);
+    this.resize.disconnect();
+    const el = this.renderer.domElement;
+    el.removeEventListener('pointermove', this.onMove);
+    el.removeEventListener('pointerleave', this.onLeave);
+    el.removeEventListener('click', this.onClick);
+    el.removeEventListener('dblclick', this.onDouble);
+    el.removeEventListener('keydown', this.onKey);
+    this.gizmo.detach();
+    this.gizmo.dispose();
+    this.fly.dispose();
+    this.dump.dispose();
+    this.terrain.dispose();
+    this.objects.dispose();
+    this.pool.dispose();
+    this.renderer.dispose();
+    el.remove();
+    this.labels.remove();
+  }
+}

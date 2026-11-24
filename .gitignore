@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+# reports generated from the game files
+reports/
+# local config with paths to the game
+kenshi-paths.json
+out/
+test-results/
+playwright-report/

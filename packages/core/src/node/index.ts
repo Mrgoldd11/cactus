@@ -1,0 +1,31 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import { readDataFile, type ReadOptions } from '../format/read.ts';
+import { writeDataFile, type WriteOptions } from '../format/write.ts';
+import type { DataFile } from '../format/types.ts';
+
+export * from './paths.ts';
+export * from './schema.ts';
+export * from './locales.ts';
+export * from './extensions.ts';
+export * from './context.ts';
+export * from './detect.ts';
+export * from './world.ts';
+export * from './terrain.ts';
+export * from './file-cache.ts';
+
+export function readDataFileSync(path: string, options?: ReadOptions): DataFile {
+  return readDataFile(readFileSync(path), options);
+}
+
+export function writeDataFileSync(path: string, file: DataFile, options?: WriteOptions): void {
+  writeFileSync(path, writeDataFile(file, options));
+}
+export * from './live-server.ts';
+export * from './mods.ts';
+export * from './game-bridge.ts';
+export * from './game-dump.ts';
+export * from './merge-store.ts';
+export * from './backup.ts';
+export * from './validation-store.ts';
+export * from './workshop.ts';
+export * from './workshop-upload.ts';

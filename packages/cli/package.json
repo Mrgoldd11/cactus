@@ -1,0 +1,23 @@
+{
+  "name": "@kenshi-editor/cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "kedit: search, inspect, validate and build Kenshi mods from the command line",
+  "type": "module",
+  "bin": {
+    "kedit": "./bin/kedit.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "kedit": "node bin/kedit.js"
+  },
+  "dependencies": {
+    "@kenshi-editor/core": "workspace:*"
+  }
+}

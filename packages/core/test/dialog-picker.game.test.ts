@@ -1,0 +1,145 @@
+/**
+ * «+ condition» / «+ effect» list of the line panel (G4) on the installed game: DC_/DA_ values and
+ * reference conditions in one list, search by translation, English and code, adding into the right field.
+ */
+import { describe, expect, it } from 'vitest';
+import { addDialogPick, dialogPickGroups, dialogPickItems, dialogPickMaybe, dialogPickUsage, itemTypeId, recordPhrases, removeLineRef, removePhrase, setLineRefValue } from '../src/index.ts';
+import { hasGame, loadModContext, resolveGamePaths } from '../src/node/index.ts';
+
+const paths = resolveGamePaths();
+/** «Healed (Recruit)»: «It's rare to meet good folks like you…», one condition (honorable). */
+const LINE = '8951-Dialogue.mod';
+
+describe.skipIf(!hasGame(paths))('dialog picker: vanilla', () => {
+  const { ctx } = loadModContext({ paths, schema: true });
+  const usage = dialogPickUsage(ctx);
+
+  it('one list: DC_ values and reference conditions, found by Russian, English and code', () => {
+    const items = dialogPickItems(ctx, 'DIALOGUE_LINE', 'condition', 'ru', usage);
+    expect(items.filter((i) => i.source === 'ref').map((i) => i.code)).toContain('my race');
+    expect(items.some((i) => i.code === 'DC_NONE')).toBe(false);
+    for (const q of ['голод', 'starv', 'DC_STARV']) {
+      const found = dialogPickGroups(items, 'condition', q, 'ru').flatMap((g) => g.items.map((i) => i.code));
+      expect(found, q).toContain('DC_STARVING');
+    }
+    // Reference conditions are searched the same way and sit in the groups next to DC_ values.
+    const race = dialogPickGroups(items, 'condition', 'моя раса', 'ru');
+    // «моя подраса» also contains «раса».
+    expect(race.flatMap((g) => g.items.map((i) => i.key))).toEqual(['ref:my race', 'ref:my subrace']);
+    expect(race[0]!.label).toBe('Кто это');
+    expect(race[0]!.items[0]).toMatchObject({ targetType: 'RACE', label: 'Моя раса' });
+    // Without a query the most used ones go first.
+    const all = dialogPickGroups(items, 'condition', '', 'ru');
+    expect(all[0]!.key).toBe('common');
+    expect(all[0]!.items).toHaveLength(6);
+  });
+
+  it('effects: DA_ values and reference effects; a dialogue has no DA_ effects', () => {
+    const line = dialogPickItems(ctx, 'DIALOGUE_LINE', 'effect', 'ru', usage);
+    expect(line.some((i) => i.code === 'DA_LOCK_THIS_DIALOG')).toBe(true);
+    expect(line.find((i) => i.code === 'give item')).toMatchObject({ source: 'ref', targetType: 'ITEM', group: 'trade' });
+    const head = dialogPickItems(ctx, 'DIALOGUE', 'effect', 'ru', usage);
+    expect(head.some((i) => i.source === 'enum')).toBe(false);
+    expect(head.some((i) => i.code === 'unlocks')).toBe(true);
+  });
+
+  it('a picked reference condition lands in its field of the line, one undo', () => {
+    const items = dialogPickItems(ctx, 'DIALOGUE_LINE', 'condition', 'en', usage);
+    const myRace = items.find((i) => i.key === 'ref:my race')!;
+    const race = [...ctx.records()].find((r) => r.type === itemTypeId('RACE'))!.stringId;
+    const before = ctx.get(LINE)!.refs.get('my race')?.length ?? 0;
+    addDialogPick(ctx, LINE, myRace, race);
+    expect(ctx.get(LINE)!.refs.get('my race')!.map((r) => r.target)).toContain(race);
+    expect(ctx.get(LINE)!.refs.get('conditions')).toHaveLength(1);
+    // Wrong target type is refused.
+    const item = [...ctx.records()].find((r) => r.type === itemTypeId('ITEM'))!.stringId;
+    expect(() => addDialogPick(ctx, LINE, myRace, item)).toThrow(/RACE/);
+    ctx.undo();
+    expect(ctx.get(LINE)!.refs.get('my race')?.length ?? 0).toBe(before);
+  });
+
+  it('a picked DC_ condition: «who: I», yes/no compares with 1', () => {
+    const items = dialogPickItems(ctx, 'DIALOGUE_LINE', 'condition', 'en', usage);
+    const id = addDialogPick(ctx, LINE, items.find((i) => i.code === 'DC_STARVING')!);
+    const ref = ctx.get(LINE)!.refs.get('conditions')!.find((r) => r.target === id)!;
+    expect(ref.v0).toBe(1);
+    expect(ctx.get(id)!.ints.get('who')).toBe(0);
+    ctx.undo();
+    expect(ctx.get(LINE)!.refs.get('conditions')).toHaveLength(1);
+  });
+
+  it('a reference row: value and removal are one undo step each', () => {
+    const faction = [...ctx.records()].find((r) => r.type === itemTypeId('FACTION'))!.stringId;
+    const items = dialogPickItems(ctx, 'DIALOGUE_LINE', 'effect', 'en', usage);
+    addDialogPick(ctx, LINE, items.find((i) => i.key === 'ref:change relations')!, faction);
+    const ref = (): { v0: number } | undefined => ctx.get(LINE)!.refs.get('change relations')?.find((r) => r.target === faction);
+    setLineRefValue(ctx, LINE, 'change relations', faction, 25);
+    expect(ref()?.v0).toBe(25);
+    removeLineRef(ctx, LINE, 'change relations', faction);
+    expect(ref()).toBeUndefined();
+    ctx.undo();
+    expect(ref()?.v0).toBe(25);
+    ctx.undo();
+    ctx.undo();
+    expect(ref()).toBeUndefined();
+    expect(() => {
+      setLineRefValue(ctx, LINE, 'change relations', faction, 1);
+    }).toThrow();
+  });
+
+  it('the whole list: every DC_ value and every reference condition, «раб» / «slave» / «DC_IS_SLAVE» alike', () => {
+    const items = dialogPickItems(ctx, 'DIALOGUE', 'condition', 'ru', usage);
+    const dc = items.filter((i) => i.source === 'enum').length;
+    const refs = items.filter((i) => i.source === 'ref').length;
+    expect(dc).toBeGreaterThanOrEqual(79);
+    expect(refs).toBeGreaterThanOrEqual(13);
+    for (const q of ['раб', 'slave', 'DC_IS_SLAVE']) {
+      const found = dialogPickGroups(items, 'condition', q, 'ru').flatMap((g) => g.items.map((i) => i.code));
+      expect(found, q).toContain('DC_IS_SLAVE');
+    }
+  });
+
+  it('search by synonyms and group names; «maybe» when nothing matches; peaceful effects first', () => {
+    const effects = dialogPickItems(ctx, 'DIALOGUE_LINE', 'effect', 'ru', usage);
+    const codes = (kind: 'condition' | 'effect', items: typeof effects, q: string): string[] =>
+      dialogPickGroups(items, kind, q, 'ru').flatMap((g) => g.items.map((i) => i.code));
+    for (const q of ['предмет', 'item', '物品', 'вещь']) expect(codes('effect', effects, q), q).toContain('give item');
+    expect(codes('effect', effects, 'деньги'), 'деньги').toContain('DA_GIVE_MONEY');
+    const conds = dialogPickItems(ctx, 'DIALOGUE_LINE', 'condition', 'ru', usage);
+    // «здоров» is in the group name «Здоровье и состояние» only.
+    expect(codes('condition', conds, 'здоров')).toContain('DC_STARVING');
+    expect(dialogPickGroups(conds, 'condition', 'здоров', 'ru').map((g) => g.key)).toEqual(['state']);
+    // Nothing matches a made-up word; for a real one «maybe» offers items by their descriptions and names instead.
+    expect(codes('effect', effects, 'zzqx')).toEqual([]);
+    expect(dialogPickMaybe(effects, 'zzqx')).toEqual([]);
+    expect(dialogPickMaybe(effects, 'торговаться').map((i) => i.code)).toContain('DA_TRADE');
+    // «Often used» effects: peaceful ones first, no fight ahead of them.
+    const common = dialogPickGroups(effects, 'effect', '', 'ru')[0]!;
+    expect(common.key).toBe('common');
+    expect(common.items[0]!.group).not.toBe('fight');
+    expect(common.items[0]!.code.startsWith('DA_ATTACK')).toBe(false);
+  });
+
+  it('graph «×»: a phrase knows its source; removing it is one undo step', () => {
+    const slave = dialogPickItems(ctx, 'DIALOGUE_LINE', 'condition', 'en', usage).find((i) => i.code === 'DC_IS_SLAVE')!;
+    const action = addDialogPick(ctx, LINE, slave);
+    const race = [...ctx.records()].filter((r) => r.type === itemTypeId('RACE')).slice(0, 2).map((r) => r.stringId);
+    const myRace = dialogPickItems(ctx, 'DIALOGUE_LINE', 'condition', 'en', usage).find((i) => i.key === 'ref:my race')!;
+    for (const r of race) addDialogPick(ctx, LINE, myRace, r);
+    const phrases = recordPhrases(ctx, ctx.get(LINE)!).conditions;
+    const act = phrases.find((p) => p.source?.target === action)!;
+    expect(act.source).toEqual({ category: 'conditions', target: action });
+    const cat = phrases.find((p) => p.source?.category === 'my race')!;
+    expect(cat.source).toEqual({ category: 'my race' });
+    // One DIALOG_ACTION.
+    removePhrase(ctx, LINE, act.source!);
+    expect(ctx.get(LINE)!.refs.get('conditions')!.map((r) => r.target)).not.toContain(action);
+    ctx.undo();
+    expect(ctx.get(LINE)!.refs.get('conditions')!.map((r) => r.target)).toContain(action);
+    // A whole reference category: all its targets at once, one undo.
+    removePhrase(ctx, LINE, cat.source!);
+    expect(ctx.get(LINE)!.refs.get('my race') ?? []).toHaveLength(0);
+    ctx.undo();
+    expect(ctx.get(LINE)!.refs.get('my race')!.map((r) => r.target)).toEqual(expect.arrayContaining(race));
+  });
+});

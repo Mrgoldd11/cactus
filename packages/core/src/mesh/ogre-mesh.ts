@@ -1,0 +1,344 @@
+/**
+ * Parser of binary Ogre models (`.mesh`): this is how all Kenshi models are stored: weapons, armour,
+ * buildings, furniture, characters. Three serializer versions occur in the game:
+ * `MeshSerializer_v1.100` (Ogre 1.10+), `MeshSerializer_v1.8` and `MeshSerializer_v1.41`.
+ *
+ * The file is nested chunks "id (uint16) + length (uint32) + data". Old Ogre versions compute chunk
+ * lengths wrongly (a submesh's length is smaller than its own geometry), so we read
+ * sequentially, like Ogre itself: chunk after chunk, never skipping by length. Only what is
+ * drawn is needed: geometry (positions, normals, UV, vertex colour), indices, the material name of each
+ * submesh and bone weights of animated models. LOD, shadow edges, poses and animations come after
+ * the submeshes; reading stops at them.
+ *
+ * The module has no disk access and no three.js: bytes in, arrays out.
+ */
+
+import { MeshFormatError, OgreReader as Reader } from './ogre-reader.ts';
+
+export { MeshFormatError } from './ogre-reader.ts';
+
+const M_HEADER = 0x1000;
+const M_MESH = 0x3000;
+const M_SUBMESH = 0x4000;
+const M_SUBMESH_OPERATION = 0x4010;
+const M_SUBMESH_BONE_ASSIGNMENT = 0x4100;
+const M_SUBMESH_TEXTURE_ALIAS = 0x4200;
+const M_GEOMETRY = 0x5000;
+const M_GEOMETRY_VERTEX_DECLARATION = 0x5100;
+const M_GEOMETRY_VERTEX_ELEMENT = 0x5110;
+const M_GEOMETRY_VERTEX_BUFFER = 0x5200;
+const M_GEOMETRY_VERTEX_BUFFER_DATA = 0x5210;
+const M_MESH_SKELETON_LINK = 0x6000;
+const M_MESH_BONE_ASSIGNMENT = 0x7000;
+
+/** Raw bone assignments of one geometry: vertex, bone handle, weight. */
+class Assignments {
+  readonly vertex: number[] = [];
+  readonly bone: number[] = [];
+  readonly weight: number[] = [];
+
+  read(r: Reader): void {
+    this.vertex.push(r.u32());
+    this.bone.push(r.u16());
+    this.weight.push(r.f32());
+  }
+}
+
+/** Meaning of a vertex element (Ogre `VertexElementSemantic`). */
+const SEM_POSITION = 1;
+const SEM_NORMAL = 4;
+const SEM_DIFFUSE = 5;
+const SEM_TEXCOORD = 7;
+
+/** Primitive kind (Ogre `RenderOperation::OperationType`). */
+export const OP_TRIANGLE_LIST = 4;
+export const OP_TRIANGLE_STRIP = 5;
+export const OP_TRIANGLE_FAN = 6;
+
+export interface MeshGeometry {
+  vertexCount: number;
+  /** x, y, z per vertex. */
+  positions: Float32Array;
+  normals?: Float32Array;
+  /** First UV set: u, v per vertex. */
+  uvs?: Float32Array;
+  /** Vertex colour r, g, b, a (0…1), if present. */
+  colors?: Float32Array;
+  /** Bone weights of an animated model; absent when the geometry has no bone assignments. */
+  skin?: MeshSkin;
+}
+
+/** Up to `SKIN_SLOTS` bones per vertex: the strongest ones, weights normalized to sum 1. */
+export interface MeshSkin {
+  /** Bone handles (as in the `.skeleton`), `SKIN_SLOTS` per vertex; unused slots are 0 with weight 0. */
+  bones: Uint16Array;
+  weights: Float32Array;
+  /** Vertices with no assignment at all (they follow the model root, not a bone). */
+  unassigned: number;
+  /** Assignments dropped because a vertex had more than `SKIN_SLOTS` bones. */
+  dropped: number;
+}
+
+/** Bones per vertex kept for skinning (Ogre and three.js both use 4). */
+export const SKIN_SLOTS = 4;
+
+export interface MeshSubmesh {
+  /** Ogre material name (`Material#84`). In Kenshi the texture is usually set by the record, not by it. */
+  material: string;
+  operation: number;
+  /** Shared model geometry or its own. */
+  geometry: MeshGeometry;
+  indices: Uint16Array | Uint32Array;
+}
+
+export interface OgreMesh {
+  /** Version string from the header: `[MeshSerializer_v1.8]`. */
+  version: string;
+  submeshes: MeshSubmesh[];
+  /** Skeleton name, if the model is animated. */
+  skeleton?: string;
+  /** Bounding box over all vertices (computed, not from the file). */
+  bounds: { min: [number, number, number]; max: [number, number, number] };
+}
+
+interface Element {
+  source: number;
+  type: number;
+  semantic: number;
+  offset: number;
+  index: number;
+}
+
+/** Number of float components of an element type; undefined for a type we do not read. */
+function floatCount(type: number): number | undefined {
+  // VET_FLOAT1..VET_FLOAT4
+  return type >= 0 && type <= 3 ? type + 1 : undefined;
+}
+
+/** Vertex colour in one uint32: COLOUR (4), COLOUR_ARGB (10), COLOUR_ABGR (11), UBYTE4 (9). */
+function isPackedColour(type: number): boolean {
+  return type === 4 || type === 9 || type === 10 || type === 11;
+}
+
+function readGeometry(r: Reader): MeshGeometry {
+  const vertexCount = r.u32();
+  const elements: Element[] = [];
+  const buffers = new Map<number, { size: number; data: Uint8Array }>();
+  for (;;) {
+    const id = r.peekChunk();
+    if (id === M_GEOMETRY_VERTEX_DECLARATION) {
+      r.chunk();
+      while (r.peekChunk() === M_GEOMETRY_VERTEX_ELEMENT) {
+        r.chunk();
+        elements.push({ source: r.u16(), type: r.u16(), semantic: r.u16(), offset: r.u16(), index: r.u16() });
+      }
+    } else if (id === M_GEOMETRY_VERTEX_BUFFER) {
+      r.chunk();
+      const bind = r.u16();
+      const size = r.u16();
+      const data = r.chunk();
+      if (data.id !== M_GEOMETRY_VERTEX_BUFFER_DATA) throw new MeshFormatError({ en: `expected vertex data, got block 0x${data.id.toString(16)}`, ru: `ждали данные вершин, а блок 0x${data.id.toString(16)}`, zh: `应为顶点数据，实际为数据块 0x${data.id.toString(16)}` });
+      buffers.set(bind, { size, data: r.slice(size * vertexCount) });
+    } else break;
+  }
+  return decodeVertices(vertexCount, elements, buffers);
+}
+
+function decodeVertices(vertexCount: number, elements: readonly Element[], buffers: ReadonlyMap<number, { size: number; data: Uint8Array }>): MeshGeometry {
+  const geo: MeshGeometry = { vertexCount, positions: new Float32Array(vertexCount * 3) };
+  let havePos = false;
+  for (const el of elements) {
+    const buf = buffers.get(el.source);
+    if (!buf) continue;
+    const view = new DataView(buf.data.buffer, buf.data.byteOffset, buf.data.byteLength);
+    const n = floatCount(el.type);
+    const readFloats = (comps: number, out: Float32Array): void => {
+      const take = Math.min(comps, n ?? 0);
+      for (let v = 0; v < vertexCount; v++) {
+        const base = v * buf.size + el.offset;
+        for (let c = 0; c < take; c++) out[v * comps + c] = view.getFloat32(base + c * 4, true);
+      }
+    };
+    if (el.semantic === SEM_POSITION && n !== undefined && n >= 3 && !havePos) {
+      readFloats(3, geo.positions);
+      havePos = true;
+    } else if (el.semantic === SEM_NORMAL && n !== undefined && n >= 3 && !geo.normals) {
+      geo.normals = new Float32Array(vertexCount * 3);
+      readFloats(3, geo.normals);
+    } else if (el.semantic === SEM_TEXCOORD && el.index === 0 && n !== undefined && n >= 2 && !geo.uvs) {
+      geo.uvs = new Float32Array(vertexCount * 2);
+      readFloats(2, geo.uvs);
+    } else if (el.semantic === SEM_DIFFUSE && isPackedColour(el.type) && !geo.colors) {
+      const out = new Float32Array(vertexCount * 4);
+      for (let v = 0; v < vertexCount; v++) {
+        const base = v * buf.size + el.offset;
+        const b0 = buf.data[base]!, b1 = buf.data[base + 1]!, b2 = buf.data[base + 2]!, b3 = buf.data[base + 3]!;
+        // In memory (little-endian): ARGB → B G R A, ABGR → R G B A. COLOUR (4) in D3D builds is ARGB.
+        const [r, g, b, a] = el.type === 11 || el.type === 9 ? [b0, b1, b2, b3] : [b2, b1, b0, b3];
+        out.set([r / 255, g / 255, b / 255, a / 255], v * 4);
+      }
+      geo.colors = out;
+    }
+  }
+  if (!havePos && vertexCount > 0) throw new MeshFormatError({ en: 'the geometry has no float3 vertex positions', ru: 'у геометрии нет позиций вершин float3', zh: '几何体没有 float3 顶点位置' });
+  return geo;
+}
+
+function readSubmesh(r: Reader, shared: MeshGeometry | undefined, sharedBones: Assignments): MeshSubmesh {
+  const material = r.line();
+  const useShared = r.bool();
+  const indexCount = r.u32();
+  const idx32 = r.bool();
+  let indices: Uint16Array | Uint32Array;
+  if (idx32) {
+    const raw = r.slice(indexCount * 4);
+    indices = new Uint32Array(indexCount);
+    const v = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+    for (let i = 0; i < indexCount; i++) indices[i] = v.getUint32(i * 4, true);
+  } else {
+    const raw = r.slice(indexCount * 2);
+    indices = new Uint16Array(indexCount);
+    const v = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+    for (let i = 0; i < indexCount; i++) indices[i] = v.getUint16(i * 2, true);
+  }
+  let geometry: MeshGeometry;
+  if (useShared) {
+    if (!shared) throw new MeshFormatError({ en: `submesh “${material}” uses shared geometry, but there is none`, ru: `подмодель «${material}» берёт общую геометрию, а её нет`, zh: `子网格“${material}”使用共享几何体，但它不存在` });
+    geometry = shared;
+  } else {
+    const c = r.chunk();
+    if (c.id !== M_GEOMETRY) throw new MeshFormatError({ en: `submesh “${material}” has no geometry (block 0x${c.id.toString(16)})`, ru: `у подмодели «${material}» нет геометрии (блок 0x${c.id.toString(16)})`, zh: `子网格“${material}”没有几何体（数据块 0x${c.id.toString(16)}）` });
+    geometry = readGeometry(r);
+  }
+  let operation = OP_TRIANGLE_LIST;
+  const bones = useShared ? sharedBones : new Assignments();
+  for (;;) {
+    const id = r.peekChunk();
+    if (id === M_SUBMESH_OPERATION) {
+      r.chunk();
+      operation = r.u16();
+    } else if (id === M_SUBMESH_BONE_ASSIGNMENT) {
+      r.chunk();
+      bones.read(r);
+    } else if (id === M_SUBMESH_TEXTURE_ALIAS) {
+      r.chunk();
+      r.line();
+      r.line();
+    } else break;
+  }
+  for (const i of indices)
+    if (i >= geometry.vertexCount) throw new MeshFormatError({ en: `index ${i} is out of the vertex range (${geometry.vertexCount}) in “${material}”`, ru: `индекс ${i} за пределами вершин (${geometry.vertexCount}) у «${material}»`, zh: `“${material}”中的索引 ${i} 超出顶点范围（${geometry.vertexCount}）` });
+  if (!useShared && bones.vertex.length > 0) geometry.skin = buildSkin(geometry.vertexCount, bones);
+  return { material, operation, geometry, indices };
+}
+
+/** Keep the `SKIN_SLOTS` strongest bones of each vertex and normalize their weights. */
+function buildSkin(vertexCount: number, a: Assignments): MeshSkin {
+  const bones = new Uint16Array(vertexCount * SKIN_SLOTS);
+  const weights = new Float32Array(vertexCount * SKIN_SLOTS);
+  const used = new Uint8Array(vertexCount);
+  let dropped = 0;
+  for (let i = 0; i < a.vertex.length; i++) {
+    const v = a.vertex[i]!;
+    const w = a.weight[i]!;
+    if (v >= vertexCount) throw new MeshFormatError({ en: `bone weight for vertex ${v}, but there are only ${vertexCount}`, ru: `вес кости для вершины ${v}, а вершин всего ${vertexCount}`, zh: `顶点 ${v} 有骨骼权重，但只有 ${vertexCount} 个顶点` });
+    if (!(w > 0)) continue;
+    const base = v * SKIN_SLOTS;
+    if (used[v]! < SKIN_SLOTS) {
+      bones[base + used[v]!] = a.bone[i]!;
+      weights[base + used[v]!] = w;
+      used[v]!++;
+      continue;
+    }
+    // Full: replace the weakest slot if this one is stronger.
+    dropped++;
+    let weakest = 0;
+    for (let s = 1; s < SKIN_SLOTS; s++) if (weights[base + s]! < weights[base + weakest]!) weakest = s;
+    if (w > weights[base + weakest]!) {
+      bones[base + weakest] = a.bone[i]!;
+      weights[base + weakest] = w;
+    }
+  }
+  let unassigned = 0;
+  for (let v = 0; v < vertexCount; v++) {
+    const base = v * SKIN_SLOTS;
+    let sum = 0;
+    for (let s = 0; s < SKIN_SLOTS; s++) sum += weights[base + s]!;
+    if (sum <= 0) {
+      unassigned++;
+      continue;
+    }
+    for (let s = 0; s < SKIN_SLOTS; s++) weights[base + s] = weights[base + s]! / sum;
+  }
+  return { bones, weights, unassigned, dropped };
+}
+
+/** Parse a `.mesh`. Throws `MeshFormatError` if the file is not an Ogre model or is corrupt. */
+export function parseOgreMesh(bytes: Uint8Array): OgreMesh {
+  const r = new Reader(bytes);
+  const head = r.u16();
+  if (head !== M_HEADER) throw new MeshFormatError(
+      head === 0x0010
+        ? { en: 'big-endian models are not supported', ru: 'модель big-endian не поддерживается', zh: '不支持 big-endian 模型' }
+        : { en: 'this is not an Ogre model (.mesh)', ru: 'это не модель Ogre (.mesh)', zh: '这不是 Ogre 模型（.mesh）' },
+    );
+  const version = r.line();
+  if (!version.startsWith('[MeshSerializer_v')) throw new MeshFormatError({ en: `unknown version “${version}”`, ru: `неизвестная версия «${version}»`, zh: `未知版本“${version}”` });
+  const mesh: OgreMesh = { version, submeshes: [], bounds: { min: [0, 0, 0], max: [0, 0, 0] } };
+  const top = r.chunk();
+  if (top.id !== M_MESH) throw new MeshFormatError({ en: `expected the mesh block, got 0x${top.id.toString(16)}`, ru: `ждали блок модели, а 0x${top.id.toString(16)}`, zh: `应为网格数据块，实际为 0x${top.id.toString(16)}` });
+  r.bool(); // skeletallyAnimated
+  let shared: MeshGeometry | undefined;
+  const sharedBones = new Assignments();
+  for (;;) {
+    const id = r.peekChunk();
+    if (id === M_GEOMETRY) {
+      r.chunk();
+      shared = readGeometry(r);
+    } else if (id === M_SUBMESH) {
+      r.chunk();
+      mesh.submeshes.push(readSubmesh(r, shared, sharedBones));
+    } else if (id === M_MESH_SKELETON_LINK) {
+      r.chunk();
+      mesh.skeleton = r.line();
+    } else if (id === M_MESH_BONE_ASSIGNMENT) {
+      r.chunk();
+      sharedBones.read(r);
+    } else break;
+  }
+  if (shared && sharedBones.vertex.length > 0) shared.skin = buildSkin(shared.vertexCount, sharedBones);
+  mesh.bounds = boundsOf(mesh.submeshes);
+  return mesh;
+}
+
+function boundsOf(subs: readonly MeshSubmesh[]): OgreMesh['bounds'] {
+  const min: [number, number, number] = [Infinity, Infinity, Infinity];
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  for (const s of subs)
+    for (const i of s.indices)
+      for (let c = 0; c < 3; c++) {
+        const v = s.geometry.positions[i * 3 + c]!;
+        if (v < min[c]!) min[c] = v;
+        if (v > max[c]!) max[c] = v;
+      }
+  if (min[0] === Infinity) return { min: [0, 0, 0], max: [0, 0, 0] };
+  return { min, max };
+}
+
+/** Indices as a triangle list (strips and fans are unrolled). */
+export function triangleIndices(sub: MeshSubmesh): Uint32Array {
+  const ix = sub.indices;
+  if (sub.operation === OP_TRIANGLE_LIST) return Uint32Array.from(ix);
+  const out: number[] = [];
+  if (sub.operation === OP_TRIANGLE_STRIP) {
+    for (let i = 2; i < ix.length; i++) {
+      const a = ix[i - 2]!, b = ix[i - 1]!, c = ix[i]!;
+      if (a === b || b === c || a === c) continue;
+      if (i % 2 === 0) out.push(a, b, c);
+      else out.push(b, a, c);
+    }
+  } else if (sub.operation === OP_TRIANGLE_FAN) {
+    for (let i = 2; i < ix.length; i++) out.push(ix[0]!, ix[i - 1]!, ix[i]!);
+  }
+  return Uint32Array.from(out);
+}

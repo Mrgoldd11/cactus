@@ -1,0 +1,80 @@
+/* Game link (Kenshi Bridge): icon, «Show in game» buttons, «Game» panel, «How it went in game». */
+.game-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+.game-link .live-dot {
+  display: inline-block;
+}
+.game-link.connected .live-dot {
+  background: var(--changed);
+}
+.game-link.in-game {
+  color: inherit;
+}
+.game-link.in-game .live-dot {
+  background: var(--new);
+  box-shadow: 0 0 4px var(--new);
+}
+.game-actions {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+.game-panel {
+  padding: 8px;
+}
+.game-row {
+  margin-bottom: 6px;
+}
+.game-trace {
+  margin: 2px 0 8px;
+  padding-left: 16px;
+  list-style: none;
+}
+.game-trace li.chosen {
+  font-weight: 600;
+}
+.game-trace li.fail {
+  opacity: 0.75;
+}
+.game-trace li.not_reached {
+  opacity: 0.55;
+}
+.game-trace-item {
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+}
+.as-in-game {
+  margin: 6px 0;
+  padding: 4px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+}
+.as-in-game .ok {
+  color: var(--new);
+}
+.as-in-game .warn {
+  color: var(--changed);
+}
+
+.game-help {
+  display: inline-block;
+  width: 1.3em;
+  text-align: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  opacity: 0.6;
+  cursor: help;
+  font-size: 0.85em;
+}
+
+.game-shot {
+  display: block;
+  max-width: 100%;
+  margin-top: 6px;
+  border: 1px solid var(--border, #555);
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@kenshi-editor/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "stdio MCP server: search, inspect, edit and save Kenshi mods through the editor core",
+  "type": "module",
+  "bin": {
+    "kenshi-mcp": "./bin/kenshi-mcp.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kenshi-editor/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "^4.6.7"
+  }
+}

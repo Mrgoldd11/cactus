@@ -1,0 +1,167 @@
+/**
+ * Semantic difference of two record states (or two files): which fields, references and objects
+ * are added, changed or removed. Key order does not matter; the order of references in a category does
+ * not count as a change if the set of references and their values are the same.
+ */
+import { bytesEqual } from '../text.ts';
+import { emptyRecord, type DataFile, type GameRecord, type Instance, type Reference } from '../format/types.ts';
+import { instanceEqual, refValuesEqual, SCALAR_DICTS, scalarEqual, scalarMap, type ScalarDict, type ScalarValue } from './record-ops.ts';
+import { UiTextError } from '../ui-text.ts';
+
+export type FieldChange =
+  | { kind: 'name'; before: Uint8Array; after: Uint8Array }
+  | { kind: 'type'; before: number; after: number }
+  | { kind: 'flags'; before: number; after: number }
+  | { kind: 'field'; dict: ScalarDict; key: string; before?: ScalarValue; after?: ScalarValue }
+  | { kind: 'ref'; category: string; target: string; before?: Reference; after?: Reference }
+  | { kind: 'refOrder'; category: string; before: string[]; after: string[] }
+  | { kind: 'instance'; key: string; before?: Instance; after?: Instance };
+
+export interface RecordDiff {
+  stringId: string;
+  /** added: the record did not exist; removed: the record is gone; changed: the content changed. */
+  change: 'added' | 'removed' | 'changed';
+  before?: GameRecord;
+  after?: GameRecord;
+  fields: FieldChange[];
+}
+
+/** Difference of two record states; undefined if they are equal. */
+export function diffRecordStates(before: GameRecord | undefined, after: GameRecord | undefined): RecordDiff | undefined {
+  if (!before && !after) return undefined;
+  const stringId = (after ?? before)!.stringId;
+  const a = before ?? emptyRecord(after!.type, stringId);
+  const b = after ?? emptyRecord(before!.type, stringId);
+  const fields: FieldChange[] = [];
+  if (!bytesEqual(a.name, b.name)) fields.push({ kind: 'name', before: a.name, after: b.name });
+  if (before && after && a.type !== b.type) fields.push({ kind: 'type', before: a.type, after: b.type });
+  for (const dict of SCALAR_DICTS) {
+    const x = scalarMap(a, dict);
+    const y = scalarMap(b, dict);
+    for (const [k, v] of y) {
+      const old = x.get(k);
+      if (!scalarEqual(old, v)) fields.push(old === undefined ? { kind: 'field', dict, key: k, after: v } : { kind: 'field', dict, key: k, before: old, after: v });
+    }
+    for (const [k, v] of x) if (!y.has(k)) fields.push({ kind: 'field', dict, key: k, before: v });
+  }
+  const cats = new Set([...a.refs.keys(), ...b.refs.keys()]);
+  for (const cat of cats) {
+    const x = a.refs.get(cat) ?? [];
+    const y = b.refs.get(cat) ?? [];
+    const xm = firstByTarget(x);
+    const ym = firstByTarget(y);
+    let setChanged = false;
+    for (const [t, r] of ym) {
+      const old = xm.get(t);
+      if (!old) {
+        fields.push({ kind: 'ref', category: cat, target: t, after: r });
+        setChanged = true;
+      } else if (!refValuesEqual(old, r)) fields.push({ kind: 'ref', category: cat, target: t, before: old, after: r });
+    }
+    for (const [t, r] of xm) {
+      if (!ym.has(t)) {
+        fields.push({ kind: 'ref', category: cat, target: t, before: r });
+        setChanged = true;
+      }
+    }
+    const xo = x.map((r) => r.target);
+    const yo = y.map((r) => r.target);
+    if (!setChanged && (xo.length !== yo.length || xo.some((t, i) => t !== yo[i]))) {
+      fields.push({ kind: 'refOrder', category: cat, before: xo, after: yo });
+    }
+  }
+  for (const [k, v] of b.instances) {
+    const old = a.instances.get(k);
+    if (!old || !instanceEqual(old, v)) fields.push(old ? { kind: 'instance', key: k, before: old, after: v } : { kind: 'instance', key: k, after: v });
+  }
+  for (const [k, v] of a.instances) if (!b.instances.has(k)) fields.push({ kind: 'instance', key: k, before: v });
+  if (before && after && fields.length === 0) return undefined;
+  const out: RecordDiff = { stringId, change: !before ? 'added' : !after ? 'removed' : 'changed', fields };
+  if (before) out.before = before;
+  if (after) out.after = after;
+  return out;
+}
+
+/** Category references by target; repeats of one target are marked separately as an order/set change. */
+function firstByTarget(list: readonly Reference[]): Map<string, Reference> {
+  const m = new Map<string, Reference>();
+  const counts = new Map<string, number>();
+  for (const r of list) {
+    const n = (counts.get(r.target) ?? 0) + 1;
+    counts.set(r.target, n);
+    m.set(n === 1 ? r.target : `${r.target}#${n}`, r);
+  }
+  return m;
+}
+
+/**
+ * Semantic difference of two files (by records with the same string id), including change flags. Records are compared as
+ * they are in the files (mod changes, not the overlay result). Order: as in the second file, then
+ * records from the first one that disappeared.
+ */
+export function diffDataFiles(a: DataFile, b: DataFile): RecordDiff[] {
+  const am = new Map(a.records.map((r) => [r.stringId, r]));
+  const bm = new Map(b.records.map((r) => [r.stringId, r]));
+  const out: RecordDiff[] = [];
+  for (const [sid, r] of bm) {
+    const old = am.get(sid);
+    let d = diffRecordStates(old, r);
+    if (old && old.changeFlags !== r.changeFlags) {
+      d ??= { stringId: sid, change: 'changed', before: old, after: r, fields: [] };
+      d.fields.unshift({ kind: 'flags', before: old.changeFlags, after: r.changeFlags });
+    }
+    if (d) out.push(d);
+  }
+  for (const [sid, r] of am) if (!bm.has(sid)) out.push(diffRecordStates(r, undefined)!);
+  return out;
+}
+
+export type DiffChange = RecordDiff['change'];
+export const DIFF_CHANGES: readonly DiffChange[] = ['added', 'changed', 'removed'];
+
+const DIFF_CHANGE_ALIASES: Record<string, DiffChange> = {
+  added: 'added',
+  new: 'added',
+  changed: 'changed',
+  removed: 'removed',
+  deleted: 'removed',
+};
+
+/** `added,changed` (or new/deleted, like record statuses) → list of changes. */
+export function parseDiffStatuses(text: string): DiffChange[] {
+  return text
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s !== '')
+    .map((s) => {
+      const c = DIFF_CHANGE_ALIASES[s];
+      if (!c) throw new UiTextError({ en: `Unknown diff status “${s}”: added, changed, removed`, ru: `Неизвестный статус разницы «${s}»: added, changed, removed`, zh: `未知的差异状态 “${s}”：added、changed、removed` });
+      return c;
+    });
+}
+
+export function filterDiffs(diffs: readonly RecordDiff[], changes?: readonly DiffChange[]): RecordDiff[] {
+  if (!changes || changes.length === 0) return [...diffs];
+  const set = new Set(changes);
+  return diffs.filter((d) => set.has(d.change));
+}
+
+export function countDiffs(diffs: readonly RecordDiff[]): Record<DiffChange, number> {
+  const out: Record<DiffChange, number> = { added: 0, changed: 0, removed: 0 };
+  for (const d of diffs) out[d.change]++;
+  return out;
+}
+
+/** Diff totals line per interface language. */
+const DIFF_SUMMARY: Record<string, (total: number, added: number, changed: number, removed: number) => string> = {
+  en: (t, a, c, r) => `total ${t}: new ${a}, changed ${c}, deleted ${r}`,
+  ru: (t, a, c, r) => `всего ${t}: новых ${a}, изменённых ${c}, удалённых ${r}`,
+  zh: (t, a, c, r) => `共 ${t}：新增 ${a}，修改 ${c}，删除 ${r}`,
+};
+
+/** `total 2950: new 2628, changed 322, deleted 0`. */
+export function formatDiffSummary(diffs: readonly RecordDiff[], lang = 'en'): string {
+  const n = countDiffs(diffs);
+  const f = DIFF_SUMMARY[lang] ?? DIFF_SUMMARY.en!;
+  return f(diffs.length, n.added, n.changed, n.removed);
+}

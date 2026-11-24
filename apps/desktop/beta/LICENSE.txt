@@ -1,0 +1,28 @@
+Cactus — свободная программа под GNU GPL v3.
+Copyright (C) 2026 Mrgoldd11.
+
+This program is free software: you can redistribute it and/or modify it under the terms of
+the GNU General Public License as published by the Free Software Foundation, either version
+3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See the GNU General Public License for more details.
+
+The full license text is in the LICENSE file next to Cactus.exe and at
+https://github.com/Mrgoldd11/Cactus/blob/main/LICENSE
+
+Third-party components. Cactus includes third-party open-source software (Electron,
+Chromium, React, Three.js and others) under their own licenses; see LICENSE and
+LICENSES.chromium.html in this folder and the licenses of the respective packages. Those
+licenses do not restrict your rights under the GPL.
+
+Kenshi. Cactus is an unofficial fan tool. It is not affiliated with or endorsed by Lo-Fi
+Games. It does not include any game files. It reads your own installed copy of Kenshi.
+
+AI features. If you connect an AI assistant (for example Claude), data from your open mod
+is sent to that service under its own terms. Cactus itself sends nothing anywhere.
+
+Always keep backups of your mods.
+
+Contact / feedback: https://github.com/Mrgoldd11/Cactus/issues

@@ -1,0 +1,914 @@
+/**
+ * Buildings and other world objects (`0-buildinglist` in zones).
+ *  - Grid by zones (64×64): a frame walks only the zones within range.
+ *  - Far away — marker boxes (one InstancedMesh for everything), close up — real models:
+ *    the record model (`modelOfRecord`) is loaded once, its parts are drawn with InstancedMeshes
+ *    for all instances of that record.
+ *  - Frustum culling and limits: number of nearby models, number of loaded models
+ *    (extra ones are unloaded), number of markers.
+ *  - Picking: ray against object boxes (no triangles — fast even on thousands of objects).
+ *  - Vegetation (`foliage.ts`) is drawn with the same instanced models but is not pickable.
+ * Parsing of `.mesh` and `.dds` — in a background thread (`WorkerPool`).
+ */
+import * as THREE from 'three';
+import { decodeText, modelOfRecord, zoneOfPath, WORLD_HALF, ZONE_COUNT, ZONE_SIZE, type BuildingPlacement, type DumpBuilding, type Instance, type MapFeature, type ModContext, type Placement, type WorldChange, type WorldEdits, type WorldIndex } from '@kenshi-editor/core';
+import type { GameInstallInfo } from '../../../../shared/api.ts';
+import type { SubmeshArrays, WorkerPool } from './protocol.ts';
+import { averageColour } from './biomes.ts';
+
+export interface ObjectsQuality {
+  /** Marker range. */
+  markerDist: number;
+  /** Real model range. */
+  modelDist: number;
+  /** How many instances to draw as models (the nearest). */
+  maxModels: number;
+  /** How many different models to keep in memory. */
+  maxProtos: number;
+  /** How many markers to draw. */
+  maxMarkers: number;
+}
+
+export interface WorldObject {
+  index: number;
+  p: Placement;
+  /** Building state, if any. */
+  b?: BuildingPlacement;
+  pos: THREE.Vector3;
+  quat: THREE.Quaternion;
+  /** Removed by a mod edit: not drawn and not pickable. */
+  gone?: boolean;
+  /** No building state: world height = ground + instance y, waiting for terrain. */
+  needsGround?: boolean;
+}
+
+function objectKey(file: string, holder: string, key: string): string {
+  return `${file.toLowerCase()}|${holder}|${key}`;
+}
+
+interface Part {
+  geo: THREE.BufferGeometry;
+  mat: THREE.Material;
+  offset: THREE.Matrix4;
+  mesh?: THREE.InstancedMesh;
+}
+
+interface Proto {
+  state: 'loading' | 'ready' | 'none';
+  parts: Part[];
+  box: THREE.Box3;
+  radius: number;
+  used: number;
+  meshPaths: string[];
+  texPaths: string[];
+}
+
+const DEFAULT_BOX = new THREE.Box3(new THREE.Vector3(-40, 0, -40), new THREE.Vector3(40, 80, 40));
+const COLOR_BUILDING = new THREE.Color(0xd9b26f);
+const COLOR_OTHER = new THREE.Color(0x8f9aa6);
+const GREY = 0xb8b2a6;
+/** Rocks without their own texture (in game the ground texture lies on them). */
+const STONE = 0x8a7c6c;
+/** Rock pattern on rocks without their own texture: the most frequent «cliff» texture of the biomes. */
+const ROCK_DETAIL = 'data/newland/land/textures/CinderRidge-Rockloop_DIF.dds';
+/** Rock pattern repeats per world unit (as on steep ground slopes, slightly finer). */
+const ROCK_TILE = 1 / 90;
+/** Vegetation smaller than this fraction of the camera distance is not drawn. */
+const FOLIAGE_MIN_SIZE = 0.015;
+
+/** Vertex colour tints rgb only: its alpha is a blend weight in the game, not opacity. */
+const COLOUR_RGB = '#if defined( USE_COLOR_ALPHA ) || defined( USE_COLOR )\ndiffuseColor.rgb *= vColor.rgb;\n#endif';
+
+function dataTexture(rgba: Uint8Array, width: number, height: number): THREE.DataTexture {
+  const tex = new THREE.DataTexture(rgba, width, height, THREE.RGBAFormat);
+  tex.flipY = false;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function zoneKey(x: number, y: number): number {
+  return y * ZONE_COUNT + x;
+}
+
+/** Ore rocks are sunk into the ground by this much (FOLIAGE_MESH `vertical offset` is -7…-20). */
+const ORE_SINK = -10;
+
+/** A building known only from the game dump. */
+interface Extra {
+  target: string;
+  pos: THREE.Vector3;
+  matrix: THREE.Matrix4;
+}
+
+/** A dump building this close (x and z) to an editor object of the same record is that object. */
+const EXTRA_MATCH = 25;
+/** A dump building this close to an editor object of any record stands in its place. */
+const EXTRA_SAME_SPOT = 2;
+const ONE = new THREE.Vector3(1, 1, 1);
+
+export class WorldObjects {
+  readonly group = new THREE.Group();
+  readonly list: WorldObject[] = [];
+  private readonly grid = new Map<number, number[]>();
+  private readonly byKey = new Map<string, WorldObject>();
+  /** Ground height (for objects without a building state the instance y is above ground). */
+  groundAt: (x: number, z: number) => number | undefined = () => undefined;
+  /** Colour map of the whole ground (world X/Z → 0..1): rocks with material type TERRAIN are coloured by it. */
+  groundMap: THREE.Texture | null = null;
+  private readonly protos = new Map<string, Proto>();
+  private readonly meshCache = new Map<string, Promise<SubmeshArrays[] | null>>();
+  private readonly texCache = new Map<string, Promise<THREE.Texture | null>>();
+  private markers: THREE.InstancedMesh;
+  private markerIds: number[] = [];
+  /** Objects drawn in the last update (for picking). */
+  private visible: number[] = [];
+  private readonly protoInstances = new Map<string, number[]>();
+  /** Vegetation: model → matrices (set by `setFoliage`). */
+  private foliage = new Map<string, THREE.Matrix4[]>();
+  drawnFoliage = 0;
+  /** Map features (features.dat): hand-placed huge scenery, drawn as models only, not selectable. */
+  private features: { target: string; matrix: THREE.Matrix4; pos: THREE.Vector3; scale: number }[] = [];
+  drawnFeatures = 0;
+  /**
+   * Buildings of the running game (plugin dump, `dump.ts`). Those the editor data does not have
+   * (placed by mods outside the opened set, or spawned by the game) are drawn as models only.
+   */
+  dump: { version: number; buildings(zx: number, zy: number): DumpBuilding[] | 'loading' | undefined } | undefined;
+  /**
+   * Draw the dump buildings the editor data does not have. Off by default: they come from mods
+   * that are not opened here, and the world must show only the opened data.
+   */
+  showDumpBuildings = false;
+  private dumpVersion = -1;
+  private readonly extras = new Map<number, Extra[]>();
+  /** Dump-only buildings near the camera: all, drawn as models, and with no model in the opened data. */
+  extraNear = 0;
+  drawnExtras = 0;
+  extraNoModel = 0;
+  private loading = 0;
+  private tick = 0;
+  quality: ObjectsQuality;
+  drawnModels = 0;
+  drawnMarkers = 0;
+  /** Records whose model is missing or unreadable (drawn as a box). */
+  failed = 0;
+  onChange: () => void = () => undefined;
+  private readonly game: GameInstallInfo;
+  private readonly pool: WorkerPool;
+  private readonly ctx: ModContext;
+
+  constructor(game: GameInstallInfo, pool: WorkerPool, ctx: ModContext, world: WorldIndex, quality: ObjectsQuality) {
+    this.game = game;
+    this.pool = pool;
+    this.ctx = ctx;
+    this.quality = quality;
+    this.group.name = 'objects';
+    const byKey = new Map<string, BuildingPlacement>();
+    for (const b of world.buildings()) byKey.set(`${b.file}|${b.holder}|${b.key}`, b);
+    for (const p of world.placements()) {
+      if (!p.zone || !p.holder.endsWith('buildinglist')) continue;
+      this.add(p, byKey.get(`${p.file}|${p.holder}|${p.key}`));
+    }
+    const box = new THREE.BoxGeometry(1, 1, 1);
+    this.markers = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.max(1, quality.maxMarkers));
+    this.markers.count = 0;
+    this.markers.frustumCulled = false;
+    this.markers.name = 'markers';
+    this.group.add(this.markers);
+  }
+
+  /** Add an object (from the world or a new one — by a mod edit). */
+  private add(p: Placement, b: BuildingPlacement | undefined): WorldObject {
+    const index = this.list.length;
+    const [w, x, y, z] = p.rotation;
+    // Instance y is above ground; world height is the building state `world Y pos`,
+    // without it — ground + y (known once the terrain loads).
+    const o: WorldObject = { index, p, pos: new THREE.Vector3(p.position[0], this.heightOf(p, b), p.position[2]), quat: new THREE.Quaternion(x, y, z, w).normalize() };
+    if (b) o.b = b;
+    if (!b || this.absoluteY(p)) this.lift(o);
+    this.list.push(o);
+    this.byKey.set(objectKey(p.file, p.holder, p.key), o);
+    const zx = Math.floor(p.position[0] / ZONE_SIZE) + ZONE_COUNT / 2;
+    const zy = Math.floor(p.position[2] / ZONE_SIZE) + ZONE_COUNT / 2;
+    const k = zoneKey(zx, zy);
+    const cell = this.grid.get(k);
+    if (cell) cell.push(index);
+    else this.grid.set(k, [index]);
+    return o;
+  }
+
+  /**
+   * Pull in the mod world edits (own, undo, redo, AI edits): what was moved, rotated,
+   * added, removed. Returns the affected objects.
+   */
+  sync(edits: WorldEdits, changes: readonly WorldChange[]): WorldObject[] {
+    const touched = new Set<WorldObject>();
+    const states = new Map<string, Set<string>>();
+    for (const { path, sid } of changes) {
+      const zone = zoneOfPath(path);
+      if (!zone) continue;
+      const rec = edits.record(path, sid);
+      if (!sid.endsWith('buildinglist') || (rec && this.ctx.typeName(rec.type) !== 'INSTANCE_COLLECTION')) {
+        const set = states.get(path.toLowerCase()) ?? new Set<string>();
+        set.add(sid);
+        states.set(path.toLowerCase(), set);
+        continue;
+      }
+      const keys = new Set<string>();
+      for (const [key, inst] of rec?.instances ?? []) {
+        keys.add(key);
+        const o = this.byKey.get(objectKey(path, sid, key));
+        if (inst.target === '') {
+          if (o && !o.gone) {
+            o.gone = true;
+            touched.add(o);
+          }
+          continue;
+        }
+        if (o && !o.gone && sameInstance(o.p, inst)) continue;
+        touched.add(this.apply(edits, path, sid, key, inst, o, zone));
+      }
+      // Objects no longer in the record («place» undone, own object deleted).
+      const prefix = objectKey(path, sid, '');
+      for (const [k, o] of this.byKey)
+        if (k.startsWith(prefix) && !keys.has(o.p.key) && !o.gone) {
+          o.gone = true;
+          touched.add(o);
+        }
+    }
+    // Building heights — from their states (`world Y pos`).
+    for (const [path, sids] of states)
+      for (const o of this.list) {
+        if (o.gone || !o.b || o.p.file.toLowerCase() !== path || !o.p.states.some((st) => sids.has(st))) continue;
+        const wy = this.absoluteY(o.p) ? undefined : worldYOf(edits, o.p.file, o.p.states);
+        if (wy !== undefined && wy !== o.pos.y) {
+          o.b = { ...o.b, worldY: wy };
+          o.pos.y = wy;
+          touched.add(o);
+        }
+      }
+    return [...touched];
+  }
+
+  private apply(edits: WorldEdits, path: string, holder: string, key: string, inst: Instance, o: WorldObject | undefined, zone: { x: number; y: number }): WorldObject {
+    const states = inst.states.map((st) => decodeText(st)).filter((st) => st !== '');
+    const p: Placement = { key, target: inst.target, position: [...inst.position], rotation: [...inst.rotation], states, holder, holderType: 'INSTANCE_COLLECTION', file: o?.p.file ?? path, layer: edits.modLayer, zone };
+    const wy = worldYOf(edits, path, states);
+    if (!o) return this.add(p, wy !== undefined ? { ...p, worldY: wy } : undefined);
+    o.p = p;
+    o.gone = false;
+    if (wy !== undefined) o.b = { ...(o.b ?? {}), ...p, worldY: wy };
+    else delete o.b;
+    const [w, x, y, z] = p.rotation;
+    o.quat.set(x, y, z, w).normalize();
+    o.pos.set(p.position[0], this.heightOf(p, o.b), p.position[2]);
+    if (!o.b || this.absoluteY(p)) this.lift(o);
+    else delete o.needsGround;
+    return o;
+  }
+
+  /**
+   * Ore deposits and other buildings with `is foliage` are spawned by the game on foliage rocks:
+   * their instance y is already the absolute world height, and `world Y pos` of the state is
+   * that height plus the ground once more (measured: median 450 units above the ground).
+   */
+  private absoluteY(p: Placement): boolean {
+    return this.ctx.get(p.target)?.bools.get('is foliage') === true;
+  }
+
+  private heightOf(p: Placement, b: BuildingPlacement | undefined): number {
+    if (b && this.absoluteY(p)) return p.position[1];
+    return b?.worldY ?? p.position[1];
+  }
+
+  /** Object without a building state — at ground height + instance y (if the terrain is there). */
+  private lift(o: WorldObject): void {
+    const g = this.groundAt(o.p.position[0], o.p.position[2]);
+    if (g === undefined) o.needsGround = true;
+    else {
+      // Ore rocks sit on the ground like foliage (sunk a little); about 8% of the saved heights
+      // are 100–900 units off today's terrain, so the ground wins over the saved y.
+      o.pos.y = o.b ? g + ORE_SINK : g + o.p.position[1];
+      delete o.needsGround;
+    }
+  }
+
+  /** Vegetation around the camera (drawn at the next `update`). */
+  setFoliage(m: Map<string, THREE.Matrix4[]>): void {
+    this.foliage = m;
+  }
+
+  /** Map features of the whole world (drawn on the next `update`). */
+  setFeatures(list: readonly MapFeature[]): void {
+    this.features = list.map((f) => {
+      const [w, x, y, z] = f.rotation;
+      const pos = new THREE.Vector3(...f.position);
+      const scale = new THREE.Vector3(...f.scale);
+      const matrix = new THREE.Matrix4().compose(pos, new THREE.Quaternion(x, y, z, w).normalize(), scale);
+      return { target: f.target, matrix, pos, scale: Math.max(Math.abs(scale.x), Math.abs(scale.y), Math.abs(scale.z)) };
+    });
+  }
+
+  /** Dump buildings of a zone that match no editor object (same record within a few units). */
+  private extrasOf(zx: number, zy: number): Extra[] | undefined {
+    const k = zoneKey(zx, zy);
+    const cached = this.extras.get(k);
+    if (cached) return cached;
+    const list = this.dump?.buildings(zx, zy);
+    if (!list || list === 'loading') return undefined;
+    // Editor objects of this zone and its neighbours, by record.
+    const known = new Map<string, THREE.Vector3[]>();
+    for (let y = zy - 1; y <= zy + 1; y++)
+      for (let x = zx - 1; x <= zx + 1; x++) {
+        if (x < 0 || y < 0 || x >= ZONE_COUNT || y >= ZONE_COUNT) continue;
+        for (const i of this.grid.get(zoneKey(x, y)) ?? []) {
+          const o = this.list[i]!;
+          const l = known.get(o.p.target);
+          if (l) l.push(o.pos);
+          else known.set(o.p.target, [o.pos]);
+        }
+      }
+    const out: Extra[] = [];
+    const all = [...known.values()].flat();
+    for (const b of list) {
+      const [px, py, pz] = b.position;
+      if (known.get(b.id)?.some((p) => Math.abs(p.x - px) < EXTRA_MATCH && Math.abs(p.z - pz) < EXTRA_MATCH)) continue;
+      // The game may swap the record (a torch of one kind for another): the same spot is the same object.
+      if (all.some((p) => Math.abs(p.x - px) < EXTRA_SAME_SPOT && Math.abs(p.z - pz) < EXTRA_SAME_SPOT)) continue;
+      const [w, x, y, z] = b.rotation;
+      const pos = new THREE.Vector3(px, py, pz);
+      out.push({ target: b.id, pos, matrix: new THREE.Matrix4().compose(pos, new THREE.Quaternion(x, y, z, w).normalize(), ONE) });
+    }
+    this.extras.set(k, out);
+    return out;
+  }
+
+  boxOf(o: WorldObject): THREE.Box3 {
+    const proto = this.protos.get(o.p.target);
+    return proto && proto.state === 'ready' ? proto.box : DEFAULT_BOX;
+  }
+
+  /** Object matrix in the world. */
+  matrixOf(o: WorldObject, out = new THREE.Matrix4()): THREE.Matrix4 {
+    return out.compose(o.pos, o.quat, new THREE.Vector3(1, 1, 1));
+  }
+
+  private proto(target: string): Proto {
+    let p = this.protos.get(target);
+    if (p) return p;
+    p = { state: 'loading', parts: [], box: DEFAULT_BOX.clone(), radius: 60, used: this.tick, meshPaths: [], texPaths: [] };
+    this.protos.set(target, p);
+    const proto = p;
+    this.loading++;
+    void this.loadProto(target, proto)
+      .catch((e: unknown) => {
+        proto.state = 'none';
+        console.warn('world: model', target, e);
+      })
+      .finally(() => {
+        if (proto.state === 'none') this.failed++;
+        this.loading--;
+        this.onChange();
+      });
+    return p;
+  }
+
+  private mesh(path: string): Promise<SubmeshArrays[] | null> {
+    const k = path.toLowerCase();
+    let m = this.meshCache.get(k);
+    if (!m) {
+      m = window.kedit.readGameAsset(this.game, path).then(async (bytes) => (bytes ? (await this.pool.run<'mesh'>({ type: 'mesh', bytes }, [bytes.buffer])).submeshes : null));
+      m.catch(() => this.meshCache.delete(k));
+      this.meshCache.set(k, m);
+    }
+    return m;
+  }
+
+  private texture(path: string): Promise<THREE.Texture | null> {
+    const k = path.toLowerCase();
+    let t = this.texCache.get(k);
+    if (!t) {
+      t = (async () => {
+        let bytes = await window.kedit.readGameAsset(this.game, path);
+        // `…_HI.dds` may have no file (not everything has high-quality textures) — then the normal one.
+        if (!bytes && /_HI\.dds$/i.test(path)) bytes = await window.kedit.readGameAsset(this.game, path.replace(/_HI(\.dds)$/i, '$1'));
+        if (!bytes) return null;
+        const r = await this.pool.run<'dds'>({ type: 'dds', bytes, maxSize: 512 }, [bytes.buffer]);
+        return dataTexture(r.rgba, r.width, r.height);
+      })();
+      t.catch(() => this.texCache.delete(k));
+      this.texCache.set(k, t);
+    }
+    return t;
+  }
+
+  /** Diffuse texture with alpha from `mask` (foliage cut-out mask — the normal map alpha). */
+  private maskedTexture(diffuse: string, mask: string): Promise<THREE.Texture | null> {
+    const k = `${diffuse}|${mask}`.toLowerCase();
+    let t = this.texCache.get(k);
+    if (!t) {
+      t = Promise.all([this.texture(diffuse), this.texture(mask).catch(() => null)]).then(([d, m]) => {
+        if (!d || !m) return d;
+        const di = d.image as { data: Uint8Array; width: number; height: number };
+        const mi = m.image as { data: Uint8Array; width: number; height: number };
+        const rgba = new Uint8Array(di.data);
+        for (let y = 0; y < di.height; y++) {
+          const my = Math.min(mi.height - 1, Math.floor((y * mi.height) / di.height));
+          for (let x = 0; x < di.width; x++) {
+            const mx = Math.min(mi.width - 1, Math.floor((x * mi.width) / di.width));
+            rgba[(y * di.width + x) * 4 + 3] = mi.data[(my * mi.width + mx) * 4 + 3]!;
+          }
+        }
+        return dataTexture(rgba, di.width, di.height);
+      });
+      t.catch(() => this.texCache.delete(k));
+      this.texCache.set(k, t);
+    }
+    return t;
+  }
+
+  /** Material of rocks with type TERRAIN: the ground colour under them (terrain colour map by world X/Z). */
+  /**
+   * Rocks with material type TERRAIN without their own texture: colour — ground map by world X/Z,
+   * pattern — rock texture in three projections (by normal), divided by its average colour
+   * so the ground colour is unchanged.
+   */
+  private terrainMaterial(rock: THREE.Texture | null): THREE.Material {
+    const map = this.groundMap;
+    const mat = new THREE.MeshLambertMaterial({ color: map ? 0xffffff : STONE, map, side: THREE.DoubleSide });
+    if (!map) return mat;
+    const data = rock ? (rock.image as { data?: Uint8Array }).data : undefined;
+    const avg = data ? averageColour(data) : null;
+    const detail = rock !== null && avg !== null;
+    mat.customProgramCacheKey = () => (detail ? 'kedit-terrain-mapped-rock' : 'kedit-terrain-mapped');
+    mat.onBeforeCompile = (shader) => {
+      const head = detail ? 'varying vec3 kRockP;\nvarying vec3 kRockN;\n' : '';
+      shader.vertexShader = head + shader.vertexShader.replace(
+        '#include <worldpos_vertex>',
+        [
+          '#include <worldpos_vertex>',
+          '#ifdef USE_INSTANCING',
+          'mat4 kModel = modelMatrix * instanceMatrix;',
+          '#else',
+          'mat4 kModel = modelMatrix;',
+          '#endif',
+          'vec4 kWorld = kModel * vec4( transformed, 1.0 );',
+          `vMapUv = ( kWorld.xz + ${WORLD_HALF.toFixed(1)} ) / ${(2 * WORLD_HALF).toFixed(1)};`,
+          detail ? 'kRockP = kWorld.xyz;\nkRockN = mat3( kModel ) * objectNormal;' : '',
+        ].join('\n'),
+      );
+      if (!detail) return;
+      shader.uniforms.tRock = { value: rock };
+      shader.uniforms.rockAvg = { value: avg };
+      shader.fragmentShader = head + 'uniform sampler2D tRock;\nuniform vec3 rockAvg;\n' +shader.fragmentShader.replace(
+        '#include <map_fragment>',
+        [
+          '#include <map_fragment>',
+          '{',
+          '  vec3 kw = pow( abs( normalize( kRockN ) ), vec3( 4.0 ) );',
+          '  kw /= kw.x + kw.y + kw.z + 1e-5;',
+          `  vec3 kp = kRockP * ${ROCK_TILE.toFixed(6)};`,
+          '  vec3 kd = texture2D( tRock, kp.zy ).rgb * kw.x + texture2D( tRock, kp.xz ).rgb * kw.y + texture2D( tRock, kp.xy ).rgb * kw.z;',
+          '  diffuseColor.rgb *= clamp( kd / rockAvg, 0.25, 2.5 );',
+          '}',
+        ].join('\n'),
+      );
+    };
+    return mat;
+  }
+
+  /**
+   * UV-mapped scenery with vertex colours: the texture is multiplied by vertex colour rgb, and
+   * `second` (DUAL_TEXTURE) is blended in by vertex colour alpha, as in the game's `objects.hlsl`.
+   */
+  private colouredMaterial(map: THREE.Texture, second: THREE.Texture | null, alphaTest: number): THREE.Material {
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, map, vertexColors: true, side: THREE.DoubleSide, alphaTest });
+    mat.customProgramCacheKey = () => (second ? 'kedit-coloured-dual' : 'kedit-coloured');
+    mat.onBeforeCompile = (shader) => {
+      if (second) shader.uniforms.tSecond = { value: second };
+      let fs = shader.fragmentShader.replace('#include <color_fragment>', COLOUR_RGB);
+      if (second) {
+        fs = 'uniform sampler2D tSecond;\n' + fs.replace(
+          '#include <map_fragment>',
+          '#include <map_fragment>\ndiffuseColor.rgb = mix( texture2D( tSecond, vMapUv ).rgb, diffuseColor.rgb, vColor.a );',
+        );
+      }
+      shader.fragmentShader = fs;
+    };
+    return mat;
+  }
+
+  /**
+   * Texture projected along the world axes, as the game's `triplanar.hlsl` does: for material
+   * types TRIPLANAR / DUAL_TRIPLANAR and for any textured mesh that has no UVs. `second` is
+   * blended in by vertex colour alpha (DUAL_TRIPLANAR; needs vertex colours). Vertex colour rgb
+   * tints the result (the game's COLOURING variants).
+   */
+  private triplanarMaterial(tex: THREE.Texture, tile: readonly [number, number], second: THREE.Texture | null, colors: boolean): THREE.Material {
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: colors, side: THREE.DoubleSide });
+    const dual = second !== null && colors;
+    mat.customProgramCacheKey = () => `kedit-triplanar${dual ? '-dual' : ''}${colors ? '-col' : ''}`;
+    mat.onBeforeCompile = (shader) => {
+      const head = 'varying vec3 kTriP;\nvarying vec3 kTriN;\n';
+      shader.uniforms.tTri = { value: tex };
+      shader.uniforms.triTile = { value: new THREE.Vector3(tile[0] / 5000, tile[0] / 5000, tile[1] / 5000) };
+      if (dual) shader.uniforms.tTri2 = { value: second };
+      shader.vertexShader = head + 'uniform vec3 triTile;\n' + shader.vertexShader.replace(
+        '#include <worldpos_vertex>',
+        [
+          '#include <worldpos_vertex>',
+          '#ifdef USE_INSTANCING',
+          'mat4 kModel = modelMatrix * instanceMatrix;',
+          '#else',
+          'mat4 kModel = modelMatrix;',
+          '#endif',
+          'kTriP = ( kModel * vec4( transformed, 1.0 ) ).xyz * triTile;',
+          'kTriN = mat3( kModel ) * objectNormal;',
+        ].join('\n'),
+      );
+      shader.fragmentShader = head + 'uniform sampler2D tTri;\n' + (dual ? 'uniform sampler2D tTri2;\n' : '') + shader.fragmentShader.replace('#include <color_fragment>', COLOUR_RGB).replace(
+        '#include <map_fragment>',
+        [
+          '#include <map_fragment>',
+          '{',
+          // Blend weights exactly as in triplanar.hlsl.
+          '  vec3 kb = clamp( abs( normalize( kTriN ) ) - 0.2, 0.0, 1.0 );',
+          '  kb = kb * kb * 49.0;',
+          '  kb /= kb.x + kb.y + kb.z + 1e-5;',
+          '  vec3 kd = texture2D( tTri, kTriP.yz ).rgb * kb.x + texture2D( tTri, kTriP.xz ).rgb * kb.y + texture2D( tTri, kTriP.xy ).rgb * kb.z;',
+          dual ? '  vec3 kd2 = texture2D( tTri2, kTriP.yz ).rgb * kb.x + texture2D( tTri2, kTriP.xz ).rgb * kb.y + texture2D( tTri2, kTriP.xy ).rgb * kb.z;\n  kd = mix( kd2, kd, vColor.a );' : '',
+          '  diffuseColor.rgb *= kd;',
+          '}',
+        ].join('\n'),
+      );
+    };
+    return mat;
+  }
+
+  private async loadProto(target: string, proto: Proto): Promise<void> {
+    const model = modelOfRecord(this.ctx, target, { interior: false });
+    const scenery = model.type === 'FOLIAGE_MESH' || model.type === 'MAP_FEATURES';
+    if (model.pieces.length === 0) {
+      proto.state = 'none';
+      return;
+    }
+    const box = new THREE.Box3();
+    for (const piece of model.pieces) {
+      const tex = !piece.texture ? Promise.resolve(null) : piece.alphaMap ? this.maskedTexture(piece.texture, piece.alphaMap) : this.texture(piece.texture);
+      const [subs, loaded] = await Promise.all([this.mesh(piece.mesh).catch(() => null), tex.catch(() => null)]);
+      if (!subs) continue;
+      const second = piece.texture2 ? await this.texture(piece.texture2).catch(() => null) : null;
+      if (second) proto.texPaths.push(piece.texture2!.toLowerCase());
+      const rock = piece.terrain || piece.terrainMode ? await this.texture(ROCK_DETAIL).catch(() => null) : null;
+      if (rock) proto.texPaths.push(ROCK_DETAIL.toLowerCase());
+      proto.meshPaths.push(piece.mesh.toLowerCase());
+      if (piece.texture) proto.texPaths.push(piece.texture.toLowerCase());
+      if (piece.texture && piece.alphaMap) proto.texPaths.push(piece.alphaMap.toLowerCase(), `${piece.texture}|${piece.alphaMap}`.toLowerCase());
+      let map = loaded;
+      const alphaTest = piece.alphaTest !== undefined && map ? Math.max(0.05, piece.alphaTest / 255) : 0;
+      if (map && piece.tile) {
+        map = map.clone();
+        map.repeat.set(piece.tile[0], piece.tile[1]);
+        map.needsUpdate = true;
+      }
+      const offset = new THREE.Matrix4();
+      if (piece.offset) offset.makeTranslation(piece.offset[0], piece.offset[1], piece.offset[2]);
+      for (const s of subs) {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(s.positions, 3));
+        if (s.uvs) geo.setAttribute('uv', new THREE.BufferAttribute(s.uvs, 2));
+        if (s.colors) geo.setAttribute('color', new THREE.BufferAttribute(s.colors, 4));
+        geo.setIndex(new THREE.BufferAttribute(s.index, 1));
+        if (s.normals) geo.setAttribute('normal', new THREE.BufferAttribute(s.normals, 3));
+        else geo.computeVertexNormals();
+        geo.computeBoundingBox();
+        box.union(geo.boundingBox!.clone().applyMatrix4(offset));
+        // TERRAIN without UVs cannot show its own texture (and the game ignores it): ground look.
+        if (piece.terrain || (piece.terrainMode && !s.uvs)) {
+          proto.parts.push({ geo, mat: this.terrainMaterial(rock), offset });
+          continue;
+        }
+        // No UVs (or a triplanar material type): project the texture along the world axes.
+        if (loaded && (piece.triplanar || !s.uvs)) {
+          proto.parts.push({ geo, mat: this.triplanarMaterial(loaded, piece.tile ?? [1, 1], second, s.colors !== undefined), offset });
+          continue;
+        }
+        // Scenery meshes carry their tint in vertex colours (grey grass textures turn green).
+        if (map && s.colors && scenery) {
+          proto.parts.push({ geo, mat: this.colouredMaterial(map, second, alphaTest), offset });
+          continue;
+        }
+        const colors = !map && s.colors !== undefined;
+        const mat = new THREE.MeshLambertMaterial({ color: map || colors ? 0xffffff : scenery ? STONE : GREY, map, vertexColors: colors, side: THREE.DoubleSide, alphaTest });
+        proto.parts.push({ geo, mat, offset });
+      }
+    }
+    if (proto.parts.length === 0) {
+      proto.state = 'none';
+      return;
+    }
+    proto.box = box;
+    proto.radius = box.getBoundingSphere(new THREE.Sphere()).radius + box.getCenter(new THREE.Vector3()).length();
+    proto.state = 'ready';
+  }
+
+  get busy(): number {
+    return this.loading;
+  }
+
+  get protoCount(): number {
+    return [...this.protos.values()].filter((p) => p.state === 'ready').length;
+  }
+
+  /** Rebuild what is drawn: cheap, call while the camera moves (no more than ~6 times per second). */
+  update(camera: THREE.Camera): void {
+    this.tick++;
+    const q = this.quality;
+    const cam = camera.position;
+    const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    const sphere = new THREE.Sphere();
+    const z0x = Math.max(0, Math.floor((cam.x - q.markerDist) / ZONE_SIZE) + ZONE_COUNT / 2);
+    const z1x = Math.min(ZONE_COUNT - 1, Math.floor((cam.x + q.markerDist) / ZONE_SIZE) + ZONE_COUNT / 2);
+    const z0y = Math.max(0, Math.floor((cam.z - q.markerDist) / ZONE_SIZE) + ZONE_COUNT / 2);
+    const z1y = Math.min(ZONE_COUNT - 1, Math.floor((cam.z + q.markerDist) / ZONE_SIZE) + ZONE_COUNT / 2);
+    const near: { i: number; d: number }[] = [];
+    for (let zy = z0y; zy <= z1y; zy++)
+      for (let zx = z0x; zx <= z1x; zx++)
+        for (const i of this.grid.get(zoneKey(zx, zy)) ?? []) {
+          const o = this.list[i]!;
+          if (o.gone) continue;
+          if (o.needsGround) this.lift(o);
+          const d = o.pos.distanceTo(cam);
+          if (d > q.markerDist) continue;
+          const proto = this.protos.get(o.p.target);
+          sphere.set(o.pos, proto?.state === 'ready' ? proto.radius : 120);
+          if (!frustum.intersectsSphere(sphere)) continue;
+          near.push({ i, d });
+        }
+    near.sort((a, b) => a.d - b.d);
+
+    // The nearest as models (if the model exists and is loaded), the rest as markers.
+    const perProto = new Map<string, number[]>();
+    const markers: number[] = [];
+    let models = 0;
+    const want: string[] = [];
+    for (const { i, d } of near) {
+      const o = this.list[i]!;
+      if (d < q.modelDist && models < q.maxModels) {
+        const proto = this.protos.get(o.p.target) ?? (want.length < 8 && this.loading < 8 ? (want.push(o.p.target), this.proto(o.p.target)) : undefined);
+        if (proto) proto.used = this.tick;
+        if (proto?.state === 'ready') {
+          const l = perProto.get(o.p.target);
+          if (l) l.push(i);
+          else perProto.set(o.p.target, [i]);
+          models++;
+          continue;
+        }
+      }
+      if (markers.length < q.maxMarkers) markers.push(i);
+    }
+
+    // Vegetation: models load in the same order, instances are frustum-culled.
+    const foliage = new Map<string, THREE.Matrix4[]>();
+    let drawnFoliage = 0;
+    const at = new THREE.Vector3();
+    for (const [target, list] of this.foliage) {
+      const proto = this.protos.get(target) ?? (want.length < 8 && this.loading < 8 ? (want.push(target), this.proto(target)) : undefined);
+      if (!proto) continue;
+      proto.used = this.tick;
+      if (proto.state !== 'ready') continue;
+      const shown: THREE.Matrix4[] = [];
+      for (const mat of list) {
+        at.setFromMatrixPosition(mat);
+        sphere.set(at, proto.radius * mat.getMaxScaleOnAxis());
+        // Small things far away are not drawn: on screen they are smaller than a couple of pixels, but have many triangles.
+        if (sphere.radius < at.distanceTo(cam) * FOLIAGE_MIN_SIZE) continue;
+        if (frustum.intersectsSphere(sphere)) shown.push(mat);
+      }
+      if (shown.length) foliage.set(target, shown);
+      drawnFoliage += shown.length;
+    }
+    this.drawnFoliage = drawnFoliage;
+
+    // Map features: landmarks, so they are drawn as far as the markers reach.
+    let drawnFeatures = 0;
+    for (const f of this.features) {
+      const d = f.pos.distanceTo(cam);
+      if (d > q.markerDist + 4000) continue;
+      const proto = this.protos.get(f.target) ?? (want.length < 8 && this.loading < 8 ? (want.push(f.target), this.proto(f.target)) : undefined);
+      if (!proto) continue;
+      proto.used = this.tick;
+      if (proto.state !== 'ready') continue;
+      sphere.set(f.pos, proto.radius * f.scale);
+      if (!frustum.intersectsSphere(sphere)) continue;
+      const l = foliage.get(f.target);
+      if (l) l.push(f.matrix);
+      else foliage.set(f.target, [f.matrix]);
+      drawnFeatures++;
+    }
+    this.drawnFeatures = drawnFeatures;
+
+    // Buildings only the running game has (plugin dump): models, not selectable.
+    if (this.dump && this.dump.version !== this.dumpVersion) {
+      this.dumpVersion = this.dump.version;
+      this.extras.clear();
+    }
+    let extraNear = 0;
+    let drawnExtras = 0;
+    let extraNoModel = 0;
+    if (this.dump && this.showDumpBuildings) {
+      const half = ZONE_COUNT / 2;
+      const e0x = Math.max(0, Math.floor((cam.x - q.modelDist) / ZONE_SIZE) + half);
+      const e1x = Math.min(ZONE_COUNT - 1, Math.floor((cam.x + q.modelDist) / ZONE_SIZE) + half);
+      const e0y = Math.max(0, Math.floor((cam.z - q.modelDist) / ZONE_SIZE) + half);
+      const e1y = Math.min(ZONE_COUNT - 1, Math.floor((cam.z + q.modelDist) / ZONE_SIZE) + half);
+      for (let zy = e0y; zy <= e1y; zy++)
+        for (let zx = e0x; zx <= e1x; zx++)
+          for (const b of this.extrasOf(zx, zy) ?? []) {
+            if (b.pos.distanceTo(cam) > q.modelDist) continue;
+            extraNear++;
+            const proto = this.protos.get(b.target) ?? (want.length < 8 && this.loading < 8 ? (want.push(b.target), this.proto(b.target)) : undefined);
+            if (!proto) continue;
+            proto.used = this.tick;
+            if (proto.state === 'none') extraNoModel++;
+            if (proto.state !== 'ready') continue;
+            sphere.set(b.pos, proto.radius);
+            if (!frustum.intersectsSphere(sphere)) continue;
+            const l = foliage.get(b.target);
+            if (l) l.push(b.matrix);
+            else foliage.set(b.target, [b.matrix]);
+            drawnExtras++;
+          }
+    }
+    this.extraNear = extraNear;
+    this.drawnExtras = drawnExtras;
+    this.extraNoModel = extraNoModel;
+
+    // Markers.
+    if (this.markers.instanceMatrix.count < markers.length) this.resizeMarkers(markers.length);
+    const m = new THREE.Matrix4();
+    const local = new THREE.Matrix4();
+    const size = new THREE.Vector3();
+    const centre = new THREE.Vector3();
+    markers.forEach((i, k) => {
+      const o = this.list[i]!;
+      const box = this.boxOf(o);
+      box.getSize(size);
+      box.getCenter(centre);
+      local.compose(centre, new THREE.Quaternion(), size.max(new THREE.Vector3(10, 10, 10)));
+      this.markers.setMatrixAt(k, this.matrixOf(o, m).multiply(local));
+      this.markers.setColorAt(k, o.b ? COLOR_BUILDING : COLOR_OTHER);
+    });
+    this.markers.count = markers.length;
+    this.markers.instanceMatrix.needsUpdate = true;
+    if (this.markers.instanceColor) this.markers.instanceColor.needsUpdate = true;
+    this.markerIds = markers;
+
+    // Models.
+    for (const [target, proto] of this.protos) {
+      const ids = perProto.get(target) ?? [];
+      const extra = foliage.get(target) ?? [];
+      const total = ids.length + extra.length;
+      for (const part of proto.parts) {
+        if (total === 0) {
+          if (part.mesh) part.mesh.visible = false;
+          continue;
+        }
+        if (!part.mesh || part.mesh.instanceMatrix.count < total) {
+          if (part.mesh) {
+            this.group.remove(part.mesh);
+            part.mesh.dispose();
+          }
+          const cap = 2 ** Math.ceil(Math.log2(Math.max(4, total)));
+          part.mesh = new THREE.InstancedMesh(part.geo, part.mat, cap);
+          part.mesh.frustumCulled = false;
+          this.group.add(part.mesh);
+        }
+        ids.forEach((i, k) => part.mesh!.setMatrixAt(k, this.matrixOf(this.list[i]!, m).multiply(part.offset)));
+        extra.forEach((f, k) => part.mesh!.setMatrixAt(ids.length + k, m.multiplyMatrices(f, part.offset)));
+        part.mesh.count = total;
+        part.mesh.visible = true;
+        part.mesh.instanceMatrix.needsUpdate = true;
+      }
+    }
+    this.protoInstances.clear();
+    for (const [k, v] of perProto) this.protoInstances.set(k, v);
+    this.visible = [...markers, ...[...perProto.values()].flat()];
+    this.drawnModels = models;
+    this.drawnMarkers = markers.length;
+    this.trimProtos();
+  }
+
+  private resizeMarkers(n: number): void {
+    const cap = 2 ** Math.ceil(Math.log2(n));
+    const old = this.markers;
+    const next = new THREE.InstancedMesh(old.geometry, old.material, cap);
+    next.frustumCulled = false;
+    next.name = 'markers';
+    this.group.remove(old);
+    old.dispose();
+    this.group.add(next);
+    this.markers = next;
+  }
+
+  /** Unload models not needed for a long time above the limit (and their files from the cache). */
+  private trimProtos(): void {
+    const ready = [...this.protos.entries()].filter(([, p]) => p.state !== 'loading');
+    if (ready.length <= this.quality.maxProtos) return;
+    ready.sort((a, b) => a[1].used - b[1].used);
+    for (const [target, p] of ready.slice(0, ready.length - this.quality.maxProtos)) {
+      if (p.used === this.tick) continue;
+      for (const part of p.parts) {
+        if (part.mesh) {
+          this.group.remove(part.mesh);
+          part.mesh.dispose();
+        }
+        part.geo.dispose();
+        part.mat.dispose();
+      }
+      this.protos.delete(target);
+    }
+    const meshes = new Set<string>();
+    const texs = new Set<string>();
+    for (const p of this.protos.values()) {
+      for (const m of p.meshPaths) meshes.add(m);
+      for (const t of p.texPaths) texs.add(t);
+    }
+    for (const k of [...this.meshCache.keys()]) if (!meshes.has(k)) this.meshCache.delete(k);
+    for (const [k, t] of [...this.texCache]) {
+      if (texs.has(k)) continue;
+      this.texCache.delete(k);
+      void t.then((tex) => tex?.dispose());
+    }
+  }
+
+  /** Object under the ray (nearest by box) among the drawn ones. */
+  pick(ray: THREE.Ray): WorldObject | undefined {
+    let best: WorldObject | undefined;
+    let bestD = Infinity;
+    const sphere = new THREE.Sphere();
+    const inv = new THREE.Matrix4();
+    const local = new THREE.Ray();
+    const hit = new THREE.Vector3();
+    for (const i of this.visible) {
+      const o = this.list[i]!;
+      const box = this.boxOf(o);
+      const proto = this.protos.get(o.p.target);
+      sphere.set(o.pos, proto?.state === 'ready' ? proto.radius : 120);
+      if (!ray.intersectsSphere(sphere)) continue;
+      this.matrixOf(o, inv).invert();
+      local.copy(ray).applyMatrix4(inv);
+      if (!local.intersectBox(box, hit)) continue;
+      const d = hit.length() === 0 ? 0 : local.origin.distanceTo(hit);
+      if (d < bestD) {
+        bestD = d;
+        best = o;
+      }
+    }
+    return best;
+  }
+
+  /** Object by instance key (file + owner + key). */
+  find(file: string, holder: string, key: string): WorldObject | undefined {
+    const o = this.byKey.get(objectKey(file, holder, key));
+    return o && !o.gone ? o : undefined;
+  }
+
+  get markerCount(): number {
+    return this.markerIds.length;
+  }
+
+  dispose(): void {
+    for (const p of this.protos.values())
+      for (const part of p.parts) {
+        part.mesh?.dispose();
+        part.geo.dispose();
+        part.mat.dispose();
+      }
+    this.protos.clear();
+    for (const t of this.texCache.values()) void t.then((tex) => tex?.dispose());
+    this.texCache.clear();
+    this.meshCache.clear();
+    this.markers.geometry.dispose();
+    (this.markers.material as THREE.Material).dispose();
+    this.markers.dispose();
+  }
+}
+
+function sameInstance(p: Placement, inst: Instance): boolean {
+  return p.target === inst.target && p.position.every((v, i) => v === inst.position[i]) && p.rotation.every((v, i) => v === inst.rotation[i]);
+}
+
+function worldYOf(edits: WorldEdits, path: string, states: readonly string[]): number | undefined {
+  for (const st of states) {
+    const wy = edits.record(path, st)?.floats.get('world Y pos');
+    if (wy !== undefined) return wy;
+  }
+  return undefined;
+}

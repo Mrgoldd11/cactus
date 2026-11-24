@@ -1,0 +1,592 @@
+/**
+ * Conversation player: character + event → which dialogues the game considers, which it picks and
+ * why; then step by step — the NPC line, player answers as buttons. «What if»: for any record with
+ * conditions you can mark whether they hold — the game's choice is recomputed at once.
+ * The selection rule comes from the game code (`playConversation` in the core, on `chooseOdds`).
+ * It lives in the «▶ Play» strip under the dialogue graph (`PlayStrip.tsx`, UI review G7): the strip
+ * fixes the event and the speaker, adds the candidate summary and highlights the current line.
+ */
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  dialogueScore,
+  EVENT_TALK,
+  getEnum,
+  PLAY_NPC,
+  playCandidates,
+  playConversation,
+  playStartList,
+  plainName,
+  quote,
+  recordPhrases,
+  refValueEnum,
+  shortEnumLabel,
+  type ModContext,
+  type PlayAnswer,
+  type PlayMode,
+  type PlayOption,
+  type PlayResult,
+  type PlayStep,
+  type ScorePart,
+  type TalkSource,
+  type TranslationIndex,
+} from '@kenshi-editor/core';
+import { errorText, type Strings, useLang, useT } from '../i18n.ts';
+import type { Project } from '../project.ts';
+import { lineCaption, useTranslation } from './LineInspector.tsx';
+import { partsText } from './TalkTab.tsx';
+import { AsInGame } from './GameLink.tsx';
+import { EventSelect } from './EventUi.tsx';
+
+interface Props {
+  project: Project;
+  sid: string;
+  version: number;
+  onGo: (sid: string) => void;
+  onSelectLine: (sid: string, dialog?: string) => void;
+  /** Fixed event (the strip picks it; the player's own event select is hidden). */
+  event?: number;
+  /** First event of the player's own event select. */
+  initialEvent?: number;
+  /** Start list instead of the character's: a package played without a particular character. */
+  start?: ReadonlyMap<string, TalkSource[]>;
+  /** Who is shown as the NPC speaker (default: the name of `sid`). */
+  speakerName?: string;
+  /** Hide the character input (the strip picks the speaker). */
+  noCharacter?: boolean;
+  /** Controls at the start and at the end of the player's bar. */
+  lead?: ReactNode;
+  tail?: ReactNode;
+  /** Under the bar: the strip's summary of the candidates. */
+  aside?: (r: PlayResult) => ReactNode;
+  /** The line the conversation is at: the last line said, or the last answer given after it. */
+  onPlaying?: (line: string | undefined) => void;
+}
+
+/** Where the conversation is: the last NPC line said or the last answer given (not «NPC goes on»). */
+export function playingLine(r: PlayResult): string | undefined {
+  let cur: string | undefined;
+  for (const s of r.steps) {
+    if (s.said !== undefined) cur = s.said;
+    if (s.answered !== undefined && s.answered !== PLAY_NPC) cur = s.answered;
+  }
+  return cur;
+}
+
+const pct = (p: number): string => `${String(Math.round(p * 100))}%`;
+
+/** A record's conditions on one line — as in the graph (conditions and filters). */
+/** Conditions of a dialogue or line in words (short phrases); the FCS code forms go to the hint. */
+function conditionsOf(ctx: ModContext, sid: string, lang: string, lockedWord: string): { words: string[]; codes: string[] } {
+  const r = ctx.get(sid);
+  if (!r) return { words: [], codes: [] };
+  const phrases = recordPhrases(ctx, r, lang, ctx.typeName(r.type) === 'DIALOGUE' ? 'dialogue' : 'line').conditions;
+  const words = phrases.map((x) => x.short);
+  const codes = phrases.map((x) => x.code);
+  if (r.bools.get('locked')) {
+    words.unshift(lockedWord);
+    codes.unshift('locked');
+  }
+  return { words, codes };
+}
+
+export function ConversationPlayer(props: Props): ReactNode {
+  const { project, sid, version, onGo, onSelectLine, start } = props;
+  const t = useT();
+  const ctx = project.ctx;
+  const tr = useTranslation(project);
+  const [ownEvent, setEvent] = useState(props.initialEvent ?? EVENT_TALK);
+  const event = props.event ?? ownEvent;
+  const [mode, setMode] = useState<PlayMode>('met');
+  const [assume, setAssume] = useState<ReadonlyMap<string, boolean>>(new Map());
+  const [answers, setAnswers] = useState<readonly string[]>([]);
+  const [prefer, setPrefer] = useState<ReadonlyMap<string, string>>(new Map());
+
+  const result = useMemo((): PlayResult | string => {
+    try {
+      return playConversation(ctx, sid, { event, mode, assume, answers, prefer, ...(start ? { start } : {}) });
+    } catch (e) {
+      return errorText(e);
+    }
+  }, [ctx, sid, event, mode, assume, answers, prefer, start, version]);
+
+  // Report the current line to the strip (and «none» when the player goes away).
+  const playing = typeof result === 'string' ? undefined : playingLine(result);
+  const onPlaying = useRef(props.onPlaying);
+  onPlaying.current = props.onPlaying;
+  useEffect(() => {
+    onPlaying.current?.(playing);
+  }, [playing]);
+  useEffect(
+    () => () => {
+      onPlaying.current?.(undefined);
+    },
+    [],
+  );
+
+  const evDef = useMemo(() => refValueEnum(ctx.schema, 'DIALOGUE_PACKAGE', 'dialogs', 0), [ctx]);
+  const characters = useMemo(() => {
+    const out: { sid: string; label: string }[] = [];
+    for (const r of ctx.records()) {
+      if (ctx.typeName(r.type) !== 'CHARACTER') continue;
+      if (!r.refs.get('dialogue')?.length && !r.refs.get('dialogue package')?.length) continue;
+      out.push({ sid: r.stringId, label: `${plainName(ctx.localizedName(r.stringId) ?? ctx.name(r.stringId) ?? r.stringId)} — ${r.stringId}` });
+    }
+    return out.slice(0, 5000);
+  }, [ctx, version]);
+
+  /** Answers given before step `i`: on a re-pick at step `i` the later answers lose their meaning. */
+  const answersBefore = (steps: readonly PlayStep[], i: number): string[] => steps.slice(0, i).flatMap((s) => (s.answered !== undefined ? [s.answered] : []));
+
+  const toggle = (id: string, passes: boolean): void => {
+    const rec = ctx.get(id);
+    const byMode = rec ? (mode === 'met' ? !rec.bools.get('locked') : false) : false;
+    const next = new Map(assume);
+    if (!passes === byMode) next.delete(id);
+    else next.set(id, !passes);
+    setAssume(next);
+  };
+
+  const name = (id: string): string => {
+    const r = ctx.localizedName(id);
+    return r !== undefined ? plainName(r) : (ctx.name(id) ?? id);
+  };
+
+  return (
+    <div className="player" data-testid="player" data-sid={sid}>
+      <div className="talk-bar">
+        {props.lead}
+        {!props.noCharacter && (
+          <label>
+            {t.plCharacter}{' '}
+            <input
+              className="pl-character"
+              data-testid="pl-character"
+              list="pl-characters"
+              placeholder={name(sid)}
+              onChange={(e) => {
+                const m = /— (\S+)$/.exec(e.target.value);
+                if (m?.[1] !== undefined && ctx.get(m[1])) {
+                  onGo(m[1]);
+                  e.target.value = '';
+                }
+              }}
+            />
+            <datalist id="pl-characters">
+              {characters.map((c) => (
+                <option key={c.sid} value={c.label} />
+              ))}
+            </datalist>
+          </label>
+        )}
+        {props.event === undefined && (
+          <label>
+            {t.talkEvent}{' '}
+            {evDef ? (
+              <EventSelect
+                def={evDef}
+                value={event}
+                testId="pl-event"
+                className="pl-event"
+                onChange={(n) => {
+                  setEvent(n);
+                  setAnswers([]);
+                  setPrefer(new Map());
+                }}
+              />
+            ) : (
+              <span data-testid="pl-event">{event}</span>
+            )}
+          </label>
+        )}
+        <label title={t.plModeHint}>
+          {t.plMode}{' '}
+          <select
+            data-testid="pl-mode"
+            value={mode}
+            onChange={(e) => {
+              setMode(e.target.value === 'none' ? 'none' : 'met');
+              setAssume(new Map());
+            }}
+          >
+            <option value="met">{t.plMode_met}</option>
+            <option value="none">{t.plMode_none}</option>
+          </select>
+        </label>
+        <span className="spacer" />
+        {assume.size > 0 && (
+          <button className="small" data-testid="pl-reset-asif" onClick={() => { setAssume(new Map()); }}>
+            {t.plResetAsIf} ({assume.size})
+          </button>
+        )}
+        <button className="small" data-testid="pl-restart" onClick={() => { setAnswers([]); setPrefer(new Map()); }}>
+          ⟲ {t.plRestart}
+        </button>
+        {props.tail}
+      </div>
+      {!start && (
+        <AsInGame
+          sid={sid}
+          event={event}
+          editorChoice={typeof result === 'string' ? undefined : result.steps[0]?.path[0]?.node}
+          onGo={onGo}
+          name={name}
+        />
+      )}
+      {typeof result !== 'string' && props.aside?.(result)}
+      {typeof result === 'string' ? (
+        <p className="error">{result}</p>
+      ) : (
+        <ol className="pl-steps">
+          {result.steps.map((s, i) => (
+            <Step
+              key={`${String(i)}:${s.from}`}
+              ctx={ctx}
+              tr={tr}
+              t={t}
+              step={s}
+              index={i}
+              npcName={props.speakerName ?? name(sid)}
+              dialog={result.steps[0]?.path[0]?.node}
+              last={i === result.steps.length - 1}
+              waiting={result.waiting}
+              name={name}
+              onGo={onGo}
+              onSelectLine={onSelectLine}
+              onToggle={toggle}
+              onPrefer={(key, choice) => {
+                const p = new Map(prefer);
+                p.set(key, choice);
+                setPrefer(p);
+                setAnswers(answersBefore(result.steps, i));
+              }}
+              onAnswer={(a) => {
+                setAnswers([...answersBefore(result.steps, i), a]);
+              }}
+              onBack={() => {
+                setAnswers(answersBefore(result.steps, i));
+              }}
+            />
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+interface StepProps {
+  ctx: ModContext;
+  tr: TranslationIndex | undefined;
+  t: Strings;
+  step: PlayStep;
+  index: number;
+  npcName: string;
+  dialog: string | undefined;
+  last: boolean;
+  waiting: boolean;
+  name: (sid: string) => string;
+  onGo: (sid: string) => void;
+  onSelectLine: (sid: string, dialog?: string) => void;
+  onToggle: (sid: string, passes: boolean) => void;
+  onPrefer: (key: string, sid: string) => void;
+  onAnswer: (sid: string) => void;
+  onBack: () => void;
+}
+
+function Step(p: StepProps): ReactNode {
+  const { ctx, tr, t, step, index, dialog } = p;
+  const lang = useLang();
+  const caption = (id: string): string => lineCaption(ctx, id, tr, lang);
+  const speaker = (id: string): string => {
+    const sp = ctx.get(id)?.ints.get('speaker') ?? 0;
+    if (sp === 0) return p.npcName;
+    if (sp === 1 || sp === 2) return t.plPlayer;
+    const def = getEnum(ctx.schema, 'TalkerEnum');
+    return def ? shortEnumLabel(def, sp, lang) : String(sp);
+  };
+  return (
+    <li className="pl-step" data-testid="pl-step" data-index={index}>
+      {step.options.length > 0 && (
+        <Choice
+          {...p}
+          title={index === 0 ? t.plWhichDialog : t.plWhichLine}
+          options={step.options}
+          keyOf={step.from}
+          isDialog={index === 0}
+        />
+      )}
+      {step.path
+        .filter((l) => l.options.length > 1 || l.options.some((o) => !o.always))
+        .map((l) => (
+          <Choice key={l.node} {...p} title={`${t.plInside} ${index === 0 && l.node === dialog ? quote(p.name(l.node), lang) : caption(l.node)}`} options={l.options} keyOf={l.node} isDialog={false} />
+        ))}
+      {step.said !== undefined && (
+        <div className="pl-said" data-testid="pl-said" data-sid={step.said}>
+          <span className="pl-speaker">{speaker(step.said)}:</span>{' '}
+          <button className="link" title={t.plOpenLine} onClick={() => { p.onSelectLine(step.said!, dialog); }}>
+            {caption(step.said)}
+          </button>
+          <LineEffects ctx={ctx} sid={step.said} t={t} />
+        </div>
+      )}
+      {(step.answers.length > 0 || step.npcToo) && (
+        <Answers {...p} answers={step.answers} />
+      )}
+      {step.end !== undefined && (
+        <div className="pl-end small" data-testid="pl-end" data-end={step.end}>
+          ⏹ {step.end === 'nothing-next' ? t.plEndNext : t.plEndFits}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** What a line does when it is said (gives an item, opens trade…): «Then: …», or nothing. */
+function LineEffects({ ctx, sid, t }: { ctx: ModContext; sid: string; t: Strings }): ReactNode {
+  const lang = useLang();
+  const rec = ctx.get(sid);
+  const effects = rec ? recordPhrases(ctx, rec, lang, 'line', false).effects : [];
+  if (!effects.length) return null;
+  return (
+    <div className="pl-effects small" data-testid="pl-effects" data-sid={sid}>
+      ⚡ {t.plThen}{' '}
+      {effects.map((e, i) => (
+        <span key={i} className="pl-effect" title={e.code}>
+          {i > 0 ? '; ' : ''}
+          {e.short}
+          <span className="fcs-code mono muted"> {e.code}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function Answers(p: StepProps & { answers: readonly PlayAnswer[] }): ReactNode {
+  const { t, step, ctx, tr } = p;
+  const lang = useLang();
+  const answered = step.answered;
+  return (
+    <div className="pl-answers">
+      <div className="small muted">{answered === undefined ? t.plChooseAnswer : t.plAnswered}</div>
+      {p.answers.map((a) => {
+        const chosen = answered === a.sid;
+        return (
+          <div key={a.sid} className={`pl-answer-row${a.shown ? '' : ' pl-hidden'}${chosen ? ' pl-chosen' : ''}`}>
+            <button
+              className="pl-answer"
+              data-testid={a.shown ? 'pl-answer' : 'pl-answer-hidden'}
+              data-sid={a.sid}
+              disabled={!a.shown}
+              title={a.shown ? undefined : t.plHiddenHint}
+              onClick={() => { p.onAnswer(a.sid); }}
+            >
+              {chosen ? '▶ ' : '→ '}
+              {lineCaption(ctx, a.sid, tr, lang)}
+            </button>
+            {!a.always && <AsIf {...p} sid={a.sid} passes={a.shown} />}
+            {chosen && <LineEffects ctx={ctx} sid={a.sid} t={t} />}
+          </div>
+        );
+      })}
+      {step.npcToo && (
+        <div className={`pl-answer-row${answered === PLAY_NPC ? ' pl-chosen' : ''}`}>
+          <button className="pl-answer" data-testid="pl-npc" title={t.plNpcHint} onClick={() => { p.onAnswer(PLAY_NPC); }}>
+            ↪ {t.plNpc}
+          </button>
+        </div>
+      )}
+      {answered !== undefined && (
+        <button className="link small" data-testid="pl-back" onClick={p.onBack}>
+          ↶ {t.plBack}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function AsIf(p: StepProps & { sid: string; passes: boolean }): ReactNode {
+  const lang = useLang();
+  const { words, codes } = conditionsOf(p.ctx, p.sid, lang, p.t.talkPart_locked);
+  return (
+    <label className="pl-asif small" data-testid="pl-asif" data-sid={p.sid} title={codes.length ? `${p.t.talkConditions}: ${codes.join('; ')}` : undefined}>
+      <input
+        type="checkbox"
+        checked={p.passes}
+        onChange={() => {
+          p.onToggle(p.sid, p.passes);
+        }}
+      />{' '}
+      {p.t.plAsIf}
+      {words.length > 0 && <span className="muted pl-conds"> ({words.join('; ')})</span>}
+    </label>
+  );
+}
+
+/** «bonus 9 + conditions 1 + target race 2»: where the points of a candidate come from; none for a single part.
+ * The label goes first so no language has to agree the noun with the number. */
+function scoreSum(parts: readonly ScorePart[], line: number, t: Strings): string | undefined {
+  const items = parts.map((p) => ({ v: p.value, label: p.key === 'bonus' ? t.plSumBonus : t[`talkPart_${p.key}`] }));
+  if (line !== 0) items.push({ v: line, label: t.plSumLine });
+  if (items.length < 2) return undefined;
+  return items.map((x, i) => `${i === 0 ? '' : x.v < 0 ? ' − ' : ' + '}${x.label} ${i === 0 && x.v < 0 ? '−' : ''}${String(Math.abs(x.v))}`).join('');
+}
+
+function Choice(p: StepProps & { title: string; options: readonly PlayOption[]; keyOf: string; isDialog: boolean }): ReactNode {
+  const { t, ctx, tr } = p;
+  const lang = useLang();
+  // Dialogues go in the game's order (the sort key: own points + the best first line), with the key shown.
+  const ranked = useMemo(() => (p.isDialog ? playCandidates(ctx, p.options) : undefined), [ctx, p.options, p.isDialog]);
+  const options = ranked ? ranked.rows.map((r) => p.options.find((o) => o.sid === r.sid)!) : p.options;
+  return (
+    <div className="pl-choice">
+      <div className="small pl-choice-title">{p.title}</div>
+      <table className="table pl-table">
+        <tbody>
+          {options.map((o) => {
+            const rec = ctx.get(o.sid);
+            const parts = rec ? dialogueScore(ctx, rec).parts : [];
+            const row = ranked?.rows.find((r) => r.sid === o.sid);
+            const sum = row ? scoreSum(parts, row.line, t) : undefined;
+            return (
+              <tr
+                key={o.sid}
+                className={`pl-opt pl-${o.why}`}
+                data-testid="pl-option"
+                data-sid={o.sid}
+                data-why={o.why}
+                {...(row ? { 'data-key': row.key, 'data-place': row.place } : {})}
+              >
+                <td className="pl-mark">{o.why === 'chosen' || o.why === 'chosen-random' ? '▶' : ''}</td>
+                <td>
+                  <button
+                    className="link"
+                    onClick={() => {
+                      if (p.isDialog) p.onGo(o.sid);
+                      else p.onSelectLine(o.sid, p.dialog);
+                    }}
+                  >
+                    {p.isDialog ? p.name(o.sid) : lineCaption(ctx, o.sid, tr, lang)}
+                  </button>
+                  {p.isDialog && o.sources && o.sources.length > 0 && (
+                    <span className="muted small"> · {[...new Set(o.sources.map((s) => t[`talkVia_${s.via}`]))].join(', ')}</span>
+                  )}
+                </td>
+                {row ? (
+                  <td className="mono small pl-key" data-testid="pl-key" title={`${t.psKeyTip(row.place, row.own, row.line)}\n${partsText(parts, t)}`}>
+                    {row.key}
+                    {sum !== undefined && (
+                      <span className="pl-sum muted" data-testid="pl-sum" title={t.plSumTip}>
+                        {' '}= {sum}
+                      </span>
+                    )}
+                  </td>
+                ) : (
+                  <td className="mono small" title={partsText(parts, t)}>
+                    {o.score}
+                  </td>
+                )}
+                <td className="small" data-testid="pl-why">
+                  {whyText(o, t)}
+                  {o.why === 'random' && (
+                    <>
+                      {' '}
+                      <button className="link small" data-testid="pl-prefer" onClick={() => { p.onPrefer(p.keyOf, o.sid); }}>
+                        {t.plPrefer}
+                      </button>
+                    </>
+                  )}
+                </td>
+                <td>{!o.always && o.why !== 'missing' && <AsIf {...p} sid={o.sid} passes={o.passes} />}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function whyText(o: PlayOption, t: Strings): string {
+  switch (o.why) {
+    case 'chosen':
+      return t.plWhy_chosen;
+    case 'chosen-random':
+      return `${t.plWhy_chosenRandom} (${t.talkChance} ${pct(o.odds)})`;
+    case 'random':
+      return `${t.plWhy_random} (${t.talkChance} ${pct(o.odds)})`;
+    case 'outscored':
+      return t.plWhy_outscored;
+    case 'fails':
+      return t.plWhy_fails;
+    case 'empty':
+      return t.plWhy_empty;
+    case 'missing':
+      return t.talkWhy_missing;
+  }
+}
+
+/** Example of the selection rule on the chosen character: how many dialogues, what the game picks with and without conditions. */
+export function TalkExample({ project, sid, version }: { project: Project; sid: string | undefined; version: number }): ReactNode {
+  const t = useT();
+  const lang = useLang();
+  const ctx = project.ctx;
+  const tr = useTranslation(project);
+  const data = useMemo(() => {
+    const rec = sid === undefined ? undefined : ctx.get(sid);
+    if (sid === undefined || !rec || ctx.typeName(rec.type) !== 'CHARACTER') return undefined;
+    try {
+      const count = playStartList(ctx, sid, EVENT_TALK).size;
+      const pick = (mode: PlayMode): { dialog?: string; why?: PlayOption['why']; said?: string } => {
+        const s = playConversation(ctx, sid, { mode, limit: 1 }).steps[0];
+        const o = s?.options.find((x) => x.why === 'chosen' || x.why === 'chosen-random');
+        return { ...(o ? { dialog: o.sid, why: o.why } : {}), ...(s?.said !== undefined ? { said: s.said } : {}) };
+      };
+      return { sid, count, met: pick('met'), none: pick('none') };
+    } catch {
+      return undefined;
+    }
+  }, [ctx, sid, version]);
+  const name = (id: string): string => {
+    const r = ctx.localizedName(id);
+    return r !== undefined ? plainName(r) : (ctx.name(id) ?? id);
+  };
+  if (!data) return <p className="muted small">{t.howtoPick}</p>;
+  const line = (label: string, p: { dialog?: string; why?: PlayOption['why']; said?: string }): ReactNode => (
+    <li>
+      {label}{' '}
+      {p.dialog === undefined ? (
+        <b>{t.howtoNothing}</b>
+      ) : (
+        <>
+          <b>{quote(name(p.dialog), lang)}</b>
+          {p.why === 'chosen-random' && <span className="muted"> ({t.plWhy_chosenRandom})</span>}
+          {p.said !== undefined && (
+            <>
+              ; {t.howtoSays}: <i>{lineCaption(ctx, p.said, tr, lang)}</i>
+            </>
+          )}
+        </>
+      )}
+    </li>
+  );
+  return (
+    <div className="howto-example" data-testid="howto-example">
+      <div className="group-title">{t.howtoExample}</div>
+      {data.count === 0 ? (
+        <p>
+          <b>{name(data.sid)}</b> — {t.howtoNoDialogs}
+        </p>
+      ) : (
+        <>
+          <p>
+            <b>{name(data.sid)}</b> — {t.howtoHas} {data.count}.
+          </p>
+          <ul>
+            {line(t.howtoMet, data.met)}
+            {line(t.howtoNone, data.none)}
+          </ul>
+        </>
+      )}
+      <p className="muted small">{t.howtoTry}</p>
+    </div>
+  );
+}

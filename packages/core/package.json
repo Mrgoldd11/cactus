@@ -1,0 +1,23 @@
+{
+  "name": "@kenshi-editor/core",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kenshi data format (.base/.mod), FCS schema and locale parsers",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./node": {
+      "types": "./src/node/index.ts",
+      "default": "./src/node/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "report": "node --experimental-strip-types scripts/schema-report.ts",
+    "package": "node scripts/package.ts"
+  }
+}
